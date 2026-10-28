@@ -8,7 +8,7 @@ import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
 import { Tooltip } from '../ui/overlay';
 import { useShellData } from './data';
-import { spendText } from './logic';
+import { activityText, spendText } from './logic';
 import { ME, NAV } from './nav';
 import { OrgSwitcher } from '../orgs/OrgSwitcher';
 import { BellButton } from '../bell/Bell';
@@ -27,8 +27,8 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const live = projects.filter((p) => !p.data.archivedAt);
   const total = activity.working + activity.idle;
-  // Card cGSENsRF: an agent may work on several items at once; say so only then.
-  const items = activity.items > activity.working ? ` on ${activity.items} items` : '';
+  // An agent may work on several items at once (card cGSENsRF) and park some (item QjTTL).
+  const line = activityText(activity);
 
   return (
     <aside
@@ -150,17 +150,14 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
                 )}
               />
             </span>
-            {activity.working} {activity.working === 1 ? 'agent' : 'agents'} working{items} ·{' '}
-            {activity.idle} idle
+            {line}
           </p>
           <p className="mt-0.5 tabular-nums">
             Spend this month {spendText(spend.spent, spend.known, 'org')}
           </p>
         </div>
         <div className="mb-1 hidden justify-center xl:hidden sm:flex">
-          <Tooltip
-            content={`${activity.working} ${activity.working === 1 ? 'agent' : 'agents'} working${items} · ${activity.idle} idle. Spend ${spendText(spend.spent, spend.known, 'org')}`}
-          >
+          <Tooltip content={`${line}. Spend ${spendText(spend.spent, spend.known, 'org')}`}>
             <button
               type="button"
               aria-label={`${activity.working} of ${total} ${total === 1 ? 'agent' : 'agents'} working. Spend this month ${spendText(spend.spent, spend.known, 'org')}`}

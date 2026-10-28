@@ -1,4 +1,12 @@
-import { AGENT_ONLINE_MS, type Agent, type Item, type Project, type Run } from '@hive/shared';
+import {
+  AGENT_ONLINE_MS,
+  parkOf,
+  STALE_CLAIM_MINUTES,
+  type Agent,
+  type Item,
+  type Project,
+  type Run,
+} from '@hive/shared';
 import type { Row } from '../lib/live';
 import { AGENT_COLORS } from '../ui/avatar';
 
@@ -30,7 +38,11 @@ export const colorValue = (index: number) => `agent-${index}`;
 export type AgentStatus =
   | { kind: 'revoked' }
   /** `items`: how many items it works on at once (card cGSENsRF: a channel session with max_items). */
-  | { kind: 'online'; working: { title: string; items?: number } | null }
+  | {
+      kind: 'online';
+      /** `waiting`: of those, how many it parked (item QjTTL). */
+      working: { title: string; items?: number; waiting?: number } | null;
+    }
   /** Paused after too many failed runs (card zSzW3LXy); a run still going shows as online. */
   | { kind: 'paused'; reason: string | null }
   | { kind: 'idle'; lastSeen: Date | null };
@@ -49,6 +61,32 @@ export function isOnline(agent: Agent, runs: Row<Run>[], uid: string, now: numbe
   const seen = lastSeenOf(agent, runs, uid);
   const out = agent.signedOutAt?.toMillis() ?? 0;
   return !!seen && seen.getTime() > out && now - seen.getTime() < ONLINE_MINUTES * 60_000;
+}
+
+/**
+ * What an agent holds right now (item QjTTL): items it is working on and items it parked, waiting
+ * on something outside it. Only claims with a recent heartbeat count.
+ */
+export function heldCounts(
+  uid: string,
+  items: Iterable<Row<Item>>,
+  now: number,
+): { working: number; waiting: number } {
+  let working = 0;
+  let waiting = 0;
+  for (const { data } of items) {
+    const c = data.claim;
+    if (c?.agentUid !== uid || data.status !== 'working') continue;
+    if (now - c.heartbeatAt.toMillis() >= STALE_CLAIM_MINUTES * 60_000) continue;
+    if (parkOf(data)) waiting++;
+    else working++;
+  }
+  return { working, waiting };
+}
+
+/** "working 2 · waiting 1" (item QjTTL). */
+export function presenceText(c: { working: number; waiting: number }): string {
+  return `working ${c.working} · waiting ${c.waiting}`;
 }
 
 export function agentStatus(
@@ -75,6 +113,13 @@ export function agentStatus(
   if (live) {
     const n = new Set(lives.map((r) => `${r.data.projectId}/${r.data.itemId}`)).size;
     const item = (items[live.data.projectId] ?? []).find((i) => i.id === live.data.itemId);
+    // Parked items keep their run open: they are held, waiting (item QjTTL).
+    const { waiting } = heldCounts(uid, Object.values(items).flat(), now);
+    if (waiting > 0)
+      return {
+        kind: 'online',
+        working: { title: item?.data.title ?? '', items: Math.max(0, n - waiting), waiting },
+      };
     if (n > 1) return { kind: 'online', working: { title: item?.data.title ?? '', items: n } };
     return { kind: 'online', working: item ? { title: item.data.title } : null };
   }
@@ -98,6 +143,8 @@ export function statusText(s: AgentStatus, now: number): string {
   if (s.kind === 'revoked') return 'Revoked';
   if (s.kind === 'paused') return `Paused${s.reason ? ` · ${s.reason}` : ''} · takes no new work`;
   if (s.kind === 'online') {
+    if (s.working?.waiting)
+      return `Online · ${presenceText({ working: s.working.items ?? 0, waiting: s.working.waiting })}`;
     if (s.working?.items && s.working.items > 1) return `Online · working ${s.working.items} items`;
     return s.working ? `Online · working on “${s.working.title}”` : 'Online · waiting for work';
   }

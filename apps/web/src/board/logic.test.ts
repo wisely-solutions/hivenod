@@ -333,3 +333,35 @@ describe('stoppedKind / stoppedReason (card rLntxm7C)', () => {
     expect(stoppedReason({}, rej, 'zzz')).toBe('');
   });
 });
+
+describe('parked items (item QjTTL)', () => {
+  const claim = (runId: string) => ({ runId, agentUid: 'bot', heartbeatAt: ts(NOW - 60_000) });
+  const agents = [{ id: 'bot', data: { name: 'Hive', color: 'blue' } }] as never;
+  const at = new Date(NOW - 3_600_000);
+  const parkedRow = row('p', {
+    status: 'working',
+    claim: claim('r1'),
+    parked: { runId: 'r1', reason: 'release batch', at: ts(at.getTime()) },
+  });
+  const workingRow = row('w', { status: 'working', claim: claim('r2') });
+  it('a parked item is not live; a park from an older claim is void', () => {
+    expect(isItemLive(parkedRow.data, NOW)).toBe(false);
+    const void_ = item({
+      status: 'working',
+      claim: claim('r9'),
+      parked: { runId: 'r1', reason: 'x', at: ts(NOW) },
+    });
+    expect(isItemLive(void_, NOW)).toBe(true);
+  });
+  it('the card shows the waiting badge and the agent presence', () => {
+    const ctx = { project, agents, items: [parkedRow, workingRow], uid: 'me', now: NOW };
+    const c = cardData(parkedRow, ctx);
+    const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+    expect(c.parked).toEqual({ reason: 'release batch', since: hhmm });
+    expect(c.agent).toMatchObject({ name: 'Hive', live: false, presence: 'working 1 · waiting 1' });
+    expect(cardData(workingRow, ctx).agent).toMatchObject({ live: true });
+    // Without parked items the card keeps the working dots, no presence text.
+    const plain = { ...ctx, items: [workingRow] };
+    expect(cardData(workingRow, plain).agent?.presence).toBeUndefined();
+  });
+});

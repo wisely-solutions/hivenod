@@ -103,7 +103,14 @@ async function session(token: string, maxItems?: number) {
     srv = createMcpServer(
       () => HiveClient.connect({ token, projectId: 'hive-rules-test', authEmulator: AUTH_HOST }),
       undefined,
-      { channel: { retryMs: 500, presenceMs: 1000, ...(maxItems ? { maxItems } : {}) } },
+      {
+        channel: {
+          retryMs: 500,
+          presenceMs: 1000,
+          parkCheckMs: 500,
+          ...(maxItems ? { maxItems } : {}),
+        },
+      },
     );
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([srv.server.connect(a), client.connect(b)]);
@@ -118,6 +125,7 @@ async function session(token: string, maxItems?: number) {
         HIVENOD_TOKEN: token,
         HIVENOD_PRESENCE_MS: '1000',
         HIVENOD_CHANNEL_RETRY_MS: '500',
+        HIVENOD_PARK_CHECK_MS: '500',
       }),
       stderr: 'inherit',
     });
@@ -531,5 +539,134 @@ for (const impl of IMPLS)
       await s.next('work', 3);
       const order = s.events.filter((e) => e.meta.kind === 'work').map((e) => e.meta.item_id);
       expect(order).toEqual(['b2', 'c2', 'a2']);
+    });
+  });
+
+for (const impl of IMPLS)
+  describe(`hivenod mcp --channel parking (item QjTTL) [${impl}]`, () => {
+    beforeAll(() => {
+      IMPL = impl;
+    });
+
+    const works = (s: Awaited<ReturnType<typeof session>>) =>
+      s.events.filter((e) => e.meta.kind === 'work');
+    const ago = (min: number) => Timestamp.fromMillis(Date.now() - min * 60_000);
+
+    it('max_items 2: a parked item frees its slot; any tool call wakes it', async () => {
+      const { uid, token } = await newAgent();
+      await put({
+        [I('a')]: itemDoc({ stepId: 'build', title: 'A', stepAt: ago(30) }),
+        [I('b')]: itemDoc({ stepId: 'build', title: 'B', stepAt: ago(20) }),
+        [I('c')]: itemDoc({ stepId: 'build', title: 'C', stepAt: ago(10) }),
+      });
+      const s = await session(token, 2);
+      await s.next('work', 2);
+      await pause(1000);
+      expect(works(s).map((e) => e.meta.item_id)).toEqual(['a', 'b']);
+      const parked = await s.call('park', { itemId: 'a', reason: 'release batch' });
+      expect(parked).toMatchObject({ itemId: 'a', parked: { reason: 'release batch' } });
+      expect(parked.note).toMatch(/no longer counts toward max_items/);
+      const runA = works(s)[0]!.meta.run_id;
+      expect(await read(I('a'))).toMatchObject({
+        claim: { agentUid: uid, runId: runA },
+        parked: { runId: runA, reason: 'release batch' },
+      });
+      // The slot is free: the third item arrives; a stays claimed by this agent.
+      const w3 = await s.next('work', 3);
+      expect(w3.meta).toMatchObject({ item_id: 'c', holding: '2', parked: '1' });
+      expect((await heldBy(uid)).sort()).toEqual(['a', 'b', 'c']);
+      // Any tool call on it wakes it: 2 active + it, nothing more is handed over.
+      await s.call('log', { itemId: 'a', text: 'back on it' });
+      expect((await read(I('a'))).parked).toBeNull();
+      await put({ [I('d')]: itemDoc({ stepId: 'build', title: 'D' }) });
+      await pause(1500);
+      expect(works(s)).toHaveLength(3);
+      // Only the holder may park; an item this session does not hold is refused.
+      await expect(s.call('park', { itemId: 'd', reason: 'x' })).rejects.toThrow(
+        /does not hold item d/,
+      );
+    });
+
+    it('a note wakes a parked item and still reaches the session; Stop reaches it too', async () => {
+      const { token } = await newAgent();
+      await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'Docs' }) });
+      const s = await session(token, 2);
+      const w = await s.next('work');
+      await s.call('park', { itemId: 'a', reason: 'review' });
+      const alice = as('alice');
+      await alice.run(
+        postMessage(alice.ctx, { projectId: 'p1', itemId: 'a', kind: 'note', text: 'Go ahead' }),
+      );
+      const note = await s.next('note');
+      expect(note.content).toContain('Go ahead');
+      expect((await read(I('a'))).parked).toBeNull();
+      await s.call('park', { itemId: 'a', reason: 'review again' });
+      const o = as('owner');
+      await o.run(
+        stopWork(o.ctx, {
+          project: PROJECT,
+          projectId: 'p1',
+          itemId: 'a',
+          item: (await read(I('a'))) as unknown as ItemState,
+          mode: 'back',
+          reason: 'Not now',
+          run: { costEur: 0, endedAt: null },
+        }),
+      );
+      const stop = await s.next('stop');
+      expect(stop.meta).toMatchObject({ item_id: 'a', run_id: w.meta.run_id });
+    });
+
+    it('a parked item resumed after a restart returns to the queue 24 h after parking', async () => {
+      const { uid, token } = await newAgent();
+      // The agent's earlier session parked it 25 hours ago (server time) and went away.
+      const runId = 'run-parked';
+      await put({
+        [paths.run(W, runId)]: {
+          agentUid: uid,
+          projectId: 'p1',
+          itemId: 'a',
+          stepId: 'build',
+          startedAt: ago(26 * 60),
+          heartbeatAt: ago(1),
+          heartbeatEventAt: ago(1),
+          endedAt: null,
+          status: 'running',
+          costEur: 0,
+          tokensIn: 0,
+          tokensOut: 0,
+          model: null,
+          summary: null,
+          lastEventId: 'seed',
+        },
+        [I('a')]: itemDoc({
+          stepId: 'build',
+          title: 'Waiting on release',
+          status: 'working',
+          claim: { runId, agentUid: uid, heartbeatAt: ago(1) },
+          parked: { runId, reason: 'release batch', at: ago(25 * 60) },
+        }),
+      });
+      const s = await session(token, 2);
+      const w = await s.next('work');
+      expect(w.meta).toMatchObject({ item_id: 'a', resumed: 'true' });
+      const back = await s.next('info', 1, 8000);
+      expect(back.meta).toMatchObject({ code: 'returned', item_id: 'a' });
+      const item = await read(I('a'));
+      expect(item).toMatchObject({ claim: null, status: 'queued' });
+      let notes: string[] = [];
+      await getEnv().withSecurityRulesDisabled(async (c) => {
+        const snap = await c
+          .firestore()
+          .collection(`workspaces/${W}/projects/p1/items/a/messages`)
+          .get();
+        notes = snap.docs.map((d) => d.data().text as string);
+      });
+      expect(notes.join('\n')).toMatch(
+        /Parked for 24 hours without activity \(waiting: release batch\)/,
+      );
+      // Given back: not handed straight back to this session.
+      await pause(1500);
+      expect(works(s)).toHaveLength(1);
     });
   });

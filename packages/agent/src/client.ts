@@ -27,7 +27,10 @@ import {
   paths,
   postMessage,
   raiseFinding,
+  parkItem,
+  parkOf,
   reportProgress,
+  unparkItem,
   decodeToken,
   askPathChange,
   isUnshaped,
@@ -834,6 +837,30 @@ export class HiveClient {
     );
     await this.write(p, l);
     return { itemId, progress: { done, total } };
+  }
+
+  /**
+   * Parks the item this agent holds (item QjTTL): it waits on something outside the agent. It
+   * stays claimed; a channel session no longer counts it toward max_items.
+   */
+  async park(itemId: string, reason: string, projectId?: string) {
+    const l = await this.load(itemId, projectId);
+    const p = this.wrap(() =>
+      parkItem(this.ctx, { projectId: l.projectId, itemId, item: l.item, reason }),
+    );
+    await this.write(p, l);
+    return { itemId, parked: { reason: reason.trim() } };
+  }
+
+  /** The parked item this agent holds is active again (item QjTTL). No write when not parked. */
+  async unpark(itemId: string, projectId?: string) {
+    const l = await this.load(itemId, projectId);
+    if (!parkOf(l.item)) return { itemId, parked: null, changed: false };
+    const p = this.wrap(() =>
+      unparkItem(this.ctx, { projectId: l.projectId, itemId, item: l.item }),
+    );
+    await this.write(p, l);
+    return { itemId, parked: null, changed: true };
   }
 
   async raiseFinding(itemId: string, title: string, details: string, projectId?: string) {

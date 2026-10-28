@@ -3,10 +3,12 @@ import {
   CHANNEL_INSTRUCTIONS,
   ChannelSession,
   GIVE_BACK_SKIP_MS,
+  type ChannelEvent,
   channelInstructions,
   parseMaxItems,
   workText,
 } from './channel';
+import { PARK_RETURN_MS } from '@hive/shared';
 import type { HiveClient } from './client';
 
 const row = { title: 'Login page', project: 'Web', step: 'Build', job: null };
@@ -148,5 +150,71 @@ describe('give-back skip (item QjTTL)', () => {
     s.gaveBack('b');
     s.forgetGiveBack('b');
     expect(skipped('b')).toBe(false);
+  });
+});
+
+describe('parking (item QjTTL)', () => {
+  const setup = () => {
+    let t = 5_000_000;
+    const calls: string[] = [];
+    const pushed: ChannelEvent[] = [];
+    const client = {
+      park: async (itemId: string, reason: string) => {
+        calls.push(`park ${itemId} ${reason}`);
+        return { itemId, parked: { reason } };
+      },
+      unpark: async (itemId: string) => void calls.push(`unpark ${itemId}`),
+      addNote: async (itemId: string, text: string) => void calls.push(`note ${itemId} ${text}`),
+      release: async (itemId: string) => void calls.push(`release ${itemId}`),
+      untrackRun: () => undefined,
+    } as unknown as HiveClient;
+    const s = new ChannelSession(client, async (e) => void pushed.push(e), {
+      maxItems: 2,
+      now: () => t,
+    });
+    // Closed: look() does nothing, so no real hand-over starts.
+    (s as unknown as { closed: boolean }).closed = true;
+    const map = (s as unknown as { current: Map<string, unknown> }).current;
+    for (const i of [1, 2])
+      map.set(`r${i}`, {
+        itemId: `i${i}`,
+        projectId: 'p1',
+        runId: `r${i}`,
+        title: `T${i}`,
+        stops: [],
+        parked: null,
+      });
+    return { s, calls, pushed, tick: (ms: number) => (t += ms) };
+  };
+
+  it('a parked item does not count toward max_items; a wake counts it again', async () => {
+    const { s, calls } = setup();
+    expect(s.active).toBe(2);
+    const out = await s.park('i1', 'release batch');
+    expect(out.note).toMatch(/no longer counts toward max_items/);
+    expect(s.active).toBe(1);
+    expect(s.parkedCount).toBe(1);
+    expect(s.isParked('i1')).toBe(true);
+    await s.wakeItem('i1');
+    await s.wakeItem('i1'); // not parked any more: no second write
+    expect(s.active).toBe(2);
+    expect(calls).toEqual(['park i1 release batch', 'unpark i1']);
+  });
+
+  it('returns a parked item to the queue after 24 h, with a note (fake clock)', async () => {
+    const { s, calls, pushed, tick } = setup();
+    await s.park('i2', 'review by Ana');
+    tick(PARK_RETURN_MS - 1);
+    expect(await s.returnStale()).toEqual([]);
+    tick(1);
+    expect(await s.returnStale()).toEqual(['i2']);
+    expect(calls.slice(1)).toEqual([
+      'note i2 Parked for 24 hours without activity (waiting: review by Ana): back to the queue.',
+      'release i2',
+    ]);
+    expect(s.held().map((h) => h.itemId)).toEqual(['i1']);
+    expect(pushed.at(-1)?.meta).toMatchObject({ kind: 'info', code: 'returned', item_id: 'i2' });
+    // Given back: not handed to this session again for 10 minutes.
+    expect((s as unknown as { skipped(i: string): boolean }).skipped('i2')).toBe(true);
   });
 });

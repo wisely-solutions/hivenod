@@ -37,7 +37,13 @@ export interface ItemCardData {
   attachments?: string;
   progress?: { done: number; total: number };
   sendBacks?: number;
-  agent?: { name: string; color: number; live?: boolean };
+  /**
+   * `presence`: "working 2 · waiting 1" when the agent has parked items (item QjTTL), shown in the
+   * card footer instead of the working dots.
+   */
+  agent?: { name: string; color: number; live?: boolean; presence?: string };
+  /** Parked by its agent (item QjTTL): "Waiting: <reason> · since <time>". */
+  parked?: { reason: string; since: string };
   approvals?: { have: number; need: number };
   waitingForYou?: boolean;
   /** "Waiting 30 h · reminder sent", shown once a gate's reminder time has passed. */
@@ -85,6 +91,14 @@ export function ItemCard({
             <Badge>{item.type}</Badge>
             {item.waitingForYou ? <Pill tone="gate">Waiting for you</Pill> : null}
             {item.onHold ? <Pill tone="gate">On hold</Pill> : null}
+            {item.parked ? (
+              <Pill tone="agent" className="max-w-full min-w-0">
+                <span className="truncate" title={`Waiting: ${item.parked.reason}`}>
+                  Waiting: {item.parked.reason}
+                </span>
+                <span className="shrink-0 whitespace-nowrap">· since {item.parked.since}</span>
+              </Pill>
+            ) : null}
             {item.pendingSync ? (
               <span className="inline-flex items-center gap-1 text-12 text-text-2">
                 <Icon icon={CloudOff} size={12} />
@@ -114,7 +128,14 @@ export function ItemCard({
               live={item.agent.live}
               size="sm"
             />
-            {item.agent.live ? (
+            {item.agent.presence ? (
+              <>
+                {item.agent.live ? <WorkingDots /> : null}
+                <span data-testid="agent-presence">
+                  {item.agent.name} · {item.agent.presence}
+                </span>
+              </>
+            ) : item.agent.live ? (
               <>
                 <WorkingDots />
                 <span className="sr-only">{item.agent.name} is working</span>

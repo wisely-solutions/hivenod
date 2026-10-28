@@ -101,6 +101,8 @@ var runners = map[string]runner{
 	"logLine":        act(LogLine),
 	"releaseClaim":   act(ReleaseClaim),
 	"reportProgress": act(ReportProgress),
+	"parkItem":       act(ParkItem),
+	"unparkItem":     act(UnparkItem),
 	"completeStep":   act(CompleteStep),
 	"endRun":         act(EndRun),
 	"attach":         act(Attach),

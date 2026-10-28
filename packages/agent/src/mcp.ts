@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
+import { MAX_PARK_REASON_CHARS } from '@hive/shared';
 import {
   CHANNEL_CLAIM_MESSAGE,
   channelInstructions,
@@ -140,7 +141,8 @@ function perItem(t: ToolDef, session: () => ChannelSession | null): ToolDef {
         if (hasItem && !itemId) throw new HiveError(`${t.name} needs itemId.`);
         if (hasRun && !runId) throw new HiveError(`${t.name} needs runId.`);
       } else if (ANY_ITEM.has(t.name) && itemId) {
-        // reading any item of the agent's projects is fine
+        // reading any item of the agent's projects is fine; a call on a parked one wakes it
+        if (s.isParked(itemId)) await s.wakeItem(itemId);
       } else {
         const h = s.resolve(t.name, { itemId, runId });
         held = h.itemId;
@@ -149,6 +151,8 @@ function perItem(t: ToolDef, session: () => ChannelSession | null): ToolDef {
           args.project ??= h.projectId;
         }
         if (hasRun) args.runId = h.runId;
+        // Any tool call on a parked item makes it active again (item QjTTL), before the call.
+        if (t.name !== 'park') await s.wakeItem(h.itemId);
       }
       if (!hasItem) delete args.itemId;
       if (!s || s.busy || !held || !GIVES_BACK.has(t.name)) return t.run(c, args as never, ctx);
@@ -165,11 +169,64 @@ function perItem(t: ToolDef, session: () => ChannelSession | null): ToolDef {
   };
 }
 
-/** The tools of a channel session: no claiming, per-item tools, and `ask` holds the item. */
+/**
+ * Item QjTTL: park and unpark, channel sessions only (a parked item frees its max_items slot).
+ * `run` gets the item already resolved by perItem; unpark is the wake perItem does before it.
+ */
+export function parkTools(session: () => ChannelSession | null): ToolDef[] {
+  const noSession = () =>
+    new HiveError('Parking is for a channel session (hivenod mcp --channel) that gets handovers.');
+  return [
+    {
+      name: 'park',
+      description:
+        "Park an item you hold that waits on something outside you (a release batch, a review, a person): say what it waits for. It stays yours but no longer counts toward max_items, so the next item can arrive. Any tool call on it, or a person's note, answer or Stop, makes it active again; after 24 h without activity it goes back to the queue with a note.",
+      input: {
+        itemId: z.string().min(1).describe('Item id, as returned by list_work'),
+        reason: z
+          .string()
+          .min(1)
+          .max(MAX_PARK_REASON_CHARS)
+          .describe('What it waits for, e.g. "release batch" or "review by Ana"'),
+        project: z
+          .string()
+          .optional()
+          .describe('Project id; only needed if the item id is ambiguous'),
+      },
+      run: async (_c, a) => {
+        const s = session();
+        if (!s || s.busy) throw noSession();
+        const args = a as { itemId: string; reason: string; project?: string };
+        return s.park(args.itemId, args.reason, args.project);
+      },
+    },
+    {
+      name: 'unpark',
+      description:
+        'Make a parked item you hold active again (any other tool call on it does this too). It counts toward max_items again.',
+      input: {
+        itemId: z.string().min(1).describe('Item id, as returned by list_work'),
+        project: z
+          .string()
+          .optional()
+          .describe('Project id; only needed if the item id is ambiguous'),
+      },
+      run: async (_c, a) => {
+        const s = session();
+        if (!s || s.busy) throw noSession();
+        const args = a as { itemId: string };
+        await s.wakeItem(args.itemId);
+        return { itemId: args.itemId, parked: null };
+      },
+    },
+  ];
+}
+
+/** The tools of a channel session: no claiming, per-item tools, `ask` holds the item, parking. */
 export function channelTools(tools: ToolDef[], session: () => ChannelSession | null): ToolDef[] {
-  return tools
-    .filter((t) => t.name !== 'wait_for_work')
-    .map((t) => perItem(channelTool(t, session), session));
+  return [...tools.filter((t) => t.name !== 'wait_for_work'), ...parkTools(session)].map((t) =>
+    perItem(channelTool(t, session), session),
+  );
 }
 
 function channelTool(t: ToolDef, session: () => ChannelSession | null): ToolDef {

@@ -1,6 +1,7 @@
 import type { Agent, Item, Project, Run } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  activityText,
   agentActivity,
   itemsInWork,
   countNeedsYou,
@@ -197,5 +198,19 @@ describe('spendText', () => {
     spendText(141, true, 'x');
     expect(spendText(5, false, 'x')).toBe('€141');
     expect(spendText(5, false, 'other')).toBe('€…');
+  });
+});
+
+describe('footer agent line with parked items (item QjTTL)', () => {
+  it('reads working N · waiting M, and as before without parked items', () => {
+    expect(activityText({ working: 1, idle: 0, items: 3, waiting: 1 })).toBe(
+      '1 agent · working 2 · waiting 1 · 0 idle',
+    );
+    expect(activityText({ working: 2, idle: 1, items: 3, waiting: 0 })).toBe(
+      '2 agents working on 3 items · 1 idle',
+    );
+    expect(activityText({ working: 1, idle: 0, items: 1, waiting: 0 })).toBe(
+      '1 agent working · 0 idle',
+    );
   });
 });
