@@ -87,21 +87,23 @@ export function FocusView({
     >
       <Inner aria-label={inner} className="flex min-h-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-surface pl-[max(8px,env(safe-area-inset-left))] pr-[max(12px,env(safe-area-inset-right))]">
-          <button
-            type="button"
-            aria-label={backLabel}
-            onClick={onBack}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-btn px-2 text-14 font-medium text-text-2 hov:text-ink foc:outline-2 foc:outline-focus"
-          >
-            <Icon icon={ArrowLeft} size={18} />
-            <span className="max-sm:sr-only">{backText}</span>
+          <div className="flex items-center">
+            <button
+              type="button"
+              aria-label={`${backText}, ${backLabel.charAt(0).toLowerCase()}${backLabel.slice(1)}`}
+              onClick={onBack}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-btn px-2 text-14 font-medium text-text-2 hov:text-ink foc:outline-2 foc:outline-focus"
+            >
+              <Icon icon={ArrowLeft} size={18} />
+              <span className="max-sm:sr-only">{backText}</span>
+            </button>
             <kbd
               aria-hidden
               className="hidden rounded border border-line-strong px-1 font-mono text-[10px] leading-4 sm:[@media(hover:hover)]:inline"
             >
               Esc
             </kbd>
-          </button>
+          </div>
           <p className="min-w-0 flex-1 truncate text-13 text-text-2 [&>strong]:font-semibold [&>strong]:text-ink">
             {crumb}
           </p>
