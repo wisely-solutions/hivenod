@@ -207,7 +207,7 @@ function SubjectCard({ row, org }: { row: SubjectRow; org: string }) {
       )}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-3">
-        <h2 className="min-w-0 flex-1 text-16 font-semibold text-ink [overflow-wrap:anywhere]">
+        <h2 className="min-w-[12rem] flex-1 text-16 font-semibold text-ink [overflow-wrap:anywhere]">
           {row.id ? (
             <Link
               to="/inbox/$wid/s/$sid"
