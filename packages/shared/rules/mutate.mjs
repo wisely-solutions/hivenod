@@ -384,8 +384,8 @@ const MUTATIONS = [
     'inbox: people write agent events',
     [
       [
-        "'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed'])",
-        "'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed', 'outcome.done'])",
+        "'relation.removed',\n                  'thread.flagged'])",
+        "'relation.removed',\n                  'thread.flagged', 'outcome.done'])",
       ],
     ],
   ],
@@ -411,8 +411,8 @@ const MUTATIONS = [
     'inbox: agents decide relations',
     [
       [
-        "'outcome.failed', 'relation.proposed']));",
-        "'outcome.failed', 'relation.proposed', 'relation.accepted']));",
+        "'outcome.failed', 'relation.proposed', 'thread.flagged']));",
+        "'outcome.failed', 'relation.proposed', 'thread.flagged', 'relation.accepted']));",
       ],
       [
         "allow update: if inboxOwner(wid, resource.data)\n          && changed(['state', 'note', 'decision'",
@@ -429,6 +429,7 @@ const MUTATIONS = [
     [['&& inboxSubjectOf(wid, d.a, d.memberUid) && inboxSubjectOf(wid, d.b, d.memberUid);', ';']],
   ],
   ['inbox: relation id forged', [["&& d.a < d.b && rid == 'rel-' + d.a + '-' + d.b", '']]],
+  ['inbox: urgent not a boolean', [['&& request.resource.data.urgent is bool', '']]],
   [
     'inbox: agents propose a related link',
     [

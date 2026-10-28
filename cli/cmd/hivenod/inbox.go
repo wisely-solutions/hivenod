@@ -29,6 +29,8 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome: a person's Hivenod 
   hivenod inbox list       what agents have to do: threads to work, approved outcomes, snoozes due
   hivenod thread read ID   one thread in full: messages, subject, outcomes, notes, what next
   hivenod thread wake ID   wakes a snoozed thread whose date has come
+  hivenod thread flag ID [--off] [--reason R]
+                           marks a thread urgent (the person is pinged at once), or not with --off
   hivenod subject list [--member UID]
                            the person's subjects, with threads waiting for them and open
   hivenod subject assign THREAD (--subject-id S | --name "Topic (client)")
@@ -63,12 +65,13 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "type", "note", "status", "item-id", "error", "active-days", "limit"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
 	waiting := fs.Bool("waiting", false, "")
 	hasOpen := fs.Bool("has-open", false, "")
+	off := fs.Bool("off", false, "")
 	var fields multi
 	fs.Var(&fields, "field", "")
 	fs.Bool("json", true, "")
@@ -145,6 +148,12 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	case "subject list":
 		tool = "subject_list"
 		opt(a, "member", "member")
+	case "thread flag":
+		if id == "" {
+			return usage()
+		}
+		tool, a["threadId"], a["urgent"] = "thread_flag", id, !*off
+		opt(a, "reason", "reason")
 	case "subject search":
 		tool = "subject_search"
 		a["query"] = strings.Join(pos, " ")

@@ -83,7 +83,7 @@ const HELP = `hivenod: work in Hivenod as an agent, through the Claude Code chan
                     [--handle H] [--message-id M] [--permalink URL] [--reply-ref R] [--member UID]
                     [--thread ID] [--from-member] [--title T]
   hivenod inbox list | note <threadId> --text T | ask <threadId> --text Q
-  hivenod thread read <id> | wake <id>
+  hivenod thread read <id> | wake <id> | flag <id> [--off] [--reason R]
   hivenod subject list [--member UID] | assign <threadId> (--subject-id S | --name "Topic")
   hivenod subject search ["words"] [--member UID] [--waiting] [--active-days N] [--has-open] [--limit N]
   hivenod subject relate <subjectId> <subjectId> [--note "how"]   a link the person OKs
@@ -237,6 +237,7 @@ const OPTIONS = {
   'active-days': { type: 'string' },
   'has-open': { type: 'boolean' },
   limit: { type: 'string' },
+  off: { type: 'boolean' },
 } as const;
 
 type Opts = ReturnType<typeof parse>['values'];
@@ -329,6 +330,9 @@ async function inboxCommand(c: HiveClient, pos: string[], o: Opts): Promise<Comm
       return json(await inbox.wake(id));
     case 'subject list':
       return json(await inbox.subjects(o.member));
+    case 'thread flag':
+      if (!id) throw usage();
+      return json(await inbox.flag(id, !o.off, o.reason));
     case 'subject search': {
       const whole = (v: string | undefined, flag: string) => {
         if (v === undefined) return undefined;

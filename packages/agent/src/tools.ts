@@ -321,6 +321,24 @@ export const TOOLS: ToolDef[] = [
       }),
   }),
   tool({
+    name: 'thread_flag',
+    description:
+      "Mark a thread urgent when it can't wait (production down, a deadline today, the person's own rules say so): the person is pinged at once, whatever their quiet hours. urgent: false takes it back. Use it sparingly.",
+    input: {
+      threadId: z.string().min(1).describe('Thread id'),
+      urgent: z.boolean().optional().describe('true (the default) or false'),
+      reason: z.string().max(1000).optional().describe('Why it is urgent, in one line'),
+    },
+    run: (c, a) =>
+      c
+        .inbox()
+        .flag(
+          a.threadId as string,
+          (a.urgent as boolean | undefined) ?? true,
+          a.reason as string | undefined,
+        ),
+  }),
+  tool({
     name: 'subject_relate',
     description:
       "Propose that two subjects of the same person are related (the same client, project or problem seen from two sides), with an optional note saying how. It is a proposal: the person OKs or turns it down, and a link turned down is not proposed again. Related subjects show on each other's page and in subject_search.",

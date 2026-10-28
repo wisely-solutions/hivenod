@@ -60,6 +60,7 @@ import {
   finishOutcome,
   inboxMessageKey,
   inboxThreadKey,
+  flagThread,
   proposeRelation,
   relationId,
   searchSubjects,
@@ -1577,6 +1578,17 @@ function build(): ContractCase[] {
   tf('first line', { text: '\n\n  Hello   there \nsecond' });
   tf('long', { text: 'é'.repeat(130) });
   tf('blank', { text: ' \n ' });
+  const flag = (name: string, actor: Actor, input: Partial<Parameters<typeof flagThread>[1]>) =>
+    act(
+      `flagThread/${name}`,
+      'flagThread',
+      actor,
+      { threadId: 'it1', thread: TH({ subjectId: 's1' }), urgent: true, ...input },
+      flagThread,
+    );
+  flag('urgent with a reason', AGENT, { reason: '  Production is down ' });
+  flag('not urgent', AGENT, { urgent: false, reason: '  ' });
+  flag('reason too long', AGENT, { reason: 'r'.repeat(1001) });
   // Related subjects and search (item 4PEHr, scope addition 2026-10-28)
   const J = { memberUid: 'joao' };
   const relate = (

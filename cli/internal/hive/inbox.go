@@ -475,7 +475,7 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 	}
 	return map[string]any{
 		"threadId": id, "member": t.MemberUID, "state": t.State, "waiting": waiting, "question": question,
-		"title": t.Title, "subject": subject, "fetchedBy": t.FetchedBy, "fetchedByMe": t.FetchedBy == c.UID,
+		"title": t.Title, "subject": subject, "fetchedBy": t.FetchedBy, "fetchedByMe": t.FetchedBy == c.UID, "urgent": t.Urgent,
 		"messages": messages, "outcomes": outcomes, "timeline": timeline, "next": next,
 	}, nil
 }
@@ -799,4 +799,19 @@ func (c *Client) SubjectRelate(ctx context.Context, a, b string, note *string) (
 	}
 	return map[string]any{"relationId": res.RelationID, "a": res.A, "b": res.B, "state": "proposed",
 		"note": "Proposed. The person OKs or turns it down; until then it shows as a suggestion."}, nil
+}
+
+// ThreadFlag marks a thread urgent or not (thread_flag).
+func (c *Client) ThreadFlag(ctx context.Context, id string, urgent bool, reason *string) (map[string]any, error) {
+	err := c.threadAction(ctx, id, func(t actions.ThreadState) (plan.Plan, error) {
+		return actions.FlagThread(c.actx(), actions.FlagInput{ThreadID: id, Thread: t, Urgent: urgent, Reason: reason})
+	})
+	if err != nil {
+		return nil, err
+	}
+	note := "No longer urgent."
+	if urgent {
+		note = "Marked urgent: the person is pinged at once, whatever their quiet hours."
+	}
+	return map[string]any{"threadId": id, "urgent": urgent, "note": note}, nil
 }

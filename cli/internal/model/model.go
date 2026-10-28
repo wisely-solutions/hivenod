@@ -413,6 +413,7 @@ type InboxThread struct {
 	Refs          []string       `firestore:"refs" json:"refs"`
 	LastMessageAt time.Time      `firestore:"lastMessageAt" json:"lastMessageAt"`
 	FetchedBy     string         `firestore:"fetchedBy" json:"fetchedBy"`
+	Urgent        bool           `firestore:"urgent" json:"urgent"`
 }
 
 // InboxDecision is the member's approval or rejection of an outcome.

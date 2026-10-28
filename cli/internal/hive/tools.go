@@ -169,6 +169,13 @@ var ToolRuns = map[string]Run{
 	"subject_search": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.SubjectSearch(ctx, a.S("query"), SearchFilters{Member: a.S("member"), WaitingForMe: a.BP("waitingForMe"), ActiveDays: a.F("activeDays"), HasOpen: a.BP("hasOpen"), Limit: a.F("limit")})
 	},
+	"thread_flag": func(ctx context.Context, c *Client, a Args) (any, error) {
+		urgent := true
+		if v := a.BP("urgent"); v != nil {
+			urgent = *v
+		}
+		return c.ThreadFlag(ctx, a.S("threadId"), urgent, a.SP("reason"))
+	},
 	"subject_relate": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.SubjectRelate(ctx, a.S("a"), a.S("b"), a.SP("note"))
 	},

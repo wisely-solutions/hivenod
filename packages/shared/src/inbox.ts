@@ -78,6 +78,7 @@ export const INBOX_EVENT_TYPES = [
   'outcome.failed',
   // agents and the member
   'thread.titled',
+  'thread.flagged',
   // the member
   'thread.answered',
   'thread.ignored',
@@ -159,6 +160,8 @@ export const inboxThreadSchema = z.object({
   lastMessageAt: timestamp,
   /** The agent that brought it in: it posts replies (it has the channel access). */
   fetchedBy: z.string(),
+  /** Urgent (thread_flag): the member is pinged at once. Absent means false. */
+  urgent: z.boolean().optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
@@ -757,6 +760,36 @@ export function wakeThread(
         { state: 'investigating', waiting: null },
         eventId,
       ),
+    ],
+  );
+}
+
+/**
+ * Marks a thread urgent, or not (thread_flag; its agent or its member). An urgent thread pings
+ * the member at once, whatever their quiet hours (the notifier). Stored as `urgent: boolean`
+ * on the thread; absent means false.
+ */
+export function flagThread(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf; urgent: boolean; reason?: string | null },
+): ActionPlan {
+  if (ctx.actor.type === 'human') owner(ctx, input.thread.memberUid);
+  const reason = input.reason?.trim() || null;
+  need(
+    reason === null || reason.length <= INBOX_LIMITS.reason,
+    tooLong('The reason', INBOX_LIMITS.reason),
+  );
+  return inboxPlan(
+    ctx,
+    'thread.flagged',
+    {
+      memberUid: input.thread.memberUid,
+      threadId: input.threadId,
+      subjectId: input.thread.subjectId,
+    },
+    { urgent: input.urgent, reason },
+    (eventId) => [
+      upd(inboxPaths.thread(ctx.workspaceId, input.threadId), { urgent: input.urgent }, eventId),
     ],
   );
 }

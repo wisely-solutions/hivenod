@@ -18,6 +18,7 @@ import {
   assignSubject,
   digest24,
   finishOutcome,
+  flagThread,
   inboxMessageKey,
   inboxPaths,
   inboxThreadKey,
@@ -430,6 +431,7 @@ export class InboxOps {
       subject: t.subjectId ? { subjectId: t.subjectId, name: subject?.name ?? null } : null,
       fetchedBy: t.fetchedBy,
       fetchedByMe: t.fetchedBy === this.d.uid,
+      urgent: t.urgent === true,
       messages,
       outcomes,
       timeline,
@@ -586,6 +588,23 @@ export class InboxOps {
       ),
     );
     return { threadId, state: 'investigating', note: 'Awake: investigate it again.' };
+  }
+
+  /** thread_flag: marks a thread urgent (the person is pinged at once), or not. */
+  async flag(threadId: string, urgent: boolean, reason?: string) {
+    const t = await this.thread(threadId);
+    await this.write(
+      this.wrap(() =>
+        flagThread(this.d.ctx, { threadId, thread: this.state(t), urgent, reason: reason ?? null }),
+      ),
+    );
+    return {
+      threadId,
+      urgent,
+      note: urgent
+        ? 'Marked urgent: the person is pinged at once, whatever their quiet hours.'
+        : 'No longer urgent.',
+    };
   }
 
   /** subject_search: a person's subjects by name, people, channel and thread text. */

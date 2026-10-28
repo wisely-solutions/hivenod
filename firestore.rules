@@ -1126,12 +1126,13 @@ service cloud.firestore {
                 && request.resource.data.type in ['thread.titled', 'thread.answered', 'thread.ignored',
                   'thread.closed', 'thread.restored', 'thread.moved', 'outcome.approved',
                   'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split',
-                  'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed'])
+                  'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
+                  'thread.flagged'])
             || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(wid, request.resource.data.memberUid)
                 && request.resource.data.type in ['inbox.added', 'thread.filed', 'thread.note',
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.done',
-                  'outcome.failed', 'relation.proposed']));
+                  'outcome.failed', 'relation.proposed', 'thread.flagged']));
         allow update, delete: if false;
       }
 
@@ -1191,7 +1192,12 @@ service cloud.firestore {
             || ((isActiveAgent(wid) || inboxOwner(wid, resource.data))
               && changed(['title', 'updatedAt', 'lastEventId'])
               && str(request.resource.data.title, 1, 200)
-              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.titled'], resource.data.memberUid, tid)));
+              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.titled'], resource.data.memberUid, tid))
+            // Urgent or not (thread_flag): its agents or its member.
+            || ((isActiveAgent(wid) || inboxOwner(wid, resource.data))
+              && changed(['urgent', 'updatedAt', 'lastEventId'])
+              && request.resource.data.urgent is bool
+              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.flagged'], resource.data.memberUid, tid)));
         allow delete: if false;
 
         function inboxThreadAgent(wid, tid, d, r) {

@@ -23,7 +23,8 @@ All of these live under `workspaces/{wid}`. They are separate from projects and 
 inboxSubjects/{sid}   memberUid, name, createdBy{type,id}, createdAt, updatedAt, lastEventId
 inboxThreads/{tid}    memberUid, subjectId|null, state, waiting{on, until|null}|null,
                       question{text, by, at, answer|null, answeredAt|null}|null, title, refs[],
-                      lastMessageAt, fetchedBy (the home agent), createdAt, updatedAt, lastEventId
+                      lastMessageAt, fetchedBy (the home agent), urgent? (bool, thread_flag),
+                      createdAt, updatedAt, lastEventId
 inboxMessages/{mid}   memberUid, threadId, direction in|out, source, sender{name, handle}, text,
                       threadRef, messageId, permalink, replyRef, receivedAt, attachments[{name,url}],
                       fetchedBy, createdAt, lastEventId
@@ -172,20 +173,21 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
 
 ## Agent tools (MCP, Go CLI and TS agent)
 
-| Tool              | CLI                          | What it does                                                                                                               |
-| ----------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `inbox_add`       | `hivenod inbox add`          | Brings a message in. It's for `member`, by default the person who connected the agent. Repeats are reported as duplicates. |
-| `inbox_list`      | `hivenod inbox list`         | Lists what agents have to do: `toWork`, `toCarryOut` (approved outcomes this agent carries out) and `toWake`.              |
-| `thread_read`     | `hivenod thread read ID`     | Shows one thread: messages, subject, outcomes and decisions, notes and Q&A, and what to do next.                           |
-| `subject_list`    | `hivenod subject list`       | Lists a member's subjects, with how many threads wait for them and how many are open.                                      |
-| `subject_assign`  | `hivenod subject assign ID`  | Files or moves a thread under an existing subject or a new one. A matching name reuses the existing subject.               |
-| `subject_search`  | `hivenod subject search …`   | Finds a member's subjects by name, people, channel and thread text, with filters (see "Finding subjects").                 |
-| `subject_relate`  | `hivenod subject relate A B` | Proposes two subjects as related, with a note. The member OKs or turns it down.                                            |
-| `inbox_note`      | `hivenod inbox note ID`      | Adds an investigation note to the timeline.                                                                                |
-| `inbox_ask`       | `hivenod inbox ask ID`       | Asks the member a question. The thread waits in Needs you.                                                                 |
-| `outcome_propose` | `hivenod outcome propose ID` | Proposes an outcome of a type from the registry, with its fields.                                                          |
-| `outcome_done`    | `hivenod outcome done OID`   | The executor reports an approved outcome as done or failed.                                                                |
-| `thread_wake`     | `hivenod thread wake ID`     | Wakes a snoozed thread whose date has come.                                                                                |
+| Tool              | CLI                          | What it does                                                                                                                |
+| ----------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `inbox_add`       | `hivenod inbox add`          | Brings a message in. It's for `member`, by default the person who connected the agent. Repeats are reported as duplicates.  |
+| `inbox_list`      | `hivenod inbox list`         | Lists what agents have to do: `toWork`, `toCarryOut` (approved outcomes this agent carries out) and `toWake`.               |
+| `thread_read`     | `hivenod thread read ID`     | Shows one thread: messages, subject, outcomes and decisions, notes and Q&A, and what to do next.                            |
+| `subject_list`    | `hivenod subject list`       | Lists a member's subjects, with how many threads wait for them and how many are open.                                       |
+| `subject_assign`  | `hivenod subject assign ID`  | Files or moves a thread under an existing subject or a new one. A matching name reuses the existing subject.                |
+| `subject_search`  | `hivenod subject search …`   | Finds a member's subjects by name, people, channel and thread text, with filters (see "Finding subjects").                  |
+| `subject_relate`  | `hivenod subject relate A B` | Proposes two subjects as related, with a note. The member OKs or turns it down.                                             |
+| `inbox_note`      | `hivenod inbox note ID`      | Adds an investigation note to the timeline.                                                                                 |
+| `inbox_ask`       | `hivenod inbox ask ID`       | Asks the member a question. The thread waits in Needs you.                                                                  |
+| `outcome_propose` | `hivenod outcome propose ID` | Proposes an outcome of a type from the registry, with its fields.                                                           |
+| `outcome_done`    | `hivenod outcome done OID`   | The executor reports an approved outcome as done or failed.                                                                 |
+| `thread_wake`     | `hivenod thread wake ID`     | Wakes a snoozed thread whose date has come.                                                                                 |
+| `thread_flag`     | `hivenod thread flag ID`     | Marks a thread urgent (or not, `urgent: false` / `--off`): the notifier pings the member at once, whatever the quiet hours. |
 
 The contract tests cover the agent actions: `cli/contract/cases.ts` against the Go actions, and
 `packages/agent/test/go.integration.test.ts`, which runs the inbox scenario through both CLIs on

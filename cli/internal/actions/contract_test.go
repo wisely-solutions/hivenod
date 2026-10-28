@@ -148,6 +148,7 @@ var runners = map[string]runner{
 	}) (any, error) {
 		return TitleFrom(in.Text), nil
 	}),
+	"flagThread":      act(FlagThread),
 	"proposeRelation": act(ProposeRelation),
 	"relationId": pure(func(in struct {
 		A string `json:"a"`

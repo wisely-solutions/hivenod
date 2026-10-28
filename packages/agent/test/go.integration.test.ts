@@ -545,6 +545,11 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       );
       await call('subject_relate', { a: s1, b: s2 });
       await call('subject_search', { query: 'klarna refunds' });
+      // Urgent threads (thread_flag).
+      await call('thread_flag', { threadId: t1, reason: 'Order 12 is stuck at checkout' });
+      await call('thread_read', { threadId: t1 });
+      await call('thread_flag', { threadId: t1, urgent: false });
+      await call('thread_flag', { threadId: 'nope' });
     });
     const oks = r.ts.calls.map((c) => (c as { ok: boolean }).ok);
     expect(oks).toEqual([
@@ -558,7 +563,12 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       true,
       false,
       true,
+      true,
+      true,
+      true,
+      false,
     ]);
+    expect(r.ts.calls[23]).toMatchObject({ out: { urgent: true } });
     const hits = (i: number) =>
       (out(r.ts.calls[i] as never).subjects as { name: string }[]).map((x) => x.name);
     expect(hits(6)).toHaveLength(3);
