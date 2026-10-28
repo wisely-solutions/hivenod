@@ -35,9 +35,14 @@ type ChannelOptions struct {
 	ProjectID string
 	StepID    string
 	MaxItems  int
-	Presence  time.Duration // default 60 s
-	Retry     time.Duration // default 30 s
+	Presence  time.Duration    // default 60 s
+	Retry     time.Duration    // default 30 s
+	Now       func() time.Time // the clock (tests); default time.Now
 }
+
+// GiveBackSkip: an item this session just gave back (release, end_run) is not handed to it again
+// for this long (item QjTTL), so the next oldest item gets its turn.
+const GiveBackSkip = 10 * time.Minute
 
 // Handover is what the session holds.
 type Handover struct {
@@ -60,6 +65,7 @@ type Session struct {
 	current      []*heldItem // hand-over order
 	stoppedItems map[string]string
 	stoppedRuns  map[string]bool
+	givenBack    map[string]time.Time // items given back, with when (item QjTTL)
 	closed       bool
 	looking      bool
 	waking       bool
@@ -84,8 +90,39 @@ func NewSession(c *Client, cfg Config, push func(Event), o ChannelOptions) *Sess
 	if o.Retry == 0 {
 		o.Retry = 30 * time.Second
 	}
+	if o.Now == nil {
+		o.Now = time.Now
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Session{c: c, cfg: cfg, push: push, o: o, stoppedItems: map[string]string{}, stoppedRuns: map[string]bool{}, ctx: ctx, cancel: cancel}
+	return &Session{c: c, cfg: cfg, push: push, o: o, stoppedItems: map[string]string{}, stoppedRuns: map[string]bool{}, givenBack: map[string]time.Time{}, ctx: ctx, cancel: cancel}
+}
+
+// GaveBack: the agent gave this item back (release, end_run); it is not handed to this session
+// again for GiveBackSkip, so other waiting work gets its turn first.
+func (s *Session) GaveBack(itemID string) {
+	s.mu.Lock()
+	s.givenBack[itemID] = s.o.Now()
+	s.mu.Unlock()
+}
+
+// ForgetGiveBack: the give-back did not happen after all (the tool failed).
+func (s *Session) ForgetGiveBack(itemID string) {
+	s.mu.Lock()
+	delete(s.givenBack, itemID)
+	s.mu.Unlock()
+}
+
+// skipped: given back by this session less than GiveBackSkip ago. Call with s.mu held.
+func (s *Session) skipped(itemID string) bool {
+	at, ok := s.givenBack[itemID]
+	if !ok {
+		return false
+	}
+	if s.o.Now().Sub(at) < GiveBackSkip {
+		return true
+	}
+	delete(s.givenBack, itemID)
+	return false
 }
 
 // MaxItems is how many items the session holds at once.
@@ -311,7 +348,9 @@ func (s *Session) next() error {
 		r, err := s.c.WaitForWork(s.ctx, Filter{ProjectID: s.o.ProjectID, StepID: s.o.StepID}, 9*time.Minute, func(id string) bool {
 			s.mu.Lock()
 			defer s.mu.Unlock()
-			return s.byItem(id) != nil
+			// Held items are listed as "claimed by you": not new work. Nor is an item just given
+			// back (the wait re-checks every 30 s, so it returns after the skip).
+			return s.byItem(id) != nil || s.skipped(id)
 		})
 		if s.ctx.Err() != nil {
 			return nil
@@ -325,12 +364,13 @@ func (s *Session) next() error {
 		rows := make([]WorkRow, 0, len(r.Work))
 		s.mu.Lock()
 		for _, row := range r.Work {
-			if s.byItem(row.ItemID) == nil {
+			if s.byItem(row.ItemID) == nil && !s.skipped(row.ItemID) {
 				rows = append(rows, row)
 			}
 		}
 		s.mu.Unlock()
-		// Items this agent already holds first (a session that restarted resumes them).
+		// Oldest first (the client's order); items this agent already holds first (a session that
+		// restarted resumes them).
 		sort.SliceStable(rows, func(i, j int) bool {
 			mi := rows[i].Claim != nil && rows[i].Claim.Mine
 			mj := rows[j].Claim != nil && rows[j].Claim.Mine

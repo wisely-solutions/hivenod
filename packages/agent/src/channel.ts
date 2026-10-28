@@ -35,7 +35,15 @@ export interface ChannelOptions {
    * here, not in the rules. With more than one, each item is meant for its own sub-agent.
    */
   maxItems?: number;
+  /** The clock (tests). */
+  now?: () => number;
 }
+
+/**
+ * An item this session just gave back (release, end_run) is not handed to it again for this long
+ * (item QjTTL), so the next oldest item gets its turn.
+ */
+export const GIVE_BACK_SKIP_MS = 10 * 60_000;
 
 /** The highest `max_items` accepted (a session runs one sub-agent per item). */
 export const MAX_ITEMS_LIMIT = 10;
@@ -119,6 +127,8 @@ export class ChannelSession {
   /** Items (and their runs) a person stopped while this session held them: their tools refuse. */
   private readonly stoppedItems = new Map<string, string>();
   private readonly stoppedRuns = new Set<string>();
+  /** Items this session gave back, with when (item QjTTL): skipped for GIVE_BACK_SKIP_MS. */
+  private readonly givenBack = new Map<string, number>();
   private abort = new AbortController();
   private presence: NodeJS.Timeout | null = null;
   private wake: NodeJS.Timeout | null = null;
@@ -156,6 +166,32 @@ export class ChannelSession {
   private heldItem(itemId: string): Held | undefined {
     for (const h of this.current.values()) if (h.itemId === itemId) return h;
     return undefined;
+  }
+
+  private now() {
+    return this.opts.now?.() ?? Date.now();
+  }
+
+  /**
+   * The agent gave this item back (release, end_run): it is not handed to this session again for
+   * GIVE_BACK_SKIP_MS, so other waiting work gets its turn first.
+   */
+  gaveBack(itemId: string) {
+    this.givenBack.set(itemId, this.now());
+  }
+
+  /** The give-back did not happen after all (the tool failed). */
+  forgetGiveBack(itemId: string) {
+    this.givenBack.delete(itemId);
+  }
+
+  /** Whether the item was given back by this session less than GIVE_BACK_SKIP_MS ago. */
+  private skipped(itemId: string) {
+    const at = this.givenBack.get(itemId);
+    if (at === undefined) return false;
+    if (this.now() - at < GIVE_BACK_SKIP_MS) return true;
+    this.givenBack.delete(itemId);
+    return false;
   }
 
   /** Whether a person stopped this item (or run) while this session held it. */
@@ -302,14 +338,16 @@ export class ChannelSession {
         stepId: this.opts.stepId,
         timeoutMs: 9 * 60_000,
         signal: this.abort.signal,
-        // The items this session holds are listed as "claimed by you": not new work.
-        exclude: (itemId) => !!this.heldItem(itemId),
+        // The items this session holds are listed as "claimed by you": not new work. Nor is an
+        // item it just gave back (the wait re-checks every 30 s, so it returns after the skip).
+        exclude: (itemId) => !!this.heldItem(itemId) || this.skipped(itemId),
       });
       if (this.closed) return;
       if (r.timedOut) continue;
-      // Items this agent already holds first (a session that restarted resumes them).
+      // Oldest first (the client's order); items this agent already holds first (a session that
+      // restarted resumes them).
       const rows = [...r.work]
-        .filter((row) => !this.heldItem(row.itemId))
+        .filter((row) => !this.heldItem(row.itemId) && !this.skipped(row.itemId))
         .sort((a, b) => Number(!!b.claim?.mine) - Number(!!a.claim?.mine));
       let handed = false;
       for (const row of rows) {

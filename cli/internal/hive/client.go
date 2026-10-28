@@ -43,6 +43,7 @@ type Client struct {
 	lastBeat    map[string]int64
 	nextLog     map[string]int
 	itemProject map[string]string
+	arrivalKeys map[string]arrivalKey // the hand-out order key of each work row seen
 	// AutoHeartbeatError is the last problem an automatic heartbeat hit.
 	AutoHeartbeatError string
 	clockOffset        time.Duration
@@ -90,6 +91,7 @@ func Connect(ctx context.Context, cfg Config, tok string) (*Client, error) {
 		lastBeat:    map[string]int64{},
 		nextLog:     map[string]int{},
 		itemProject: map[string]string{},
+		arrivalKeys: map[string]arrivalKey{},
 	}
 	a, err := c.readAgent(ctx)
 	if err != nil {

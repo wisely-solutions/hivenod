@@ -519,6 +519,11 @@ export const itemSchema = z.object({
   pathRefused: z.array(z.string()).max(MAX_STEPS).optional(),
   /** Bumped by every write that touches the path fields (the rules route on it). */
   pathRev: z.number().int().min(0).optional(),
+  /**
+   * When the item reached its current step (item QjTTL): agents are handed work oldest first by
+   * it. Absent on items that have not moved since; they count as older than any that has.
+   */
+  stepAt: timestamp.optional(),
   updatedAt: timestamp,
   lastEventId: id,
 });

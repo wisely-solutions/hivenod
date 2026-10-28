@@ -20,6 +20,7 @@ import {
   type ItemState,
   type Step,
 } from '@hive/shared';
+import { Timestamp } from 'firebase/firestore';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   as,
@@ -478,5 +479,57 @@ for (const impl of IMPLS)
       await s.call('complete', { itemId: 'c' });
       expect(await read(I('c'))).toMatchObject({ stepId: 'test' });
       expect((await read(I('a'))).claim).toMatchObject({ runId: runOf('a') });
+    });
+  });
+
+for (const impl of IMPLS)
+  describe(`hivenod mcp --channel hand-out order (item QjTTL) [${impl}]`, () => {
+    beforeAll(() => {
+      IMPL = impl;
+    });
+
+    const ago = (min: number) => Timestamp.fromMillis(Date.now() - min * 60_000);
+
+    it('hands out oldest first by stepAt; a given-back item skips this agent', async () => {
+      const { token } = await newAgent();
+      // Document ids in the opposite order of age, so Firestore order would be wrong.
+      await put({
+        [I('a1')]: itemDoc({ stepId: 'build', title: 'Newest', stepAt: ago(5) }),
+        [I('b1')]: itemDoc({ stepId: 'build', title: 'Middle', stepAt: ago(60) }),
+        [I('c1')]: itemDoc({ stepId: 'build', title: 'Oldest', stepAt: ago(180) }),
+      });
+      const s = await session(token);
+      const w1 = await s.next('work');
+      expect(w1.meta.item_id).toBe('c1');
+      // Given back: the next oldest comes, not the same item again.
+      await s.call('release', { itemId: 'c1' });
+      const w2 = await s.next('work', 2);
+      expect(w2.meta.item_id).toBe('b1');
+      expect((await read(I('c1'))).claim).toBeNull();
+      await s.call('complete', { itemId: 'b1' });
+      // b1 moves on to Test with a fresh stepAt (newer than a1); c1 is still skipped.
+      const w3 = await s.next('work', 3);
+      expect(w3.meta.item_id).toBe('a1');
+      expect((await read(I('b1'))).stepAt).toBeTruthy();
+      await s.call('complete', { itemId: 'a1' });
+      const w4 = await s.next('work', 4);
+      expect(w4.meta.item_id).toBe('b1');
+      await pause(1000);
+      expect(
+        s.events.filter((e) => e.meta.kind === 'work' && e.meta.item_id === 'c1'),
+      ).toHaveLength(1);
+    });
+
+    it('items without stepAt count as older than any that moved (max_items 3)', async () => {
+      const { token } = await newAgent();
+      await put({
+        [I('a2')]: itemDoc({ stepId: 'build', title: 'New', stepAt: ago(1) }),
+        [I('b2')]: itemDoc({ stepId: 'build', title: 'Legacy' }),
+        [I('c2')]: itemDoc({ stepId: 'test', title: 'Old', stepAt: ago(30) }),
+      });
+      const s = await session(token, 3);
+      await s.next('work', 3);
+      const order = s.events.filter((e) => e.meta.kind === 'work').map((e) => e.meta.item_id);
+      expect(order).toEqual(['b2', 'c2', 'a2']);
     });
   });

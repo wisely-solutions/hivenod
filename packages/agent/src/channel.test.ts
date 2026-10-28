@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CHANNEL_INSTRUCTIONS,
   ChannelSession,
+  GIVE_BACK_SKIP_MS,
   channelInstructions,
   parseMaxItems,
   workText,
@@ -128,5 +129,24 @@ describe('max_items (card cGSENsRF)', () => {
       /A person stopped the work on item i2/,
     );
     expect(() => s.resolve('log', { runId: 'r2' })).toThrow(/stopped the work of run r2/);
+  });
+});
+
+describe('give-back skip (item QjTTL)', () => {
+  it('does not hand a given-back item to the same session for 10 minutes (fake clock)', () => {
+    let t = 1_000_000;
+    const s = new ChannelSession({} as HiveClient, async () => undefined, { now: () => t });
+    const skipped = (id: string) => (s as unknown as { skipped(i: string): boolean }).skipped(id);
+    expect(skipped('a')).toBe(false);
+    s.gaveBack('a');
+    expect(skipped('a')).toBe(true);
+    expect(skipped('b')).toBe(false);
+    t += GIVE_BACK_SKIP_MS - 1;
+    expect(skipped('a')).toBe(true);
+    t += 1;
+    expect(skipped('a')).toBe(false);
+    s.gaveBack('b');
+    s.forgetGiveBack('b');
+    expect(skipped('b')).toBe(false);
   });
 });

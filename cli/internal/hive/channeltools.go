@@ -32,6 +32,9 @@ func (cs *ChannelServer) Get() *Session {
 // Tools about one item that act on any item of the agent's projects (holding it is not needed).
 var anyItem = map[string]bool{"read_item": true, "raise_finding": true}
 
+// Tools that give a held item back without finishing it (item QjTTL).
+var givesBack = map[string]bool{"release": true, "end_run": true}
+
 // Not about one item.
 var noItem = map[string]bool{"list_work": true, "wait_for_work": true, "claim": true}
 
@@ -81,6 +84,7 @@ func ChannelTools(lazy *Lazy, cs *ChannelServer) []mcpserver.Tool {
 					args[k] = v
 				}
 				itemID, runID := args.S("itemId"), args.S("runId")
+				held := ""
 				switch {
 				case s == nil || s.IsBusy():
 					if hasItem && itemID == "" {
@@ -96,6 +100,7 @@ func ChannelTools(lazy *Lazy, cs *ChannelServer) []mcpserver.Tool {
 					if err != nil {
 						return nil, err
 					}
+					held = h.ItemID
 					if hasItem {
 						args["itemId"] = h.ItemID
 						if !args.Has("project") {
@@ -109,7 +114,18 @@ func ChannelTools(lazy *Lazy, cs *ChannelServer) []mcpserver.Tool {
 				if !hasItem {
 					delete(args, "itemId")
 				}
-				return inner(ctx, c, args)
+				if held == "" || !givesBack[name] {
+					return inner(ctx, c, args)
+				}
+				// Given back: not handed to this session again for a while (item QjTTL). Marked
+				// before the write, since the handover ends (and the next look starts) as soon as
+				// the claim goes.
+				s.GaveBack(held)
+				res, err := inner(ctx, c, args)
+				if err != nil {
+					s.ForgetGiveBack(held)
+				}
+				return res, err
 			}
 		}
 		final := run
