@@ -701,10 +701,15 @@ function Board({ pid, row }: { pid: string; row: Row<Project> }) {
     </div>
   );
 
+  // Items still on their way: on a phone the swipe carousel is reserved at about its final height, so
+  // it does not grow under the reader when they arrive (card 3j7gK: 0.077 at 6x CPU). A board that
+  // fills the screen is what a loaded one looks like; a shorter one shrinks below the fold, shifting nothing.
+  const loadingItems = list.length === 0 && !settled;
   const columns = (
     <div
       className={cn(
         'relative gap-3 pb-4',
+        phone && !asRows && loadingItems && 'min-h-[calc(100dvh-14rem)]',
         asRows
           ? 'flex flex-col'
           : phone
@@ -812,7 +817,7 @@ function Board({ pid, row }: { pid: string; row: Row<Project> }) {
                 ))}
               </div>
             ) : null}
-            {rows.length === 0 && i !== 0 ? (
+            {rows.length === 0 && i !== 0 && !loadingItems ? (
               <p className="px-1 py-2 text-13 text-text-2">Nothing here.</p>
             ) : null}
           </>
@@ -957,7 +962,12 @@ function Board({ pid, row }: { pid: string; row: Row<Project> }) {
   return (
     <div>
       {header}
-      {view === 'board' && phone ? (
+      {view === 'board' && phone && loadingItems ? (
+        // The step strip appears with the first items: hold its place (44 px pills, 12 px padding and
+        // margin) so the board does not drop 68 px when they arrive.
+        <div aria-hidden className="mb-3 h-14" />
+      ) : null}
+      {view === 'board' && phone && !loadingItems ? (
         <Scrubber
           entries={scrubber(project, grouped, uid)}
           activeId={activeStep}
