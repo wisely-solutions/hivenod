@@ -53,6 +53,9 @@ func (pathBuilders) InboxOutcome(w, o string) string {
 	return "workspaces/" + w + "/inboxOutcomes/" + o
 }
 func (pathBuilders) InboxEvent(w, e string) string { return "workspaces/" + w + "/inboxEvents/" + e }
+func (pathBuilders) InboxRelation(w, r string) string {
+	return "workspaces/" + w + "/inboxRelations/" + r
+}
 
 // InboxCollection is workspaces/{w}/<name> (inboxThreads, inboxMessages, …).
 func (pathBuilders) InboxCollection(w, name string) string { return "workspaces/" + w + "/" + name }

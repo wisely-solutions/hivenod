@@ -1125,12 +1125,13 @@ service cloud.firestore {
                 && request.resource.data.memberUid == me()
                 && request.resource.data.type in ['thread.titled', 'thread.answered', 'thread.ignored',
                   'thread.closed', 'thread.restored', 'thread.moved', 'outcome.approved',
-                  'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split'])
+                  'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split',
+                  'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed'])
             || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(wid, request.resource.data.memberUid)
                 && request.resource.data.type in ['inbox.added', 'thread.filed', 'thread.note',
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.done',
-                  'outcome.failed']));
+                  'outcome.failed', 'relation.proposed']));
         allow update, delete: if false;
       }
 
@@ -1359,6 +1360,57 @@ service cloud.firestore {
         // A merge deletes the subject it empties, with the tombstone event del-subject-<sid>.
         allow delete: if inboxOwner(wid, resource.data)
           && inboxTracked(wid, 'del-subject-' + sid, ['subject.merged'], me());
+      }
+
+      // Related subjects: one document per pair (a < b, id rel-<a>-<b>) of one member's
+      // subjects. An agent proposes; only the member relates, accepts, turns down or removes
+      // (back to rejected). Never deleted.
+      match /inboxRelations/{rid} {
+        allow read: if inboxReader(wid, resource.data);
+        allow create: if exactKeys(request.resource.data, ['memberUid', 'a', 'b', 'note', 'state',
+               'proposedBy', 'decision', 'createdAt', 'updatedAt', 'lastEventId'])
+          && inboxRelationPairOk(wid, rid, request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && inboxEv(wid, request.resource.data.lastEventId).data.data.relationId == rid
+          && ((isActiveAgent(wid) && inboxMember(wid, request.resource.data.memberUid)
+                && request.resource.data.state == 'proposed'
+                && request.resource.data.proposedBy == me_('agent')
+                && request.resource.data.decision == null
+                && inboxTracked(wid, request.resource.data.lastEventId, ['relation.proposed'], request.resource.data.memberUid))
+            || (isMember(wid) && request.resource.data.memberUid == me()
+                && request.resource.data.state == 'related'
+                && request.resource.data.proposedBy == me_('human')
+                && inboxRelationDecisionOk(request.resource.data)
+                && inboxTracked(wid, request.resource.data.lastEventId, ['relation.created'], me())));
+        allow update: if inboxOwner(wid, resource.data)
+          && changed(['state', 'note', 'decision', 'updatedAt', 'lastEventId'])
+          && str(request.resource.data.note, 0, 500)
+          && request.resource.data.updatedAt == request.time
+          && inboxRelationDecisionOk(request.resource.data)
+          && inboxTracked(wid, request.resource.data.lastEventId,
+               ['relation.accepted', 'relation.created', 'relation.rejected', 'relation.removed'], me())
+          && inboxEv(wid, request.resource.data.lastEventId).data.data.relationId == rid
+          && inboxRelationMove(resource.data, request.resource.data,
+               inboxEv(wid, request.resource.data.lastEventId).data.type);
+        allow delete: if false;
+
+        // The pair: two different subjects of the member, in order, named by the id.
+        function inboxRelationPairOk(wid, rid, d) {
+          return d.a is string && d.b is string && d.a < d.b && rid == 'rel-' + d.a + '-' + d.b
+            && str(d.note, 0, 500)
+            && inboxSubjectOf(wid, d.a, d.memberUid) && inboxSubjectOf(wid, d.b, d.memberUid);
+        }
+        function inboxRelationDecisionOk(d) {
+          return exactKeys(d.decision, ['byUid', 'at']) && d.decision.byUid == me()
+            && d.decision.at == request.time;
+        }
+        function inboxRelationMove(r, d, type) {
+          return type == 'relation.accepted' ? r.state == 'proposed' && d.state == 'related'
+            : type == 'relation.created' ? r.state == 'rejected' && d.state == 'related'
+            : type == 'relation.rejected' ? r.state == 'proposed' && d.state == 'rejected' && d.note == r.note
+            : r.state == 'related' && d.state == 'rejected' && d.note == r.note;
+        }
       }
 
       // ---------- projects ----------

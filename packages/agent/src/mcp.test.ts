@@ -49,6 +49,8 @@ describe('hivenod mcp', () => {
       'skip_step',
       'subject_assign',
       'subject_list',
+      'subject_relate',
+      'subject_search',
       'thread_read',
       'thread_wake',
       'wait_for_work',

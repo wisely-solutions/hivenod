@@ -384,8 +384,8 @@ const MUTATIONS = [
     'inbox: people write agent events',
     [
       [
-        "'subject.created', 'subject.renamed', 'subject.merged', 'subject.split'])",
-        "'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'outcome.done'])",
+        "'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed'])",
+        "'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed', 'outcome.done'])",
       ],
     ],
   ],
@@ -407,6 +407,37 @@ const MUTATIONS = [
     [['return d.state == outcomeAfter()[type]', 'return d.state is string']],
   ],
   ['inbox: early wake', [['&& r.waiting.until <= request.time', '']]],
+  [
+    'inbox: agents decide relations',
+    [
+      [
+        "'outcome.failed', 'relation.proposed']));",
+        "'outcome.failed', 'relation.proposed', 'relation.accepted']));",
+      ],
+      [
+        "allow update: if inboxOwner(wid, resource.data)\n          && changed(['state', 'note', 'decision'",
+        "allow update: if (inboxOwner(wid, resource.data) || isActiveAgent(wid))\n          && changed(['state', 'note', 'decision'",
+      ],
+      [
+        "['relation.accepted', 'relation.created', 'relation.rejected', 'relation.removed'], me())",
+        "['relation.accepted', 'relation.created', 'relation.rejected', 'relation.removed'], resource.data.memberUid)",
+      ],
+    ],
+  ],
+  [
+    "inbox: relate another member's subject",
+    [['&& inboxSubjectOf(wid, d.a, d.memberUid) && inboxSubjectOf(wid, d.b, d.memberUid);', ';']],
+  ],
+  ['inbox: relation id forged', [["&& d.a < d.b && rid == 'rel-' + d.a + '-' + d.b", '']]],
+  [
+    'inbox: agents propose a related link',
+    [
+      [
+        "&& request.resource.data.state == 'proposed'\n                && request.resource.data.proposedBy == me_('agent')",
+        "&& request.resource.data.proposedBy == me_('agent')",
+      ],
+    ],
+  ],
 ];
 
 // Fail loudly, before any run: a search text that no longer matches (the rules were refactored)

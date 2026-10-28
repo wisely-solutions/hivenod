@@ -74,6 +74,14 @@ func (a Args) F(k string) *float64 {
 	return nil
 }
 
+// BP is an optional boolean argument.
+func (a Args) BP(k string) *bool {
+	if v, ok := a[k].(bool); ok {
+		return &v
+	}
+	return nil
+}
+
 // SP is an optional string argument.
 func (a Args) SP(k string) *string {
 	if v, ok := a[k].(string); ok {
@@ -157,6 +165,12 @@ var ToolRuns = map[string]Run{
 	},
 	"subject_assign": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.SubjectAssign(ctx, a.S("threadId"), a.SP("subjectId"), a.SP("name"))
+	},
+	"subject_search": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.SubjectSearch(ctx, a.S("query"), SearchFilters{Member: a.S("member"), WaitingForMe: a.BP("waitingForMe"), ActiveDays: a.F("activeDays"), HasOpen: a.BP("hasOpen"), Limit: a.F("limit")})
+	},
+	"subject_relate": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.SubjectRelate(ctx, a.S("a"), a.S("b"), a.SP("note"))
 	},
 	"inbox_note": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.InboxNote(ctx, a.S("threadId"), a.S("text"))

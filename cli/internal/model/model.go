@@ -446,6 +446,15 @@ type InboxOutcome struct {
 	CreatedAt  time.Time      `firestore:"createdAt" json:"createdAt"`
 }
 
+// InboxRelation is workspaces/{w}/inboxRelations/{rid}: two related subjects (a < b).
+type InboxRelation struct {
+	MemberUID string `firestore:"memberUid" json:"memberUid"`
+	A         string `firestore:"a" json:"a"`
+	B         string `firestore:"b" json:"b"`
+	Note      string `firestore:"note" json:"note"`
+	State     string `firestore:"state" json:"state"`
+}
+
 // InboxSubject is workspaces/{w}/inboxSubjects/{sid}.
 type InboxSubject struct {
 	MemberUID string `firestore:"memberUid" json:"memberUid"`

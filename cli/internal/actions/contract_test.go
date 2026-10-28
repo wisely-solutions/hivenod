@@ -148,6 +148,14 @@ var runners = map[string]runner{
 	}) (any, error) {
 		return TitleFrom(in.Text), nil
 	}),
+	"proposeRelation": act(ProposeRelation),
+	"relationId": pure(func(in struct {
+		A string `json:"a"`
+		B string `json:"b"`
+	}) (any, error) {
+		return RelationID(in.A, in.B), nil
+	}),
+	"searchSubjects": pure(func(in SearchInput) (any, error) { return SearchSubjects(in), nil }),
 	"calendarUpsert": act(CalendarUpsert),
 	"calendarDelete": act(CalendarDelete),
 	"freeSlots": pure(func(in FreeSlotsInput) (any, error) {

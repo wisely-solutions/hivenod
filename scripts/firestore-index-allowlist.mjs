@@ -62,4 +62,10 @@ export const ALLOWLIST = [
     reason:
       'Inbox agent tools (item 4PEHr): exactly one where() (==, in or array-contains) and no orderBy, which single-field indexes always serve; results are sorted in memory.',
   },
+  {
+    file: 'packages/agent/src/inbox.ts',
+    text: 'query(collection(this.d.db, `workspaces/${w}/inboxRelations`), where(field, op, value))',
+    reason:
+      'Inbox agent tools (item 4PEHr): exactly one where() (==, in or array-contains) and no orderBy, which single-field indexes always serve; results are sorted in memory.',
+  },
 ];

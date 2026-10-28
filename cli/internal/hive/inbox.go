@@ -706,3 +706,97 @@ func (c *Client) ThreadWake(ctx context.Context, id string) (map[string]any, err
 	}
 	return map[string]any{"threadId": id, "state": "investigating", "note": "Awake: investigate it again."}, nil
 }
+
+// SearchFilters are subject_search's filters.
+type SearchFilters struct {
+	Member       string
+	WaitingForMe *bool
+	ActiveDays   *float64
+	HasOpen      *bool
+	Limit        *float64
+}
+
+// SubjectSearch is subject_search: a person's subjects by name, people, channel and thread text.
+func (c *Client) SubjectSearch(ctx context.Context, q string, f SearchFilters) (map[string]any, error) {
+	member, err := c.inboxMember(ctx, f.Member)
+	if err != nil {
+		return nil, err
+	}
+	subs, err := listInbox[model.InboxSubject](ctx, c, "inboxSubjects", "memberUid", "==", member)
+	if err != nil {
+		return nil, err
+	}
+	threads, err := listInbox[model.InboxThread](ctx, c, "inboxThreads", "memberUid", "==", member)
+	if err != nil {
+		return nil, err
+	}
+	msgs, err := listInbox[model.InboxMessage](ctx, c, "inboxMessages", "memberUid", "==", member)
+	if err != nil {
+		return nil, err
+	}
+	rels, err := listInbox[model.InboxRelation](ctx, c, "inboxRelations", "memberUid", "==", member)
+	if err != nil {
+		return nil, err
+	}
+	in := actions.SearchInput{Query: q, NowMs: time.Now().UnixMilli(),
+		Filters:   actions.SearchFilters{WaitingForMe: f.WaitingForMe, ActiveDays: f.ActiveDays, HasOpen: f.HasOpen, Limit: f.Limit},
+		Subjects:  []actions.SearchSubject{},
+		Threads:   []actions.SearchThread{},
+		Messages:  []actions.SearchMessage{},
+		Relations: []actions.SearchRelation{}}
+	for _, s := range subs {
+		in.Subjects = append(in.Subjects, actions.SearchSubject{ID: s.ID, Name: s.Data.Name})
+	}
+	for _, t := range threads {
+		in.Threads = append(in.Threads, actions.SearchThread{ID: t.ID, SubjectID: t.Data.SubjectID, State: t.Data.State, Title: t.Data.Title, LastMessageAtMs: t.Data.LastMessageAt.UnixMilli()})
+	}
+	for _, m := range msgs {
+		in.Messages = append(in.Messages, actions.SearchMessage{ThreadID: m.Data.ThreadID, Direction: m.Data.Direction, Source: m.Data.Source, SenderName: m.Data.Sender.Name, SenderHandle: m.Data.Sender.Handle, Text: m.Data.Text})
+	}
+	for _, r := range rels {
+		in.Relations = append(in.Relations, actions.SearchRelation{A: r.Data.A, B: r.Data.B, State: r.Data.State, Note: r.Data.Note})
+	}
+	r := actions.SearchSubjects(in)
+	note := "No subject matches. Try fewer or other words, or make a new subject with subject_assign (name)."
+	if r.Total > 0 {
+		note = "Best matches first. File a thread under the subject it belongs to (subject_assign with subjectId); propose links between related subjects with subject_relate."
+	}
+	return map[string]any{"member": member, "query": q, "total": r.Total, "subjects": r.Subjects, "note": note}, nil
+}
+
+// SubjectRelate is subject_relate: proposes a link between two subjects; the person OKs it.
+func (c *Client) SubjectRelate(ctx context.Context, a, b string, note *string) (map[string]any, error) {
+	var sa, sb model.InboxSubject
+	okA, err := c.getDoc(ctx, model.Paths.InboxSubject(c.WorkspaceID, a), &sa)
+	if err != nil {
+		return nil, err
+	}
+	okB, err := c.getDoc(ctx, model.Paths.InboxSubject(c.WorkspaceID, b), &sb)
+	if err != nil {
+		return nil, err
+	}
+	if !okA {
+		return nil, Errf(fmt.Sprintf("Subject %s not found (see subject_search).", a))
+	}
+	if !okB {
+		return nil, Errf(fmt.Sprintf("Subject %s not found (see subject_search).", b))
+	}
+	var ex model.InboxRelation
+	found, err := c.getDoc(ctx, model.Paths.InboxRelation(c.WorkspaceID, actions.RelationID(a, b)), &ex)
+	if err != nil {
+		return nil, err
+	}
+	in := actions.ProposeRelationInput{A: a, B: b, SubjectA: actions.SubjectOf{MemberUID: sa.MemberUID}, SubjectB: actions.SubjectOf{MemberUID: sb.MemberUID}, Note: note}
+	if found {
+		in.Existing = &actions.RelationState{MemberUID: ex.MemberUID, A: ex.A, B: ex.B, Note: ex.Note, State: ex.State}
+	}
+	res, err := actions.ProposeRelation(c.actx(), in)
+	if err != nil {
+		return nil, wrap(err)
+	}
+	if err := c.inboxWrite(ctx, res.Plan); err != nil {
+		return nil, err
+	}
+	return map[string]any{"relationId": res.RelationID, "a": res.A, "b": res.B, "state": "proposed",
+		"note": "Proposed. The person OKs or turns it down; until then it shows as a suggestion."}, nil
+}
