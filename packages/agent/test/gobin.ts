@@ -31,6 +31,9 @@ let built = '';
 /** Builds the binary (once) and returns its path. */
 export function goBinary(): string {
   if (built) return built;
+  // Built once by globalSetup.ts, for all the test workers.
+  const prebuilt = process.env.HIVENOD_GO_BIN;
+  if (prebuilt && existsSync(prebuilt)) return (built = prebuilt);
   if (!GO) throw new Error('Go is not installed');
   const out = join(mkdtempSync(join(tmpdir(), 'hivenod-go-')), 'hivenod');
   execFileSync(GO, ['build', '-o', out, './cmd/hivenod'], {
