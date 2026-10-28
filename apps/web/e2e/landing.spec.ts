@@ -32,8 +32,19 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(
       page.getByRole('contentinfo').getByRole('link', { name: 'Privacy' }),
     ).toBeVisible();
-    // The GitHub links stay hidden until the open-source card turns their flag on.
-    await expect(page.locator('a[href*="github.com"]')).toHaveCount(0);
+    // The repository is public: every GitHub link points to it.
+    const repo = 'https://github.com/wisely-solutions/hivenod';
+    await expect(page.getByRole('link', { name: 'View on GitHub' })).toHaveAttribute('href', repo);
+    const footer = page.getByRole('contentinfo');
+    await expect(footer.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', repo);
+    await expect(footer.getByRole('link', { name: 'Docs' })).toHaveAttribute(
+      'href',
+      `${repo}#readme`,
+    );
+    for (const href of await page
+      .locator('a[href*="github.com"]')
+      .evaluateAll((as) => as.map((a) => a.getAttribute('href'))))
+      expect(href?.startsWith(repo)).toBe(true);
     await expectNoHorizontalScroll(page);
     await page.screenshot({
       path: `${process.env.SHOTS ?? 'test-results'}/landing-${theme}-${page.viewportSize()!.width}.png`,
