@@ -408,6 +408,12 @@ const MUTATIONS = [
   ],
   ['inbox: early wake', [['&& r.waiting.until <= request.time', '']]],
   [
+    'inbox: an item link without the item',
+    [['|| inboxItemMade(wid, request.resource.data))', '|| true)']],
+  ],
+  [
+    "inbox: linking another member's thread",
+    [["&& get(inboxDoc(wid, 'inboxThreads', e.threadId)).data.memberUid == me()", '']],
     'inbox: agents decide relations',
     [
       [

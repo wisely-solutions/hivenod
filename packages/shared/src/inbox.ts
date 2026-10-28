@@ -86,6 +86,7 @@ export const INBOX_EVENT_TYPES = [
   'thread.closed',
   'thread.restored',
   'thread.moved',
+  'thread.itemMade',
   'outcome.approved',
   'outcome.rejected',
   'subject.created',
@@ -1165,6 +1166,33 @@ export function splitSubject(
     ],
   );
   return { ...p, subjectId };
+}
+
+/**
+ * The member's own "Make it work": a Hivenod item they create from a thread (createItem, with
+ * them as its creator), linked on the thread's timeline by a `thread.itemMade` event in the same
+ * batch. The thread itself does not change: proposals and agents carry on.
+ */
+export function makeItemFromThread(
+  ctx: ActionContext,
+  input: {
+    threadId: string;
+    thread: Pick<ThreadStateOf, 'memberUid' | 'subjectId'>;
+    /** The createItem plan for the new item, built by the caller in the same context. */
+    item: ActionPlan & { itemId: string };
+    projectId: string;
+    title: string;
+  },
+): ActionPlan & { itemId: string } {
+  owner(ctx, input.thread.memberUid);
+  const p = inboxPlan(
+    ctx,
+    'thread.itemMade',
+    { memberUid: ctx.actor.id, threadId: input.threadId, subjectId: input.thread.subjectId },
+    { projectId: input.projectId, itemId: input.item.itemId, title: input.title.slice(0, 300) },
+    () => input.item.ops,
+  );
+  return { ...p, itemId: input.item.itemId };
 }
 
 // ---------- related subjects (docs/INBOX.md, "Related subjects") ----------

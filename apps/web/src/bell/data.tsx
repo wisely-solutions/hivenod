@@ -4,7 +4,14 @@
  * same on every device. New entries that arrive while the app is open pop up once as a toast;
  * the first snapshot never does (sign-in shows no burst).
  */
-import { BELL_KEEP_MS, BELL_LIMIT, bellEntrySchema, bellPath, bellPlain } from '@hive/shared';
+import {
+  BELL_KEEP_MS,
+  BELL_LIMIT,
+  bellEntrySchema,
+  bellPath,
+  bellPlain,
+  isInboxBell,
+} from '@hive/shared';
 import { useNavigate } from '@tanstack/react-router';
 import {
   collection,
@@ -101,6 +108,13 @@ export function BellProvider({ children }: { children: ReactNode }) {
   const open = useCallback(
     (row: BellRow) => {
       markRead(row.id);
+      if (isInboxBell(row.data.kind)) {
+        void navigate({
+          to: '/inbox/$wid/t/$tid',
+          params: { wid: row.data.workspaceId, tid: row.data.itemId },
+        });
+        return;
+      }
       void navigate({
         to: '/p/$pid',
         params: { pid: row.data.projectId },

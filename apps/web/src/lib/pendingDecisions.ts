@@ -141,7 +141,10 @@ export function forget(uid: string, ws: string, id: string): void {
 
 /** The event document a plan creates, if any (used to tell that the plan already landed). */
 export function eventPath(plan: WriteOp[]): string | null {
-  return plan.find((o) => o.kind === 'set' && /\/events\/[^/]+$/.test(o.path))?.path ?? null;
+  return (
+    plan.find((o) => o.kind === 'set' && /\/(events|inboxEvents)\/[^/]+$/.test(o.path))?.path ??
+    null
+  );
 }
 
 /**

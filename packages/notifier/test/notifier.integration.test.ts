@@ -3,11 +3,19 @@
  * carry decision buttons, a button press approves through the same ActionPlan the app uses, a
  * reply sends back with a reason, and a one-time code links a chat.
  */
-import { bellId, bellPath, notifyPath, paths } from '@hive/shared';
+import { bellId, bellPath, inboxPaths, notifyPath, paths } from '@hive/shared';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { atGate, I, itemDoc, put, useEmulator, W } from '../../shared/rules/harness';
+import {
+  atGate,
+  I,
+  itemDoc,
+  now as harnessNow,
+  put,
+  useEmulator,
+  W,
+} from '../../shared/rules/harness';
 import { Engine } from '../src/engine';
 import { firestorePorts, watchAll } from '../src/store';
 import { TelegramApi, TelegramBot } from '../src/telegram';
@@ -251,6 +259,85 @@ describe('notifier end to end', () => {
       expect((await db.doc(bellPath.entry('bob', bellId.sentBack('dsb1'))).get()).exists).toBe(
         false,
       );
+    } finally {
+      stop();
+    }
+  });
+
+  it('an Inbox thread at Your call tells its member alone (item 4PEHr)', async () => {
+    const now = harnessNow();
+    await put({
+      [notifyPath.telegram('alice')]: { chatId: 42, username: null, linkedAt: 1 },
+      [notifyPath.telegram('bob')]: { chatId: 43, username: null, linkedAt: 1 },
+      [inboxPaths.subject(W, 's1')]: {
+        memberUid: 'alice',
+        name: 'Review dates (Payments)',
+        createdBy: { type: 'agent', id: 'agentA' },
+        createdAt: now,
+        updatedAt: now,
+        lastEventId: 'e0',
+      },
+      [inboxPaths.thread(W, 'it1')]: {
+        memberUid: 'alice',
+        subjectId: 's1',
+        state: 'yourCall',
+        waiting: null,
+        question: null,
+        title: 'Move the review to Thursday?',
+        refs: ['r1'],
+        lastMessageAt: now,
+        fetchedBy: 'agentA',
+        createdAt: now,
+        updatedAt: now,
+        lastEventId: 'e1',
+      },
+      [inboxPaths.outcome(W, 'o1')]: {
+        memberUid: 'alice',
+        threadId: 'it1',
+        type: 'reply',
+        fields: { text: 'Thursday works.' },
+        state: 'proposed',
+        note: '',
+        proposedBy: 'agentA',
+        executor: 'agentA',
+        decision: null,
+        result: null,
+        createdAt: now,
+        updatedAt: now,
+        lastEventId: 'e1',
+      },
+    });
+    const { calls, bot } = fakeTelegram();
+    const engine = new Engine(
+      firestorePorts(db, {
+        sendPush: async () => ({ result: 'error' as const, attempts: 0 }),
+        sendTelegram: (c, n, a) => bot.send(c, n, a),
+        log: () => undefined,
+      }),
+    );
+    const stop = watchAll(
+      db,
+      engine,
+      () => void engine.sweep(),
+      () => undefined,
+    );
+    try {
+      const mine = () =>
+        calls.filter(
+          (c) => c.method === 'sendMessage' && String(c.body.text).includes('Your call'),
+        );
+      await until(() => mine().length > 0);
+      expect(mine().map((c) => c.body.chat_id)).toEqual([42]);
+      expect(String(mine()[0]!.body.text)).toContain('Move the review to Thursday?');
+      expect(JSON.stringify(mine()[0]!.body)).toContain(`/inbox/${W}/t/it1`);
+      const bell = bellPath.entry('alice', bellId.inbox('it1', `c${now.toMillis()}`));
+      await until(async () => (await db.doc(bell).get()).exists);
+      expect((await db.doc(bell).get()).data()).toMatchObject({
+        kind: 'inboxCall',
+        itemId: 'it1',
+        projectName: 'Inbox · Review dates (Payments)',
+        text: 'Reply',
+      });
     } finally {
       stop();
     }

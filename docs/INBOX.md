@@ -250,9 +250,44 @@ last event id it handled (`lastEventId`):
 - Tuning and tests: `HIVENOD_INBOX_PER_MIN`, and in milliseconds `HIVENOD_INBOX_NUDGE_MS`,
   `HIVENOD_INBOX_LEASE_MS` and `HIVENOD_INBOX_TICK_MS`.
 
+## The Inbox view (web app)
+
+- **`/inbox`**: the member's subjects, across all their organizations or one (`?org=<id>`).
+  Subjects with threads waiting for the member (Needs you, Your call) come first, then the
+  rest by activity. Threads not filed yet gather under "Not filed yet". **Find** searches the
+  subject names, thread titles, the people who wrote, the channels and the text of the
+  messages; the filters are: organization, waiting for me, has open threads, active in the
+  last 7, 30 or 90 days. Find runs `searchSubjects` (see "Finding subjects") in the browser over
+  the member's own records, one call per organization, so it answers like `subject_search`.
+- **`/inbox/<org>/s/<subject>`**: the subject's threads (open and closed) and its timeline, with
+  Rename, Merge (pick the target) and Split (pick the threads, name the new subject), and its
+  related subjects: links an agent proposed (OK or No), related ones (Unlink), and Link a
+  subject with an optional note.
+- **`/inbox/<org>/t/<thread>`**: the agent's question with an answer box, the proposed outcomes,
+  the decided ones, and the timeline: each message with its sender, source, the original text,
+  attachments and a link to the original, and the agents' notes and the decisions. Each outcome
+  is drawn from the registry; its fields become editable with **Edit**, and **Approve** (the
+  registry's word, e.g. Send for a reply) or **Reject** counts down on the pressed button with
+  Undo before it is written. The member can also move the thread to another subject, mark it
+  done, ignore it, bring it back, mark it urgent or not (`flagThread`), and **Make it work**.
+  An approved `reply_book` shows the slot it booked.
+- **Make it work** (the member's own): `makeItemFromThread` creates a Hivenod item with
+  `createItem`, the member as its creator, in one of their projects of the thread's
+  organization, and links it on the thread's timeline with a `thread.itemMade` event in the
+  same batch. The rules accept that event only for the member's own thread and an item they
+  created in that batch. The thread itself does not change.
+- Every query filters on `memberUid == me`; the rules allow nothing wider.
+
+## Notices (notifier)
+
+A thread arriving at **Needs you** (an agent's question) or **Your call** (outcomes proposed)
+tells its member alone: a bell entry (`inboxAsk`, `inboxCall`; `projectId` is `inbox`, `itemId`
+the thread) and push and Telegram, linking to the thread page. One arrival is one notice: a new
+question, or a new round of proposals after the earlier ones were decided, is a new arrival.
+A thread with `urgent: true` (`thread_flag`, or the member's Mark urgent) skips quiet hours and
+the summary.
+
 ## Still to come
 
-- **Part 3:** the Inbox view (per workspace and across workspaces), decisions on outcomes,
-  rename, merge, split and move, and notifier notices, including urgent pings.
 - **Later slices:** personal Google sync, and
   per-workspace auto-OK per outcome type.

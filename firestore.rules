@@ -1117,6 +1117,14 @@ service cloud.firestore {
       function outcomeRequired() { return {'reply': ['text'], 'reply_book': ['text', 'start', 'end', 'with'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': []}; }
       // END outcome registry
 
+      // The member's own "Make it work": the item is created in the same batch, by them, and the
+      // thread is theirs.
+      function inboxItemMade(wid, e) {
+        return e.threadId is string && e.data.projectId is string && e.data.itemId is string
+          && get(inboxDoc(wid, 'inboxThreads', e.threadId)).data.memberUid == me()
+          && getAfter(/databases/$(database)/documents/workspaces/$(wid)/projects/$(e.data.projectId)/items/$(e.data.itemId)).data.createdBy.id == me();
+      }
+
       match /inboxEvents/{eid} {
         allow read: if inboxReader(wid, resource.data);
         allow create: if signedIn() && !isDeleting(wid)
@@ -1131,10 +1139,11 @@ service cloud.firestore {
           && ((request.resource.data.actor.type == 'human' && isMember(wid)
                 && request.resource.data.memberUid == me()
                 && request.resource.data.type in ['thread.titled', 'thread.answered', 'thread.ignored',
-                  'thread.closed', 'thread.restored', 'thread.moved', 'outcome.approved',
+                  'thread.closed', 'thread.restored', 'thread.moved', 'thread.itemMade', 'outcome.approved',
                   'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged'])
+                && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))
             || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(wid, request.resource.data.memberUid)
                 && request.resource.data.type in ['inbox.added', 'thread.filed', 'thread.note',

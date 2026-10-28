@@ -10,6 +10,9 @@
  *  - The bell (item 3ENs): every new arrival, question, answer and send-back is written to the
  *    history of the people it is for, whatever their channels, quiet hours or its age. Pop-ups
  *    stay live only; the bell is where the rest waits.
+ *  - Inbox (item 4PEHr): a thread arriving at Needs you (an agent's question) or Your call
+ *    (outcomes proposed) tells its member alone, once per arrival, on the bell, push and
+ *    Telegram. An urgent thread skips quiet hours and the summary.
  *  - After the gate's remindAfterHours a reminder goes out once, and only then is `remindedAt` set,
  *    which the app shows as "reminder sent".
  */
@@ -19,6 +22,8 @@ import {
   clipText,
   type BellEntry,
   inQuietHours,
+  inboxNotice,
+  INBOX_BELL_PROJECT,
   gateKey,
   questionNotice,
   reminderDue,
@@ -106,8 +111,28 @@ export interface DecisionMsg {
   creatorUid: string | null;
 }
 
+/** An Inbox thread waiting for its member (Needs you or Your call). */
+export interface InboxWaiting {
+  wid: string;
+  tid: string;
+  memberUid: string;
+  state: 'needsYou' | 'yourCall';
+  title: string;
+  subjectName: string;
+  /** The question, or what is proposed ("Reply, Snooze"). */
+  text: string;
+  /** Who asked or proposed (an agent's name). */
+  byName: string;
+  /** Identifies this arrival: a new question or a new round of proposals is a new one. */
+  arrival: string;
+  /** When it arrived (ms). */
+  sinceMs: number;
+  urgent: boolean;
+}
+
 export class Engine {
   private waiting = new Map<string, WaitingItem>();
+  private inbox = new Map<string, InboxWaiting>();
   private questions = new Map<string, QuestionMsg>();
   /** Channels that already got a message, by `key|uid|channel` (kept for the process's life). */
   private chanDone = new Set<string>();
@@ -158,6 +183,10 @@ export class Engine {
     if (w) this.waiting.set(key, w);
     else this.waiting.delete(key);
   }
+  setInbox(t: InboxWaiting | null, key: string) {
+    if (t) this.inbox.set(key, t);
+    else this.inbox.delete(key);
+  }
   setQuestion(q: QuestionMsg | null, key: string) {
     if (q) this.questions.set(key, q);
     else this.questions.delete(key);
@@ -176,9 +205,15 @@ export class Engine {
    * 'retry': push was tried and failed everywhere, so the message is not marked sent. `key` names the
    * message so a channel that already got it (Telegram) is not used again on a retry.
    */
-  async deliver(uid: string, notice: Notice, action?: ApprovalAction, key = ''): Promise<Delivery> {
+  async deliver(
+    uid: string,
+    notice: Notice,
+    action?: ApprovalAction,
+    key = '',
+    urgent = false,
+  ): Promise<Delivery> {
     const prefs = await this.prefs(uid);
-    if (inQuietHours(prefs.quiet, new Date(this.p.now()))) return 'held';
+    if (!urgent && inQuietHours(prefs.quiet, new Date(this.p.now()))) return 'held';
     const id = `${key}|${uid}`;
     let sent = this.chanDone.has(`${id}|push`) || this.chanDone.has(`${id}|tg`);
     let pushFailed = false;
@@ -377,10 +412,72 @@ export class Engine {
       }
     }
 
+    for (const t of [...this.inbox.values()]) {
+      try {
+        const key = `i-${t.tid}`;
+        const r = await record(t.wid, key, () => ({
+          itemId: t.tid,
+          projectId: INBOX_BELL_PROJECT,
+          gateKey: t.arrival,
+          sent: now - t.sinceMs > FRESH_MS ? [t.memberUid] : [],
+          remindedAt: null,
+          at: now,
+        }));
+        if (!r) continue;
+        let arrived = r.dirty;
+        if (r.rec.gateKey !== t.arrival) {
+          r.rec = { ...r.rec, gateKey: t.arrival, sent: [], remindedAt: null, at: now };
+          r.dirty = true;
+          arrived = true;
+        }
+        if (arrived)
+          await this.bell([t.memberUid], bellId.inbox(t.tid, t.arrival), {
+            kind: t.state === 'needsYou' ? 'inboxAsk' : 'inboxCall',
+            workspaceId: t.wid,
+            projectId: INBOX_BELL_PROJECT,
+            itemId: t.tid,
+            projectName: clipText(t.subjectName ? `Inbox · ${t.subjectName}` : 'Inbox', 200),
+            itemTitle: clipText(t.title || 'An Inbox thread', 300),
+            stepName: '',
+            actorName: clipText(t.byName, 200),
+            text: clipText(t.text.replace(/\s+/g, ' ').trim(), 200),
+            at: t.sinceMs,
+            readAt: null,
+          });
+        if (r.rec.sent.includes(t.memberUid)) continue;
+        cands.push({
+          uid: t.memberUid,
+          notice: inboxNotice({
+            kind: t.state,
+            subjectName: t.subjectName,
+            threadTitle: t.title,
+            text: t.text,
+            workspaceId: t.wid,
+            threadId: t.tid,
+            urgent: t.urgent,
+          }),
+          key: `in|${t.tid}|${t.arrival}`,
+          urgent: t.urgent,
+          done: () => {
+            r.rec.sent = [...r.rec.sent, t.memberUid];
+            r.dirty = true;
+          },
+        });
+      } catch (e) {
+        this.p.log(`inbox ${t.tid}: ${String(e)}`);
+      }
+    }
+
     const byUid = new Map<string, Candidate[]>();
     for (const c of cands) byUid.set(c.uid, [...(byUid.get(c.uid) ?? []), c]);
-    for (const [uid, list] of byUid) {
+    for (const [uid, all] of byUid) {
       try {
+        // Urgent threads go out at once, on their own, whatever the hour.
+        for (const c of all.filter((x) => x.urgent)) {
+          const d = await this.deliver(uid, c.notice, c.action, c.key, true);
+          if (d !== 'retry') c.done();
+        }
+        const list = all.filter((x) => !x.urgent);
         if (list.length > SUMMARY_OVER) {
           const d = await this.deliver(
             uid,
@@ -408,5 +505,6 @@ interface Candidate {
   notice: Notice;
   action?: ApprovalAction;
   key: string;
+  urgent?: boolean;
   done: () => void;
 }
