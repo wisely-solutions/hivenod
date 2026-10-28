@@ -12,6 +12,8 @@ import { activityText, spendText } from './logic';
 import { ME, NAV } from './nav';
 import { OrgSwitcher } from '../orgs/OrgSwitcher';
 import { BellButton } from '../bell/Bell';
+import { useNeedsAll } from '../needs/data';
+import { NeedsBadge, needsLabel } from '../needs/NeedsBadge';
 
 const item =
   'group relative flex min-h-11 items-center gap-3 rounded-btn px-3 text-14 text-text-2 transition-colors ' +
@@ -24,6 +26,9 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
   const { projects, needs: liveNeeds, needsReady, activity, spend } = useShellData();
   // Hidden until the count is final, so the badge never climbs.
   const needs = needsReady ? liveNeeds : { total: 0, byProject: {} as Record<string, number> };
+  // The badge counts every organization (item 2YZRd); per-project counts stay this one's.
+  const all = useNeedsAll();
+  const count = all.ready ? all.counts : { total: 0, onlyYou: 0 };
   const path = useRouterState({ select: (s) => s.location.pathname });
   const live = projects.filter((p) => !p.data.archivedAt);
   const total = activity.working + activity.idle;
@@ -82,15 +87,15 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
             key={n.to}
             to={n.to}
             activeOptions={{ exact: n.to === '/' }}
-            aria-label={n.badge && needs.total > 0 ? `${n.label} ${needs.total} waiting` : n.label}
+            aria-label={n.badge ? needsLabel(n.label, count.total, count.onlyYou) : n.label}
             title={n.label}
             className={item}
           >
             <Icon icon={n.icon} size={18} />
             <span className="flex-1 max-xl:hidden">{n.label}</span>{' '}
-            {n.badge && needs.total > 0 ? (
+            {n.badge && count.total > 0 ? (
               <>
-                <Badge tone="gate" count={needs.total} className="max-xl:hidden" />
+                <NeedsBadge total={count.total} onlyYou={count.onlyYou} className="max-xl:hidden" />
                 <span
                   aria-hidden
                   className="absolute right-2.5 top-2 size-2 rounded-full bg-gate xl:hidden"

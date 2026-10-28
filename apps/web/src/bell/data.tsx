@@ -62,22 +62,69 @@ export function useBell(): BellApi {
   return ctx;
 }
 
+type BellPart = { state: 'loading' | 'ready' | 'error'; rows: BellRow[] };
+
+/** One organization's entries (the bell lists every organization's, item 2YZRd). */
+function BellFeed({
+  uid,
+  wid,
+  since,
+  onPart,
+}: {
+  uid: string;
+  wid: string;
+  since: number;
+  onPart: (wid: string, p: BellPart | null) => void;
+}) {
+  const live = useLiveQuery(
+    `bell:${uid}:${wid}`,
+    () => bellQuery(uid, wid, since),
+    bellEntrySchema,
+  );
+  useEffect(() => {
+    onPart(wid, {
+      state: live.state,
+      rows: live.state === 'ready' ? live.data.map((r) => ({ id: r.id, data: r.data })) : [],
+    });
+  }, [wid, live, onPart]);
+  useEffect(() => () => onPart(wid, null), [wid, onPart]);
+  return null;
+}
+
 export function BellProvider({ children }: { children: ReactNode }) {
-  const { session } = useReady();
+  const { session, switchOrg } = useReady();
   const uid = session.me.uid;
   const wid = session.workspaceId;
   const toast = useToast();
   const navigate = useNavigate();
   // Fixed for the session: entries older than 30 days are never shown (the notifier prunes them).
   const [sessionStart] = useState(() => Date.now());
-  const live = useLiveQuery(
-    `bell:${uid}:${wid}`,
-    () => bellQuery(uid, wid, sessionStart - BELL_KEEP_MS),
-    bellEntrySchema,
+  // Every organization the person is in, the one on screen first: the bell counts them all.
+  const wids = useMemo(
+    () => [...new Set([wid, ...session.profile.workspaceIds])],
+    [wid, session.profile.workspaceIds],
   );
+  const [parts, setParts] = useState<Record<string, BellPart>>({});
+  const onPart = useCallback((w: string, p: BellPart | null) => {
+    setParts((cur) => {
+      if (p === null) {
+        if (!(w in cur)) return cur;
+        const next = { ...cur };
+        delete next[w];
+        return next;
+      }
+      return { ...cur, [w]: p };
+    });
+  }, []);
+  // The organization on screen decides when the bell is ready; the others join as they answer.
+  const live = { state: parts[wid]?.state ?? 'loading' };
   const rows = useMemo<BellRow[]>(
-    () => (live.state === 'ready' ? live.data.map((r) => ({ id: r.id, data: r.data })) : []),
-    [live],
+    () =>
+      wids
+        .flatMap((w) => parts[w]?.rows ?? [])
+        .sort((a, b) => b.data.at - a.data.at)
+        .slice(0, BELL_LIMIT),
+    [wids, parts],
   );
 
   const markRead = useCallback(
@@ -101,13 +148,20 @@ export function BellProvider({ children }: { children: ReactNode }) {
   const open = useCallback(
     (row: BellRow) => {
       markRead(row.id);
-      void navigate({
-        to: '/p/$pid',
-        params: { pid: row.data.projectId },
-        search: { item: row.data.itemId },
-      });
+      const go = () =>
+        void navigate({
+          to: '/p/$pid',
+          params: { pid: row.data.projectId },
+          search: { item: row.data.itemId },
+        });
+      // Another organization's entry: switch to it first, then open the item there.
+      if (row.data.workspaceId !== wid)
+        switchOrg(row.data.workspaceId).then(go, () =>
+          toast.push({ message: 'Could not open it. Try again.' }),
+        );
+      else go();
     },
-    [markRead, navigate],
+    [markRead, navigate, wid, switchOrg, toast],
   );
 
   // Live only: a toast for what arrives while the app is open, never for the first snapshot.
@@ -145,5 +199,12 @@ export function BellProvider({ children }: { children: ReactNode }) {
     }),
     [live.state, rows, markRead, markAllRead, open],
   );
-  return <BellContext.Provider value={value}>{children}</BellContext.Provider>;
+  return (
+    <BellContext.Provider value={value}>
+      {children}
+      {wids.map((w) => (
+        <BellFeed key={w} uid={uid} wid={w} since={sessionStart - BELL_KEEP_MS} onPart={onPart} />
+      ))}
+    </BellContext.Provider>
+  );
 }

@@ -2,7 +2,16 @@ import { firstRunPath, firstRunSchema, nextOnPath } from '@hive/shared';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { doc, setDoc } from 'firebase/firestore';
 import { Inbox } from 'lucide-react';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
 import { colorIndex } from '../agents/logic';
 import { firstName, useReady } from '../auth/context';
 import { db } from '../lib/db';
@@ -13,11 +22,11 @@ import { isLive } from '../shell/logic';
 import { useShellData } from '../shell/data';
 import { useShortcut } from '../shell/shortcuts';
 import { AgentAvatar } from '../ui/avatar';
-import { Segmented } from '../ui/form';
+import { Segmented, Select } from '../ui/form';
 import { Eyebrow } from '../ui/badge';
 import { Button } from '../ui/button';
 import { EmptyState, Skeleton, WorkingDots } from '../ui/feedback';
-import { AnimatePresence } from '../ui/motion';
+import { AnimatePresence, motion } from '../ui/motion';
 import { Sheet, useCountdowns } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
 import { BAR_BUTTON, BAR_PRIMARY, BarUndo, SelectionBar } from '../board/SelectionBar';
@@ -26,15 +35,20 @@ import { isTypingTarget } from '../shell/shortcuts';
 import { Check, X } from 'lucide-react';
 import { DecisionDialog, type DialogMode } from './DecisionDialog';
 import { InboxRow, type RowAgent } from './InboxRow';
+import { isOpenFinding, nextKey, parseFilter, type InboxEntry } from './logic';
+import { useNeedsAll } from '../needs/data';
 import {
-  buildInbox,
-  countByFilter,
-  filterEntries,
-  isOpenFinding,
-  nextKey,
-  parseFilter,
-  type InboxEntry,
-} from './logic';
+  countKinds,
+  countNeeds,
+  filterKind,
+  filterNeeds,
+  groupsOf,
+  parseScope,
+  type NeedsEntry,
+  type Scope,
+} from '../needs/logic';
+import { ThreadRow } from '../needs/ThreadRow';
+import { useToast } from '../ui/overlay';
 import { useDecide } from './useDecide';
 import { FirstRun } from './FirstRun';
 import { firstRunDone, firstRunState } from './firstRun';
@@ -62,10 +76,21 @@ function useIsDesktop(): boolean {
   );
 }
 
-/** Screen 1, the heart of Hivenod: everything waiting on me, decided in seconds (SPEC 9.1). */
+/**
+ * Screen 1, the heart of Hivenod: everything waiting on me, decided in seconds (SPEC 9.1), across
+ * every organization I am in (item 2YZRd), grouped by organization and project.
+ */
 export function InboxPage() {
-  const { sel, f: rawFilter } = useSearch({ strict: false }) as { sel?: string; f?: string };
-  const { session } = useReady();
+  const {
+    sel,
+    f: rawFilter,
+    who: rawWho,
+    org: rawOrg,
+  } = useSearch({ strict: false }) as { sel?: string; f?: string; who?: string; org?: string };
+  const { session, switchOrg } = useReady();
+  const toast = useToast();
+  const all = useNeedsAll();
+  const scope = parseScope(rawWho);
   const wid = session.workspaceId;
   const uid = session.me.uid;
   const navigate = useNavigate();
@@ -87,7 +112,9 @@ export function InboxPage() {
     return () => clearTimeout(t);
   }, []);
   // Runs (agent and summary on each row) may follow: they are not what the list waits for.
-  const loading = shell.loading || (!shell.needsSettled && patient);
+  const loading = shell.loading || (!all.settled && patient);
+  const orgFilter = rawOrg && all.orgs.some((o) => o.wid === rawOrg) ? rawOrg : null;
+  const manyOrgs = all.orgs.length > 1;
   // The first paint draws only the rows a phone screen can show; the rest follow a frame later,
   // so a long list does not hold back the first rows (card CGPynEQY). Counts use the whole list.
   const [allRows, setAllRows] = useState(false);
@@ -112,49 +139,64 @@ export function InboxPage() {
     void loadSendBack().catch(() => undefined);
   }, []);
 
-  const inbox = useMemo(
-    () =>
-      buildInbox({
-        projects: shell.projects,
-        items: shell.items,
-        suggestions: shell.suggestions,
-        isAdmin: session.isAdmin,
-        questions: shell.questions,
-        proposals: shell.proposals,
-        uid,
-      }),
-    [
-      shell.projects,
-      shell.items,
-      shell.suggestions,
-      shell.questions,
-      shell.proposals,
-      uid,
-      session.isAdmin,
-    ],
-  );
+  const needs = all.needs;
   const { hidden, decide, decideMany, held, release } = useDecide();
   const countdowns = useCountdowns();
-  const visible = useMemo(() => inbox.todo.filter((e) => !hidden.has(e.key)), [inbox.todo, hidden]);
-  const counts = countByFilter(visible);
+  // Every row of every organization, the suggestions last (their own section).
+  const everything = useMemo(
+    () => [...needs.todo, ...needs.suggestions],
+    [needs.todo, needs.suggestions],
+  );
+  const byKey = useMemo(() => new Map(everything.map((e) => [e.key, e])), [everything]);
+  const visible = useMemo(() => everything.filter((e) => !hidden.has(e.key)), [everything, hidden]);
+  // The org picker narrows everything; Only me · Shared · All counts within it.
+  const inOrg = useMemo(() => filterNeeds(visible, 'all', orgFilter), [visible, orgFilter]);
+  const scoped = useMemo(() => filterNeeds(inOrg, scope), [inOrg, scope]);
+  const counts = countKinds(scoped);
+  const whoCounts = countNeeds(inOrg);
   // A finally-approved item stays in the list through the Undo window and the Done moment
   // (it is already out of the counts), then Needs you moves on.
   const [heldAt, setHeldAt] = useState(0);
   const shown = useMemo(() => {
-    if (!held) return visible;
-    if (visible.some((e) => e.key === held.entry.key)) return visible;
-    const out = [...visible];
-    out.splice(Math.min(Math.max(heldAt, 0), out.length), 0, held.entry);
+    if (!held) return scoped;
+    if (scoped.some((e) => e.key === held.entry.key)) return scoped;
+    const h = held.entry;
+    const hw = h.wid ?? wid;
+    const row: NeedsEntry = {
+      key: h.key,
+      wid: hw,
+      org: all.orgs.find((o) => o.wid === hw)?.name ?? '',
+      kind: h.kind,
+      since: h.since,
+      urgent: false,
+      who: { only: true },
+      group: h.pid,
+      entry: h,
+    };
+    const out = [...scoped];
+    out.splice(Math.min(Math.max(heldAt, 0), out.length), 0, row);
     return out;
-  }, [visible, held, heldAt]);
-  const list = filterEntries(shown, filter);
+  }, [scoped, held, heldAt, wid, all.orgs]);
+  const filtered = filterKind(shown, filter);
+  const list = filtered.filter((e) => e.kind !== 'finding');
+  const found = filtered.filter((e) => e.kind === 'finding');
+  // Keyboard order and the focus view's position: the list, then the suggestions.
+  const nav = [...list, ...found];
   const batch = countdowns.find((c) => c.tag.startsWith('batch-'));
-  const waiting = inbox.waiting.filter((e) => !hidden.has(e.key));
+  const waiting = filterNeeds(
+    needs.waiting.filter((e) => !hidden.has(e.key)),
+    'all',
+    orgFilter,
+  );
 
   // The row that is highlighted (desktop: the first one until you pick), and the item opened in
   // the focus view over the list (card ExMNfP8A).
-  const focused = list.find((e) => e.key === sel) ?? null;
-  const selected = focused ?? (desktop ? (list[0] ?? null) : null);
+  const focusedRow = nav.find((e) => e.key === sel) ?? null;
+  // The focus view opens items of the organization on screen; another one's is opened by
+  // switching to it first (openRow).
+  const focused = focusedRow?.entry && focusedRow.wid === wid ? focusedRow.entry : null;
+  const selectedRow = focusedRow ?? (desktop ? (nav[0] ?? null) : null);
+  const selected = selectedRow?.entry ?? null;
 
   // Moving on: the held entry goes in the same render that shows the next selection.
   const heldLeaving = held?.leaving ? held.entry.key : null;
@@ -165,18 +207,23 @@ export function InboxPage() {
   const deciderUids = useMemo(
     () => [
       ...new Set(
-        [...inbox.todo, ...inbox.waiting].flatMap(
-          (e) => e.project.steps.find((s) => s.id === e.item.stepId)?.gate?.deciderUids ?? [],
+        [...needs.todo, ...needs.waiting].flatMap((e) =>
+          e.entry && e.wid === wid
+            ? (e.entry.project.steps.find((s) => s.id === e.entry!.item.stepId)?.gate
+                ?.deciderUids ?? [])
+            : [],
         ),
       ),
     ],
-    [inbox],
+    [needs, wid],
   );
   const profiles = useProfiles(wid, deciderUids);
   const names = useMemo(
     () => Object.fromEntries(deciderUids.map((u) => [u, displayName(profiles[u], u)])),
     [deciderUids, profiles],
   );
+  /** Names for an entry's organization (the one on screen has the freshest profiles). */
+  const namesOf = (w: string | undefined) => (!w || w === wid ? names : (all.names[w] ?? {}));
 
   const runsByItem = useMemo(() => {
     const m = new Map<string, (typeof shell.runs)[number]>();
@@ -193,12 +240,15 @@ export function InboxPage() {
    * the run that raised it counts, never the last run of the item it was found on.
    */
   function runOf(e: InboxEntry) {
+    // Runs and agents are only loaded for the organization on screen.
+    if (e.wid && e.wid !== wid) return undefined;
     if (e.kind === 'finding')
       return e.item.sourceRunId ? shell.runs.find((r) => r.id === e.item.sourceRunId) : undefined;
     return runsByItem.get(e.itemId);
   }
 
   function agentOf(e: InboxEntry): RowAgent | null {
+    if (e.wid && e.wid !== wid) return null;
     const run = runOf(e);
     const id =
       run?.data.agentUid ?? (e.item.createdBy.type === 'agent' ? e.item.createdBy.id : null);
@@ -215,7 +265,8 @@ export function InboxPage() {
   const [rationales, setRationales] = useState<Record<string, string>>({});
   const [dialog, setDialog] = useState<{ mode: DialogMode | 'iterate'; key: string } | null>(null);
   const [quick, setQuick] = useState<string | null>(null);
-  const dialogEntry = dialog ? ([...inbox.todo].find((e) => e.key === dialog.key) ?? null) : null;
+  const entryOf = (key: string | null) => (key ? (byKey.get(key)?.entry ?? null) : null);
+  const dialogEntry = dialog ? entryOf(dialog.key) : null;
   const quickCountdown = countdowns.find((c) => c.key === quick);
   // The quick sheet stays open while its Approve counts down, and closes when that ends.
   const hadQuickCountdown = useRef(false);
@@ -226,7 +277,7 @@ export function InboxPage() {
       setQuick(null);
     }
   }, [quickCountdown]);
-  const quickEntry = quick ? ([...inbox.todo].find((e) => e.key === quick) ?? null) : null;
+  const quickEntry = entryOf(quick);
 
   // Selecting several Approve/Accept rows to decide them together. Questions, findings and path
   // decisions need a real answer each, so they cannot be selected.
@@ -234,7 +285,7 @@ export function InboxPage() {
   const [barHeight, setBarHeight] = useState(56);
   const [bulkReject, setBulkReject] = useState(false);
   const anchor = useRef<string | null>(null);
-  const selectable = (e: InboxEntry) => e.kind === 'approval';
+  const selectable = (e: { kind: string }) => e.kind === 'approval';
   const selectOrder = list.filter(selectable).map((e) => e.key);
   const clearPicked = () => {
     setPicked(new Set());
@@ -254,9 +305,14 @@ export function InboxPage() {
     }
     anchor.current = key;
   };
-  /** The selected entries still in Needs you, and how many left meanwhile (decided elsewhere). */
+  /**
+   * The selected entries still in Needs you, and how many left meanwhile (decided elsewhere). A
+   * selection may span organizations: each is decided in its own (useDecide).
+   */
   const pickedNow = () => {
-    const live = inbox.todo.filter((e) => picked.has(e.key) && selectable(e));
+    const live = needs.todo.flatMap((e) =>
+      e.entry && picked.has(e.key) && selectable(e) ? [e.entry] : [],
+    );
     return { live, gone: picked.size - live.length };
   };
   const decidePicked = (d: Parameters<typeof decideMany>[1]) => {
@@ -265,12 +321,36 @@ export function InboxPage() {
     return decideMany(live, d, gone, clearPicked);
   };
 
+  const keep = {
+    ...(filter !== 'all' ? { f: filter } : {}),
+    ...(scope !== 'all' ? { who: scope as Exclude<Scope, 'all'> } : {}),
+    ...(orgFilter ? { org: orgFilter } : {}),
+  };
   const go = (key: string | null, replace = true) =>
     void navigate({
       to: '/',
-      search: { ...(key ? { sel: key } : {}), ...(filter !== 'all' ? { f: filter } : {}) },
+      search: { ...(key ? { sel: key } : {}), ...keep },
       replace,
     });
+
+  /**
+   * Opens a row. An Inbox thread opens on the Inbox screen; an item of another organization
+   * switches to that organization first (its detail, send-back and history read from there).
+   */
+  const openRow = (e: NeedsEntry) => {
+    if (e.thread) {
+      void navigate({ href: `/inbox/${e.wid}/t/${e.thread.id}` });
+      return;
+    }
+    if (e.wid !== wid) {
+      switchOrg(e.wid).then(
+        () => go(e.key, false),
+        () => toast.push({ message: 'Could not open it. Try again.' }),
+      );
+      return;
+    }
+    go(e.key, false);
+  };
 
   // Undo runs up to 5 s after the decision: read where the person is now, not where they were.
   const latest = useRef({ sel, desktop, go });
@@ -282,9 +362,9 @@ export function InboxPage() {
   const decideEntry = (e: InboxEntry, d: Parameters<typeof decide>[1]) => {
     // Already counting down on its button: a second press (or the A key) does nothing.
     if (countdowns.some((c) => c.key === e.key)) return null;
-    const following = nextKey(list, e.key);
+    const following = nextKey(nav, e.key);
     const fromDetail = sel === e.key;
-    setHeldAt(list.findIndex((x) => x.key === e.key));
+    setHeldAt(shown.findIndex((x) => x.key === e.key));
     // Approve and Reject count down on their button with the item still on screen; when the
     // window ends the item moves on (a final approval first shows its Done panel).
     const problem = decide(
@@ -323,7 +403,7 @@ export function InboxPage() {
         return;
       }
       if (e.key.toLowerCase() !== 'x') return;
-      const key = selected && selectable(selected) ? selected.key : selectOrder[0];
+      const key = selectedRow && selectable(selectedRow) ? selectedRow.key : selectOrder[0];
       if (!key) return;
       e.preventDefault();
       pick(key, e.shiftKey);
@@ -333,14 +413,14 @@ export function InboxPage() {
   });
 
   const step = (dir: 1 | -1) => {
-    if (!list.length) return;
+    if (!nav.length) return;
     // Nothing selected yet (phone): the first j/k lands on the first item, not the second.
-    if (!focused) return go(list[0]!.key);
+    if (!focusedRow) return go(nav[0]!.key);
     const i = Math.max(
       0,
-      list.findIndex((e) => e.key === selected?.key),
+      nav.findIndex((e) => e.key === selectedRow?.key),
     );
-    const to = list[Math.min(list.length - 1, Math.max(0, i + dir))];
+    const to = nav[Math.min(nav.length - 1, Math.max(0, i + dir))];
     if (to) go(to.key);
   };
   const canApprove = selected?.kind === 'approval';
@@ -364,8 +444,8 @@ export function InboxPage() {
     label: 'Open item',
     group: 'Needs you',
     run: () => {
-      const e = selected ?? list[0];
-      if (e && !focused) go(e.key, false);
+      const e = selectedRow ?? nav[0];
+      if (e && !focused) openRow(e);
     },
   });
   useShortcut({
@@ -393,7 +473,7 @@ export function InboxPage() {
     label: 'Close',
     group: 'Needs you',
     run: () => {
-      if (focused) go(null, false);
+      if (focusedRow) go(null, false);
     },
   });
 
@@ -409,75 +489,172 @@ export function InboxPage() {
     { value: 'findings', label: 'Findings', count: counts.findings },
   ];
 
+  const setSearch = (patch: Partial<{ f: string; who: string; org: string }>) => {
+    const next: Record<string, string> = { ...keep, ...patch };
+    for (const k of Object.keys(next)) if (!next[k] || next[k] === 'all') delete next[k];
+    void navigate({ to: '/', search: next as never, replace: true });
+  };
   const chips = (
-    <Segmented
-      label="Filter"
-      value={filter}
-      onValueChange={(v) =>
-        void navigate({
-          to: '/',
-          search: v === 'all' ? {} : { f: v as 'approvals' },
-          replace: true,
-        })
-      }
-      options={filterOptions}
-    />
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+      <Segmented
+        label="Filter"
+        value={filter}
+        onValueChange={(v) => setSearch({ f: v })}
+        options={filterOptions}
+      />
+      <Segmented
+        label="Who can act"
+        value={scope}
+        onValueChange={(v) => setSearch({ who: v })}
+        options={[
+          { value: 'mine', label: 'Only me', count: whoCounts.onlyYou },
+          { value: 'shared', label: 'Shared', count: whoCounts.shared },
+          { value: 'all', label: 'All', count: whoCounts.total },
+        ]}
+      />
+      {manyOrgs ? (
+        <Select
+          label="Organization"
+          hideLabel
+          inline
+          value={orgFilter ?? 'all'}
+          onValueChange={(v) => setSearch({ org: v })}
+          options={[
+            { value: 'all', label: 'All organizations' },
+            ...all.orgs.map((o) => ({ value: o.wid, label: o.name })),
+          ]}
+        />
+      ) : null}
+    </div>
   );
+
+  const renderRow = (r: NeedsEntry) => {
+    if (!r.entry)
+      return (
+        <ThreadRow
+          key={r.key}
+          entry={r}
+          now={now}
+          selected={desktop && selectedRow?.key === r.key}
+          onOpen={() => openRow(r)}
+        />
+      );
+    const e = r.entry;
+    return (
+      <InboxRow
+        key={r.key}
+        entry={e}
+        selected={desktop && selectedRow?.key === r.key}
+        now={now}
+        uid={uid}
+        names={namesOf(r.wid)}
+        agent={agentOf(e)}
+        summary={e.kind === 'finding' ? '' : (runOf(e)?.data.summary ?? '')}
+        who={r.who}
+        swipeable={!desktop && e.kind === 'approval' && picked.size === 0}
+        select={
+          selectable(e)
+            ? {
+                show: desktop || picked.size > 0,
+                checked: picked.has(e.key),
+                onToggle: (shift) => pick(e.key, shift),
+              }
+            : undefined
+        }
+        onOpen={() =>
+          !desktop && picked.size > 0 && selectable(e) ? pick(e.key, false) : openRow(r)
+        }
+        onSwipe={(a) => setDialog({ mode: a === 'approve' ? 'approve' : 'iterate', key: e.key })}
+        onLongPress={() => (selectable(e) ? pick(e.key, false) : setQuick(e.key))}
+      />
+    );
+  };
+
+  /**
+   * Rows under their headings: the organization (when there are several) and the project (or
+   * Inbox). One organization with one project needs no headings: each row names its project.
+   */
+  const grouped = (entries: NeedsEntry[], label: string) => {
+    const groups = groupsOf(entries);
+    const orgHeads = manyOrgs && !orgFilter;
+    const projectHeads = orgHeads || groups.length > 1;
+    const out: ReactNode[] = [];
+    let lastOrg: string | null = null;
+    for (const g of groups) {
+      if (orgHeads && g.wid !== lastOrg) {
+        out.push(
+          <motion.li key={`org:${label}:${g.wid}`} layout={false} className="pb-1 pt-3 first:pt-0">
+            <h2 className="text-14 font-semibold text-ink">{g.org}</h2>
+          </motion.li>,
+        );
+      }
+      lastOrg = g.wid;
+      if (projectHeads) {
+        const Head = orgHeads ? 'h3' : 'h2';
+        out.push(
+          <motion.li
+            key={`group:${label}:${g.wid}:${g.group}`}
+            layout={false}
+            className="pb-1 pt-2 first:pt-0"
+          >
+            <Head className="font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-2">
+              {g.project ? `${g.project.emoji} ${g.project.name}` : 'Inbox'}
+            </Head>
+          </motion.li>,
+        );
+      }
+      for (const r of g.entries) out.push(renderRow(r));
+    }
+    return out;
+  };
 
   const rows = (
     <ul aria-label="Needs you" className="flex flex-col">
       <AnimatePresence initial={false} mode="popLayout">
-        {(allRows ? list : list.slice(0, FIRST_ROWS)).map((e) => (
-          <InboxRow
-            key={e.key}
-            entry={e}
-            selected={desktop && selected?.key === e.key}
-            now={now}
-            uid={uid}
-            names={names}
-            agent={agentOf(e)}
-            summary={e.kind === 'finding' ? '' : (runOf(e)?.data.summary ?? '')}
-            swipeable={!desktop && e.kind === 'approval' && picked.size === 0}
-            select={
-              selectable(e)
-                ? {
-                    show: desktop || picked.size > 0,
-                    checked: picked.has(e.key),
-                    onToggle: (shift) => pick(e.key, shift),
-                  }
-                : undefined
-            }
-            onOpen={() =>
-              !desktop && picked.size > 0 && selectable(e) ? pick(e.key, false) : go(e.key, false)
-            }
-            onSwipe={(a) =>
-              setDialog({ mode: a === 'approve' ? 'approve' : 'iterate', key: e.key })
-            }
-            onLongPress={() => (selectable(e) ? pick(e.key, false) : setQuick(e.key))}
-          />
-        ))}
+        {grouped(allRows ? list : list.slice(0, FIRST_ROWS), 'todo')}
       </AnimatePresence>
     </ul>
   );
+
+  const suggestionList = found.length ? (
+    <section aria-label="New suggestions" className="mt-4 flex flex-col gap-2">
+      <Eyebrow>New suggestions · add or dismiss</Eyebrow>
+      <ul className="flex flex-col">
+        <AnimatePresence initial={false} mode="popLayout">
+          {grouped(found, 'found')}
+        </AnimatePresence>
+      </ul>
+    </section>
+  ) : null;
 
   const waitingList = waiting.length ? (
     <section aria-label="Waiting on others" className="mt-4 flex flex-col gap-2">
       <Eyebrow>Waiting on others</Eyebrow>
       <ul className="flex flex-col">
-        {waiting.map((e) => (
+        {waiting.map((r) => (
           <InboxRow
-            key={e.key}
-            entry={e}
+            key={r.key}
+            entry={r.entry!}
             selected={false}
             now={now}
             uid={uid}
-            names={names}
-            agent={agentOf(e)}
+            names={namesOf(r.wid)}
+            agent={agentOf(r.entry!)}
             summary=""
             swipeable={false}
-            onOpen={() =>
-              void navigate({ to: '/p/$pid', params: { pid: e.pid }, search: { item: e.itemId } })
-            }
+            onOpen={() => {
+              const open = () =>
+                void navigate({
+                  to: '/p/$pid',
+                  params: { pid: r.entry!.pid },
+                  search: { item: r.entry!.itemId },
+                });
+              if (r.wid === wid) open();
+              else
+                switchOrg(r.wid).then(open, () =>
+                  toast.push({ message: 'Could not open it. Try again.' }),
+                );
+            }}
             onSwipe={() => undefined}
             onLongPress={() => undefined}
           />
@@ -572,7 +749,7 @@ export function InboxPage() {
         onDialog={(mode) => setDialog({ mode, key: focused.key })}
         onBack={() => go(null, false)}
         phone={!desktop}
-        position={{ index: list.findIndex((e) => e.key === focused.key), total: list.length }}
+        position={{ index: nav.findIndex((e) => e.key === focused.key), total: nav.length }}
         onStep={step}
         released={held && held.entry.key === focused.key ? held.phase : undefined}
         doneRuns={shell.runs.filter((r) => r.data.itemId === focused.itemId)}
@@ -580,8 +757,10 @@ export function InboxPage() {
     </Suspense>
   ) : null;
 
-  const summaryLine = counts.all
-    ? `${counts.all} ${counts.all === 1 ? 'thing needs' : 'things need'} you.`
+  // Everything, in every organization and filter.
+  const total = visible.length;
+  const summaryLine = total
+    ? `${total} ${total === 1 ? 'thing needs' : 'things need'} you.`
     : 'You are all caught up.';
 
   const dialogs = (
@@ -597,6 +776,7 @@ export function InboxPage() {
             projectId={dialogEntry.pid}
             itemId={dialogEntry.itemId}
             item={dialogEntry.item}
+            wid={dialogEntry.wid}
           />
         </Suspense>
       ) : null}
@@ -697,15 +877,16 @@ export function InboxPage() {
         </div>
       ) : null}
       {loading ? null : chips}
-      {loading ? null : list.length === 0 && waiting.length === 0 ? (
+      {loading ? null : total === 0 && waiting.length === 0 ? (
         <div className="mt-4">{empty}</div>
       ) : (
         <div className="mt-3 max-w-3xl">
-          {list.length === 0 ? (
+          {list.length === 0 && found.length === 0 ? (
             <p className="py-4 text-14 text-text-2">Nothing in this filter.</p>
-          ) : (
+          ) : list.length ? (
             rows
-          )}
+          ) : null}
+          {suggestionList}
           {waitingList}
         </div>
       )}

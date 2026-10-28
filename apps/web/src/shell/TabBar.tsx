@@ -2,9 +2,9 @@ import { Link } from '@tanstack/react-router';
 import { Fragment, useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useCapture } from '../capture/CaptureProvider';
-import { Badge } from '../ui/badge';
 import { Icon } from '../ui/icon';
-import { useShellData } from './data';
+import { useNeedsAll } from '../needs/data';
+import { NeedsBadge, needsLabel } from '../needs/NeedsBadge';
 import { TABS } from './nav';
 
 /** Hides while scrolling down, comes back on any scroll up (or near the top). */
@@ -35,8 +35,9 @@ export function useScrollHidden(): boolean {
 
 /** Phone bottom tabs (SPEC section 8). Targets are 56 px tall, inset by the home indicator. */
 export function TabBar({ hidden }: { hidden: boolean }) {
-  const { needs: liveNeeds, needsReady } = useShellData();
-  const needs = needsReady ? liveNeeds : { total: 0 };
+  // Every organization's Needs you (item 2YZRd), hidden until the count is final.
+  const all = useNeedsAll();
+  const needs = all.ready ? all.counts : { total: 0, onlyYou: 0 };
   const capture = useCapture();
   return (
     <nav
@@ -70,9 +71,7 @@ export function TabBar({ hidden }: { hidden: boolean }) {
               <Link
                 to={t.to}
                 activeOptions={{ exact: t.to === '/' }}
-                aria-label={
-                  t.badge && needs.total > 0 ? `${t.label} ${needs.total} waiting` : t.label
-                }
+                aria-label={t.badge ? needsLabel(t.label, needs.total, needs.onlyYou) : t.label}
                 // The label comes first in the DOM (shown below the icon by flex-col-reverse), so
                 // the visible text reads "Needs you 5" like the start of the aria-label (axe
                 // label-content-name-mismatch at 390).
@@ -82,7 +81,11 @@ export function TabBar({ hidden }: { hidden: boolean }) {
                 <span className="relative">
                   <Icon icon={t.icon} size={22} />
                   {t.badge && needs.total > 0 ? (
-                    <Badge tone="gate" count={needs.total} className="absolute -right-3 -top-2" />
+                    <NeedsBadge
+                      total={needs.total}
+                      onlyYou={needs.onlyYou}
+                      className="absolute -right-3 -top-2"
+                    />
                   ) : null}
                 </span>
               </Link>
