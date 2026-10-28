@@ -100,7 +100,8 @@ const penv = process.env;
 export const FIREBASE_OPTIONS = {
   apiKey: penv.HIVENOD_FIREBASE_API_KEY || HOSTED_FIREBASE.apiKey,
   authDomain: penv.HIVENOD_FIREBASE_AUTH_DOMAIN || HOSTED_FIREBASE.authDomain,
-  projectId: penv.HIVENOD_FIREBASE_PROJECT_ID || penv.HIVENOD_PROJECT_ID || HOSTED_FIREBASE.projectId,
+  projectId:
+    penv.HIVENOD_FIREBASE_PROJECT_ID || penv.HIVENOD_PROJECT_ID || HOSTED_FIREBASE.projectId,
   appId: penv.HIVENOD_FIREBASE_APP_ID || HOSTED_FIREBASE.appId,
   messagingSenderId: penv.HIVENOD_FIREBASE_MESSAGING_SENDER_ID || HOSTED_FIREBASE.messagingSenderId,
 };
