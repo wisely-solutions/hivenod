@@ -1961,16 +1961,17 @@ service cloud.firestore {
               // Path writes (card st5INNZj) bump pathRev; no other path below changes the path.
               && (request.resource.data.get('pathRev', 0) != r.get('pathRev', 0)
                 ? humanPathUpdate(wid, pid, iid, r, p)
-              // "Ask for status" (item AzveC) is the only write that changes statusAsk.
-              : request.resource.data.get('statusAsk', null) != r.get('statusAsk', null)
-                ? askStatusIt(wid, pid, iid, r)
               // Stop work / Resume are the only writes that change workStopped.
               : request.resource.data.get('workStopped', null) != r.get('workStopped', null)
                 ? (stopWorkIt(wid, pid, iid, r, p) || resumeIt(wid, pid, iid, r, p))
                 // Only an item waiting at a gate can be decided on.
                 : r.status == 'waiting'
                   ? waitingUpdate(wid, pid, iid, r, p)
-                  : otherHumanUpdate(wid, pid, iid, r, p));
+                  // "Ask for status" (item AzveC) is the only write that changes statusAsk; only
+                  // a worked item can be asked, so gate writes never pay for this check.
+                  : request.resource.data.get('statusAsk', null) != r.get('statusAsk', null)
+                    ? askStatusIt(wid, pid, iid, r)
+                    : otherHumanUpdate(wid, pid, iid, r, p));
           }
           // Ask for status (item AzveC): anyone on the project, on an item an agent is actively
           // working (claimed with a recent heartbeat, not parked, not waiting for an answer), at

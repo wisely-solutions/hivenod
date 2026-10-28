@@ -261,8 +261,9 @@ test('board card quick menu: Stop work then Resume without opening the item', as
     await trigger.focus();
     await page.keyboard.press('Enter');
     await expect(menu).toBeVisible();
-    // Stop work, and Delete… (the admin made it): never Archive while an agent holds it.
-    await expect(menu.getByRole('menuitem')).toHaveCount(2);
+    // Ask for status (item AzveC), Stop work, and Delete… (the admin made it): never Archive
+    // while an agent holds it.
+    await expect(menu.getByRole('menuitem')).toHaveCount(3);
     await page.keyboard.press('Escape');
     await expect(menu).toBeHidden();
     await expect(trigger).toBeFocused();
@@ -314,7 +315,9 @@ test('board card quick menu: Stop work then Resume without opening the item', as
   await expect(page.getByText('On hold', { exact: true })).toHaveCount(0);
 });
 
-test('board card quick menu: not shown to a member who decides nowhere', async ({ page }) => {
+test('board card quick menu: a member who decides nowhere gets only Ask for status', async ({
+  page,
+}) => {
   const { wid, uid } = await seed(page, 'Mo Member', 'somebody-else');
   await fetch(
     `http://localhost:${process.env.E2E_FIRESTORE_PORT ?? 8080}/v1/projects/hive-board-43be/databases/(default)/documents/workspaces/${wid}?updateMask.fieldPaths=memberRoles.%60${uid}%60`,
@@ -334,10 +337,27 @@ test('board card quick menu: not shown to a member who decides nowhere', async (
   await expect(page.locator('h3', { hasText: 'Draft the launch email' }).first()).toBeVisible({
     timeout: 15_000,
   });
-  await expect(page.getByTestId('card-menu')).toHaveCount(0);
-  await page
-    .locator('h3', { hasText: 'Draft the launch email' })
-    .first()
-    .click({ button: 'right' });
-  await expect(page.getByRole('menu')).toHaveCount(0);
+  // Any member may ask the agent for a status (item AzveC); Stop work stays with the deciders.
+  const phone = (page.viewportSize()?.width ?? 1440) < 640;
+  const card = page.locator('button', {
+    has: page.locator('h3', { hasText: 'Draft the launch email' }),
+  });
+  if (phone) {
+    await card.dispatchEvent('pointerdown', {
+      pointerType: 'touch',
+      isPrimary: true,
+      button: 0,
+      clientX: 100,
+      clientY: 300,
+    });
+    await page.waitForTimeout(1000);
+    await card.dispatchEvent('pointerup', { pointerType: 'touch', isPrimary: true, button: 0 });
+  } else {
+    await page.getByTestId('card-menu').click();
+  }
+  const menu = page.getByRole('menu', { name: 'Actions for Draft the launch email' });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem')).toHaveCount(1);
+  await expect(menu.getByRole('menuitem', { name: 'Ask for status' })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Stop work' })).toHaveCount(0);
 });
