@@ -67,5 +67,5 @@ describe('only hivenod.com', () => {
       });
     }
     expect(found).toEqual([]);
-  });
+  }, 60_000); // reads every tracked file: slow on a busy CI runner (it timed out at 5 s)
 });
