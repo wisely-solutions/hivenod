@@ -1,4 +1,4 @@
-import { CloudOff, CornerUpLeft, Paperclip } from 'lucide-react';
+import { Clock, CloudOff, CornerUpLeft, Paperclip } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { AgentAvatar } from './avatar';
@@ -44,6 +44,10 @@ export interface ItemCardData {
   agent?: { name: string; color: number; live?: boolean; presence?: string };
   /** Parked by its agent (item QjTTL): "Waiting: <reason> · since <time>". */
   parked?: { reason: string; since: string };
+  /** The agent's last status line (item AzveC): "Running release checks · 70%". */
+  status?: string;
+  /** No status for a while (item AzveC): "No update for 42 min". */
+  silence?: string;
   approvals?: { have: number; need: number };
   waitingForYou?: boolean;
   /** "Waiting 30 h · reminder sent", shown once a gate's reminder time has passed. */
@@ -99,6 +103,12 @@ export function ItemCard({
                 <span className="shrink-0 whitespace-nowrap">· since {item.parked.since}</span>
               </Pill>
             ) : null}
+            {item.silence ? (
+              <Pill tone="sendback" data-testid="silence-flag">
+                <Icon icon={Clock} size={12} />
+                {item.silence}
+              </Pill>
+            ) : null}
             {item.pendingSync ? (
               <span className="inline-flex items-center gap-1 text-12 text-text-2">
                 <Icon icon={CloudOff} size={12} />
@@ -107,6 +117,15 @@ export function ItemCard({
             ) : null}
           </div>
           <h3 className="text-14 font-semibold leading-snug text-ink">{item.title}</h3>
+          {item.status ? (
+            <p
+              className="mt-1 truncate text-13 text-text-2"
+              title={item.status}
+              data-testid="status-line"
+            >
+              {item.status}
+            </p>
+          ) : null}
         </div>
         {item.progress ? (
           <ProgressRing

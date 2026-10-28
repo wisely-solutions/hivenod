@@ -1,6 +1,14 @@
 import {
+  activelyWorked,
+  STATUS_ASK_EVERY_MS,
+  statusAskOf,
+  statusAskOpen,
   isOnHold,
   parkOf,
+  silenceOf,
+  silenceText,
+  statusLine,
+  statusOf,
   STALE_CLAIM_MINUTES,
   type Agent,
   type Item,
@@ -127,6 +135,7 @@ export function cardData(row: ItemRow, ctx: CardContext): ItemCardData {
     parked: parked
       ? { reason: parked.reason, since: sinceText(parked.at.toMillis(), ctx.now) }
       : undefined,
+    ...statusView(data, ctx.now),
     approvals:
       need > 0 && data.gate && data.status === 'waiting'
         ? { have: Object.keys(data.gate.approvals).length, need }
@@ -474,4 +483,38 @@ export function stoppedReason(
   if (item.archivedAt) return '';
   const mine = rejections.filter((d) => d.itemId === itemId).sort((a, b) => b.at - a.at)[0];
   return mine?.rationale.trim() ?? '';
+}
+
+/**
+ * The status line and the silence flag of an item an agent holds (item AzveC). Only while it is
+ * worked: a parked item shows its wait instead, and the status of an earlier run is gone.
+ */
+export function statusView(item: Item, now: number): { status?: string; silence?: string } {
+  if (item.status !== 'working' || !item.claim) return {};
+  const st = statusOf(item);
+  const quiet = parkOf(item) ? null : silenceOf(item);
+  return {
+    ...(st ? { status: statusLine(st) } : {}),
+    ...(quiet ? { silence: silenceText(quiet.since, now) } : {}),
+  };
+}
+
+export interface AskState {
+  /** The item is being actively worked: the button shows. */
+  show: boolean;
+  disabled: boolean;
+  label: string;
+}
+
+/** What "Ask for status" shows now. Mirrors askStatusIt in firestore.rules. */
+export function askStatusState(item: Item, now: number): AskState {
+  if (!isItemLive(item, now) || !activelyWorked(item))
+    return { show: false, disabled: true, label: 'Ask for status' };
+  const ask = statusAskOf(item);
+  const recent = !!ask && now - ask.at.toMillis() < STATUS_ASK_EVERY_MS;
+  if (statusAskOpen(item))
+    return recent
+      ? { show: true, disabled: true, label: 'Asked · waiting…' }
+      : { show: true, disabled: false, label: 'Ask again' };
+  return { show: true, disabled: recent, label: 'Ask for status' };
 }
