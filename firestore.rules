@@ -1106,8 +1106,8 @@ service cloud.firestore {
       function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore']; }
       function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored'}; }
       function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null}; }
-      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'reply_book': ['text', 'slot', 'with'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason']}; }
-      function outcomeRequired() { return {'reply': ['text'], 'reply_book': ['text', 'slot', 'with'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': []}; }
+      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'reply_book': ['text', 'start', 'end', 'with', 'title'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason']}; }
+      function outcomeRequired() { return {'reply': ['text'], 'reply_book': ['text', 'start', 'end', 'with'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': []}; }
       // END outcome registry
 
       match /inboxEvents/{eid} {
