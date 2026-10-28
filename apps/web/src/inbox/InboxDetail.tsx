@@ -29,6 +29,17 @@ import { BarNote, DecisionBar, Key } from '../components/DecisionBar';
 import { FocusView, Properties } from '../components/FocusView';
 import { DonePanel } from '../components/DonePanel';
 import { ItemActions } from '../board/itemActions';
+import {
+  AddFiles,
+  EditableSummary,
+  EditableTitle,
+  TypePicker,
+  takePastedFiles,
+  useAddFiles,
+} from '../board/ItemEdit';
+import { canEditItem } from '../board/logic';
+import { stepOfText } from '../board/path';
+import { useReady } from '../auth/context';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -99,6 +110,8 @@ export function InboxDetail({
   doneRuns?: Row<Run>[];
 }) {
   const reminders = useReminderMap();
+  const { session } = useReady();
+  const { add: addFiles } = useAddFiles(entry.pid, entry.itemId);
   const root = useRef<HTMLElement>(null);
   // Swipe between items; in an installed app (where the browser has no back gesture) the left edge goes back.
   useSwipe(root, {
@@ -209,7 +222,7 @@ export function InboxDetail({
     </>
   ) : null;
 
-  const stepIndex = project.steps.findIndex((x) => x.id === item.stepId);
+  const canEdit = canEditItem(item, session.me.uid, session.isAdmin);
   const deciders = step?.gate?.deciderUids ?? [];
   const bar = actions ? (
     <DecisionBar
@@ -223,6 +236,7 @@ export function InboxDetail({
             hint="Saved with the decision."
             value={rationale}
             onChange={onRationale}
+            onPaste={(e) => takePastedFiles(e, (f) => void addFiles(f))}
           />
         ) : entry.kind === 'question' ? (
           <BarNote
@@ -267,9 +281,7 @@ export function InboxDetail({
           rows={[
             {
               label: 'Step',
-              value: step
-                ? `${step.name} \u00b7 ${stepIndex + 1} of ${project.steps.length}`
-                : '\u2014',
+              value: step ? `${step.name} \u00b7 ${stepOfText(project, item)}` : '\u2014',
             },
             ...(step?.kind === 'human'
               ? [
@@ -282,7 +294,15 @@ export function InboxDetail({
                 ]
               : []),
             { label: 'Agent', value: agent?.data.name ?? '\u2014' },
-            { label: 'Type', value: item.type },
+            {
+              label: 'Type',
+              value:
+                canEdit && item.type !== 'finding' ? (
+                  <TypePicker pid={pid} itemId={itemId} item={item} />
+                ) : (
+                  item.type
+                ),
+            },
             { label: 'Cost', value: run ? formatEur(run.data.costEur) : '\u2014' },
           ]}
         >
@@ -300,7 +320,19 @@ export function InboxDetail({
               <Badge>{item.type}</Badge>
               {item.sendBackCount ? <Badge tone="sendback">↩ {item.sendBackCount}</Badge> : null}
             </div>
-            <h2 className="text-20 font-semibold leading-snug text-ink">{item.title}</h2>
+            <section aria-label="Item detail" className="flex flex-col gap-4">
+              <EditableTitle pid={pid} itemId={itemId} item={item} canEdit={canEdit} />
+              <Section title="Description">
+                <EditableSummary pid={pid} itemId={itemId} item={item} canEdit={canEdit} />
+              </Section>
+              <Section title="Attachments">
+                <AddFiles pid={pid} itemId={itemId}>
+                  <p className="text-14 text-text-2">
+                    New files are listed with the item&apos;s other attachments.
+                  </p>
+                </AddFiles>
+              </Section>
+            </section>
           </div>
         </header>
 

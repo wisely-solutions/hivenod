@@ -243,21 +243,11 @@ export function EditableSummary({ pid, itemId, item, canEdit }: Common & { canEd
 
 const MAX_PER_ADD = 5;
 
-/** Add files (picked, dropped or pasted screenshots) to the item, as an attachment each. */
-export function AddFiles({
-  pid,
-  itemId,
-  children,
-}: {
-  pid: string;
-  itemId: string;
-  children: React.ReactNode;
-}) {
+/** Adds files to the item as an attachment each; the shared logic of the zone and the note field. */
+export function useAddFiles(pid: string, itemId: string) {
   const { session, actionContext, run } = useReady();
-  const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [over, setOver] = useState(false);
 
   async function add(list: File[]) {
     const ctx = actionContext(session.workspaceId);
@@ -290,12 +280,37 @@ export function AddFiles({
       setError(problems.join(' '));
     }
   }
+  return { add, busy, error };
+}
+
+/**
+ * A paste handler that sends pasted files to `add` and leaves plain-text pastes alone.
+ * Returns true when it took the paste.
+ */
+export function takePastedFiles(e: ClipboardEvent<HTMLElement>, add: (f: File[]) => void): boolean {
+  const files = Array.from(e.clipboardData?.files ?? []);
+  if (files.length === 0) return false;
+  e.preventDefault();
+  add(files);
+  return true;
+}
+
+/** Add files (picked, dropped or pasted screenshots) to the item, as an attachment each. */
+export function AddFiles({
+  pid,
+  itemId,
+  children,
+}: {
+  pid: string;
+  itemId: string;
+  children: React.ReactNode;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const { add, busy, error } = useAddFiles(pid, itemId);
+  const [over, setOver] = useState(false);
 
   function onPaste(e: ClipboardEvent<HTMLElement>) {
-    const files = Array.from(e.clipboardData.files);
-    if (files.length === 0) return;
-    e.preventDefault();
-    void add(files);
+    takePastedFiles(e, (f) => void add(f));
   }
   function onDrop(e: DragEvent<HTMLElement>) {
     e.preventDefault();

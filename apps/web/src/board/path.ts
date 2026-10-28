@@ -162,3 +162,9 @@ export function editableSteps(project: Pick<Project, 'steps'>, item: Item): Step
   const i = project.steps.findIndex((s) => s.id === item.stepId);
   return project.steps.slice(i + 1);
 }
+
+/** "Step 2 of 4" along the item's own path (skipped steps do not count): one count for every screen. */
+export function stepOfText(project: Project, item: Item): string {
+  const { n, m } = pathPosition(project, item);
+  return n > 0 ? `${n} of ${m}` : '';
+}
