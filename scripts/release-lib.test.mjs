@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   previousTag,
+  compareVersions,
+  versionRegressions,
   authHeaderProblems,
   MAIN_AUTH_URLS,
   mainAuthProblems,
@@ -170,5 +172,26 @@ describe('two hosting sites (card 9ZbSDmos)', () => {
     expect(ALIAS_URL).toBe('https://hivenod.web.app');
     expect(aliasRedirectProblems(js)).toEqual([]);
     expect(aliasRedirectProblems('nothing').length).toBe(1);
+  });
+});
+
+describe('version guard', () => {
+  const live = { cli: '0.1.1014', cliBin: '0.2.103' };
+  it('compares numerically, not as strings', () => {
+    expect(compareVersions('0.2.10', '0.2.9')).toBeGreaterThan(0);
+    expect(compareVersions('0.2.103', '0.2.9')).toBeGreaterThan(0);
+    expect(compareVersions('0.2.9', '0.2.9')).toBe(0);
+    expect(compareVersions('0.1.14', '0.1.614')).toBeLessThan(0);
+  });
+  it('refuses a lower cliBin or cli', () => {
+    expect(versionRegressions({ cli: '0.1.1014', cliBin: '0.2.3' }, live)).toHaveLength(1);
+    expect(
+      versionRegressions({ cli: '0.1.14', cliBin: '0.2.3' }, { cli: '0.1.614', cliBin: '0.2.9' }),
+    ).toHaveLength(2);
+  });
+  it('allows equal or higher, and no live version', () => {
+    expect(versionRegressions(live, live)).toEqual([]);
+    expect(versionRegressions({ cli: '0.1.1015', cliBin: '0.2.110' }, live)).toEqual([]);
+    expect(versionRegressions({ cli: '0.1.1', cliBin: '0.2.1' }, null)).toEqual([]);
   });
 });

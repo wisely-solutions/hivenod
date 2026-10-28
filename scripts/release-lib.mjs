@@ -130,3 +130,25 @@ export function aliasRedirectProblems(themeInitJs, main = MAIN_URL) {
     ? []
     : [`${ALIAS_URL}/theme-init.js has no redirect to ${main}`];
 }
+
+/** Numeric dotted compare: negative when a < b, 0 when equal, positive when a > b. */
+export function compareVersions(a, b) {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+/** Problems when a release would publish a CLI version lower than the live one (equal is fine). */
+export function versionRegressions(next, live) {
+  const problems = [];
+  for (const key of ['cliBin', 'cli']) {
+    if (live?.[key] && next?.[key] && compareVersions(next[key], live[key]) < 0) {
+      problems.push(`${key} ${next[key]} is lower than the live ${live[key]}`);
+    }
+  }
+  return problems;
+}

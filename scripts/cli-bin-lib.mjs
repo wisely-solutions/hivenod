@@ -17,8 +17,12 @@ export const BIN_PATH = '/cli/bin';
 /**
  * The binary's version: 0.2.<commits that touched cli/>. It changes only when the CLI does, so
  * a release that leaves cli/ alone ships byte-identical binaries (reproducible build).
+ *
+ * The public repo restarted its history, so the raw count fell below the last published 0.2.9
+ * (release-136 and earlier). BIN_VERSION_BASE lifts it above every published version; never lower it.
  */
-export const binVersionFor = (cliCommits) => `0.2.${cliCommits}`;
+export const BIN_VERSION_BASE = 100;
+export const binVersionFor = (cliCommits) => `0.2.${BIN_VERSION_BASE + cliCommits}`;
 
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 

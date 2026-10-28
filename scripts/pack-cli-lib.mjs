@@ -5,9 +5,12 @@
 // how to install hivenod.
 
 /** The CLI version of a release: 0.1.<number of commits on main>, so it only grows. */
+export const CLI_VERSION_BASE = 1000;
+// The public repo restarted its history; the base keeps the version above the last published
+// 0.1.617 (private history). Never lower it.
 export function cliVersionFor(commitCount) {
   if (!Number.isInteger(commitCount) || commitCount < 1) throw new Error('bad commit count');
-  return `0.1.${commitCount}`;
+  return `0.1.${CLI_VERSION_BASE + commitCount}`;
 }
 
 /** package.json of the published tarball: the agent package, bundled, stamped with the release. */

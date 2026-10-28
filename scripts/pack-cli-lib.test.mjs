@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { compareVersions } from './release-lib.mjs';
 import {
   cliVersionFor,
   LATEST_TARBALL,
@@ -17,7 +18,9 @@ import {
 
 describe('pack-cli', () => {
   it('versions grow with the commit count', () => {
-    expect(cliVersionFor(77)).toBe('0.1.77');
+    expect(cliVersionFor(77)).toBe('0.1.1077');
+    // Above the last version published from the private history (0.1.617).
+    expect(compareVersions(cliVersionFor(1), '0.1.617')).toBeGreaterThan(0);
     expect(() => cliVersionFor(0)).toThrow();
     expect(tarballName('0.1.77')).toBe('hivenod-0.1.77.tgz');
     expect(LATEST_TARBALL).toBe('hivenod-latest.tgz');
