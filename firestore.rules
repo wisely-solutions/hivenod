@@ -25,6 +25,9 @@ rules_version = '2';
 //  5d. Agent send-back (card KLCTVnX8): the agent holding an item sends it back to an earlier
 //      agent step on its path, never across a people step, with a reason, at most 3 rounds until
 //      a person acts on the item (approve, send back, move, answer reset the rounds).
+//  5e. Inbox (item 4PEHrOW5IfXBQWgOK9wo, docs/INBOX.md): a request, subject or inbox event is read
+//      only by the member it is for and the organization's agents; only that member edits, sends
+//      or ignores; nothing reaches 'sending' without the member's Send.
 //  7. Every domain write carries one event in the same batch (existsAfter, actor == auth uid,
 //     at == request.time). Events are create-only. Revoked agents are denied everything.
 //

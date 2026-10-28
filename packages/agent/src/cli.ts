@@ -2,7 +2,7 @@
 /** The `hivenod` command (SPEC section 10). `--json` prints machine-readable output. */
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { setLogLevel } from 'firebase/firestore';
 import { HiveClient } from './client';
@@ -72,6 +72,11 @@ const HELP = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
                        creates an item (work at the first step) where the project lets agents
                        create items; at most 30 an hour
+  hivenod inbox add --source S --sender NAME --thread REF --received-at ISO (--text T | --text-file F)
+                    [--handle H] [--message-id M] [--permalink URL] [--reply-ref R] [--member UID]
+  hivenod inbox list | read <id> | draft <id> --reply TEXT [--action A]... | sent <id> [--permalink URL]
+  hivenod subject list [--member UID] | assign <requestId> (--subject-id S | --name "Topic")
+                       a person's Inbox (item 4PEHr): nothing is sent before they press Send
   hivenod item path <itemId>                           the item's path: every library step, skipped or not
   hivenod item shape <itemId> --run R [--skip a,b] [--reason "why"] --note "one line"
                        ends a shaping run (work list shows job shape): the steps it skips; people
@@ -193,6 +198,21 @@ const OPTIONS = {
   'max-minutes': { type: 'string' },
   'max-items': { type: 'string' },
   server: { type: 'string' },
+  // Inbox (item 4PEHrOW5IfXBQWgOK9wo)
+  source: { type: 'string' },
+  sender: { type: 'string' },
+  handle: { type: 'string' },
+  thread: { type: 'string' },
+  'received-at': { type: 'string' },
+  text: { type: 'string' },
+  'text-file': { type: 'string' },
+  'message-id': { type: 'string' },
+  permalink: { type: 'string' },
+  'reply-ref': { type: 'string' },
+  member: { type: 'string' },
+  reply: { type: 'string' },
+  'subject-id': { type: 'string' },
+  action: { type: 'string', multiple: true },
 } as const;
 
 type Opts = ReturnType<typeof parse>['values'];
@@ -225,6 +245,53 @@ export interface Command {
   text: (r: never) => string;
 }
 
+const INBOX_USAGE =
+  'Usage: hivenod inbox add|list|read|draft|sent …, hivenod subject list|assign … (see hivenod --help)';
+
+/** `hivenod inbox …` / `hivenod subject …` (item 4PEHrOW5IfXBQWgOK9wo): the inbox tools. */
+async function inboxCommand(c: HiveClient, pos: string[], o: Opts): Promise<Command> {
+  const [a, b, id] = pos;
+  const inbox = c.inbox();
+  const usage = () => new HiveError(INBOX_USAGE);
+  const json = (r: unknown) => ({ result: r, text: () => JSON.stringify(r, null, 2) });
+  switch (`${a} ${b ?? ''}`) {
+    case 'inbox add': {
+      const text = o['text-file'] ? readFileSync(o['text-file'], 'utf8') : o.text;
+      if (!o.source || !o.sender || !o.thread || !o['received-at'] || !text) throw usage();
+      return json(
+        await inbox.add({
+          source: o.source,
+          sender: { name: o.sender, ...(o.handle !== undefined ? { handle: o.handle } : {}) },
+          text,
+          threadRef: o.thread,
+          receivedAt: o['received-at'],
+          messageId: o['message-id'],
+          permalink: o.permalink,
+          replyRef: o['reply-ref'],
+          member: o.member,
+        }),
+      );
+    }
+    case 'inbox list':
+      return json(await inbox.list());
+    case 'inbox read':
+      if (!id) throw usage();
+      return json(await inbox.readRequest(id));
+    case 'inbox draft':
+      if (!id || !o.reply) throw usage();
+      return json(await inbox.draft(id, o.reply, o.action ?? []));
+    case 'inbox sent':
+      if (!id) throw usage();
+      return json(await inbox.sent(id, o.permalink));
+    case 'subject list':
+      return json(await inbox.subjects(o.member));
+    case 'subject assign':
+      if (!id || (o['subject-id'] === undefined) === (o.name === undefined)) throw usage();
+      return json(await inbox.assign(id, o['subject-id'], o.name));
+  }
+  throw usage();
+}
+
 async function dispatch(c: HiveClient, pos: string[], o: Opts): Promise<Command> {
   const [a, b] = pos;
   if (a === 'create-item') {
@@ -244,6 +311,7 @@ async function dispatch(c: HiveClient, pos: string[], o: Opts): Promise<Command>
         ].join('\n'),
     };
   }
+  if (a === 'inbox' || a === 'subject') return inboxCommand(c, pos, o);
   const key = `${a} ${b ?? ''}`.trim();
   switch (key) {
     case 'whoami':
