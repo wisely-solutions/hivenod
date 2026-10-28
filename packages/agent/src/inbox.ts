@@ -79,14 +79,7 @@ export const NEXT: Record<string, string> = {
 export const CARRY_OUT =
   'Carry out the approved outcome exactly as approved (its fields, as the person left them), then report it with outcome_done.';
 
-const COLLECTIONS = [
-  'inboxThreads',
-  'inboxSubjects',
-  'inboxMessages',
-  'inboxOutcomes',
-  'inboxEvents',
-] as const;
-type Coll = (typeof COLLECTIONS)[number];
+type Coll = 'inboxThreads' | 'inboxSubjects' | 'inboxMessages' | 'inboxOutcomes' | 'inboxEvents';
 
 export class InboxOps {
   constructor(private readonly d: InboxDeps) {}

@@ -1426,7 +1426,11 @@ function build(): ContractCase[] {
   title('plain', AGENT, { title: '  Review   on Thursday ' });
   title('empty', AGENT, { title: '   ' });
   title('too long', AGENT, { title: 't'.repeat(201) });
-  const propose = (name: string, actor: Actor, input: Partial<Parameters<typeof proposeOutcome>[1]>) =>
+  const propose = (
+    name: string,
+    actor: Actor,
+    input: Partial<Parameters<typeof proposeOutcome>[1]>,
+  ) =>
     act(
       `proposeOutcome/${name}`,
       'proposeOutcome',
