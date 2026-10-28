@@ -205,6 +205,14 @@ function withRunUsage<T extends RunOutcome | RunUsage>(run: Run, o: T): T & RunO
 const iso = (t: { toMillis(): number } | null | undefined) =>
   t ? new Date(t.toMillis()).toISOString() : null;
 
+/** The part of a Firestore document snapshot that the work rows read. */
+interface WorkDoc {
+  id: string;
+  data: () => Item;
+  /** Raw field access (a snapshot): 'none' gives null for a server timestamp not yet confirmed. */
+  get?: (field: string, options: { serverTimestamps: 'none' }) => unknown;
+}
+
 export interface WorkRow {
   itemId: string;
   projectId: string;
@@ -487,7 +495,7 @@ export class HiveClient {
   private workRows(
     pid: string,
     project: Project,
-    docs: { id: string; data: () => Item }[],
+    docs: WorkDoc[],
     filter: { stepId?: string },
   ): WorkRow[] {
     const agentSteps = new Map(
@@ -513,7 +521,16 @@ export class HiveClient {
       // A step limited to other agents is not work for this one (the rules deny the claim too).
       if (!mine && !shaping && !agentMayTakeStep(project, item.stepId, this.uid)) continue;
       this.itemProject.set(d.id, pid);
-      this.arrivalKeys.set(d.id, arrivalKey(item, d.id));
+      // This client's own write that moved the item (a complete, a send-back) is still pending: the
+      // SDK's local estimate of a server timestamp is cut to whole seconds, which sorts the item
+      // before everything that arrived earlier in the same second. It moved just now: use that.
+      const pending = d.get?.('stepAt', { serverTimestamps: 'none' }) === null;
+      this.arrivalKeys.set(
+        d.id,
+        pending
+          ? ([Date.now(), Math.floor(item.updatedAt?.toMillis() ?? 0), d.id] as const)
+          : arrivalKey(item, d.id),
+      );
       out.push({
         itemId: d.id,
         projectId: pid,
@@ -581,7 +598,7 @@ export class HiveClient {
     const projects = new Map<string, Project>();
     for (const pid of ids) projects.set(pid, await this.getProject(pid));
     return new Promise((resolve, reject) => {
-      const latest = new Map<string, { id: string; data: () => Item }[]>();
+      const latest = new Map<string, WorkDoc[]>();
       const stops: (() => void)[] = [];
       let done = false;
       const finish = (timedOut: boolean, err?: unknown, work: WorkRow[] = []) => {
@@ -632,7 +649,7 @@ export class HiveClient {
 
   private collect(
     projects: Map<string, Project>,
-    latest: Map<string, { id: string; data: () => Item }[]>,
+    latest: Map<string, WorkDoc[]>,
     filter: { stepId?: string },
   ): WorkRow[] {
     const out: WorkRow[] = [];
