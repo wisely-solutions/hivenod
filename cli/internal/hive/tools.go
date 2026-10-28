@@ -2,6 +2,7 @@ package hive
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -265,6 +266,19 @@ var ToolRuns = map[string]Run{
 	},
 	"calendar_free": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.CalendarFree(ctx, a.S("member"), a.S("from"), a.S("to"), a.F("minMinutes"))
+	},
+	"calendar_sync": func(ctx context.Context, c *Client, a Args) (any, error) {
+		b, _ := json.Marshal(map[string]any{"items": a["events"]})
+		feed, err := ParseFeed(b, "events")
+		if err != nil {
+			return nil, err
+		}
+		if t := a.S("nextSyncToken"); t != "" {
+			feed.NextSyncToken = &t
+		}
+		inc, _ := a["incremental"].(bool)
+		busy, _ := a["busyOnly"].(bool)
+		return c.CalendarSync(ctx, SyncArgs{Member: a.S("member"), Source: a.S("source"), From: a.S("from"), To: a.S("to"), Incremental: inc, BusyOnly: busy, Feed: feed})
 	},
 	"report_usage": func(ctx context.Context, c *Client, a Args) (any, error) {
 		u := Usage{TokensIn: *a.F("tokensIn"), TokensOut: *a.F("tokensOut"), TokensCached: a.F("tokensCached")}
