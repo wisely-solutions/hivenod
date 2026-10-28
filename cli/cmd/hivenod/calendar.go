@@ -15,7 +15,7 @@ import (
 // calendarCmd is `hivenod calendar upsert|delete|free` (Inbox item w9SAf), like the MCP tools.
 func calendarCmd(ctx context.Context, o opts, pos []string, resolve func() (hive.Config, error), stdin io.Reader, say func(string), fail func(error) int, stderr io.Writer) int {
 	usage := func() int {
-		fmt.Fprintln(stderr, "hivenod: Usage: hivenod calendar upsert <events.json|-> [--member M] | delete <id>... | delete --source S [--member M] <sourceEventId>... | free --from T --to T [--member M] [--min N] | sync <events.json|-> [--source S] [--member M] [--from T --to T] [--incremental] [--busy-only] [--state FILE]")
+		fmt.Fprintln(stderr, "hivenod: Usage: hivenod calendar upsert <events.json|-> [--member M] | delete <id>... | delete --source S [--member M] <sourceEventId>... | free --from T --to T [--member M] [--min N] | sync <events.json|-> [--source S] [--member M] [--from T --to T] [--incremental] [--busy-only] [--state FILE] | mirror <outcomeId> <sourceEventId> [--source S] [--from T --to T] [--title T]")
 		return 2
 	}
 	if len(pos) < 2 {
@@ -72,6 +72,10 @@ func calendarCmd(ctx context.Context, o opts, pos []string, resolve func() (hive
 			events = append(events, ev)
 		}
 	case "delete":
+	case "mirror":
+		if len(pos) < 4 {
+			return usage()
+		}
 	case "free":
 		if o.from == "" || o.to == "" {
 			return usage()
@@ -123,6 +127,16 @@ func calendarCmd(ctx context.Context, o opts, pos []string, resolve func() (hive
 			lines = append(lines, "  skipped "+id+": "+k.Reason)
 		}
 		return out(r, strings.Join(lines, "\n"))
+	case "mirror":
+		var title *string
+		if o.title != "" {
+			title = &o.title
+		}
+		r, err := c.CalendarMirror(ctx, hive.MirrorArgs{OutcomeID: pos[2], SourceEventID: pos[3], Source: o.source, Start: o.from, End: o.to, Title: title})
+		if err != nil {
+			return fail(err)
+		}
+		return out(r, r.Note)
 	case "upsert":
 		r, err := c.CalendarUpsert(ctx, o.member, events)
 		if err != nil {

@@ -8,6 +8,7 @@ import {
   deleteEvents,
   freeTime,
   syncEvents,
+  mirrorBooking,
   upsertEvents,
   type CalendarEventArg,
 } from './calendar';
@@ -747,6 +748,32 @@ export const TOOLS: ToolDef[] = [
           items: a.events as never,
           ...(a.nextSyncToken ? { nextSyncToken: a.nextSyncToken as string } : {}),
         },
+      }),
+  }),
+  tool({
+    name: 'calendar_mirror',
+    description:
+      "After the member approved a booking (a reply_book outcome), Hivenod put the meeting in their calendar. Once you have created it in their own calendar (for example their Google Calendar, with your own access, inviting the people in 'with'), call this with that calendar's event id: the booking becomes that event, so your next calendar sync updates it and never counts the meeting twice. Then send the reply and report outcome_done. Safe to call again.",
+    input: {
+      outcomeId: z.string().min(1).describe('The approved reply_book outcome'),
+      sourceEventId: z
+        .string()
+        .min(1)
+        .max(600)
+        .describe("The event's id in the member's calendar (e.g. the Google event id)"),
+      source: z.string().max(40).optional().describe('Which calendar; default google'),
+      start: z.string().optional().describe('Only if the calendar moved it: RFC 3339'),
+      end: z.string().optional().describe('Only if the calendar moved it: RFC 3339'),
+      title: z.string().max(300).optional().describe('Only if it differs from the booking'),
+    },
+    run: (c, a) =>
+      mirrorBooking(c.calendarDeps(), {
+        outcomeId: a.outcomeId as string,
+        sourceEventId: a.sourceEventId as string,
+        source: a.source as string | undefined,
+        start: a.start as string | undefined,
+        end: a.end as string | undefined,
+        title: a.title as string | undefined,
       }),
   }),
   tool({

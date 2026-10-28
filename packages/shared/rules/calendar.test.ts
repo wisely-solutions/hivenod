@@ -21,6 +21,7 @@ import {
   busyBlockId,
   calendarDelete,
   calendarEventId,
+  calendarMirror,
   calendarPaths,
   calendarUpsert,
   freeSlots,
@@ -203,6 +204,42 @@ describe('calendar events', () => {
     const e = p.ops.at(-1)!;
     (e.data!.data as Record<string, unknown>).title = 'Meeting t1';
     await denied(a.run(p));
+  });
+});
+
+describe('mirroring a booking (item fJnu6)', () => {
+  it('an agent turns a booking into the Google event in one batch; the busy time stays once', async () => {
+    const alice = as('alice');
+    const b = calendarUpsert(alice.ctx, {
+      memberUid: 'alice',
+      events: [ev('o1', 10, { source: 'hivenod' })],
+    });
+    await ok(alice.run(b));
+    const a = as(AGENTS.star);
+    const m = calendarMirror(a.ctx, {
+      memberUid: 'alice',
+      replacedId: b.ids[0]!,
+      event: ev('gcal-1', 10),
+    });
+    await ok(a.run(m));
+    expect(await snap(calendarPaths.event(W, b.ids[0]!))).toMatchObject({
+      deleted: true,
+      title: '',
+    });
+    expect(await snap(calendarPaths.event(W, m.id))).toMatchObject({
+      source: 'google',
+      deleted: false,
+    });
+    expect(await snap(calendarPaths.busyBlock('alice', busyBlockId(W, b.ids[0]!)))).toMatchObject({
+      deleted: true,
+    });
+    // a member never mirrors someone else's booking
+    const bob = as('bob');
+    const forged = calendarMirror(
+      { ...bob.ctx, actor: { ...bob.ctx.actor, id: 'alice' } },
+      { memberUid: 'alice', replacedId: m.id, event: ev('gcal-2', 10) },
+    );
+    await denied(bob.run(forged));
   });
 });
 

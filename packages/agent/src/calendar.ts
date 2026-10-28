@@ -5,8 +5,11 @@
  */
 import {
   ActionError,
+  bookingEventId,
   calendarDelete,
   calendarEventId,
+  calendarMirror,
+  inboxPaths,
   calendarPaths,
   calendarUpsert,
   DEFAULT_FREE_MIN_MINUTES,
@@ -356,4 +359,86 @@ export function saveSyncState(
     `${JSON.stringify({ source: r.source, member: r.member, syncToken: r.nextSyncToken, syncedAt: new Date().toISOString() }, null, 2)}\n`,
     { mode: 0o600 },
   );
+}
+
+// ---------- mirroring a booking (item fJnu6) ----------
+
+export interface MirrorArgs {
+  outcomeId: string;
+  sourceEventId: string;
+  source?: string;
+  /** When the copy differs from the booking (the calendar moved it): RFC 3339. */
+  start?: string;
+  end?: string;
+  title?: string;
+}
+
+/**
+ * After the member approved a reply_book outcome, Hivenod booked the meeting (source hivenod).
+ * The agent puts it into the member's own calendar (for example Google, with its own access) and
+ * calls this with that calendar's event id: the booking becomes that event, so the next sync
+ * updates it instead of counting the meeting twice.
+ */
+export async function mirrorBooking(d: Deps, a: MirrorArgs) {
+  const source = (a.source ?? 'google').trim();
+  if (!a.outcomeId) throw new HiveError('Give the outcome id of the booking.');
+  if (!(a.sourceEventId ?? '').trim())
+    throw new HiveError(`Give the event's id in the ${source || 'source'} calendar.`);
+  const o = (await getDoc(doc(d.db, inboxPaths.outcome(d.ctx.workspaceId, a.outcomeId)))).data() as
+    { memberUid?: string; type?: string; state?: string } | undefined;
+  if (!o?.memberUid) throw new HiveError(`Outcome ${a.outcomeId} not found.`);
+  if (o.type !== 'reply_book')
+    throw new HiveError(`Outcome ${a.outcomeId} is not a booking (reply_book).`);
+  if (o.state !== 'approved' && o.state !== 'done')
+    throw new HiveError(`Outcome ${a.outcomeId} is not approved (it is ${o.state}).`);
+  const memberUid = o.memberUid;
+  const replacedId = bookingEventId(memberUid, a.outcomeId);
+  const mirrorId = calendarEventId(memberUid, source, a.sourceEventId);
+  const b = (await getDoc(doc(d.db, calendarPaths.event(d.ctx.workspaceId, replacedId)))).data() as
+    | {
+        title: string;
+        start: Timestamp;
+        end: Timestamp;
+        allDay: boolean;
+        attendees: string[];
+        deleted: boolean;
+      }
+    | undefined;
+  if (!b) throw new HiveError(`No booking in the calendar for outcome ${a.outcomeId}.`);
+  if (b.deleted) {
+    const m = (await getDoc(doc(d.db, calendarPaths.event(d.ctx.workspaceId, mirrorId)))).data() as
+      { deleted?: boolean } | undefined;
+    if (m && !m.deleted)
+      return {
+        member: memberUid,
+        id: mirrorId,
+        replaced: replacedId,
+        mirrored: false,
+        note: 'Already mirrored: the booking is that event.',
+      };
+    throw new HiveError(`The booking of outcome ${a.outcomeId} was removed from the calendar.`);
+  }
+  const p = wrap(() =>
+    calendarMirror(d.ctx, {
+      memberUid,
+      replacedId,
+      event: {
+        source,
+        sourceEventId: a.sourceEventId,
+        title: a.title ?? b.title,
+        start: a.start ? parseTime(a.start, 'start') : b.start.toDate(),
+        end: a.end ? parseTime(a.end, 'end') : b.end.toDate(),
+        allDay: b.allDay,
+        attendees: b.attendees,
+      },
+    }),
+  );
+  await d.write(p);
+  return {
+    member: memberUid,
+    id: p.id,
+    replaced: replacedId,
+    mirrored: true,
+    note: `The booking is now the ${source} event ${a.sourceEventId}: the next sync updates it, never adds it twice. Report the outcome with outcome_done.`,
+  };
 }
