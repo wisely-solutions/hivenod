@@ -16,7 +16,31 @@ import (
 // on the confirm page (any member confirms it with one click for their own projects), and saves
 // the agent token it receives, sealed for a key that never leaves this process. The token is
 // never printed.
-func connect(ctx context.Context, cfg hive.Config, say func(string)) error {
+//
+// Then it sets up Claude Code (the plugin and its channel) and, in a terminal, starts it with
+// `hivenod claude`. noStart (--no-start, or no terminal) only prints how to start it.
+func connect(ctx context.Context, cfg hive.Config, say func(string), noStart bool) error {
+	if err := connectToken(ctx, cfg, say); err != nil {
+		return err
+	}
+	if err := claudeSetup(say); err != nil {
+		return err
+	}
+	if noStart || os.Getenv("HIVENOD_NO_START") != "" || !interactive() {
+		say("Start it with: hivenod claude")
+		return nil
+	}
+	argv, err := claudeCommand(nil)
+	if err != nil {
+		return err
+	}
+	say("Starting Claude Code with the Hivenod channel (next time: hivenod claude).")
+	say("Claude Code asks to confirm the development channel: choose \"I am using this for local development\".")
+	return runClaude(argv)
+}
+
+// connectToken gets this machine its agent token, unless it already has one.
+func connectToken(ctx context.Context, cfg hive.Config, say func(string)) error {
 	tok, src, err := credentials.Resolve()
 	if errors.Is(err, credentials.ErrDamaged) {
 		say(credentials.DamagedMessage() + " Connecting again replaces it.")

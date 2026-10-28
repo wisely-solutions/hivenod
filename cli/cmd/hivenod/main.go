@@ -1,6 +1,6 @@
 // hivenod: the Hivenod agent CLI (item zLwtX2WEEg3mER4CR74g), one binary, no Node.js.
 //
-//	hivenod connect | pair | whoami | logout | mcp [--channel ...] | update | version
+//	hivenod connect | claude | pair | whoami | logout | mcp [--channel ...] | update | version
 package main
 
 import (
@@ -23,7 +23,9 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
 
   hivenod connect          connects this machine to Hivenod: opens your browser, where you
                            confirm it with one click (any member, for their own projects),
-                           and saves the token
+                           and saves the token; then sets up the hivenod plugin in Claude Code
+                           and starts it (--no-start: only set up)
+  hivenod claude [args]    starts Claude Code with the Hivenod channel (args go to claude)
   hivenod pair             pairs this machine with Hivenod (shows a code an admin confirms) and
                            saves the token; then install the hivenod plugin in Claude Code
   hivenod whoami           the agent this machine works as
@@ -42,8 +44,8 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 
 type opts struct {
-	json, channel, help, version, force bool
-	project, step, maxItems             string
+	json, channel, help, version, force, noStart bool
+	project, step, maxItems                      string
 }
 
 func parse(args []string) (opts, []string, error) {
@@ -57,6 +59,7 @@ func parse(args []string) (opts, []string, error) {
 	fs.BoolVar(&o.version, "version", false, "")
 	fs.BoolVar(&o.version, "v", false, "")
 	fs.BoolVar(&o.force, "force", false, "")
+	fs.BoolVar(&o.noStart, "no-start", false, "")
 	fs.StringVar(&o.project, "project", "", "")
 	fs.StringVar(&o.step, "step", "", "")
 	fs.StringVar(&o.maxItems, "max-items", "", "")
@@ -76,6 +79,15 @@ func parse(args []string) (opts, []string, error) {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	// `hivenod claude …`: everything after the word belongs to claude, not to these flags.
+	if len(args) > 0 && args[0] == "claude" {
+		argv, err := claudeCommand(args[1:])
+		if err == nil {
+			err = runClaude(argv)
+		}
+		fmt.Fprintf(stderr, "hivenod: %v\n", err)
+		return 1
+	}
 	o, pos, err := parse(args)
 	if err != nil {
 		fmt.Fprintf(stderr, "hivenod: %v\n", err)
@@ -105,7 +117,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	say := func(s string) { fmt.Fprintln(stdout, s) }
 	switch pos[0] {
 	case "connect":
-		if err := connect(ctx, cfg, say); err != nil {
+		if err := connect(ctx, cfg, say, o.noStart); err != nil {
 			return fail(err)
 		}
 		return 0
