@@ -968,15 +968,14 @@ service cloud.firestore {
                         'archivedAt', 'memberUids', 'stepAgents', 'shapeNewItems',
                         'agentsMayCreateItems', 'lastEventId'])
             && validProject(request.resource.data)
-            // Shaping new items (card st5INNZj) is switched by admins and the project's creator.
-            && (request.resource.data.get('shapeNewItems', false) == resource.data.get('shapeNewItems', false)
+            // Shaping new items (card st5INNZj) and "Agents may create items" (item DhsO9) are
+            // switched by admins and the project's creator. One check for both: long processes
+            // are close to the rules budget.
+            && (!request.resource.data.diff(resource.data).affectedKeys()
+                  .hasAny(['shapeNewItems', 'agentsMayCreateItems'])
                 || (canSetStepAgents(wid, resource.data)
-                    && request.resource.data.shapeNewItems is bool))
-            // Agents may create items (item DhsO9): the same people switch it.
-            && (request.resource.data.get('agentsMayCreateItems', false)
-                  == resource.data.get('agentsMayCreateItems', false)
-                || (canSetStepAgents(wid, resource.data)
-                    && request.resource.data.agentsMayCreateItems is bool))
+                    && request.resource.data.get('shapeNewItems', false) is bool
+                    && request.resource.data.get('agentsMayCreateItems', false) is bool))
             && gatesAllowed(wid, resource.data, request.resource.data)
             // Unchanged per-step agents cost little: long processes are close to the rules budget.
             && (request.resource.data.get('stepAgents', {}) == resource.data.get('stepAgents', {})
