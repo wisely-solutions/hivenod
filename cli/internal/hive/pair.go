@@ -30,6 +30,11 @@ type PairOptions struct {
 	Say    func(string)
 	Folder string
 	TTL    time.Duration
+	// Connect makes a `hivenod connect` request (item EJ2Cxq4k): any member confirms it with one
+	// click on /connect, within 10 minutes. Without it, the `hivenod pair` request an admin confirms.
+	Connect bool
+	// OpenBrowser opens the confirm page (connect only); nil or an error just prints the URL.
+	OpenBrowser func(url string) error
 }
 
 type pairingDoc struct {
@@ -63,6 +68,9 @@ func PairTerminal(ctx context.Context, cfg Config, o PairOptions) (*Paired, erro
 		folder = filepath.Base(wd)
 	}
 	req := pairing.Request(keys.PublicKey, o.CLI, host, folder)
+	if o.Connect {
+		req = pairing.ConnectRequest(keys.PublicKey, o.CLI, host, folder)
+	}
 	var code string
 	for attempt := 0; ; attempt++ {
 		code = pairing.NewCode()
@@ -78,16 +86,27 @@ func PairTerminal(ctx context.Context, cfg Config, o PairOptions) (*Paired, erro
 	ttl := o.TTL
 	if ttl == 0 {
 		ttl = pairing.TTL
+		if o.Connect {
+			ttl = pairing.ConnectTTL
+		}
 	}
 	say := o.Say
-	say("This terminal is not connected to Hivenod yet. To connect it, open")
-	say("  " + pairing.URL(cfg.WebURL, code))
-	say(fmt.Sprintf("and confirm the code %s (Agents, Connect a terminal). It expires in %d minutes.", pairing.Format(code), int(ttl.Round(time.Minute)/time.Minute)))
+	minutes := int(ttl.Round(time.Minute) / time.Minute)
+	if o.Connect {
+		sayConnect(say, cfg.WebURL, code, host, minutes, o.OpenBrowser)
+	} else {
+		say("This terminal is not connected to Hivenod yet. To connect it, open")
+		say("  " + pairing.URL(cfg.WebURL, code))
+		say(fmt.Sprintf("and confirm the code %s (Agents, Connect a terminal). It expires in %d minutes.", pairing.Format(code), minutes))
+	}
 	say("Waiting for confirmation… (Ctrl+C to cancel)")
 
 	wctx, cancel := context.WithTimeout(ctx, ttl)
 	defer cancel()
 	doc, werr := waitForPairing(wctx, db.Doc(pairing.Path(code)))
+	if errors.Is(werr, errDeclined) {
+		return nil, Errf("The request was declined in the browser. Nothing was connected.")
+	}
 	if doc == nil {
 		dctx, dcancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_, _ = db.Doc(pairing.Path(code)).Delete(dctx)
@@ -97,6 +116,9 @@ func PairTerminal(ctx context.Context, cfg Config, o PairOptions) (*Paired, erro
 		}
 		if ctx.Err() != nil {
 			return nil, Errf("Pairing cancelled.")
+		}
+		if o.Connect {
+			return nil, Errf("The request expired before anyone confirmed it. Run hivenod connect again.")
 		}
 		return nil, Errf("The code expired before anyone confirmed it. Run the command again for a new code.")
 	}
@@ -110,6 +132,24 @@ func PairTerminal(ctx context.Context, cfg Config, o PairOptions) (*Paired, erro
 	}
 	return &Paired{Code: code, Token: tok, WorkspaceID: doc.WorkspaceID, AgentUID: doc.AgentUID, AgentName: name}, nil
 }
+
+// sayConnect tells the person where to confirm, and opens the browser there when it can.
+func sayConnect(say func(string), web, code, host string, minutes int, open func(string) error) {
+	link := pairing.ConnectURL(web, code)
+	machine := ""
+	if host != "" {
+		machine = " (" + host + ")"
+	}
+	if open != nil && open(link) == nil {
+		say("Opened your browser to connect this machine" + machine + " to Hivenod. Confirm it there.")
+	} else {
+		say("Open this link to connect this machine" + machine + " to Hivenod:")
+	}
+	say("  " + link)
+	say(fmt.Sprintf("Or go to %s and enter the code %s. It expires in %d minutes.", pairing.ConnectPage(web), pairing.Format(code), minutes))
+}
+
+var errDeclined = errors.New("declined")
 
 func waitForPairing(ctx context.Context, ref *firestore.DocumentRef) (*pairingDoc, error) {
 	for ctx.Err() == nil {
@@ -127,7 +167,9 @@ func waitForPairing(ctx context.Context, ref *firestore.DocumentRef) (*pairingDo
 				break // a broken stream: listen again
 			}
 			if !snap.Exists() {
-				continue
+				// The request was created before listening: gone means declined in the browser.
+				it.Stop()
+				return nil, errDeclined
 			}
 			var d pairingDoc
 			if err := snap.DataTo(&d); err != nil {

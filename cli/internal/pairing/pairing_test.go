@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOpenTypeScriptVector(t *testing.T) {
@@ -63,6 +64,22 @@ func TestCode(t *testing.T) {
 	}
 	if URL("https://hivenod.com/", "K7QX29PD") != "https://hivenod.com/agents/connect?code=K7QX-29PD" {
 		t.Fatal("url")
+	}
+	if ConnectURL("https://hivenod.com/", "K7QX29PD") != "https://hivenod.com/connect?code=K7QX-29PD" {
+		t.Fatal("connect url")
+	}
+	if ConnectPage("https://hivenod.com/") != "https://hivenod.com/connect" {
+		t.Fatal("connect page")
+	}
+	if ConnectTTL != 10*time.Minute || TTL != 15*time.Minute {
+		t.Fatal("ttl mirrors firestore.rules")
+	}
+	r := ConnectRequest("pk", "claude", "laptop", "blog")
+	if r["kind"] != "connect" || r["status"] != "pending" {
+		t.Fatal("connect request")
+	}
+	if _, ok := Request("pk", "claude", "laptop", "blog")["kind"]; ok {
+		t.Fatal("a pair request has no kind")
 	}
 	k, _ := NewKeys()
 	if b, _ := base64.RawURLEncoding.DecodeString(k.PublicKey); len(b) != 65 {

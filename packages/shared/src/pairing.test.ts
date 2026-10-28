@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONNECT_TTL_MS,
+  connectUrl,
   formatPairingCode,
   newPairingCode,
   normalizePairingCode,
   openToken,
   PAIRING_CODE_ALPHABET,
   pairingKeys,
+  pairingRequest,
   pairingSchema,
+  pairingTtlMs,
+  PAIRING_TTL_MS,
   pairingUrl,
   sealToken,
 } from './pairing';
@@ -32,6 +37,22 @@ describe('pairing codes', () => {
     expect(pairingUrl('https://hive.example', 'K7QX29PD')).toBe(
       'https://hive.example/agents/connect?code=K7QX-29PD',
     );
+  });
+});
+
+describe('connect requests (hivenod connect)', () => {
+  it('link to the one-click confirm page', () => {
+    expect(connectUrl('https://hivenod.com/', 'K7QX29PD')).toBe(
+      'https://hivenod.com/connect?code=K7QX-29PD',
+    );
+  });
+  it('carry kind connect and last 10 minutes; a pair request has no kind and lasts 15', () => {
+    const base = { publicKey: 'k', cli: 'claude', host: 'laptop', folder: 'blog' };
+    expect(pairingRequest({ ...base, kind: 'connect' }).kind).toBe('connect');
+    expect('kind' in pairingRequest(base)).toBe(false);
+    expect(pairingTtlMs({ kind: 'connect' })).toBe(CONNECT_TTL_MS);
+    expect(CONNECT_TTL_MS).toBe(10 * 60_000);
+    expect(pairingTtlMs({})).toBe(PAIRING_TTL_MS);
   });
 });
 

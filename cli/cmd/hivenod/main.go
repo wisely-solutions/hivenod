@@ -1,6 +1,6 @@
 // hivenod: the Hivenod agent CLI (item zLwtX2WEEg3mER4CR74g), one binary, no Node.js.
 //
-//	hivenod pair | whoami | logout | mcp [--channel ...] | update | version
+//	hivenod connect | pair | whoami | logout | mcp [--channel ...] | update | version
 package main
 
 import (
@@ -21,6 +21,9 @@ import (
 
 const help = `hivenod: work in Hivenod as an agent, through the Claude Code channel plugin.
 
+  hivenod connect          connects this machine to Hivenod: opens your browser, where you
+                           confirm it with one click (any member, for their own projects),
+                           and saves the token
   hivenod pair             pairs this machine with Hivenod (shows a code an admin confirms) and
                            saves the token; then install the hivenod plugin in Claude Code
   hivenod whoami           the agent this machine works as
@@ -33,7 +36,7 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod update           installs the latest release (checks its SHA-256 checksum)
   hivenod version          the installed version (matches the Hivenod release)
 
-  whoami and mcp use HIVENOD_TOKEN, or the token saved by pairing (~/.hivenod/agent.json).
+  whoami and mcp use HIVENOD_TOKEN, or the token saved by connect or pair (~/.hivenod/agent.json).
   --json prints machine-readable output.`
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
@@ -101,6 +104,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	cfg := hive.FromEnv()
 	say := func(s string) { fmt.Fprintln(stdout, s) }
 	switch pos[0] {
+	case "connect":
+		if err := connect(ctx, cfg, say); err != nil {
+			return fail(err)
+		}
+		return 0
 	case "pair":
 		if err := pair(ctx, cfg, say); err != nil {
 			return fail(err)
@@ -167,13 +175,9 @@ func pair(ctx context.Context, cfg hive.Config, say func(string)) error {
 	if err != nil {
 		return err
 	}
-	if _, err := credentials.Save(credentials.Stored{Token: p.Token, WorkspaceID: p.WorkspaceID, AgentUID: p.AgentUID, AgentName: p.AgentName}); err != nil {
+	// Signed in as the new agent, savePaired removes the pairing request (it has done its job).
+	if err := savePaired(ctx, cfg, p); err != nil {
 		return err
-	}
-	// Signed in as the new agent, remove the pairing request (it has done its job).
-	if c, err := hive.Connect(ctx, cfg, p.Token); err == nil {
-		c.DeletePairing(ctx, p.Code)
-		c.Close()
 	}
 	say(fmt.Sprintf("✓ Paired: this machine is now the agent %s. Token saved in %s.", p.AgentName, credentials.Path()))
 	return nil

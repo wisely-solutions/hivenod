@@ -23,6 +23,18 @@ export const PAIRING_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const PAIRING_CODE_LENGTH = 8;
 /** How long a code can be confirmed (mirrored in firestore.rules). */
 export const PAIRING_TTL_MS = 15 * 60_000;
+/**
+ * `hivenod connect` (item EJ2Cxq4k): a device-login style request (kind 'connect') that any member
+ * confirms with one click for their own projects. Valid 10 minutes, single use (firestore.rules).
+ */
+export const CONNECT_TTL_MS = 10 * 60_000;
+/** A plain member connects an agent to at most this many of their projects (firestore.rules). */
+export const MEMBER_CONNECT_MAX_PROJECTS = 5;
+
+/** How long this request can be confirmed. */
+export function pairingTtlMs(p: { kind?: 'connect' }): number {
+  return p.kind === 'connect' ? CONNECT_TTL_MS : PAIRING_TTL_MS;
+}
 
 export function newPairingCode(): string {
   const out: string[] = [];
@@ -54,6 +66,11 @@ export function pairingUrl(origin: string, code: string): string {
   return `${origin.replace(/\/$/, '')}/agents/connect?code=${formatPairingCode(code)}`;
 }
 
+/** The page where a signed-in member confirms a `hivenod connect` request. */
+export function connectUrl(origin: string, code: string): string {
+  return `${origin.replace(/\/$/, '')}/connect?code=${formatPairingCode(code)}`;
+}
+
 export const pairingPath = (code: string) => `pairings/${code}`;
 
 /** What the terminal writes (no sign-in needed; firestore.rules "pairings"). */
@@ -62,6 +79,8 @@ export function pairingRequest(input: {
   cli: string;
   host: string;
   folder: string;
+  /** 'connect' for `hivenod connect`; left out for `hivenod pair`. */
+  kind?: 'connect';
 }) {
   return {
     publicKey: input.publicKey,
@@ -70,6 +89,7 @@ export function pairingRequest(input: {
     folder: input.folder.slice(0, 120),
     status: 'pending' as const,
     createdAt: SERVER_TIME,
+    ...(input.kind ? { kind: input.kind } : {}),
   };
 }
 
@@ -98,6 +118,7 @@ export const pairingSchema = z.object({
   folder: z.string().max(120),
   status: z.enum(['pending', 'paired']),
   createdAt: timestamp,
+  kind: z.literal('connect').optional(),
   workspaceId: z.string().max(128).optional(),
   agentUid: z.string().max(128).optional(),
   agentName: z.string().max(80).optional(),
