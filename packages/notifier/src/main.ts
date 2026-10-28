@@ -5,6 +5,8 @@
  *
  *   notifier init     create the Web Push (VAPID) keys once and save them to the secrets file
  *   notifier          run (default)
+ *   notifier personal-org --email <email> [--name Personal] [--apply]
+ *                     create a person's Personal organization (Inbox item fJnu6; dry run first)
  *
  * Secrets are read from files, never from code: see docs/NOTIFIER.md.
  */
@@ -18,6 +20,7 @@ import { makePushSender, newVapidKeys } from './push';
 import { firestorePorts, watchAll } from './store';
 import { TelegramApi, TelegramBot } from './telegram';
 import { notifyPath } from '@hive/shared';
+import { describePersonalOrg, parsePersonalOrgArgs, personalOrg } from './personalOrg';
 
 const log = (s: string) => console.log(`${new Date().toISOString()} ${s}`);
 
@@ -37,7 +40,8 @@ function init() {
   log(`Wrote new VAPID keys to ${path} (mode 600). The private key is not printed.`);
 }
 
-async function run() {
+/** Signs in with the service account (or the emulator) and returns Firestore. */
+function adminDb() {
   const env = { ...readEnvFile(join(secretsDir(), 'gcp.env')), ...readEnvFile(notifyEnvPath()) };
   const get = (k: string) => process.env[k] ?? env[k];
   const cred = get('GOOGLE_APPLICATION_CREDENTIALS');
@@ -59,7 +63,11 @@ async function run() {
       ? { projectId }
       : { projectId, credential: applicationDefault() },
   );
-  const db = getFirestore();
+  return { db: getFirestore(), get };
+}
+
+async function run() {
+  const { db, get } = adminDb();
   const appUrl = (get('APP_URL') ?? 'https://hivenod.com').replace(/\/$/, '');
 
   const pub = get('VAPID_PUBLIC_KEY');
@@ -137,6 +145,17 @@ async function run() {
 }
 
 if (process.argv[2] === 'init') init();
+else if (process.argv[2] === 'personal-org')
+  Promise.resolve()
+    .then(() => personalOrg(adminDb().db, parsePersonalOrgArgs(process.argv.slice(3))))
+    .then((r) => {
+      console.log(describePersonalOrg(r));
+      process.exit(0);
+    })
+    .catch((e) => {
+      console.error(String(e instanceof Error ? e.message : e));
+      process.exit(1);
+    });
 else
   run().catch((e) => {
     log(`fatal: ${String(e)}`);

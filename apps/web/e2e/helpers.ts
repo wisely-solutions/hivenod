@@ -195,6 +195,21 @@ export async function adminSet(path: string, data: Record<string, unknown>) {
   expect(res.ok, await res.text()).toBe(true);
 }
 
+/** Sets some fields of a document (any values: lists, maps, dates) as the emulator's admin. */
+export async function adminUpdate(path: string, data: Record<string, unknown>) {
+  const mask = Object.keys(data)
+    .map((k) => `updateMask.fieldPaths=${k}`)
+    .join('&');
+  const res = await fetch(`${FIRESTORE}/${path}?${mask}`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer owner', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      fields: (encodeValue(data) as { mapValue: { fields: object } }).mapValue.fields,
+    }),
+  });
+  expect(res.ok, await res.text()).toBe(true);
+}
+
 /** Creates or replaces many whole documents in one atomic commit, as the emulator's admin. */
 export async function adminSetAll(docs: Array<[string, Record<string, unknown>]>) {
   const res = await fetch(`${FIRESTORE}:commit`, {
