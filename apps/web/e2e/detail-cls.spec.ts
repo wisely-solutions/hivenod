@@ -87,18 +87,28 @@ async function seed(page: Page) {
   return { pid };
 }
 
+// Counts only the shifts from now on: the start time is taken BEFORE the observer exists and nothing
+// buffered is replayed. Replaying the buffer raced with the start time on a slow CPU: the board's own
+// load shift (before the tap) was delivered late and counted as the tap's (card zBUaH: exactly 0.077 on
+// the CI runner, reproduced locally at 6x CPU throttling). `CLS_THROTTLE=6` reruns it throttled.
 async function observe(page: Page) {
+  const rate = Number(process.env.CLS_THROTTLE ?? 0);
+  if (rate > 1) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate });
+  }
   await page.evaluate(() => {
-    const w = window as unknown as { __cls: number };
+    const w = window as unknown as { __cls: number; __t0: number };
     w.__cls = 0;
+    w.__t0 = performance.now();
     new PerformanceObserver((l) => {
       for (const e of l.getEntries() as Array<
         PerformanceEntry & { value: number; hadRecentInput: boolean }
       >) {
-        if (e.startTime < ((w as unknown as { __t0?: number }).__t0 ?? 0)) continue;
+        if (e.startTime < w.__t0) continue;
         if (!e.hadRecentInput) w.__cls += e.value;
       }
-    }).observe({ type: 'layout-shift', buffered: true });
+    }).observe({ type: 'layout-shift' });
   });
 }
 const cls = (page: Page) => page.evaluate(() => (window as unknown as { __cls: number }).__cls);
@@ -138,7 +148,6 @@ test('tapping a done item with an attachment does not shift', async ({ page }, i
   await expect(page.getByText('Other i2').first()).toBeAttached();
   await page.waitForTimeout(800);
   await observe(page);
-  await page.evaluate(() => ((window as unknown as { __t0: number }).__t0 = performance.now()));
   // A done item is not on the board; open it the way a tap on a link does: client-side navigation.
   await page.evaluate((to) => {
     window.history.pushState({}, '', to);
