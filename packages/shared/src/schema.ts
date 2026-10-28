@@ -125,6 +125,7 @@ export const EVENT_TYPES = [
   'agent.created',
   'agent.revoked',
   'agent.removed',
+  'agent.renamed',
   'agent.rotated',
   'agent.updated',
   'project.created',

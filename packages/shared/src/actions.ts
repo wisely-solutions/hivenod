@@ -632,6 +632,31 @@ export function revokeAgent(
   ]);
 }
 
+/** Admin: renames an agent. Old events keep the name they were written with. */
+export function renameAgent(
+  ctx: ActionContext,
+  input: { agentUid: string; oldName: string; newName: string },
+): ActionPlan {
+  requireHuman(ctx);
+  const newName = input.newName.trim();
+  if (!newName) throw new ActionError('Give the agent a name');
+  if (newName.length > 80) throw new ActionError('Keep the name to 80 characters');
+  if (newName === input.oldName) throw new ActionError('That is already its name');
+  return plan(
+    ctx,
+    'agent.renamed',
+    {},
+    { agentUid: input.agentUid, name: newName, oldName: input.oldName, newName },
+    (eventId) => [
+      {
+        kind: 'update',
+        path: paths.agent(ctx.workspaceId, input.agentUid),
+        data: { name: newName, lastEventId: eventId },
+      },
+    ],
+  );
+}
+
 /** Removes a revoked agent for good (admins only; the rules refuse a live agent). */
 export function removeAgent(
   ctx: ActionContext,
