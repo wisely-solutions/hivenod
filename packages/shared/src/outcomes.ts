@@ -13,6 +13,8 @@
  * the outcome is done.
  */
 
+import { ActionError } from './actions';
+
 export type OutcomeFieldKind = 'text' | 'line' | 'datetime' | 'boolean';
 export interface OutcomeField {
   kind: OutcomeFieldKind;
@@ -158,7 +160,8 @@ export function outcomeType(id: string): OutcomeType | null {
     : null;
 }
 
-export class OutcomeFieldError extends Error {}
+/** A bad outcome field: an ActionError, so callers show its message. */
+export class OutcomeFieldError extends ActionError {}
 
 /**
  * Checks and cleans an outcome's fields against its type: strings trimmed and within bounds,
