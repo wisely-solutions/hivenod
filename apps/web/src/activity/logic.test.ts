@@ -203,6 +203,7 @@ describe('filters', () => {
           'item.resumed',
           'item.archived',
           'item.restored',
+          'item.erasing',
         ],
       ],
     ]);

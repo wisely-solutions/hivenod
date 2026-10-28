@@ -26,4 +26,10 @@ export const ALLOWLIST = [
     reason:
       'Org delete walks every subcollection in batches: a plain collection read with only limit(), no where/orderBy, so it needs no composite index.',
   },
+  {
+    file: 'apps/web/src/board/eraseItem.ts',
+    text: 'query(collection(db, col), limit(max))',
+    reason:
+      'Item delete walks its subcollections (log lines, messages, files) in batches: a plain collection read with only limit(), no where/orderBy, so it needs no composite index.',
+  },
 ];

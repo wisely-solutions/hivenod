@@ -110,6 +110,7 @@ export const EVENT_TYPES = [
   'item.resumed',
   'item.archived',
   'item.restored',
+  'item.erasing',
   'attachment.added',
   'message.posted',
   'decision.approved',
@@ -522,6 +523,8 @@ export const itemSchema = z.object({
   workStopped: workStopSchema.nullable().optional(),
   /** Set by Archive (card O2Ehb9CG): the item is stopped without a decision; Restore clears it. Absent = never archived. */
   archivedAt: timestamp.nullable().optional(),
+  /** Set when a delete for good has begun; the rules then let the item's history be erased in chunks. */
+  erasing: z.boolean().optional(),
   /** Absent: an item from before paths (full library). null: not shaped yet. */
   shape: itemShapeSchema.nullable().optional(),
   /** The agent steps this item skips, with why: {stepId: reason}. */

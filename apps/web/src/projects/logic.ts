@@ -54,6 +54,7 @@ export const VERBS: Record<EventType, string> = {
   'item.resumed': 'resumed an item',
   'item.archived': 'archived an item',
   'item.restored': 'restored an item',
+  'item.erasing': 'started deleting an item',
   'attachment.added': 'attached a file',
   'message.posted': 'posted a message',
   'decision.approved': 'approved an item',

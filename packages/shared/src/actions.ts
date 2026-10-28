@@ -998,53 +998,62 @@ export function undoCreateItem(
   );
 }
 
-/** The most a single batch may carry (Firestore allows 500 writes; the event and the item are two). */
-export const MAX_ERASE_DOCS = 480;
-
 /**
- * Human: delete an item and its history for good ("Delete…" in an item menu): its messages, files
- * and runs go in the same batch, and the Activity keeps one line "deleted '<title>'" (the
- * tombstone event, `data.forever`). Only the item's creator or an organization admin may (the
- * rules enforce it), and not while an agent holds it: Stop work first. `children` lists what the
- * item owns; the caller reads it just before.
+ * Human: delete an item and its history for good ("Delete…" in an item menu), in two plans around
+ * a chunked erase the caller runs in between (a single batch cannot hold a long history: runs keep
+ * up to 500 log lines each).
+ *
+ *  1. `beginItemErase` flags the item (`erasing`, stopped like an archive). From then on the rules
+ *     let its creator or an admin delete its log lines, runs, messages and files in any number of
+ *     batches. Interrupted, the flag stays and the same erase resumes ("Continue").
+ *  2. `finishItemErase` deletes the item itself, with the tombstone event: the Activity keeps one
+ *     line "deleted '<title>'" (`data.forever`).
+ *
+ * Only the item's creator or an organization admin (the rules enforce it), and not while an agent
+ * holds it: Stop work first.
  */
-export function deleteItem(
+export function beginItemErase(
   ctx: ActionContext,
-  input: {
-    projectId: string;
-    itemId: string;
-    item: ItemState;
-    attachmentIds: string[];
-    messageIds: string[];
-    runIds: string[];
-  },
+  input: { projectId: string; itemId: string; item: ItemState },
 ): ActionPlan {
   requireHuman(ctx);
   if (input.item.claim) throw new ActionError('An agent is working on this item. Stop work first.');
-  const n = input.attachmentIds.length + input.messageIds.length + input.runIds.length;
-  if (n > MAX_ERASE_DOCS)
-    throw new ActionError('This item has too much history to delete in one go');
+  return plan(
+    ctx,
+    'item.erasing',
+    { projectId: input.projectId, itemId: input.itemId },
+    { title: input.item.title },
+    (eventId) => [
+      {
+        kind: 'update',
+        path: paths.item(ctx.workspaceId, input.projectId, input.itemId),
+        data: {
+          erasing: true,
+          status: 'stopped',
+          claim: null,
+          gate: null,
+          archivedAt: SERVER_TIME,
+          updatedAt: SERVER_TIME,
+          lastEventId: eventId,
+        },
+      },
+    ],
+  );
+}
+
+/** Last step of the delete: the (by now empty) item goes, leaving the "deleted" line. */
+export function finishItemErase(
+  ctx: ActionContext,
+  input: { projectId: string; itemId: string; title: string },
+): ActionPlan {
+  requireHuman(ctx);
   const { projectId, itemId } = input;
   return plan(
     ctx,
     'item.deleted',
     { projectId, itemId },
-    { title: input.item.title, forever: true },
-    () => [
-      ...input.attachmentIds.map((a): WriteOp => ({
-        kind: 'delete',
-        path: paths.attachment(ctx.workspaceId, projectId, itemId, a),
-      })),
-      ...input.messageIds.map((m): WriteOp => ({
-        kind: 'delete',
-        path: paths.message(ctx.workspaceId, projectId, itemId, m),
-      })),
-      ...input.runIds.map((r): WriteOp => ({
-        kind: 'delete',
-        path: paths.run(ctx.workspaceId, r),
-      })),
-      { kind: 'delete', path: paths.item(ctx.workspaceId, projectId, itemId) },
-    ],
+    { title: input.title, forever: true },
+    () => [{ kind: 'delete', path: paths.item(ctx.workspaceId, projectId, itemId) }],
     paths.deleteEventId('items', itemId),
   );
 }

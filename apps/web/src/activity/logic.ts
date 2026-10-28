@@ -85,6 +85,7 @@ const PHRASES: Record<EventType, (d: Data, title: string | null) => string> = {
   },
   'item.archived': (_d, t) => `archived ${quote(t)}`,
   'item.restored': (_d, t) => `restored ${quote(t)}`,
+  'item.erasing': (_d, t) => `started deleting ${quote(t)}`,
   'item.resumed': (_d, t) => `resumed ${quote(t)}: agents may take it again`,
   'attachment.added': (d, t) => `attached ${text(d.name) || 'a file'} to ${quote(t)}`,
   'message.posted': (d, t) =>
@@ -238,6 +239,7 @@ export const TYPE_GROUPS = [
       'item.resumed',
       'item.archived',
       'item.restored',
+      'item.erasing',
     ],
   },
   {
