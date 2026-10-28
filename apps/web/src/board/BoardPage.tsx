@@ -400,6 +400,13 @@ function ItemPanel({
         const to = waiting[i < 0 ? (dir === 1 ? 0 : waiting.length - 1) : i + dir];
         if (to) onOpen(to);
       }}
+      onDecided={() => {
+        // Like Needs you: after an approval go to the next waiting item, else the one before, else close.
+        const i = waiting.indexOf(itemId);
+        const to = waiting[i + 1] ?? (i > 0 ? waiting[i - 1] : undefined);
+        if (to && to !== itemId) onOpen(to);
+        else onClose();
+      }}
     />
   );
 }

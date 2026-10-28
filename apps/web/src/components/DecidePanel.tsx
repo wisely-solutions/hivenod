@@ -1,5 +1,6 @@
 import { approve, nextOnPath, skips, type Item, type Project } from '@hive/shared';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { takePastedFiles, useAddFiles } from '../board/ItemEdit';
 import { waitedMs } from '../insights/logic';
 import { stash } from '../lib/pendingDecisions';
 import { useReady } from '../auth/context';
@@ -27,6 +28,7 @@ export function DecidePanel({
   itemId,
   item,
   compact = false,
+  onDecided,
 }: {
   project: Project;
   projectId: string;
@@ -34,6 +36,8 @@ export function DecidePanel({
   item: Item;
   /** In the viewer's narrow side panel: a stacked bar. */
   compact?: boolean;
+  /** Called when the approval is written (after the Undo window) while still on this item. */
+  onDecided?: () => void;
 }) {
   const { session, actionContext, run } = useReady();
   const toast = useToast();
@@ -44,6 +48,19 @@ export function DecidePanel({
   const { decide } = useDecide();
   const [mountedAt] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
+  const { add: addFiles, error: fileError } = useAddFiles(projectId, itemId);
+  // The latest callback and item, so a commit 5 s later acts on what is on screen then.
+  const live = useRef({ onDecided, itemId });
+  useEffect(() => {
+    live.current = { onDecided, itemId };
+  });
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const index = project.steps.findIndex((s) => s.id === item.stepId);
   const step = project.steps[index];
@@ -154,6 +171,9 @@ export function DecidePanel({
         setNote(typed);
       },
       onCommit: () => {
+        // Move on like Needs you does, but only when the person is still looking at this item.
+        // A final approval stays: the Done panel is what it shows.
+        if (!final && mounted.current && live.current.itemId === itemId) live.current.onDecided?.();
         // Released shows at once, with the Done panel the write brings (not when the server answers).
         if (final) toast.push({ message });
         run(plan).then(
@@ -184,7 +204,8 @@ export function DecidePanel({
             placeholder="Add a note (optional)"
             value={note}
             onChange={setNote}
-            error={error ?? undefined}
+            error={error ?? (fileError || undefined)}
+            onPaste={(e) => takePastedFiles(e, (f) => void addFiles(f))}
           />
         }
       >

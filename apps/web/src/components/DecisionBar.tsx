@@ -1,5 +1,12 @@
 import { cn } from '../ui/cn';
-import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  type ClipboardEvent,
+  type ReactNode,
+} from 'react';
 
 /**
  * The one decision bar (cards 9bmMIGlC, ExMNfP8A): pinned at the bottom of the focus view, full
@@ -97,6 +104,7 @@ export function BarNote({
   placeholder,
   error,
   hint,
+  onPaste,
 }: {
   label: string;
   value: string;
@@ -104,6 +112,8 @@ export function BarNote({
   placeholder?: string;
   error?: string;
   hint?: string;
+  /** Pasted files go here (the note itself keeps plain-text pastes). */
+  onPaste?: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
 }) {
   const id = useId();
   const el = useRef<HTMLTextAreaElement>(null);
@@ -133,6 +143,7 @@ export function BarNote({
         aria-invalid={error ? true : undefined}
         aria-describedby={error || hint ? `${id}-msg` : undefined}
         onChange={(e) => onChange(e.target.value)}
+        onPaste={onPaste}
         className="min-h-11 w-full resize-none rounded-btn border border-line-strong bg-surface px-3 py-2.5 text-16 leading-snug text-ink placeholder:text-text-3 hov:border-text-2 foc:border-focus foc:outline-2 foc:outline-offset-0 foc:outline-focus aria-invalid:border-sendback"
       />
       {error || hint ? (

@@ -47,6 +47,7 @@ import { AttachmentPreview } from './AttachmentPreview';
 import { ItemActions } from './itemActions';
 import { AddFiles, EditableSummary, EditableTitle, TypePicker } from './ItemEdit';
 import { canEditItem, isItemLive, isNewAttachment, sinceText } from './logic';
+import { stepOfText } from './path';
 import { LiveRun } from './LiveRun';
 import { PathPanel } from './PathPanel';
 import { decisionText } from './sendback';
@@ -100,6 +101,7 @@ export function ItemDetail({
   onClose,
   position,
   onStep,
+  onDecided,
   backText,
 }: {
   pid: string;
@@ -111,6 +113,8 @@ export function ItemDetail({
   /** Where this item sits among the ones waiting for the person (J / K step through them). */
   position?: { index: number; total: number };
   onStep?: (dir: 1 | -1) => void;
+  /** The person's approval was written: open the next waiting item. */
+  onDecided?: () => void;
   /** "Board" or "List": where Esc goes back to. */
   backText: string;
 }) {
@@ -268,8 +272,7 @@ export function ItemDetail({
     }
   }
 
-  const stepIndex = project.steps.findIndex((x) => x.id === item.stepId);
-  const stepNow = project.steps[stepIndex];
+  const stepNow = project.steps.find((x) => x.id === item.stepId);
   const deciders = stepNow?.gate?.deciderUids ?? [];
   const cost = runList.reduce((sum, r) => sum + r.data.costEur, 0);
 
@@ -296,9 +299,7 @@ export function ItemDetail({
           rows={[
             {
               label: 'Step',
-              value: stepNow
-                ? `${stepNow.name} \u00b7 ${stepIndex + 1} of ${project.steps.length}`
-                : '\u2014',
+              value: stepNow ? `${stepNow.name} \u00b7 ${stepOfText(project, item)}` : '\u2014',
             },
             ...(stepNow?.kind === 'human'
               ? [
@@ -326,7 +327,15 @@ export function ItemDetail({
           <ItemActions pid={pid} itemId={itemId} item={item} onGone={onClose} />
         </Properties>
       }
-      bar={<DecidePanel project={project} projectId={pid} itemId={itemId} item={item} />}
+      bar={
+        <DecidePanel
+          project={project}
+          projectId={pid}
+          itemId={itemId}
+          item={item}
+          onDecided={onDecided}
+        />
+      }
     >
       <div className="flex min-w-0 flex-col gap-5">
         <header className="flex items-start gap-3">
