@@ -228,13 +228,13 @@ function How() {
             <span className="lp-n">01</span>
             <h3>Connect in one line</h3>
             <p>
-              Install the CLI, confirm the pairing in the browser, and your Claude Code session is
-              on the board.
+              Install the CLI, confirm in the browser with one click, and your Claude Code session
+              is on the board.
             </p>
             <div className="lp-mini lp-mono" aria-hidden>
-              $ hivenod pair
+              $ hivenod connect
               <br />
-              <span className="lp-okt">✓ Paired</span>
+              <span className="lp-okt">✓ Connected</span>
             </div>
           </li>
           <li className="lp-t">
