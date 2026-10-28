@@ -16,6 +16,8 @@ rules_version = '2';
 //     when the approvals satisfy the step's rule; send back / stop obey the reject policy.
 //  5b. Only admins, a project's creator and a step's current deciders change who decides there.
 //  6. Only admins manage members, roles, groups, agents, project people and project deletion.
+//     Exception (item EJ2Cxq4k, `hivenod connect`): a member confirming a connect request creates
+//     an agent for at most 5 projects they are in (never all), and may revoke an agent they made.
 //     The last admin can neither be demoted nor removed (adminUids is kept in step with memberRoles).
 //  5c. Per-item paths (card st5INNZj): an item with a path moves only along it; an agent never
 //      adds or drops a people step on a path (any one decider of that step does, or approves a
@@ -281,8 +283,12 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
 
+      // `hivenod connect` (item EJ2Cxq4k) adds kind 'connect': a device-login style request that
+      // any member confirms for their own projects, valid 10 minutes instead of 15.
       allow create: if code.matches('^[A-HJKMNP-Z2-9]{8}$')
-        && exactKeys(request.resource.data, ['publicKey', 'cli', 'host', 'folder', 'status', 'createdAt'])
+        && (exactKeys(request.resource.data, ['publicKey', 'cli', 'host', 'folder', 'status', 'createdAt'])
+            || (exactKeys(request.resource.data, ['publicKey', 'cli', 'host', 'folder', 'status', 'createdAt', 'kind'])
+                && request.resource.data.kind == 'connect'))
         && str(request.resource.data.publicKey, 80, 200)
         && str(request.resource.data.cli, 1, 40)
         && str(request.resource.data.host, 0, 80)
@@ -290,10 +296,12 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && request.resource.data.createdAt == request.time;
 
-      // Completed once, within 15 minutes, by an admin, for an agent they just created.
+      // Completed once, within 15 minutes (a connect request: 10), by an admin, or for a connect
+      // request by any member, for an agent they just created.
       allow update: if signedIn() && verified()
         && resource.data.status == 'pending'
-        && request.time < resource.data.createdAt + duration.value(15, 'm')
+        && request.time < resource.data.createdAt
+             + duration.value(isConnect() ? 10 : 15, 'm')
         && changed(['status', 'workspaceId', 'agentUid', 'agentName', 'pairedBy', 'pairedAt', 'sealed'])
         && pairedByMe(request.resource.data);
 
@@ -305,12 +313,13 @@ service cloud.firestore {
         || (signedIn() && me() == resource.data.agentUid)
         || (signedIn() && isAdmin(resource.data.workspaceId));
 
+      function isConnect() { return resource.data.get('kind', 'pair') == 'connect'; }
       function pairedByMe(d) {
         let agent = get(agentPath(d.workspaceId, d.agentUid));
         return d.status == 'paired'
           && d.workspaceId is string && d.agentUid is string
           && d.pairedBy == me() && d.pairedAt == request.time
-          && isAdmin(d.workspaceId)
+          && (isAdmin(d.workspaceId) || (isConnect() && isMember(d.workspaceId)))
           && agent != null && agent.data.createdBy == me() && agent.data.revokedAt == null
           && agent.data.name == d.agentName
           && d.sealed is map && exactKeys(d.sealed, ['epk', 'iv', 'ct'])
@@ -588,7 +597,7 @@ service cloud.firestore {
       match /agents/{aid} {
         allow read: if isMember(wid) || (signedIn() && aid == me() && isActiveAgent(wid));
 
-        allow create: if isAdmin(wid) && verified()
+        allow create: if (isAdmin(wid) || memberConnects(request.resource.data)) && verified()
           && aid != me() && !(aid in get(wsPath(wid)).data.memberRoles)
           && request.resource.data.keys().hasAll(['name', 'color', 'projectIds', 'createdBy', 'createdAt',
                'revokedAt', 'lastSeenAt', 'tokenHint', 'previousAgentUid', 'lastEventId'])
@@ -619,6 +628,12 @@ service cloud.firestore {
                 || request.resource.data.get('pausedReason', null) == null)
             && request.resource.data.get('failStreak', 0) in [0, resource.data.get('failStreak', 0)]
             && tracked(wid, request.resource.data.lastEventId, ['agent.updated', 'agent.revoked', 'agent.rotated']))
+          // A member revokes an agent they connected (also undoes a connect that did not finish).
+          || (roleOf(wid) == 'member' && resource.data.createdBy == me()
+            && resource.data.revokedAt == null
+            && changed(['revokedAt', 'lastEventId'])
+            && request.resource.data.revokedAt == request.time
+            && tracked(wid, request.resource.data.lastEventId, ['agent.revoked']))
           || (signedIn() && aid == me() && isActiveAgent(wid)
             && changed(['lastSeenAt', 'seenHost'])
             && request.resource.data.lastSeenAt == request.time
@@ -631,6 +646,20 @@ service cloud.firestore {
 
         allow delete: if false;
 
+        // `hivenod connect` confirmed by a plain member (item EJ2Cxq4k): only projects they are
+        // in, at most 5 (no '*'), default guardrails and permissions. THE ONE PLACE for this rule;
+        // mirrored by MEMBER_CONNECT_MAX_PROJECTS in packages/shared/src/pairing.ts.
+        function memberConnects(d) {
+          return roleOf(wid) == 'member'
+            && !('guardrails' in d) && !('permissions' in d)
+            && d.projectIds is list && d.projectIds.size() >= 1 && d.projectIds.size() <= 5
+            && inProject(d.projectIds, 0) && inProject(d.projectIds, 1) && inProject(d.projectIds, 2)
+            && inProject(d.projectIds, 3) && inProject(d.projectIds, 4);
+        }
+        function inProject(ids, i) {
+          return ids.size() <= i
+            || (ids[i] is string && me() in get(projPath(wid, ids[i])).data.memberUids);
+        }
         function validAgentFields(d) {
           return str(d.name, 1, 80) && str(d.color, 0, 32) && str(d.tokenHint, 0, 8)
             && (d.projectIds == '*' || (d.projectIds is list && d.projectIds.size() <= 100))

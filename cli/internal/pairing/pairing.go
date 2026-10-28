@@ -24,6 +24,10 @@ const CodeLength = 8
 // TTL is how long a code can be confirmed (mirrored in firestore.rules).
 const TTL = 15 * time.Minute
 
+// ConnectTTL is how long a `hivenod connect` request can be confirmed (item EJ2Cxq4k; mirrored in
+// firestore.rules and CONNECT_TTL_MS in packages/shared/src/pairing.ts).
+const ConnectTTL = 10 * time.Minute
+
 // NewCode draws a code with rejection sampling, so every symbol is equally likely.
 func NewCode() string {
 	n := len(Alphabet)
@@ -48,6 +52,14 @@ func Format(code string) string { return code[:4] + "-" + code[4:] }
 func URL(origin, code string) string {
 	return strings.TrimRight(origin, "/") + "/agents/connect?code=" + Format(code)
 }
+
+// ConnectURL is the page where a signed-in member confirms a `hivenod connect` request.
+func ConnectURL(origin, code string) string {
+	return strings.TrimRight(origin, "/") + "/connect?code=" + Format(code)
+}
+
+// ConnectPage is the same page without the code, for typing it in by hand.
+func ConnectPage(origin string) string { return strings.TrimRight(origin, "/") + "/connect" }
 
 // Path of the pairing document.
 func Path(code string) string { return "pairings/" + code }
@@ -145,4 +157,11 @@ func Request(publicKey, cli, host, folder string) map[string]any {
 		"status":    "pending",
 		"createdAt": map[string]any{"__hive": "serverTime"},
 	}
+}
+
+// ConnectRequest is the request `hivenod connect` creates: any member confirms it (rules).
+func ConnectRequest(publicKey, cli, host, folder string) map[string]any {
+	r := Request(publicKey, cli, host, folder)
+	r["kind"] = "connect"
+	return r
 }

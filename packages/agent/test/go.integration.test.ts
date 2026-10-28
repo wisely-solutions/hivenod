@@ -11,6 +11,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { createAgentIdentity } from '@hive/shared/agent-auth';
 import {
+  createAgent,
   pairingCompletion,
   pairingPath,
   paths,
@@ -560,5 +561,70 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     } finally {
       delete process.env.HIVENOD_HOME;
     }
+  }, 60_000);
+  it('hivenod connect: a plain member confirms with one click, the token is saved, never shown', async () => {
+    await reset();
+    const { uid, token } = await createAgentIdentity(options, W, {
+      authEmulatorUrl: `http://${AUTH_HOST}`,
+    });
+    const home = mkdtempSync(join(tmpdir(), 'hivenod-home-'));
+    const child = spawn(BIN, ['connect'], {
+      env: {
+        PATH: process.env.PATH ?? '',
+        HOME: home,
+        HIVENOD_HOME: home,
+        HIVENOD_NO_BROWSER: '1',
+        HIVENOD_PROJECT_ID: PROJECT,
+        HIVENOD_FIREBASE_API_KEY: 'fake-api-key',
+        FIREBASE_AUTH_EMULATOR_HOST: AUTH_HOST,
+        FIRESTORE_EMULATOR_HOST: FS_HOST,
+      },
+    });
+    let said = '';
+    child.stdout.on('data', (d: Buffer) => (said += d.toString()));
+    child.stderr.on('data', (d: Buffer) => (said += d.toString()));
+    const exited = new Promise<number | null>((r) => child.once('exit', r));
+    await expect.poll(() => said, { timeout: 15_000 }).toMatch(/enter the code/);
+    const code = /code=([A-Z0-9]{4})-([A-Z0-9]{4})/.exec(said)!.slice(1).join('');
+    expect(said).toContain(`https://hivenod.com/connect?code=${code.slice(0, 4)}-${code.slice(4)}`);
+    expect(said).toContain('It expires in 10 minutes');
+    const alice = as('alice');
+    const req = await getDoc(doc(alice.db, pairingPath(code)));
+    expect(req.data()).toMatchObject({ status: 'pending', cli: 'claude', kind: 'connect' });
+    await alice.run(
+      createAgent(alice.ctx, {
+        agentUid: uid,
+        name: 'Claude Code (laptop)',
+        color: '#2F5FD0',
+        projectIds: ['p1'],
+        tokenHint: 'a7f3',
+      }),
+    );
+    const sealed = await sealToken(token, req.data()!.publicKey as string, code);
+    await updateDoc(
+      doc(alice.db, pairingPath(code)),
+      toFirestoreValue(
+        pairingCompletion({
+          workspaceId: W,
+          agentUid: uid,
+          agentName: 'Claude Code (laptop)',
+          pairedBy: 'alice',
+          sealed,
+        }),
+      ) as Record<string, unknown>,
+    );
+    expect(await exited).toBe(0);
+    expect(said).toContain('Connected: this machine is now the agent Claude Code (laptop)');
+    expect(said).not.toContain(token);
+    const saved = JSON.parse(readFileSync(join(home, 'agent.json'), 'utf8'));
+    expect(saved).toMatchObject({ token, workspaceId: W, agentUid: uid });
+    expect(await snap(pairingPath(code))).toEqual({});
+    // Run again: it says it is connected and creates no new request.
+    const again = spawnSync(BIN, ['connect'], {
+      encoding: 'utf8',
+      env: { PATH: process.env.PATH ?? '', HOME: home, HIVENOD_HOME: home },
+    });
+    expect(again.status).toBe(0);
+    expect(again.stdout).toContain('Already connected as Claude Code (laptop)');
   }, 60_000);
 });

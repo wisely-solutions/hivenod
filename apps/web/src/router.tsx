@@ -208,6 +208,14 @@ const connectRoute = createRoute({
     typeof s.code === 'string' && s.code ? { code: s.code } : {},
   component: lazyRouteComponent(() => import('./agents/ConnectPage'), 'ConnectPage'),
 });
+// `hivenod connect` opens this page (item EJ2Cxq4k): one click confirms the machine.
+const confirmConnectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/connect',
+  validateSearch: (s: Record<string, unknown>): { code?: string } =>
+    typeof s.code === 'string' && s.code ? { code: s.code } : {},
+  component: lazyRouteComponent(() => import('./agents/ConfirmConnectPage'), 'ConfirmConnectPage'),
+});
 const agentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/agents/$id',
@@ -267,6 +275,7 @@ export const router = createRouter({
     activityRoute,
     agentsRoute,
     connectRoute,
+    confirmConnectRoute,
     agentRoute,
     joinRoute,
     actionRoute,
