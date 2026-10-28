@@ -150,7 +150,7 @@ test('New item lands at the agent step, an agent works it, and it waits at the g
   await detail.getByRole('button', { name: /Approve/ }).click();
   // The approval is written when the 5 s Undo window ends.
   await expect.poll(() => stepOf(wid, pid, claimed), { timeout: 15_000 }).toBe('publish');
-  await detail.getByRole('button', { name: 'Close item' }).click();
+  // It was the only item waiting, so the view closes by itself (the last one closes).
   await expect(page).not.toHaveURL(/item=/);
 });
 

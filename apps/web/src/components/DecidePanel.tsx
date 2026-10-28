@@ -172,7 +172,8 @@ export function DecidePanel({
       },
       onCommit: () => {
         // Move on like Needs you does, but only when the person is still looking at this item.
-        if (mounted.current && live.current.itemId === itemId) live.current.onDecided?.();
+        // A final approval stays: the Done panel is what it shows.
+        if (!final && mounted.current && live.current.itemId === itemId) live.current.onDecided?.();
         // Released shows at once, with the Done panel the write brings (not when the server answers).
         if (final) toast.push({ message });
         run(plan).then(
