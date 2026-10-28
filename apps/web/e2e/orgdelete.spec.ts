@@ -70,6 +70,10 @@ async function fill(wid: string, uid: string, agentUid: string) {
   await adminSet(`${base}/runs/r1/log/0`, { text: 'line' });
   await adminSet(`${base}/groups/g1`, { name: 'Team', memberUids: [uid], lastEventId: 'seed' });
   await adminSet(`${base}/notified/n1`, { at: new Date() });
+  // A calendar event with its busy block in the member's own store (it goes with the organization).
+  const ev = `${uid}_ev1`;
+  await adminSet(`${base}/calendar/${ev}`, { memberUid: uid, title: 'Standup' });
+  await adminSet(`users/${uid}/busy/${wid}_${ev}`, { workspaceId: wid, deleted: false });
   await adminSet(`${base}/agents/${agentUid}`, {
     name: 'Scout',
     color: 'agent-3',
@@ -98,6 +102,8 @@ async function fill(wid: string, uid: string, agentUid: string) {
     `${base}/groups/g1`,
     `${base}/notified/n1`,
     `${base}/agents/${agentUid}`,
+    `${base}/calendar/${ev}`,
+    `users/${uid}/busy/${wid}_${ev}`,
     `${base}/events/seed`,
     `${base}/members/${uid}`,
   ];
