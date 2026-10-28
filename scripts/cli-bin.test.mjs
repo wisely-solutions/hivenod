@@ -83,7 +83,9 @@ describe('cli-bin-lib', () => {
 // ---------- install.sh against a local site ----------
 
 const target = `${platform() === 'darwin' ? 'darwin' : 'linux'}-${arch() === 'arm64' ? 'arm64' : 'x64'}`;
-const fakeBin = Buffer.from('#!/bin/sh\necho "hivenod 9.9.9"\n');
+const fakeBin = Buffer.from(
+  '#!/bin/sh\nif [ "$1" = connect ]; then echo "ran hivenod $*"; else echo "hivenod 9.9.9"; fi\n',
+);
 let server;
 let base = '';
 let served = { bin: fakeBin, sum: sha256(fakeBin), side: sha256(fakeBin) };
@@ -124,7 +126,7 @@ beforeAll(async () => {
 afterAll(() => server?.close());
 
 /** Runs install.sh against the local site (async: the site runs in this process). */
-function install() {
+function install(extra = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'hivenod-install-'));
   const child = spawn('sh', [join(root, 'cli/install/install.sh')], {
     env: {
@@ -132,6 +134,7 @@ function install() {
       HOME: dir,
       HIVENOD_WEB_URL: base,
       HIVENOD_INSTALL_DIR: join(dir, 'bin'),
+      ...extra,
     },
   });
   let stdout = '';
@@ -153,6 +156,16 @@ describe.skipIf(platform() === 'win32')('install.sh', () => {
     expect(r.stdout).toContain(`Downloading hivenod 9.9.9 for ${target}`);
     expect(r.stdout).toContain('Installed hivenod 9.9.9');
     expect(readFileSync(r.file)).toEqual(fakeBin);
+    // Then it connects (item EJ2Cxq4k); with no terminal it only sets up, it does not start claude.
+    expect(r.stdout).toContain('ran hivenod connect --no-start');
+  });
+
+  it('HIVENOD_NO_CONNECT=1 only installs', async () => {
+    served = { bin: fakeBin, sum: sha256(fakeBin), side: sha256(fakeBin) };
+    const r = await install({ HIVENOD_NO_CONNECT: '1' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('Next: hivenod connect');
+    expect(r.stdout).not.toContain('ran hivenod');
   });
 
   it('installs nothing when the download does not match the manifest or the .sha256 file', async () => {

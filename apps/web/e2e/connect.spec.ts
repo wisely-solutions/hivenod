@@ -5,6 +5,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
 import {
   formatPairingCode,
   newPairingCode,
@@ -20,6 +21,7 @@ import { deleteApp, initializeApp } from 'firebase/app';
 import { connectAuthEmulator, initializeAuth, inMemoryPersistence } from 'firebase/auth';
 import { connectFirestoreEmulator, doc, getDoc, getFirestore, setDoc } from 'firebase/firestore';
 import {
+  adminPatch,
   adminSet,
   AUTH_PORT,
   expectNoHorizontalScroll,
@@ -226,11 +228,15 @@ for (const theme of ['light', 'dark'] as const) {
       ).toEqual([]);
     };
     await page.goto('/connect');
-    await expect(page.getByLabel('Code from the terminal')).toBeVisible();
+    await expect(page.getByLabel('Connect command', { exact: true })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await settle(page);
     await axe();
-    await snap('1-enter-code');
+    await expectNoHorizontalScroll(page);
+    await snap('1-one-line');
+    await page.getByText('The browser did not open? Enter the code').click();
+    await expect(page.getByLabel('Code from the terminal')).toBeVisible();
+    await axe();
     await page.goto(term.link);
     await expect(page.getByRole('group', { name: 'Machine asking' })).toBeVisible();
     await settle(page);
@@ -242,5 +248,90 @@ for (const theme of ['light', 'dark'] as const) {
     await axe();
     await snap('3-connected');
     await term.done();
+  });
+}
+
+test('Connect Claude Code: one line for everyone, and the page flips live when the terminal connects', async ({
+  page,
+  context,
+}) => {
+  const { wid } = await asMember(page, 'Lena Live');
+  await page.goto('/connect');
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { name: 'Connect Claude Code' })).toBeVisible();
+  await expect(main.getByLabel('Connect command', { exact: true })).toHaveText(
+    /^curl -fsSL https?:\/\/[^ ]+\/install\.sh \| sh$/,
+  );
+  await main.getByRole('button', { name: 'Windows' }).click();
+  await expect(main.getByLabel('Connect command', { exact: true })).toHaveText(
+    /^irm https?:\/\/[^ ]+\/install\.ps1 \| iex$/,
+  );
+  await main.getByRole('button', { name: 'macOS / Linux' }).click();
+  const status = main.getByRole('status').filter({ hasText: /Waiting|Connected/ });
+  await expect(status).toHaveText('Waiting for your terminal…');
+
+  // The terminal opens the confirm page in another tab; one click there.
+  const term = await asTerminal();
+  const other = await context.newPage();
+  await other.goto(term.link);
+  await other.getByRole('button', { name: 'Connect' }).click();
+  await expect(other.getByRole('main').getByRole('status')).toHaveText('Connected');
+
+  // The first tab flips by itself, then shows the session online once the agent is seen.
+  await expect(status).toContainText('Connected');
+  await expect(status).toContainText('Claude Code (laptop) · starting Claude Code…');
+  await expect
+    .poll(async () => (await term.read()).data()?.status, { timeout: 15_000 })
+    .toBe('paired');
+  const agentUid = (await term.read()).data()!.agentUid as string;
+  await adminPatch(`workspaces/${wid}/agents/${agentUid}`, { lastSeenAt: new Date() });
+  await expect(status).toContainText('Claude Code is online');
+  const shots = process.env.SHOTS_DIR;
+  if (shots) {
+    mkdirSync(shots, { recursive: true });
+    await page.screenshot({
+      path: `${shots}/connect-${test.info().project.name}-live.png`,
+      fullPage: true,
+    });
+  }
+  await status.getByRole('link', { name: 'Add your first item' }).click();
+  await expect(page).toHaveURL(/\/p\/blog/);
+  await other.close();
+  await term.done();
+});
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`sign-up asks what the agents will work on (axe-clean, ${theme})`, async ({
+    page,
+  }, info) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/');
+    await signIn(page, person('Tess Template'));
+    await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    const list = page.getByRole('region', { name: 'Get started' });
+    await expect(
+      list.getByRole('radiogroup', { name: 'What will your agents work on?' }),
+    ).toBeVisible();
+    await settle(page);
+    const { violations } = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'])
+      .analyze();
+    expect(
+      violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
+    ).toEqual([]);
+    await expectNoHorizontalScroll(page);
+    const shots = process.env.SHOTS_DIR;
+    if (shots)
+      await page.screenshot({
+        path: `${shots}/signup-${info.project.name}-${theme}.png`,
+        fullPage: true,
+      });
+    await list.getByRole('radio', { name: /Research to decision/ }).click();
+    await list.getByRole('button', { name: 'Create project' }).click();
+    await expect(page).toHaveURL(/\/connect$/);
+    // The project carries the template's process.
+    await page.goto('/projects');
+    await expect(page.getByRole('main').getByText('Research to decision').first()).toBeVisible();
   });
 }

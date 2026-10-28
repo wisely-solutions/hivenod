@@ -1,4 +1,6 @@
 # Installs the hivenod agent CLI on Windows: irm https://hivenod.com/install.ps1 | iex
+# then runs `hivenod connect` (item EJ2Cxq4k): a one-click confirm in the browser, the Claude Code
+# plugin set up, and Claude Code started ($env:HIVENOD_NO_CONNECT = '1' only installs).
 # Downloads hivenod-windows-x64.exe from the release manifest, checks its SHA-256 checksum
 # (manifest and the .sha256 file must both match) and puts it in $env:HIVENOD_INSTALL_DIR
 # (default %LOCALAPPDATA%\hivenod), added to the user PATH. Nothing is installed if a check fails.
@@ -28,5 +30,11 @@ if (($userPath -split ';') -notcontains $dir) {
   [Environment]::SetEnvironmentVariable('Path', "$userPath;$dir", 'User')
   Write-Host "Added $dir to your user PATH (open a new terminal to use it)."
 }
+if (($env:Path -split ';') -notcontains $dir) { $env:Path = "$env:Path;$dir" }
 & (Join-Path $dir 'hivenod.exe') --version
-Write-Host "Next: hivenod pair, then install the hivenod plugin in Claude Code ($site/agents)."
+if ($env:HIVENOD_NO_CONNECT) {
+  Write-Host 'Next: hivenod connect'
+} else {
+  Write-Host ''
+  & (Join-Path $dir 'hivenod.exe') connect
+}

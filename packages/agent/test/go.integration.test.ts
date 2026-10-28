@@ -23,7 +23,7 @@ import { toFirestoreValue } from '@hive/shared/firestore';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { readCredentials } from '../src/credentials';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -568,9 +568,17 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       authEmulatorUrl: `http://${AUTH_HOST}`,
     });
     const home = mkdtempSync(join(tmpdir(), 'hivenod-home-'));
+    // A stand-in `claude` that records the setup commands (no real Claude Code here).
+    mkdirSync(join(home, 'bin'));
+    writeFileSync(
+      join(home, 'bin', 'claude'),
+      `#!/bin/sh\necho "$*" >> ${join(home, 'claude.log')}\n`,
+      { mode: 0o755 },
+    );
+    const PATH = `${join(home, 'bin')}:/usr/bin:/bin`;
     const child = spawn(BIN, ['connect'], {
       env: {
-        PATH: process.env.PATH ?? '',
+        PATH,
         HOME: home,
         HIVENOD_HOME: home,
         HIVENOD_NO_BROWSER: '1',
@@ -615,6 +623,11 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     );
     expect(await exited).toBe(0);
     expect(said).toContain('Connected: this machine is now the agent Claude Code (laptop)');
+    expect(said).toContain('Claude Code has the hivenod plugin');
+    expect(said).toContain('Start it with: hivenod claude');
+    expect(readFileSync(join(home, 'claude.log'), 'utf8')).toBe(
+      'plugin marketplace add wisely-solutions/hivenod\nplugin install hivenod@hivenod\n',
+    );
     expect(said).not.toContain(token);
     const saved = JSON.parse(readFileSync(join(home, 'agent.json'), 'utf8'));
     expect(saved).toMatchObject({ token, workspaceId: W, agentUid: uid });
@@ -622,7 +635,7 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     // Run again: it says it is connected and creates no new request.
     const again = spawnSync(BIN, ['connect'], {
       encoding: 'utf8',
-      env: { PATH: process.env.PATH ?? '', HOME: home, HIVENOD_HOME: home },
+      env: { PATH, HOME: home, HIVENOD_HOME: home },
     });
     expect(again.status).toBe(0);
     expect(again.stdout).toContain('Already connected as Claude Code (laptop)');

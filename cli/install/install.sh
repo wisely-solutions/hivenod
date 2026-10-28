@@ -1,5 +1,7 @@
 #!/bin/sh
 # Installs the hivenod agent CLI: curl -fsSL https://hivenod.com/install.sh | sh
+# then runs `hivenod connect` (item EJ2Cxq4k): a one-click confirm in the browser, the Claude Code
+# plugin set up, and Claude Code started (HIVENOD_NO_CONNECT=1 only installs).
 # Downloads the binary for this machine from the release manifest, checks its SHA-256 checksum
 # (manifest and the .sha256 file next to the binary must both match) and puts it in
 # $HIVENOD_INSTALL_DIR (default ~/.local/bin). Nothing is installed if a check fails.
@@ -71,4 +73,16 @@ case ":$PATH:" in
   *":$dir:"*) ;;
   *) say "Add $dir to your PATH, for example: echo 'export PATH=\"$dir:\$PATH\"' >> ~/.profile" ;;
 esac
-say "Next: hivenod pair, then install the hivenod plugin in Claude Code ($site/agents)."
+if [ -n "${HIVENOD_NO_CONNECT:-}" ]; then
+  say "Next: hivenod connect"
+  exit 0
+fi
+say ""
+# Piped from curl, stdin is the script: give connect (and Claude Code after it) the terminal.
+status=0
+if [ -t 1 ] && (: </dev/tty) 2>/dev/null; then
+  "$dir/hivenod" connect </dev/tty || status=$?
+else
+  "$dir/hivenod" connect --no-start || status=$?
+fi
+exit "$status"

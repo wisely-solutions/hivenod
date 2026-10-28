@@ -8,6 +8,7 @@ import { cn } from '../ui/cn';
 import { Input } from '../ui/form';
 import { Eyebrow } from '../ui/badge';
 import type { FirstRunState } from './firstRun';
+import { WelcomeProject } from './WelcomeProject';
 
 const linkBtn =
   'inline-flex min-h-11 items-center justify-center rounded-btn border border-line-strong bg-surface px-4 text-14 font-medium text-ink hover:bg-canvas';
@@ -51,13 +52,11 @@ function Step({
 export function FirstRun({
   state,
   project,
-  isAdmin,
   onDismiss,
 }: {
   state: FirstRunState;
   /** Where a typed idea lands: the first live project. */
   project: { id: string; data: Project } | null;
-  isAdmin: boolean;
   onDismiss: () => void;
 }) {
   const { add } = useCapture();
@@ -86,10 +85,11 @@ export function FirstRun({
         </Button>
       </div>
       <ol className="mt-2 divide-y divide-line">
-        <Step n={1} done={state.project} title="Create a project">
-          <Link to="/projects" search={{ new: 1 }} className={linkBtn}>
-            New project
-          </Link>
+        <Step n={1} done={state.project} title="What will your agents work on?">
+          <p className="mb-3 text-14 text-text-2">
+            Pick a template: the project comes with its process, agent steps and decision points.
+          </p>
+          <WelcomeProject />
         </Step>
         <Step n={2} done={state.idea} title="Add your first idea">
           {project ? (
@@ -122,17 +122,13 @@ export function FirstRun({
             <p className="text-14 text-text-2">Create a project first.</p>
           )}
         </Step>
-        <Step n={3} done={state.agent} title="Connect an agent">
+        <Step n={3} done={state.agent} title="Connect Claude Code">
           <p className="mb-2 text-14 text-text-2">
             Nothing moves until an agent picks your idea up.
           </p>
-          {isAdmin ? (
-            <Link to="/agents/connect" className={linkBtn}>
-              Connect a terminal
-            </Link>
-          ) : (
-            <p className="text-14 text-text-2">Ask an admin to connect one.</p>
-          )}
+          <Link to="/connect" className={linkBtn}>
+            Connect Claude Code
+          </Link>
         </Step>
       </ol>
     </section>

@@ -72,7 +72,13 @@ person's note on the parked item reaches the session (`ACKNOTE`) and wakes it (`
 `HIVENOD_SMOKE_GO=1 pnpm smoke:claude` runs the same smoke with the Go CLI binary (`cli/`, built
 with Go) as `hivenod` instead of the TypeScript one.
 
-`pnpm smoke:claude --only basic`, `--only max-items` or `--only park` runs one part. `HIVE_SMOKE_MODEL` picks the model
+With `HIVENOD_SMOKE_GO=1` it first runs the connect flow (item EJ2Cxq4k): `hivenod connect --no-start`
+with no token and no browser shows a code; a plain member confirms it (what the /connect page does);
+connect saves the token and installs the plugin into the private config itself (marketplace: this
+repo, through `HIVENOD_PLUGIN_MARKETPLACE`); then `hivenod claude` starts the session, which gets an
+item and finishes it. The later parts reuse that plugin install.
+
+`pnpm smoke:claude --only connect`, `--only basic`, `--only max-items` or `--only park` runs one part. `HIVE_SMOKE_MODEL` picks the model
 (default haiku).
 
 Waits are bounded (60 s start-up, 90-180 s per model step, 15 min per part, 35 min overall).
