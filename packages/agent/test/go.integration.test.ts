@@ -33,6 +33,7 @@ import {
   I,
   itemDoc,
   now,
+  P,
   projectDoc,
   put,
   reset,
@@ -292,6 +293,44 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     expect(r.ts.docs['workspaces/w1/runs/<id>/log']).toHaveLength(2);
     expect(r.go.calls).toEqual(r.ts.calls);
     expect(r.go.docs).toEqual(r.ts.docs);
+  }, 120_000);
+
+  it('create_item (item DhsO9): created where allowed, with files; refused when off or not its project', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hive-att-'));
+    const md = join(dir, 'notes.md');
+    writeFileSync(md, '# Steps');
+    // The TypeScript side keeps its rate-limit file in a throwaway home too.
+    const home = mkdtempSync(join(tmpdir(), 'hivenod-home-'));
+    process.env.HIVENOD_HOME = home;
+    try {
+      const r = await both(async (call) => {
+        // Off (absent) in p1 at first.
+        await call('create_item', { project: 'p1', title: 'Too early' });
+        await put({ [P('p1')]: projectDoc({}, { agentsMayCreateItems: true }) });
+        await put({ [P('p2')]: projectDoc({}, { agentsMayCreateItems: true }) });
+        const made = out(
+          await call('create_item', {
+            project: 'Blog',
+            title: '  Checkout times out ',
+            description: 'Asked on Telegram.',
+            attachments: [md, join(dir, 'missing.md')],
+          }),
+        ) as { itemId: string };
+        await call('list_work', {});
+        await call('claim', { itemId: made.itemId });
+        // Not its project (p2 allows it, but the agent may use p1 only), unknown, blank title.
+        await call('create_item', { project: 'p2', title: 'Elsewhere' });
+        await call('create_item', { project: 'Nope', title: 'x' });
+        await call('create_item', { project: 'p1', title: '   ' });
+      });
+      const oks = r.ts.calls.map((c) => (c as { ok: boolean }).ok);
+      expect(oks).toEqual([false, true, true, true, false, false, false]);
+      expect(r.ts.calls[1]).toMatchObject({ out: { status: 'queued', step: 'Intake' } });
+      expect(r.go.calls).toEqual(r.ts.calls);
+      expect(r.go.docs).toEqual(r.ts.docs);
+    } finally {
+      delete process.env.HIVENOD_HOME;
+    }
   }, 120_000);
 
   it('errors: gate, not claimed, wrong run, unknown item, oversized file, bad progress', async () => {

@@ -146,7 +146,7 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: 'create_item',
     description:
-      "Create a new item (ordinary work) in a project, when a person asked you for real work or a scheduled job found some. It starts at the project's first step like a person's quick-add, records you as its creator, and can be claimed at once. Only in projects that allow it (\"Agents may create items\") and that this agent may use; at most 30 an hour per agent. For something you merely noticed, use raise_finding instead.",
+      'Create a new item (ordinary work) in a project, when a person asked you for real work or a scheduled job found some. It starts at the project\'s first step like a person\'s quick-add, records you as its creator, and can be claimed at once. Only in projects that allow it ("Agents may create items") and that this agent may use; at most 30 an hour per agent. For something you merely noticed, use raise_finding instead.',
     input: {
       project: z.string().min(1).describe('Project id or exact name'),
       title: z.string().min(1).max(300),

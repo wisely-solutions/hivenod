@@ -930,9 +930,7 @@ export class HiveClient {
     const clean = title.trim();
     if (!clean) throw new HiveError('An item needs a title.');
     if ([...clean].length > 300 || [...description].length > 20000)
-      throw new HiveError(
-        'The title is at most 300 characters and the description at most 20000.',
-      );
+      throw new HiveError('The title is at most 300 characters and the description at most 20000.');
     if (attachments.length > MAX_CREATE_ATTACHMENTS)
       throw new HiveError(
         `At most ${MAX_CREATE_ATTACHMENTS} attachments per item; attach the rest with attach.`,
@@ -985,7 +983,11 @@ export class HiveClient {
           attachAction(this.ctx, { projectId, itemId: plan.itemId, runId: null, ...prepared }),
         );
         await this.write(a);
-        out.attachments.push({ attachmentId: a.attachmentId, name: prepared.name, kind: prepared.kind });
+        out.attachments.push({
+          attachmentId: a.attachmentId,
+          name: prepared.name,
+          kind: prepared.kind,
+        });
       } catch (e) {
         errors.push(`${source}: ${messageOf(e)}`);
       }
