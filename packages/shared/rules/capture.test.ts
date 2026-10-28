@@ -72,3 +72,19 @@ describe('undo of a new item', () => {
     await denied(a.run([{ kind: 'delete', path: paths.item(W, 'p1', plan.itemId) }]));
   });
 });
+
+describe('a batch the SDK sends twice (item VJHVv)', () => {
+  it('a replay of a committed create is not reported as a refusal', async () => {
+    const a = as('alice');
+    const plan = createItem(a.ctx, { project, projectId: 'p1', title: 'Twice', type: 'task' });
+    await ok(a.run(plan));
+    // What the SDK does after a token refresh or a drop that swallowed the first acknowledgement.
+    await ok(a.run(plan));
+  });
+
+  it('a refusal that never committed stays a refusal', async () => {
+    const eve = as('eve');
+    const plan = createItem(eve.ctx, { project, projectId: 'p1', title: 'Nope', type: 'task' });
+    await denied(eve.run(plan));
+  });
+});

@@ -7,6 +7,7 @@ import {
   arrayUnion,
   deleteField,
   doc,
+  getDocFromServer,
   increment,
   serverTimestamp,
   writeBatch,
@@ -76,7 +77,35 @@ function addOp(batch: ReturnType<typeof writeBatch>, db: Firestore, op: WriteOp)
 export async function applyPlan(db: Firestore, plan: Pick<ActionPlan, 'ops'>): Promise<void> {
   const batch = writeBatch(db);
   for (const op of plan.ops) addOp(batch, db, op);
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (e) {
+    if (
+      (e as { code?: string }).code === 'permission-denied' &&
+      (await alreadyCommitted(db, plan))
+    ) {
+      return;
+    }
+    throw e;
+  }
+}
+
+/**
+ * The SDK re-sends a batch whose acknowledgement it never saw (the write stream restarts on an
+ * ID-token refresh or a network drop). When the first send had already been committed, the second
+ * lands on documents that now exist: the create becomes an update and the immutable event refuses
+ * it, so the caller sees PERMISSION_DENIED for a change that was in fact made (item VJHVv).
+ * Every plan writes one event under a fresh random id, so finding that event means this very
+ * batch was committed. Anything else (no event op, not readable, absent) stays the refusal.
+ */
+async function alreadyCommitted(db: Firestore, plan: Pick<ActionPlan, 'ops'>): Promise<boolean> {
+  const event = plan.ops.find((op) => op.kind === 'set' && op.path.split('/').at(-2) === 'events');
+  if (!event) return false;
+  try {
+    return (await getDocFromServer(doc(db, event.path))).exists();
+  } catch {
+    return false;
+  }
 }
 
 /** A converter that validates documents with a Zod schema when read. */
