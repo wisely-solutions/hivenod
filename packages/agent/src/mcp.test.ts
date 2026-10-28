@@ -25,6 +25,7 @@ describe('hivenod mcp', () => {
       'attach',
       'claim',
       'complete',
+      'create_item',
       'end_run',
       'list_work',
       'log',
@@ -39,6 +40,11 @@ describe('hivenod mcp', () => {
       'skip_step',
       'wait_for_work',
     ]);
+    const make = tools.find((t) => t.name === 'create_item')!;
+    expect(make.inputSchema).toMatchObject({
+      required: ['project', 'title'],
+      properties: { title: { maxLength: 300 }, attachments: { type: 'array', maxItems: 10 } },
+    });
     const back = tools.find((t) => t.name === 'send_back')!;
     expect(back.inputSchema).toMatchObject({
       required: ['itemId', 'runId', 'toStep', 'reason'],

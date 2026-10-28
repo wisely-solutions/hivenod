@@ -287,6 +287,47 @@
         }
       },
       {
+        "name": "create_item",
+        "description": "Create a new item (ordinary work) in a project, when a person asked you for real work or a scheduled job found some. It starts at the project's first step like a person's quick-add, records you as its creator, and can be claimed at once. Only in projects that allow it (\"Agents may create items\") and that this agent may use; at most 30 an hour per agent. For something you merely noticed, use raise_finding instead.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Project id or exact name"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "description": {
+              "description": "The brief, in Markdown: what is asked, by whom, and what done looks like",
+              "type": "string",
+              "maxLength": 20000
+            },
+            "attachments": {
+              "description": "Files (html, md, txt, png, jpg, pdf up to 900 KB) or http(s) URLs to attach",
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "project",
+            "title"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "release",
         "description": "Give an item you hold back to the queue without finishing it (for example after a run that ended without complete). Any agent can then claim it. Ending a run as failed already does this.",
         "inputSchema": {
@@ -1028,6 +1069,47 @@
             "itemId",
             "title",
             "details"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "create_item",
+        "description": "Create a new item (ordinary work) in a project, when a person asked you for real work or a scheduled job found some. It starts at the project's first step like a person's quick-add, records you as its creator, and can be claimed at once. Only in projects that allow it (\"Agents may create items\") and that this agent may use; at most 30 an hour per agent. For something you merely noticed, use raise_finding instead.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Project id or exact name"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "description": {
+              "description": "The brief, in Markdown: what is asked, by whom, and what done looks like",
+              "type": "string",
+              "maxLength": 20000
+            },
+            "attachments": {
+              "description": "Files (html, md, txt, png, jpg, pdf up to 900 KB) or http(s) URLs to attach",
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "project",
+            "title"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },

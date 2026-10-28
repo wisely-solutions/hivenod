@@ -24,6 +24,7 @@ import {
   W,
 } from '../../shared/rules/harness';
 import { HiveClient } from '../src/client';
+import { CreateLimiter } from '../src/ratelimit';
 import { main } from '../src/cli';
 
 useEmulator();
@@ -170,6 +171,59 @@ describe('agent client against the emulators', () => {
     const waited = await c.waitForWork({ timeoutMs: 3000 });
     expect(waited.work.map((w) => w.itemId)).not.toContain(r.findingItemId);
     await expect(c.claim(r.findingItemId)).rejects.toThrow(/suggestion waiting for people/);
+  });
+
+  it('creates an item where the project allows it: work at the first step, by the agent (item DhsO9)', async () => {
+    await put({ [P('p1')]: projectDoc({}, { agentsMayCreateItems: true }) });
+    const { uid, token } = await newAgent();
+    const c = await connect(token);
+    c.creates = new CreateLimiter(null);
+    const dir = await mkdtemp(join(tmpdir(), 'hive-'));
+    const file = join(dir, 'notes.md');
+    await writeFile(file, '# Steps to reproduce');
+    const r = await c.createItem('Blog', 'Checkout times out', 'Asked on Telegram.', [
+      file,
+      join(dir, 'missing.md'),
+    ]);
+    expect(r).toMatchObject({ projectId: 'p1', step: 'Intake', status: 'queued' });
+    expect(r.attachments).toMatchObject([{ name: 'notes.md', kind: 'markdown' }]);
+    expect(r.attachErrors?.[0]).toMatch(/missing\.md/);
+    const it0 = (await docs(`workspaces/${W}/projects/p1/items`))[r.itemId]!;
+    expect(it0).toMatchObject({
+      title: 'Checkout times out',
+      summary: 'Asked on Telegram.',
+      stepId: 'intake',
+      status: 'queued',
+      createdBy: { type: 'agent', id: uid },
+      source: { kind: 'agent', label: 'Research agent' },
+      attachmentCount: 1,
+    });
+    const created = (await events()).find(
+      (e) => e.type === 'item.created' && e.itemId === r.itemId,
+    );
+    expect(created).toMatchObject({ actor: { type: 'agent', id: uid } });
+    // Ordinary work: listed and claimable at once.
+    expect((await c.listWork()).map((w) => w.itemId)).toContain(r.itemId);
+    await c.claim(r.itemId);
+  });
+
+  it('refuses a create where the setting is off or the project is not its own (item DhsO9)', async () => {
+    const { token } = await newAgent();
+    const c = await connect(token);
+    c.creates = new CreateLimiter(null);
+    await expect(c.createItem('p1', 'x')).rejects.toThrow(/does not let agents create items/);
+    await put({ [P('p2')]: projectDoc({}, { agentsMayCreateItems: true }) });
+    await expect(c.createItem('p2', 'x')).rejects.toThrow(/cannot use the project "p2"/);
+  });
+
+  it('stops at the rate limit with a clear message (item DhsO9)', async () => {
+    await put({ [P('p1')]: projectDoc({}, { agentsMayCreateItems: true }) });
+    const { token } = await newAgent();
+    const c = await connect(token);
+    c.creates = new CreateLimiter(null, Date.now, 2);
+    await c.createItem('p1', 'One');
+    await c.createItem('p1', 'Two');
+    await expect(c.createItem('p1', 'Three')).rejects.toThrow(/Rate limit.*at most 2 per hour/);
   });
 
   it('completes an open run directly, ending it as done with the cost', async () => {

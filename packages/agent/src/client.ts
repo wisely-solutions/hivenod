@@ -28,6 +28,10 @@ import {
   paths,
   postMessage,
   raiseFinding,
+  createItem as createItemAction,
+  agentsMayCreateItems,
+  AGENT_CREATE_OFF_MESSAGE,
+  shapesNewItems,
   parkItem,
   parkOf,
   reportProgress,
@@ -79,6 +83,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import { prepareAttachment } from './attach';
+import { CreateLimiter } from './ratelimit';
 import { resolveToken } from './credentials';
 import {
   errorCode,
@@ -118,6 +123,12 @@ export function useFirebaseConfig(c: typeof activeServer): void {
 }
 
 export const HEARTBEAT_INTERVAL_MS = 60_000;
+
+/** Bounds the files of one create_item call (item DhsO9). */
+export const MAX_CREATE_ATTACHMENTS = 10;
+/** The refusal when the rules turn a create down. */
+export const CREATE_PROJECT_DENIED =
+  'Hivenod refused to create the item: the project must allow it ("Agents may create items", switched on by an admin or the project creator) and this agent must be allowed on the project in its own organization.';
 
 export interface ConnectOptions {
   /** Defaults to process.env.HIVENOD_TOKEN, then the token saved by pairing (~/.hivenod/agent.json). */
@@ -271,6 +282,8 @@ export class HiveClient {
   private readonly arrivalKeys = new Map<string, ArrivalKey>();
   /** Last problem an automatic heartbeat hit; surfaced by `whoami` style callers and tests. */
   autoHeartbeatError: string | null = null;
+  /** The create_item rate limit (item DhsO9); defaults to the file shared on this machine. */
+  creates: CreateLimiter | null = null;
 
   private constructor(
     private readonly app: FirebaseApp,
@@ -918,6 +931,105 @@ export class HiveClient {
       status: 'suggested' as const,
       note: `Suggested to people: it waits in the ${first} suggestions until someone adds it or dismisses it. It is not work: it never shows in work list and cannot be claimed.`,
     };
+  }
+
+  /** The project this agent may use, by id or exact name (any case), with its doc. */
+  private async resolveProject(idOrName: string): Promise<{ projectId: string; project: Project }> {
+    const ids = await this.projectIds();
+    const projects = new Map<string, Project>();
+    for (const pid of ids) {
+      const p = await this.getProject(pid).catch(() => null);
+      if (p) projects.set(pid, p);
+    }
+    const byId = projects.get(idOrName);
+    if (byId) return { projectId: idOrName, project: byId };
+    const hits = [...projects].filter(([, p]) => p.name.toLowerCase() === idOrName.toLowerCase());
+    if (hits.length === 1) return { projectId: hits[0]![0], project: hits[0]![1] };
+    const names = [...projects.values()].map((p) => p.name);
+    throw new HiveError(
+      `This agent cannot use the project ${JSON.stringify(idOrName)}${names.length ? `. Its projects: ${names.join(', ')}` : ': it has no projects yet'}.`,
+    );
+  }
+
+  /**
+   * Creates an item as this agent (item DhsO9): ordinary work at the project's first step, in a
+   * project that allows it, at most 30 an hour. Files are attached right after; one that fails
+   * is reported, the item stays.
+   */
+  async createItem(
+    project: string,
+    title: string,
+    description = '',
+    attachments: readonly string[] = [],
+  ) {
+    await this.requireNotPaused();
+    const clean = title.trim();
+    if (!clean) throw new HiveError('An item needs a title.');
+    if ([...clean].length > 300 || [...description].length > 20000)
+      throw new HiveError('The title is at most 300 characters and the description at most 20000.');
+    if (attachments.length > MAX_CREATE_ATTACHMENTS)
+      throw new HiveError(
+        `At most ${MAX_CREATE_ATTACHMENTS} attachments per item; attach the rest with attach.`,
+      );
+    if (!project.trim()) throw new HiveError('Name the project (its id or its name).');
+    const { projectId, project: p } = await this.resolveProject(project);
+    if (!agentsMayCreateItems(p)) throw new HiveError(AGENT_CREATE_OFF_MESSAGE);
+    const limiter = (this.creates ??= new CreateLimiter());
+    limiter.check(this.uid);
+    const unshaped = shapesNewItems(p);
+    const plan = this.wrap(() =>
+      createItemAction(this.ctx, {
+        project: p,
+        projectId,
+        title: clean,
+        type: 'task',
+        summary: description,
+        unshaped,
+      }),
+    );
+    try {
+      await this.write(plan);
+    } catch (e) {
+      if (e instanceof HiveError && e.message.startsWith('Hivenod refused this change'))
+        throw new HiveError(CREATE_PROJECT_DENIED);
+      throw e;
+    }
+    limiter.record(this.uid);
+    this.itemProject.set(plan.itemId, projectId);
+    const first = p.steps[0]!;
+    const out = {
+      itemId: plan.itemId,
+      projectId,
+      project: p.name,
+      step: first.name,
+      status: (!unshaped && first.kind === 'human' ? 'waiting' : 'queued') as 'queued' | 'waiting',
+      attachments: [] as { attachmentId: string; name: string; kind: string }[],
+      attachErrors: undefined as string[] | undefined,
+      note: unshaped
+        ? `Created in ${p.name}. It waits at ${first.name} to be shaped (an agent picks its steps), then goes through its path like any item.`
+        : first.kind === 'human'
+          ? `Created in ${p.name}. It waits at ${first.name} for people to decide.`
+          : `Created in ${p.name} at ${first.name}: it is work now, and any agent of that step can claim it (also you).`,
+    };
+    const errors: string[] = [];
+    for (const source of attachments) {
+      try {
+        const prepared = await prepareAttachment(source, {});
+        const a = this.wrap(() =>
+          attachAction(this.ctx, { projectId, itemId: plan.itemId, runId: null, ...prepared }),
+        );
+        await this.write(a);
+        out.attachments.push({
+          attachmentId: a.attachmentId,
+          name: prepared.name,
+          kind: prepared.kind,
+        });
+      } catch (e) {
+        errors.push(`${source}: ${messageOf(e)}`);
+      }
+    }
+    if (errors.length) out.attachErrors = errors;
+    return out;
   }
 
   async endRun(runId: string, status: 'done' | 'failed', outcome: RunOutcome = {}) {

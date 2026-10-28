@@ -105,7 +105,7 @@ const ANY_ITEM = new Set(['read_item', 'raise_finding']);
 /** Tools that give a held item back without finishing it (item QjTTL). */
 const GIVES_BACK = new Set(['release', 'end_run']);
 /** Not about one item. */
-const NO_ITEM = new Set(['list_work', 'wait_for_work', 'claim']);
+const NO_ITEM = new Set(['list_work', 'wait_for_work', 'claim', 'create_item']);
 
 const ITEM_ID_HELP =
   'Item id (the item_id of the <channel kind="work"> event). May be left out while this session holds one item; required when it holds several.';

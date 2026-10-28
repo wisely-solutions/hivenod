@@ -1,4 +1,11 @@
-import { restoreProject, updateProject, type Project } from '@hive/shared';
+import {
+  agentsMayCreateItems,
+  canEditAgentSettings,
+  restoreProject,
+  setAgentsMayCreateItems,
+  updateProject,
+  type Project,
+} from '@hive/shared';
 import { Link } from '@tanstack/react-router';
 import { Archive, ArchiveRestore, Pencil, Workflow } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -11,10 +18,18 @@ import { useShellData } from '../../shell/data';
 import { Pill } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { cn } from '../../ui/cn';
-import { Input, Textarea } from '../../ui/form';
+import { Input, Textarea, Toggle } from '../../ui/form';
 import { Icon } from '../../ui/icon';
 import { useToast } from '../../ui/overlay';
 import { PageHeader } from '../Chrome';
+
+/** Item DhsO9: the words of the "Agents may create items" switch. */
+export const AGENTS_CREATE_LABEL = 'Agents may create items';
+export function agentsCreateHint(may: boolean): string {
+  return may
+    ? 'Agents on this project can add new work at its first step, at most 30 an hour each.'
+    : 'Agents on this project can add new work at its first step. Admins and the project creator switch this.';
+}
 
 const rowBtn =
   'inline-flex min-h-11 items-center gap-1.5 rounded-btn px-3 text-14 font-medium text-ink hover:bg-canvas focus-visible:outline-2 focus-visible:outline-focus';
@@ -27,6 +42,8 @@ export function ProjectsTab() {
   const { hidden, archive, cancelArchive } = useArchiveProject();
   const [editing, setEditing] = useState<Row<Project> | null>(null);
   const { isAdmin } = session;
+  const mayChange = (p: Row<Project>) =>
+    canEditAgentSettings({ uid: session.me.uid, isAdmin }, { createdBy: p.data.createdBy });
 
   const rows = useMemo(
     () =>
@@ -37,6 +54,25 @@ export function ProjectsTab() {
       ),
     [projects],
   );
+
+  const [switching, setSwitching] = useState<string | null>(null);
+  async function setAgentsCreate(p: Row<Project>, on: boolean) {
+    const ctx = actionContext(session.workspaceId);
+    if (!ctx) return;
+    setSwitching(p.id);
+    try {
+      await run(setAgentsMayCreateItems(ctx, { projectId: p.id, on }));
+      toast.push({
+        message: on
+          ? `Agents may now create items in ${p.data.name}.`
+          : `Agents no longer create items in ${p.data.name}.`,
+      });
+    } catch (e) {
+      toast.push({ message: `Could not save: ${(e as Error).message}` });
+    } finally {
+      setSwitching(null);
+    }
+  }
 
   function restore(p: Row<Project>) {
     const ctx = actionContext(session.workspaceId);
@@ -89,6 +125,17 @@ export function ProjectsTab() {
                   </div>
                   {archived ? <Pill tone="neutral">Archived</Pill> : null}
                 </div>
+                {archived ? null : (
+                  <div data-testid="agents-create-switch">
+                    <Toggle
+                      label={AGENTS_CREATE_LABEL}
+                      description={agentsCreateHint(mayChange(p))}
+                      checked={agentsMayCreateItems(p.data)}
+                      disabled={!mayChange(p) || switching === p.id}
+                      onCheckedChange={(v) => void setAgentsCreate(p, v)}
+                    />
+                  </div>
+                )}
                 <div className="-ml-3 flex flex-wrap gap-x-1">
                   {isAdmin ? (
                     <button type="button" className={rowBtn} onClick={() => setEditing(p)}>
@@ -132,7 +179,14 @@ export function ProjectsTab() {
           onSave={async (v) => {
             const ctx = actionContext(session.workspaceId);
             if (!ctx) return;
-            await run(updateProject(ctx, { projectId: editing.id, ...v }));
+            const { agentsMayCreateItems: on, ...rest } = v;
+            await run(
+              updateProject(ctx, {
+                projectId: editing.id,
+                ...rest,
+                ...(on === agentsMayCreateItems(editing.data) ? {} : { agentsMayCreateItems: on }),
+              }),
+            );
             toast.push({ message: `${v.name} saved.` });
           }}
         />
@@ -148,9 +202,15 @@ function EditProjectModal({
 }: {
   project: Row<Project>;
   onClose: () => void;
-  onSave: (v: { name: string; emoji: string; description: string }) => Promise<void>;
+  onSave: (v: {
+    name: string;
+    emoji: string;
+    description: string;
+    agentsMayCreateItems: boolean;
+  }) => Promise<void>;
 }) {
   const p = project.data;
+  const [agentsCreate, setAgentsCreate] = useState(agentsMayCreateItems(p));
   const [name, setName] = useState(p.name);
   const [emoji, setEmoji] = useState(p.emoji);
   const [description, setDescription] = useState(p.description ?? '');
@@ -163,7 +223,12 @@ function EditProjectModal({
     if (!clean) return setError('Give the project a name.');
     setBusy(true);
     try {
-      await onSave({ name: clean, emoji, description: description.trim() });
+      await onSave({
+        name: clean,
+        emoji,
+        description: description.trim(),
+        agentsMayCreateItems: agentsCreate,
+      });
       onClose();
     } catch {
       setError('Could not save. Try again.');
@@ -213,6 +278,12 @@ function EditProjectModal({
           value={description}
           maxLength={500}
           onChange={(e) => setDescription(e.target.value)}
+        />
+        <Toggle
+          label={AGENTS_CREATE_LABEL}
+          description={agentsCreateHint(true)}
+          checked={agentsCreate}
+          onCheckedChange={setAgentsCreate}
         />
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1.5 text-13 font-medium text-ink">Emoji</legend>

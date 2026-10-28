@@ -47,6 +47,8 @@ type Client struct {
 	// AutoHeartbeatError is the last problem an automatic heartbeat hit.
 	AutoHeartbeatError string
 	clockOffset        time.Duration
+	// Creates is the create_item rate limit (item DhsO9); defaults to the shared file.
+	Creates *CreateLimiter
 }
 
 // Connect signs in with the token (tok "" = HIVENOD_TOKEN, then the saved pairing) and reads

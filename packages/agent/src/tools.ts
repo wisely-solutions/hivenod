@@ -144,6 +144,32 @@ export const TOOLS: ToolDef[] = [
       ),
   }),
   tool({
+    name: 'create_item',
+    description:
+      'Create a new item (ordinary work) in a project, when a person asked you for real work or a scheduled job found some. It starts at the project\'s first step like a person\'s quick-add, records you as its creator, and can be claimed at once. Only in projects that allow it ("Agents may create items") and that this agent may use; at most 30 an hour per agent. For something you merely noticed, use raise_finding instead.',
+    input: {
+      project: z.string().min(1).describe('Project id or exact name'),
+      title: z.string().min(1).max(300),
+      description: z
+        .string()
+        .max(20000)
+        .optional()
+        .describe('The brief, in Markdown: what is asked, by whom, and what done looks like'),
+      attachments: z
+        .array(z.string().min(1))
+        .max(10)
+        .optional()
+        .describe('Files (html, md, txt, png, jpg, pdf up to 900 KB) or http(s) URLs to attach'),
+    },
+    run: (c, a) =>
+      c.createItem(
+        a.project as string,
+        a.title as string,
+        (a.description as string | undefined) ?? '',
+        (a.attachments as string[] | undefined) ?? [],
+      ),
+  }),
+  tool({
     name: 'release',
     description:
       'Give an item you hold back to the queue without finishing it (for example after a run that ended without complete). Any agent can then claim it. Ending a run as failed already does this.',

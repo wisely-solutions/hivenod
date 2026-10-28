@@ -4368,6 +4368,491 @@
       "output": { "error": "Only agents can do this" }
     },
     {
+      "name": "createItem/by an agent",
+      "action": "createItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "project": {
+          "steps": [
+            { "id": "shape", "name": "Shape", "kind": "agent", "description": "" },
+            {
+              "id": "approve",
+              "name": "Approve",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "build", "name": "Build", "kind": "agent", "description": "" },
+            { "id": "review", "name": "Review", "kind": "agent", "description": "" },
+            { "id": "test", "name": "Test", "kind": "agent", "description": "" },
+            {
+              "id": "accept",
+              "name": "Accept",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "release", "name": "Release", "kind": "agent", "description": "" }
+          ],
+          "agentsMayCreateItems": true
+        },
+        "projectId": "p1",
+        "title": "Fix the checkout timeout",
+        "type": "task",
+        "summary": "Asked on Telegram."
+      },
+      "output": {
+        "itemId": "id01",
+        "eventId": "id02",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/projects/p1/items/id01",
+            "data": {
+              "title": "Fix the checkout timeout",
+              "type": "task",
+              "summary": "Asked on Telegram.",
+              "source": { "kind": "agent", "label": "Hive" },
+              "createdBy": { "type": "agent", "id": "agentA" },
+              "parentItemId": null,
+              "sourceRunId": null,
+              "progress": null,
+              "triage": null,
+              "sendBackCount": 0,
+              "attachmentCount": 0,
+              "costEur": 0,
+              "order": 1800000000000,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id02",
+              "stepId": "shape",
+              "status": "queued",
+              "claim": null,
+              "gate": null,
+              "stepAt": { "__hive": "serverTime" }
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id02",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "id01",
+              "runId": null,
+              "type": "item.created",
+              "data": { "title": "Fix the checkout timeout" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "createItem/by an agent, unshaped, own id",
+      "action": "createItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "project": {
+          "steps": [
+            { "id": "shape", "name": "Shape", "kind": "agent", "description": "" },
+            {
+              "id": "approve",
+              "name": "Approve",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "build", "name": "Build", "kind": "agent", "description": "" },
+            { "id": "review", "name": "Review", "kind": "agent", "description": "" },
+            { "id": "test", "name": "Test", "kind": "agent", "description": "" },
+            {
+              "id": "accept",
+              "name": "Accept",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "release", "name": "Release", "kind": "agent", "description": "" }
+          ],
+          "agentsMayCreateItems": true,
+          "shapeNewItems": true
+        },
+        "projectId": "p1",
+        "itemId": "n1",
+        "title": "Look at the logs",
+        "type": "bug",
+        "unshaped": true
+      },
+      "output": {
+        "itemId": "n1",
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/projects/p1/items/n1",
+            "data": {
+              "title": "Look at the logs",
+              "type": "bug",
+              "summary": "",
+              "source": { "kind": "agent", "label": "Hive" },
+              "createdBy": { "type": "agent", "id": "agentA" },
+              "parentItemId": null,
+              "sourceRunId": null,
+              "progress": null,
+              "triage": null,
+              "sendBackCount": 0,
+              "attachmentCount": 0,
+              "costEur": 0,
+              "order": 1800000000000,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01",
+              "stepId": "shape",
+              "status": "queued",
+              "claim": null,
+              "gate": null,
+              "shape": null,
+              "stepAt": { "__hive": "serverTime" }
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "n1",
+              "runId": null,
+              "type": "item.created",
+              "data": { "title": "Look at the logs" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "createItem/by an agent at a people first step",
+      "action": "createItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "project": {
+          "steps": [
+            {
+              "id": "approve",
+              "name": "Approve",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "build", "name": "Build", "kind": "agent", "description": "" }
+          ],
+          "agentsMayCreateItems": true
+        },
+        "projectId": "p1",
+        "title": "Approve the banner",
+        "type": "request",
+        "parentItemId": "i1",
+        "order": 5
+      },
+      "output": {
+        "itemId": "id01",
+        "eventId": "id02",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/projects/p1/items/id01",
+            "data": {
+              "title": "Approve the banner",
+              "type": "request",
+              "summary": "",
+              "source": { "kind": "agent", "label": "Hive" },
+              "createdBy": { "type": "agent", "id": "agentA" },
+              "parentItemId": "i1",
+              "sourceRunId": null,
+              "progress": null,
+              "triage": null,
+              "sendBackCount": 0,
+              "attachmentCount": 0,
+              "costEur": 0,
+              "order": 5,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id02",
+              "stepId": "approve",
+              "status": "waiting",
+              "claim": null,
+              "gate": { "stepId": "approve", "approvals": {}, "rejections": {} },
+              "stepAt": { "__hive": "serverTime" }
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id02",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "id01",
+              "runId": null,
+              "type": "item.created",
+              "data": { "title": "Approve the banner" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "createItem/by an agent, setting off",
+      "action": "createItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "project": {
+          "steps": [
+            { "id": "shape", "name": "Shape", "kind": "agent", "description": "" },
+            {
+              "id": "approve",
+              "name": "Approve",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "build", "name": "Build", "kind": "agent", "description": "" },
+            { "id": "review", "name": "Review", "kind": "agent", "description": "" },
+            { "id": "test", "name": "Test", "kind": "agent", "description": "" },
+            {
+              "id": "accept",
+              "name": "Accept",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "release", "name": "Release", "kind": "agent", "description": "" }
+          ],
+          "agentsMayCreateItems": false
+        },
+        "projectId": "p1",
+        "title": "x",
+        "type": "task"
+      },
+      "output": {
+        "error": "This project does not let agents create items. An admin or the project creator can switch on \"Agents may create items\" in Settings, Projects."
+      }
+    },
+    {
+      "name": "createItem/by an agent, setting absent",
+      "action": "createItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "project": {
+          "steps": [
+            { "id": "shape", "name": "Shape", "kind": "agent", "description": "" },
+            {
+              "id": "approve",
+              "name": "Approve",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "build", "name": "Build", "kind": "agent", "description": "" },
+            { "id": "review", "name": "Review", "kind": "agent", "description": "" },
+            { "id": "test", "name": "Test", "kind": "agent", "description": "" },
+            {
+              "id": "accept",
+              "name": "Accept",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "release", "name": "Release", "kind": "agent", "description": "" }
+          ]
+        },
+        "projectId": "p1",
+        "title": "x",
+        "type": "task"
+      },
+      "output": {
+        "error": "This project does not let agents create items. An admin or the project creator can switch on \"Agents may create items\" in Settings, Projects."
+      }
+    },
+    {
+      "name": "createItem/by an agent, no steps",
+      "action": "createItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "project": { "steps": [], "agentsMayCreateItems": true },
+        "projectId": "p1",
+        "title": "x",
+        "type": "task"
+      },
+      "output": { "error": "This project has no steps" }
+    },
+    {
+      "name": "createItem/by a person",
+      "action": "createItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "project": {
+          "steps": [
+            { "id": "shape", "name": "Shape", "kind": "agent", "description": "" },
+            {
+              "id": "approve",
+              "name": "Approve",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "build", "name": "Build", "kind": "agent", "description": "" },
+            { "id": "review", "name": "Review", "kind": "agent", "description": "" },
+            { "id": "test", "name": "Test", "kind": "agent", "description": "" },
+            {
+              "id": "accept",
+              "name": "Accept",
+              "kind": "human",
+              "description": "",
+              "gate": {
+                "deciderUids": ["joao"],
+                "groupIds": [],
+                "rule": "any",
+                "n": 1,
+                "mustInclude": [],
+                "rejectPolicy": "one",
+                "remindAfterHours": 0
+              }
+            },
+            { "id": "release", "name": "Release", "kind": "agent", "description": "" }
+          ]
+        },
+        "projectId": "p1",
+        "title": "Quick one",
+        "type": "idea",
+        "source": { "kind": "telegram", "label": "Telegram" }
+      },
+      "output": {
+        "itemId": "id01",
+        "eventId": "id02",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/projects/p1/items/id01",
+            "data": {
+              "title": "Quick one",
+              "type": "idea",
+              "summary": "",
+              "source": { "kind": "telegram", "label": "Telegram" },
+              "createdBy": { "type": "human", "id": "joao" },
+              "parentItemId": null,
+              "sourceRunId": null,
+              "progress": null,
+              "triage": null,
+              "sendBackCount": 0,
+              "attachmentCount": 0,
+              "costEur": 0,
+              "order": 1800000000000,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id02",
+              "stepId": "shape",
+              "status": "queued",
+              "claim": null,
+              "gate": null,
+              "stepAt": { "__hive": "serverTime" }
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id02",
+            "data": {
+              "actor": { "type": "human", "id": "joao", "name": "João" },
+              "projectId": "p1",
+              "itemId": "id01",
+              "runId": null,
+              "type": "item.created",
+              "data": { "title": "Quick one" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "agentSendBack/round 0 to build",
       "action": "agentSendBack",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },

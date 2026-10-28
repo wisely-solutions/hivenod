@@ -108,6 +108,7 @@ var runners = map[string]runner{
 	"attach":         act(Attach),
 	"postMessage":    act(PostMessage),
 	"raiseFinding":   act(RaiseFinding),
+	"createItem":     act(CreateItem),
 	"agentSendBack":  act(AgentSendBack),
 	"shapeItem":      act(ShapeItem),
 	"skipStep":       act(SkipStep),

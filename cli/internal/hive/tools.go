@@ -50,6 +50,18 @@ func (a Args) S(k string) string {
 	return s
 }
 
+// Strings is a string-array argument (nil when absent).
+func (a Args) Strings(k string) []string {
+	arr, _ := a[k].([]any)
+	var out []string
+	for _, e := range arr {
+		if s, ok := e.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // Has reports whether an argument was given.
 func (a Args) Has(k string) bool { _, ok := a[k]; return ok }
 
@@ -112,6 +124,9 @@ var ToolRuns = map[string]Run{
 	},
 	"raise_finding": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.RaiseFinding(ctx, a.S("itemId"), a.S("title"), a.S("details"), a.S("project"))
+	},
+	"create_item": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.CreateItem(ctx, a.S("project"), a.S("title"), a.S("description"), a.Strings("attachments"))
 	},
 	// park / unpark exist in channel sessions only (ChannelTools gives them the session).
 	"park":   func(context.Context, *Client, Args) (any, error) { return nil, Errf(parkNoSession) },

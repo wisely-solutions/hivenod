@@ -204,6 +204,8 @@ hivenod run log <runId> "what I am doing"
 hivenod item attach <itemId> report.html  # html/md/txt/png/jpg/pdf up to 900 KB, else give a URL
 hivenod item ask <itemId> "Which audience?"          # shows under "Needs you"
 hivenod finding raise <itemId> "title" "details"     # suggest something outside your task (not work)
+hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
+                                                    # new work, where the project lets agents create items
 hivenod run usage <runId> --tokens-in 52000 --tokens-cached 40000 --tokens-out 900 --model claude-opus-5-5
 hivenod run end <runId> --status done --cost 0.42 --tokens-in 1200 --tokens-out 300
 hivenod item complete <itemId> --run <runId>         # moves on along its path; stops at the next human gate
@@ -239,6 +241,12 @@ stderr, exit code 1). Use `--project <id>` if an item id exists in more than one
   top of the project's first step until a person adds it there or dismisses it (with a reason). It
   is not work: it never shows in `work list` / `wait_for_work` and cannot be claimed. Once added,
   it is a normal item that agents pick up like any other.
+- **Agents may create items** (item DhsO9). `hivenod create-item` (MCP: `create_item`, also in the
+  Go CLI) adds ordinary work at a project's first step, recorded as created by the agent, when a
+  person asked for it. Only in projects whose "Agents may create items" is on (off by default; an
+  admin or the project creator switches it in Settings, Projects), in the agent's own organization
+  and projects. At most 30 an hour per agent, counted on this machine in
+  `~/.hivenod/created-items.json`; past that it says when the next one can be made.
 - **Settings and guardrails** (set by an admin on the agent's page in Hivenod; `hivenod whoami` shows them):
   - _Projects and steps._ The agent works only in its projects. A project's process can limit an
     agent step to some agents: other agents never see it in `work list` / `wait_for_work`, and the

@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/wisely-solutions/hivenod/cli/internal/credentials"
@@ -29,6 +30,9 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod pair             pairs this machine with Hivenod (shows a code an admin confirms) and
                            saves the token; then install the hivenod plugin in Claude Code
   hivenod whoami           the agent this machine works as
+  hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
+                           creates an item (work at the first step) where the project lets
+                           agents create items; at most 30 an hour
   hivenod logout           forgets the token saved by pairing
   hivenod mcp              MCP stdio server for Claude Code
   hivenod mcp --channel [--project P] [--step S] [--max-items N]
@@ -48,7 +52,15 @@ func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 type opts struct {
 	json, channel, help, version, force, noStart bool
 	project, step, maxItems, server              string
+	title, description                           string
+	attach                                       multi
 }
+
+// multi is a flag that may be given several times.
+type multi []string
+
+func (m *multi) String() string     { return strings.Join(*m, ",") }
+func (m *multi) Set(v string) error { *m = append(*m, v); return nil }
 
 func parse(args []string) (opts, []string, error) {
 	var o opts
@@ -66,6 +78,9 @@ func parse(args []string) (opts, []string, error) {
 	fs.StringVar(&o.step, "step", "", "")
 	fs.StringVar(&o.maxItems, "max-items", "", "")
 	fs.StringVar(&o.server, "server", "", "")
+	fs.StringVar(&o.title, "title", "", "")
+	fs.StringVar(&o.description, "description", "", "")
+	fs.Var(&o.attach, "attach", "")
 	// Flags may come before or after the command words.
 	var pos []string
 	for len(args) > 0 {
@@ -179,6 +194,40 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			say(hive.JSON(w))
 		} else {
 			say(w.Text())
+		}
+		return 0
+	case "create-item":
+		title := o.title
+		if title == "" && len(pos) > 1 {
+			title = pos[1]
+		}
+		if o.project == "" || title == "" {
+			fmt.Fprintln(stderr, `hivenod: Usage: hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...`)
+			return 2
+		}
+		cfg, err := resolve()
+		if err != nil {
+			return fail(err)
+		}
+		c, err := hive.Connect(ctx, cfg, "")
+		if err != nil {
+			return fail(err)
+		}
+		defer c.Close()
+		r, err := c.CreateItem(ctx, o.project, title, o.description, o.attach)
+		if err != nil {
+			return fail(err)
+		}
+		if o.json {
+			say(hive.JSON(r))
+			return 0
+		}
+		say(fmt.Sprintf("Created item %s. %s", r.ItemID, r.Note))
+		for _, f := range r.Attachments {
+			say("  attached " + f.Name)
+		}
+		for _, e := range r.AttachErrors {
+			say("  not attached: " + e)
 		}
 		return 0
 	case "mcp":

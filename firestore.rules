@@ -756,7 +756,7 @@ service cloud.firestore {
                 && projectAgent(wid, request.resource.data.projectId)
                 && request.resource.data.type in [
                   'item.claimed', 'item.released', 'item.completed', 'item.updated',
-                  'attachment.added', 'message.posted', 'finding.raised',
+                  'item.created', 'attachment.added', 'message.posted', 'finding.raised',
                   'run.started', 'run.heartbeat', 'run.ended',
                   'item.shaped', 'item.pathChanged', 'step.proposed', 'item.sentBack']));
         allow update, delete: if false;
@@ -957,8 +957,9 @@ service cloud.firestore {
           // shapeNewItems (card st5INNZj): new items wait to be shaped by an agent.
           && request.resource.data.keys().hasOnly(['name', 'emoji', 'color', 'templateId',
                'steps', 'stepIndex', 'memberUids', 'createdBy', 'createdAt', 'archivedAt',
-               'shapeNewItems', 'lastEventId'])
+               'shapeNewItems', 'agentsMayCreateItems', 'lastEventId'])
           && request.resource.data.get('shapeNewItems', false) is bool
+          && request.resource.data.get('agentsMayCreateItems', false) is bool
           && validProject(request.resource.data)
           && (isAdmin(wid) || request.resource.data.memberUids == [me()])
           && request.resource.data.createdBy == me()
@@ -968,12 +969,17 @@ service cloud.firestore {
 
         allow update: if (canProject(wid, pid)
             && changed(['name', 'emoji', 'description', 'color', 'templateId', 'steps', 'stepIndex',
-                        'archivedAt', 'memberUids', 'stepAgents', 'shapeNewItems', 'lastEventId'])
+                        'archivedAt', 'memberUids', 'stepAgents', 'shapeNewItems',
+                        'agentsMayCreateItems', 'lastEventId'])
             && validProject(request.resource.data)
-            // Shaping new items (card st5INNZj) is switched by admins and the project's creator.
-            && (request.resource.data.get('shapeNewItems', false) == resource.data.get('shapeNewItems', false)
+            // Shaping new items (card st5INNZj) and "Agents may create items" (item DhsO9) are
+            // switched by admins and the project's creator. One check for both: long processes
+            // are close to the rules budget.
+            && (!request.resource.data.diff(resource.data).affectedKeys()
+                  .hasAny(['shapeNewItems', 'agentsMayCreateItems'])
                 || (canSetStepAgents(wid, resource.data)
-                    && request.resource.data.shapeNewItems is bool))
+                    && request.resource.data.get('shapeNewItems', false) is bool
+                    && request.resource.data.get('agentsMayCreateItems', false) is bool))
             && gatesAllowed(wid, resource.data, request.resource.data)
             // Unchanged per-step agents cost little: long processes are close to the rules budget.
             && (request.resource.data.get('stepAgents', {}) == resource.data.get('stepAgents', {})
@@ -1181,9 +1187,9 @@ service cloud.firestore {
             && ('shape' in request.resource.data
                 // A new item waiting to be shaped (card st5INNZj).
                 ? unshapedAt0(request.resource.data, get(projPath(wid, pid)).data)
-                  && humanCreate(wid, pid, iid)
+                  && newItemBy(wid, pid, iid)
                 : ((arrivesAt(request.resource.data, get(projPath(wid, pid)).data, 0)
-                    && humanCreate(wid, pid, iid))
+                    && newItemBy(wid, pid, iid))
                   || agentRaiseFinding(wid, pid, iid)));
 
           allow update: if validItemText(request.resource.data)
@@ -1215,6 +1221,24 @@ service cloud.firestore {
               && d.sourceRunId == null && strOrNull(d.parentItemId, 128)
               && trackedFor(wid, d.lastEventId, ['item.created'], pid, iid);
           }
+          // New work at the first step: a person's quick-add, or an agent's create_item (item
+          // DhsO9). createdBy routes it, so neither side pays for the other's checks.
+          function newItemBy(wid, pid, iid) {
+            return request.resource.data.createdBy.type == 'agent'
+              ? agentCreate(wid, pid, iid)
+              : humanCreate(wid, pid, iid);
+          }
+          // An agent creates ordinary work only in a project of its own workspace that it may use
+          // (its projectIds) and that allows it (agentsMayCreateItems, off when absent). Its rate
+          // limit lives in the agent's session code.
+          function agentCreate(wid, pid, iid) {
+            let d = request.resource.data;
+            return projectAgent(wid, pid)
+              && get(projPath(wid, pid)).data.get('agentsMayCreateItems', false) == true
+              && d.createdBy == me_('agent') && d.type != 'finding'
+              && d.sourceRunId == null && strOrNull(d.parentItemId, 128)
+              && trackedFor(wid, d.lastEventId, ['item.created'], pid, iid);
+          }
           // Findings are suggestions (card TU5pDmzE): any agent allowed on the project raises one
           // about an item of this project, holding it or not. It waits at the first step as
           // `suggested` (no claim, no gate), so it is never work. sourceRunId is the agent's own
@@ -1239,7 +1263,11 @@ service cloud.firestore {
             let p = get(projPath(wid, pid)).data;
             let r = resource.data;
             return projectAgent(wid, pid) && hasStep(p, r.stepId)
-              && (request.resource.data.get('pathRev', 0) != r.get('pathRev', 0)
+              // The files of an item the agent created (item DhsO9), right after create_item, while
+              // nobody holds it: at any step, as the first step may be a people step.
+              && ((r.claim == null && r.createdBy == me_('agent')
+                  && attachCounted(wid, pid, iid, r))
+              || (request.resource.data.get('pathRev', 0) != r.get('pathRev', 0)
                 ? agentPathUpdate(wid, pid, iid, r, p)
                 // An unshaped item is only shaping work (card st5INNZj), at any first step.
                 : unshaped(r)
@@ -1258,7 +1286,7 @@ service cloud.firestore {
                         || attachCounted(wid, pid, iid, r)))
                     : (claimIt(wid, pid, iid, r, p, false) || heartbeatIt(wid, r)
                       || progressIt(wid, pid, iid, r) || attachCounted(wid, pid, iid, r)
-                      || parkIt(wid, pid, iid, r))));
+                      || parkIt(wid, pid, iid, r)))));
           }
           // Path writes by an agent (card st5INNZj): shaping the unshaped item it holds, or, on
           // the item it holds at an agent step, changing agent steps ahead, asking for a people
@@ -1863,8 +1891,12 @@ service cloud.firestore {
               && ((canProject(wid, pid) && request.resource.data.by == me_('human')
                     && request.resource.data.runId == null)
                   || (projectAgent(wid, pid) && request.resource.data.by == me_('agent')
-                    && get(itemPath(wid, pid, iid)).data.claim.agentUid == me()
-                    && get(itemPath(wid, pid, iid)).data.claim.runId == request.resource.data.runId));
+                    && (request.resource.data.runId == null
+                      // An item the agent created (item DhsO9), while nobody holds it.
+                      ? get(itemPath(wid, pid, iid)).data.createdBy == me_('agent')
+                        && get(itemPath(wid, pid, iid)).data.claim == null
+                      : get(itemPath(wid, pid, iid)).data.claim.agentUid == me()
+                        && get(itemPath(wid, pid, iid)).data.claim.runId == request.resource.data.runId)));
             allow update: if false;
             // Erased together with its item.
             allow delete: if eraseWith(wid, pid, iid);
