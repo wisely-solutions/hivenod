@@ -501,6 +501,10 @@ export function InboxPage() {
       },
       replace: true,
     });
+  // Only me · Shared · All shows when it can tell rows apart (or is in use, or several
+  // organizations are listed): one organization where everything is only yours keeps the old,
+  // shorter header on a phone.
+  const showWho = manyOrgs || scope !== 'all' || (whoCounts.onlyYou > 0 && whoCounts.shared > 0);
   const chips = (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
       <Segmented
@@ -509,16 +513,18 @@ export function InboxPage() {
         onValueChange={(v) => setSearch({ f: v })}
         options={filterOptions}
       />
-      <Segmented
-        label="Who can act"
-        value={scope}
-        onValueChange={(v) => setSearch({ who: v })}
-        options={[
-          { value: 'mine', label: 'Only me', count: whoCounts.onlyYou },
-          { value: 'shared', label: 'Shared', count: whoCounts.shared },
-          { value: 'all', label: 'All', count: whoCounts.total },
-        ]}
-      />
+      {showWho ? (
+        <Segmented
+          label="Who can act"
+          value={scope}
+          onValueChange={(v) => setSearch({ who: v })}
+          options={[
+            { value: 'mine', label: 'Only me', count: whoCounts.onlyYou },
+            { value: 'shared', label: 'Shared', count: whoCounts.shared },
+            { value: 'all', label: 'All', count: whoCounts.total },
+          ]}
+        />
+      ) : null}
       {manyOrgs ? (
         <Select
           label="Filter by organization"
