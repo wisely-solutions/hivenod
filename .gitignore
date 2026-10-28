@@ -7,3 +7,6 @@ playwright-report
 test-results
 coverage
 .DS_Store
+# pnpm selfhost:init (your own Firebase project's settings and deploy config)
+hivenod.selfhost.json
+firebase.selfhost.json

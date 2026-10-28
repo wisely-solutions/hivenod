@@ -15,6 +15,7 @@ import {
   LEGACY_URL,
   ALIAS_URL,
   aliasRedirectProblems,
+  discoveryProblems,
 } from './release-lib.mjs';
 
 describe('previousTag', () => {
@@ -193,5 +194,32 @@ describe('version guard', () => {
     expect(versionRegressions(live, live)).toEqual([]);
     expect(versionRegressions({ cli: '0.1.1015', cliBin: '0.2.110' }, live)).toEqual([]);
     expect(versionRegressions({ cli: '0.1.1', cliBin: '0.2.1' }, null)).toEqual([]);
+  });
+});
+
+describe('discoveryProblems', () => {
+  const good = JSON.stringify({
+    service: 'hivenod',
+    protocol: 1,
+    firebase: { projectId: 'hive-board-43be' },
+  });
+  const json = 'application/json; charset=utf-8';
+  it('accepts the deployed project', () => {
+    expect(discoveryProblems(200, json, good, 'hive-board-43be')).toEqual([]);
+  });
+  it('names what is wrong', () => {
+    expect(discoveryProblems(404, 'text/html', '', 'p')).toEqual([
+      '/.well-known/hivenod.json answered 404',
+    ]);
+    expect(discoveryProblems(200, 'text/html', '<!doctype html>', 'p')).toEqual([
+      '/.well-known/hivenod.json is text/html',
+      '/.well-known/hivenod.json is not JSON',
+    ]);
+    expect(discoveryProblems(200, json, '{}', 'p')).toEqual([
+      '/.well-known/hivenod.json is not a Hivenod discovery file',
+    ]);
+    expect(discoveryProblems(200, json, good, 'other')).toEqual([
+      '/.well-known/hivenod.json names hive-board-43be, not other',
+    ]);
   });
 });
