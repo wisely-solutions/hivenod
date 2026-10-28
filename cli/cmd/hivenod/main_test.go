@@ -91,3 +91,33 @@ func TestServerFlag(t *testing.T) {
 		t.Fatalf("pair when paired: %d %q", code, out)
 	}
 }
+
+// Item 4PEHrOW5IfXBQWgOK9wo: the inbox commands check their arguments before connecting.
+func TestInboxCommands(t *testing.T) {
+	t.Setenv("HIVENOD_HOME", filepath.Join(t.TempDir(), "h"))
+	t.Setenv("HIVENOD_TOKEN", "")
+	if code, out, _ := call("inbox", "--help"); code != 0 || !strings.Contains(out, "Nothing is carried out before") {
+		t.Fatalf("help: %d %q", code, out)
+	}
+	for _, args := range [][]string{
+		{"inbox", "frob"},
+		{"inbox", "add", "--source", "teams"},
+		{"thread", "read"},
+		{"inbox", "note", "it1"},
+		{"subject", "assign", "it1"},
+		{"subject", "assign", "it1", "--name", "A", "--subject-id", "s1"},
+		{"outcome", "propose", "it1"},
+		{"outcome", "done", "o1", "--status", "maybe"},
+	} {
+		if code, _, errs := call(args...); code != 2 || !strings.Contains(errs, "hivenod inbox add") {
+			t.Errorf("%v: %d %q", args, code, errs)
+		}
+	}
+	// Valid arguments go on to connect: without a token that fails plainly.
+	if code, _, errs := call("inbox", "list"); code != 1 || !strings.Contains(errs, "hivenod:") {
+		t.Errorf("list without a token: %d %q", code, errs)
+	}
+	if code, out, _ := call(); code != 0 || !strings.Contains(out, "hivenod inbox") {
+		t.Fatal("main help mentions inbox")
+	}
+}

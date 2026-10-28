@@ -40,3 +40,19 @@ func (pathBuilders) Event(w, e string) string { return "workspaces/" + w + "/eve
 // DeleteEventID is the deterministic tombstone event id of a hard delete
 // (kind: groups, invites, projects or items).
 func (pathBuilders) DeleteEventID(kind, docID string) string { return "del-" + kind + "-" + docID }
+
+// Inbox (item 4PEHrOW5IfXBQWgOK9wo): inboxPaths in packages/shared/src/inbox.ts.
+func (pathBuilders) InboxSubject(w, s string) string {
+	return "workspaces/" + w + "/inboxSubjects/" + s
+}
+func (pathBuilders) InboxThread(w, t string) string { return "workspaces/" + w + "/inboxThreads/" + t }
+func (pathBuilders) InboxMessage(w, m string) string {
+	return "workspaces/" + w + "/inboxMessages/" + m
+}
+func (pathBuilders) InboxOutcome(w, o string) string {
+	return "workspaces/" + w + "/inboxOutcomes/" + o
+}
+func (pathBuilders) InboxEvent(w, e string) string { return "workspaces/" + w + "/inboxEvents/" + e }
+
+// InboxCollection is workspaces/{w}/<name> (inboxThreads, inboxMessages, …).
+func (pathBuilders) InboxCollection(w, name string) string { return "workspaces/" + w + "/" + name }

@@ -17,6 +17,11 @@ import {
   paths,
   sealToken,
   sendBack,
+  answerQuestion,
+  approveOutcome,
+  inboxPaths,
+  type OutcomeStateOf,
+  type ThreadStateOf,
   type ItemState,
 } from '@hive/shared';
 import { toFirestoreValue } from '@hive/shared/firestore';
@@ -177,6 +182,14 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
     };
     await read(`workspaces/${W}/agents`);
     await read(`workspaces/${W}/events`);
+    for (const c of [
+      'inboxSubjects',
+      'inboxThreads',
+      'inboxMessages',
+      'inboxOutcomes',
+      'inboxEvents',
+    ])
+      await read(`workspaces/${W}/${c}`);
     await read(`workspaces/${W}/calendar`);
     await read('users/alice/busy');
     await read('agentHomes');
@@ -334,6 +347,143 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     } finally {
       delete process.env.HIVENOD_HOME;
     }
+  }, 120_000);
+
+  it('inbox (item 4PEHr): messages, threads, dedup, subjects, notes, questions, outcomes approved by the person', async () => {
+    const r = await both(async (call) => {
+      const base = {
+        source: 'teams',
+        sender: { name: 'Sam Example', handle: 'sam@example.com' },
+        text: 'Can we move the review to Thursday?',
+        threadRef: 'thread-1',
+        receivedAt: '2026-10-28T09:00:00Z',
+        permalink: 'https://teams.example.com/m/1',
+        replyRef: 'conv:1',
+        attachments: [{ name: 'agenda.pdf', url: 'https://files.example.com/a.pdf' }],
+      };
+      const owner = as('owner');
+      const thread = async (tid: string) =>
+        (await snap(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+      const outcome = async (oid: string) =>
+        (await snap(inboxPaths.outcome(W, oid))) as unknown as OutcomeStateOf;
+      const t1 = out(await call('inbox_add', base)).threadId as string;
+      await call('inbox_add', base); // the same message again: a duplicate
+      await call('inbox_add', { ...base, messageId: 'm-2', text: 'Or Friday?' });
+      await call('inbox_add', {
+        ...base,
+        source: 'mail',
+        threadRef: '<x@example.com>',
+        thread: t1,
+      });
+      const t2 = out(await call('inbox_add', { ...base, member: 'alice', messageId: 'm-a' }))
+        .threadId as string;
+      await call('inbox_add', { ...base, member: 'eve', messageId: 'x' });
+      await call('inbox_add', { ...base, receivedAt: 'yesterday' });
+      await call('inbox_add', { ...base, source: 'Teams', messageId: 'y' });
+      await call('inbox_add', { ...base, messageId: 'z', thread: t2 });
+      await call('inbox_list', {});
+      await call('subject_list', {});
+      await call('subject_assign', { threadId: t1, name: 'Review date (Payments)' });
+      const sa = out(await call('subject_assign', { threadId: t2, name: 'review date (payments)' }))
+        .subjectId as string;
+      await call('subject_assign', { threadId: t1, subjectId: sa });
+      await call('inbox_note', { threadId: t1, text: 'Checked the calendar: Thursday is free.' });
+      await call('inbox_ask', { threadId: t1, question: 'Thursday or Friday?' });
+      await owner.run(
+        answerQuestion(owner.ctx, { threadId: t1, thread: await thread(t1), answer: 'Thursday' }),
+      );
+      const o1 = out(
+        await call('outcome_propose', {
+          threadId: t1,
+          type: 'reply',
+          fields: { text: 'Thursday works.' },
+          note: 'They asked twice',
+        }),
+      ).outcomeId as string;
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'reply',
+        fields: { text: 'x', bcc: 'y' },
+      });
+      await call('outcome_done', { outcomeId: o1, status: 'done' });
+      await owner.run(
+        approveOutcome(owner.ctx, {
+          outcomeId: o1,
+          outcome: await outcome(o1),
+          thread: await thread(t1),
+          fields: { text: 'Thursday 10:00 works.' },
+        }),
+      );
+      await call('inbox_list', {});
+      await call('thread_read', { threadId: t1 });
+      await call('outcome_done', {
+        outcomeId: o1,
+        status: 'done',
+        result: { permalink: 'https://teams.example.com/m/9' },
+      });
+      await call('outcome_done', { outcomeId: o1, status: 'done' });
+      const o2 = out(
+        await call('outcome_propose', {
+          threadId: t1,
+          type: 'snooze',
+          fields: { until: '2020-01-01T00:00:00Z' },
+        }),
+      ).outcomeId as string;
+      await owner.run(
+        approveOutcome(owner.ctx, {
+          outcomeId: o2,
+          outcome: await outcome(o2),
+          thread: await thread(t1),
+        }),
+      );
+      await call('inbox_list', {});
+      await call('thread_wake', { threadId: t1 });
+      await call('thread_wake', { threadId: t1 });
+      await call('inbox_add', { ...base, messageId: 'm-3', text: 'Thanks!' });
+      await call('thread_read', { threadId: t1 });
+      await call('thread_read', { threadId: 'nope' });
+      await call('subject_list', { member: 'alice' });
+    });
+    const oks = r.ts.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+    ]);
+    expect(r.ts.calls[1]).toMatchObject({ out: { duplicate: true } });
+    expect(r.ts.calls[3]).toMatchObject({ out: { newThread: false } });
+    expect(r.ts.calls[20]).toMatchObject({ out: { next: expect.stringMatching(/approved/) } });
+    expect(r.ts.calls[21]).toMatchObject({ out: { threadState: 'waiting' } });
+    expect(r.go.calls).toEqual(r.ts.calls);
+    expect(r.go.docs).toEqual(r.ts.docs);
   }, 120_000);
 
   it('errors: gate, not claimed, wrong run, unknown item, oversized file, bad progress', async () => {

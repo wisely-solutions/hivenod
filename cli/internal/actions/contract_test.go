@@ -114,6 +114,40 @@ var runners = map[string]runner{
 	"skipStep":       act(SkipStep),
 	"askPathChange":  act(AskPathChange),
 	"proposeStep":    act(ProposeStep),
+	// Inbox (item 4PEHrOW5IfXBQWgOK9wo)
+	"addInboxMessage": act(AddInboxMessage),
+	"assignSubject":   act(AssignSubject),
+	"addThreadNote":   act(AddThreadNote),
+	"askMember":       act(AskMember),
+	"retitleThread":   act(RetitleThread),
+	"proposeOutcome":  act(ProposeOutcome),
+	"finishOutcome":   act(FinishOutcome),
+	"wakeThread":      act(WakeThread),
+	"cleanOutcomeFields": pure(func(in struct {
+		Type   string         `json:"type"`
+		Fields map[string]any `json:"fields"`
+	}) (any, error) {
+		return CleanOutcomeFields(in.Type, in.Fields)
+	}),
+	"threadAfter": pure(func(in struct {
+		Type   string         `json:"type"`
+		Fields map[string]any `json:"fields"`
+	}) (any, error) {
+		return ThreadAfter(in.Type, in.Fields)
+	}),
+	"inboxKeys": pure(func(in struct {
+		Member    string `json:"member"`
+		Source    string `json:"source"`
+		ThreadRef string `json:"threadRef"`
+		MessageID string `json:"messageId"`
+	}) (any, error) {
+		return map[string]any{"message": InboxMessageKey(in.Member, in.Source, in.ThreadRef, in.MessageID), "thread": InboxThreadKey(in.Member, in.Source, in.ThreadRef)}, nil
+	}),
+	"titleFrom": pure(func(in struct {
+		Text string `json:"text"`
+	}) (any, error) {
+		return TitleFrom(in.Text), nil
+	}),
 	"calendarUpsert": act(CalendarUpsert),
 	"calendarDelete": act(CalendarDelete),
 	"freeSlots": pure(func(in FreeSlotsInput) (any, error) {

@@ -328,6 +328,393 @@
         }
       },
       {
+        "name": "inbox_add",
+        "description": "Bring a message someone sent to a person of your organization into their Hivenod Inbox (a Teams or Slack message, a mail, a Jira, GitLab or GitHub mention, …), with its full text. It joins its thread (same source thread, or the thread you name: the same ask on another channel), or starts a new one. A message from them reopens a waiting or closed thread. The same message is never added twice. Set fromMember when it is the person's own reply that you spotted (they answered outside Hivenod). Next: file a new thread with subject_assign (after subject_list), then investigate it (thread_read, inbox_note, inbox_ask) and propose what should come of it (outcome_propose). Nothing is carried out before the person approves.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "description": "Where it came from, one lowercase word: teams, mail, gitlab, jira, github, telegram, slack, …"
+            },
+            "sender": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "The sender's name"
+                },
+                "handle": {
+                  "description": "Their address or handle in that source",
+                  "type": "string",
+                  "maxLength": 320
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "description": "Who sent it"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50000,
+              "description": "The full text of the message"
+            },
+            "threadRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "description": "The thread or conversation it belongs to, in the source (what you reply to)"
+            },
+            "receivedAt": {
+              "type": "string",
+              "minLength": 1,
+              "description": "When it was sent, ISO 8601 (2026-10-28T09:00:00Z)"
+            },
+            "messageId": {
+              "description": "The message's own id in the source; defaults to receivedAt",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "permalink": {
+              "description": "An http(s) link to the message",
+              "type": "string",
+              "maxLength": 2048
+            },
+            "replyRef": {
+              "description": "Whatever you need later to reply in the same place (ids, channel, …)",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "member": {
+              "description": "User id of the person it is for; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "attachments": {
+              "description": "Links to its files",
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "url": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "name",
+                  "url"
+                ]
+              }
+            },
+            "thread": {
+              "description": "An existing thread it belongs to (the same ask on another channel)",
+              "type": "string",
+              "minLength": 1
+            },
+            "fromMember": {
+              "description": "The person's own reply (it does not reopen the thread)",
+              "type": "boolean"
+            },
+            "title": {
+              "description": "A new thread's title; defaults to its first line",
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "source",
+            "sender",
+            "text",
+            "threadRef",
+            "receivedAt"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_list",
+        "description": "What agents have to do in the Inbox of your organization: toWork (threads to investigate), toCarryOut (outcomes their person approved that you carry out: do exactly what the approved fields say, then outcome_done) and toWake (snoozed threads whose date has come: thread_wake).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "thread_read",
+        "description": "Read one Inbox thread in full: its state, the messages (from every channel), the subject, the outcomes proposed and what the person decided, the notes, questions and answers, and what to do next.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            }
+          },
+          "required": [
+            "threadId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "subject_list",
+        "description": "A person's Inbox subjects: lasting, well-named topics that collect every thread about them, from any source and sender (e.g. \"Klarna refunds (M&S Payments)\"), with how many threads wait for the person and how many are open. Read them before subject_assign and reuse the one a thread belongs to; make a new one only for a new topic.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member": {
+              "description": "User id of the person; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "subject_assign",
+        "description": "File a thread under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. \"Grafana access (Pairpoint)\"). A name that matches an existing subject reuses it. Give exactly one of the two. Also moves a thread to a better subject.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "subjectId": {
+              "description": "An existing subject",
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "description": "Or the name of a new subject",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "required": [
+            "threadId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_note",
+        "description": "Add an investigation note to a thread's timeline (what you checked and found: tickets, repos, the calendar, earlier answers). The person sees it with the thread.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000
+            }
+          },
+          "required": [
+            "threadId",
+            "text"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_ask",
+        "description": "Ask the person a question about a thread when only they can answer it. The thread waits in their Needs you; the answer shows in thread_read and the thread comes back for you to go on.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "question": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "threadId",
+            "question"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "outcome_propose",
+        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (the booking itself comes with the calendar). Fields: text (text: The answer, ready to send as written); slot (line: The slot, e.g. 2026-11-03 10:00-10:30 Europe/Lisbon); with (line: Who is invited).\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "reply",
+                "reply_book",
+                "no_reply",
+                "make_it_work",
+                "handover",
+                "snooze",
+                "nudge",
+                "ignore"
+              ],
+              "description": "The outcome type"
+            },
+            "fields": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "boolean"
+                ]
+              },
+              "description": "The type's fields"
+            },
+            "note": {
+              "description": "Why you propose it, for the person",
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "threadId",
+            "type",
+            "fields"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "outcome_done",
+        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcomeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Outcome id"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "done",
+                "failed"
+              ]
+            },
+            "result": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "permalink": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "itemId": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "error": {
+                  "type": "string",
+                  "maxLength": 1000
+                }
+              }
+            }
+          },
+          "required": [
+            "outcomeId",
+            "status"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "thread_wake",
+        "description": "Wake a snoozed thread whose date has come (inbox_list toWake): it goes back to investigating.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            }
+          },
+          "required": [
+            "threadId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "release",
         "description": "Give an item you hold back to the queue without finishing it (for example after a run that ended without complete). Any agent can then claim it. Ending a run as failed already does this.",
         "inputSchema": {
@@ -1260,6 +1647,393 @@
           "required": [
             "project",
             "title"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_add",
+        "description": "Bring a message someone sent to a person of your organization into their Hivenod Inbox (a Teams or Slack message, a mail, a Jira, GitLab or GitHub mention, …), with its full text. It joins its thread (same source thread, or the thread you name: the same ask on another channel), or starts a new one. A message from them reopens a waiting or closed thread. The same message is never added twice. Set fromMember when it is the person's own reply that you spotted (they answered outside Hivenod). Next: file a new thread with subject_assign (after subject_list), then investigate it (thread_read, inbox_note, inbox_ask) and propose what should come of it (outcome_propose). Nothing is carried out before the person approves.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "description": "Where it came from, one lowercase word: teams, mail, gitlab, jira, github, telegram, slack, …"
+            },
+            "sender": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "The sender's name"
+                },
+                "handle": {
+                  "description": "Their address or handle in that source",
+                  "type": "string",
+                  "maxLength": 320
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "description": "Who sent it"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50000,
+              "description": "The full text of the message"
+            },
+            "threadRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "description": "The thread or conversation it belongs to, in the source (what you reply to)"
+            },
+            "receivedAt": {
+              "type": "string",
+              "minLength": 1,
+              "description": "When it was sent, ISO 8601 (2026-10-28T09:00:00Z)"
+            },
+            "messageId": {
+              "description": "The message's own id in the source; defaults to receivedAt",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "permalink": {
+              "description": "An http(s) link to the message",
+              "type": "string",
+              "maxLength": 2048
+            },
+            "replyRef": {
+              "description": "Whatever you need later to reply in the same place (ids, channel, …)",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "member": {
+              "description": "User id of the person it is for; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "attachments": {
+              "description": "Links to its files",
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "url": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "name",
+                  "url"
+                ]
+              }
+            },
+            "thread": {
+              "description": "An existing thread it belongs to (the same ask on another channel)",
+              "type": "string",
+              "minLength": 1
+            },
+            "fromMember": {
+              "description": "The person's own reply (it does not reopen the thread)",
+              "type": "boolean"
+            },
+            "title": {
+              "description": "A new thread's title; defaults to its first line",
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "source",
+            "sender",
+            "text",
+            "threadRef",
+            "receivedAt"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_list",
+        "description": "What agents have to do in the Inbox of your organization: toWork (threads to investigate), toCarryOut (outcomes their person approved that you carry out: do exactly what the approved fields say, then outcome_done) and toWake (snoozed threads whose date has come: thread_wake).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "thread_read",
+        "description": "Read one Inbox thread in full: its state, the messages (from every channel), the subject, the outcomes proposed and what the person decided, the notes, questions and answers, and what to do next.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            }
+          },
+          "required": [
+            "threadId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "subject_list",
+        "description": "A person's Inbox subjects: lasting, well-named topics that collect every thread about them, from any source and sender (e.g. \"Klarna refunds (M&S Payments)\"), with how many threads wait for the person and how many are open. Read them before subject_assign and reuse the one a thread belongs to; make a new one only for a new topic.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member": {
+              "description": "User id of the person; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "subject_assign",
+        "description": "File a thread under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. \"Grafana access (Pairpoint)\"). A name that matches an existing subject reuses it. Give exactly one of the two. Also moves a thread to a better subject.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "subjectId": {
+              "description": "An existing subject",
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "description": "Or the name of a new subject",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "required": [
+            "threadId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_note",
+        "description": "Add an investigation note to a thread's timeline (what you checked and found: tickets, repos, the calendar, earlier answers). The person sees it with the thread.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000
+            }
+          },
+          "required": [
+            "threadId",
+            "text"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_ask",
+        "description": "Ask the person a question about a thread when only they can answer it. The thread waits in their Needs you; the answer shows in thread_read and the thread comes back for you to go on.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "question": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "required": [
+            "threadId",
+            "question"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "outcome_propose",
+        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (the booking itself comes with the calendar). Fields: text (text: The answer, ready to send as written); slot (line: The slot, e.g. 2026-11-03 10:00-10:30 Europe/Lisbon); with (line: Who is invited).\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "reply",
+                "reply_book",
+                "no_reply",
+                "make_it_work",
+                "handover",
+                "snooze",
+                "nudge",
+                "ignore"
+              ],
+              "description": "The outcome type"
+            },
+            "fields": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "boolean"
+                ]
+              },
+              "description": "The type's fields"
+            },
+            "note": {
+              "description": "Why you propose it, for the person",
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "required": [
+            "threadId",
+            "type",
+            "fields"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "outcome_done",
+        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcomeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Outcome id"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "done",
+                "failed"
+              ]
+            },
+            "result": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "maxLength": 20000
+                },
+                "permalink": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "itemId": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "error": {
+                  "type": "string",
+                  "maxLength": 1000
+                }
+              }
+            }
+          },
+          "required": [
+            "outcomeId",
+            "status"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "thread_wake",
+        "description": "Wake a snoozed thread whose date has come (inbox_list toWake): it goes back to investigating.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            }
+          },
+          "required": [
+            "threadId"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },

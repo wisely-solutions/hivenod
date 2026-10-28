@@ -121,6 +121,10 @@ users/{uid}/busy/{wid}_{id}          workspaceId, start, end, deleted, updatedAt
 agentHomes/{agentUid}                workspaceId   (written once by the agent; lets rules outside its org know it)
 ```
 
+**Inbox** (item 4PEHrOW5IfXBQWgOK9wo): `workspaces/{wid}/inboxSubjects`, `inboxThreads`,
+`inboxMessages`, `inboxOutcomes` and `inboxEvents` (its own create-only tracking log), private to
+the member each belongs to and the organization's agents. See [INBOX.md](INBOX.md).
+
 ### 5.1 Security rules (the backend)
 
 The rules in `firestore.rules` are the backend. Rules tests must cover every allow and deny below.
