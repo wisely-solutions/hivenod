@@ -112,16 +112,37 @@ test('ten projects: spend is right from the first number on', async ({ page }, i
   test.setTimeout(120_000);
   await seedOrg(page);
   const expected = `€${(PROJECTS * RUNS * COST).toFixed(2)}`;
+  // The page that seeded the org was open while the data arrived, so its sidebar stored every
+  // in-between sum as "the last spend I knew" (hive.spend.last.*), and the next load shows that
+  // until the server confirms. That is the design for a returning user, but not what this test is
+  // about: let the open page settle on the final sum, then forget the remembered values.
+  await expect(page.getByText(/^Spend this month /).first()).toHaveText(
+    `Spend this month ${expected}`,
+    { timeout: 30_000 },
+  );
+  await page.evaluate(() => {
+    for (const k of Object.keys(localStorage))
+      if (k.startsWith('hive.spend.last.')) localStorage.removeItem(k);
+  });
   for (const path of ['/projects', '/agents']) {
+    // `CLS_THROTTLE=6` reruns the load under CPU throttling (the CI runner is that slow).
+    const rate = Number(process.env.CLS_THROTTLE ?? 0);
+    if (rate > 1 && path === '/projects') {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate });
+    }
     // Records every spend text the sidebar shows while the page loads.
     await page.goto(path);
     const seen = new Set<string>();
     const spend = page.getByText(/^Spend this month /).first();
-    const until = Date.now() + 4000;
+    // Watches until the final sum has shown (a throttled CPU can take many seconds), then 1.5 s more.
+    const deadline = Date.now() + 30_000;
+    let until = deadline;
     while (Date.now() < until) {
       const t = await spend.textContent().catch(() => null);
       const m = t?.match(/^Spend this month (\S+)$/);
       if (m) seen.add(m[1]!);
+      if (m?.[1] === expected && until === deadline) until = Math.min(deadline, Date.now() + 1500);
       await page.waitForTimeout(25);
     }
     expect([...seen].filter((v) => v !== '€…')).toEqual([expected]);
