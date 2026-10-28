@@ -4,7 +4,13 @@
  */
 import { z } from 'zod';
 import { OUTCOME_TYPES, outcomeGuide } from '@hive/shared';
-import { deleteEvents, freeTime, upsertEvents, type CalendarEventArg } from './calendar';
+import {
+  deleteEvents,
+  freeTime,
+  syncEvents,
+  upsertEvents,
+  type CalendarEventArg,
+} from './calendar';
 import type { HiveClient } from './client';
 
 export interface ToolDef<S extends z.ZodRawShape = z.ZodRawShape> {
@@ -703,6 +709,44 @@ export const TOOLS: ToolDef[] = [
         from: a.from as string,
         to: a.to as string,
         minMinutes: a.minMinutes as number | undefined,
+      }),
+  }),
+  tool({
+    name: 'calendar_sync',
+    description:
+      "Sync a calendar you read yourself (for example the member's Google Calendar, through your own Google access) into their calendar in this organization. Pass the events exactly as the Google Calendar API lists them (single events, recurring ones expanded) for the window from..to (default: a day ago to 30 days ahead): new and changed events are saved, cancelled, declined and free ones are removed, and in a full sync an event no longer listed in the window is removed too. With incremental, pass only the changes since your last sync token: nothing is removed for being absent. Echoes nextSyncToken for your next incremental sync. For large calendars use `hivenod calendar sync <file>` instead.",
+    input: {
+      events: z
+        .array(z.record(z.string(), z.unknown()))
+        .max(2500)
+        .describe(
+          'Google Calendar API events: id, status, summary, start, end, attendees, transparency, eventType',
+        ),
+      source: z.string().max(40).optional().describe('Where they come from; default google'),
+      member: z
+        .string()
+        .optional()
+        .describe(
+          'Whose calendar: uid, email or name (may be left out when the organization has one member)',
+        ),
+      from: z.string().optional().describe('Window start, RFC 3339; default a day ago'),
+      to: z.string().optional().describe('Window end, RFC 3339; default 30 days ahead'),
+      incremental: z.boolean().optional().describe('Only changes since the last sync token'),
+      busyOnly: z.boolean().optional().describe('Keep only the times (no titles or attendees)'),
+      nextSyncToken: z.string().max(2000).optional().describe("The source's token, echoed back"),
+    },
+    run: (c, a) =>
+      syncEvents(c.calendarDeps(), {
+        member: a.member as string | undefined,
+        source: a.source as string | undefined,
+        from: a.from as string | undefined,
+        to: a.to as string | undefined,
+        incremental: a.incremental as boolean | undefined,
+        busyOnly: a.busyOnly as boolean | undefined,
+        feed: {
+          items: a.events as never,
+          ...(a.nextSyncToken ? { nextSyncToken: a.nextSyncToken as string } : {}),
+        },
       }),
   }),
   tool({

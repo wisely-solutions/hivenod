@@ -26,6 +26,7 @@ describe('hivenod mcp', () => {
       'attach',
       'calendar_delete',
       'calendar_free',
+      'calendar_sync',
       'calendar_upsert',
       'claim',
       'complete',

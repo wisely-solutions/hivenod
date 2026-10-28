@@ -15,7 +15,7 @@ import (
 // calendarCmd is `hivenod calendar upsert|delete|free` (Inbox item w9SAf), like the MCP tools.
 func calendarCmd(ctx context.Context, o opts, pos []string, resolve func() (hive.Config, error), stdin io.Reader, say func(string), fail func(error) int, stderr io.Writer) int {
 	usage := func() int {
-		fmt.Fprintln(stderr, "hivenod: Usage: hivenod calendar upsert <events.json|-> [--member M] | delete <id>... | delete --source S [--member M] <sourceEventId>... | free --from T --to T [--member M] [--min N]")
+		fmt.Fprintln(stderr, "hivenod: Usage: hivenod calendar upsert <events.json|-> [--member M] | delete <id>... | delete --source S [--member M] <sourceEventId>... | free --from T --to T [--member M] [--min N] | sync <events.json|-> [--source S] [--member M] [--from T --to T] [--incremental] [--busy-only] [--state FILE]")
 		return 2
 	}
 	if len(pos) < 2 {
@@ -23,7 +23,25 @@ func calendarCmd(ctx context.Context, o opts, pos []string, resolve func() (hive
 	}
 	var events []hive.CalendarEventArg
 	var min *float64
+	var feed hive.SyncFeed
 	switch pos[1] {
+	case "sync":
+		if len(pos) < 3 {
+			return usage()
+		}
+		var b []byte
+		var err error
+		if pos[2] == "-" {
+			b, err = io.ReadAll(stdin)
+		} else {
+			b, err = os.ReadFile(pos[2])
+		}
+		if err != nil {
+			return fail(hive.Errf(pos[2] + ": cannot read it."))
+		}
+		if feed, err = hive.ParseFeed(b, pos[2]); err != nil {
+			return fail(err)
+		}
 	case "upsert":
 		if len(pos) < 3 {
 			return usage()
@@ -86,6 +104,25 @@ func calendarCmd(ctx context.Context, o opts, pos []string, resolve func() (hive
 		return 0
 	}
 	switch pos[1] {
+	case "sync":
+		r, err := c.CalendarSync(ctx, hive.SyncArgs{Member: o.member, Source: o.source, Incremental: o.incremental, BusyOnly: o.busyOnly, From: o.from, To: o.to, Feed: feed})
+		if err != nil {
+			return fail(err)
+		}
+		if o.state != "" {
+			if err := hive.SaveSyncState(o.state, r); err != nil {
+				return fail(err)
+			}
+		}
+		lines := []string{r.Note}
+		for _, k := range r.Skipped {
+			id := k.SourceEventID
+			if id == "" {
+				id = "(no id)"
+			}
+			lines = append(lines, "  skipped "+id+": "+k.Reason)
+		}
+		return out(r, strings.Join(lines, "\n"))
 	case "upsert":
 		r, err := c.CalendarUpsert(ctx, o.member, events)
 		if err != nil {

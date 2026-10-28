@@ -727,6 +727,79 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     expect(r.go.docs).toEqual(r.ts.docs);
   }, 120_000);
 
+  it('calendar sync (item fJnu6): a stub Google source creates, updates and deletes; busy blocks follow', async () => {
+    // A stub of what the personal agent reads from Google (Calendar API v3 events, single events).
+    const google = (id: string, h: number, over: Record<string, unknown> = {}) => ({
+      kind: 'calendar#event',
+      id,
+      status: 'confirmed',
+      summary: `Meeting ${id}`,
+      start: {
+        dateTime: `2030-01-07T${String(h).padStart(2, '0')}:00:00+01:00`,
+        timeZone: 'Europe/Lisbon',
+      },
+      end: { dateTime: `2030-01-07T${String(h + 1).padStart(2, '0')}:00:00+01:00` },
+      attendees: [{ email: 'alice@example.com', self: true, responseStatus: 'accepted' }],
+      ...over,
+    });
+    const win = { member: 'alice', from: '2030-01-06T00:00:00Z', to: '2030-02-05T00:00:00Z' };
+    const r = await both(async (call) => {
+      await call('calendar_sync', {
+        ...win,
+        events: [
+          google('a', 9),
+          google('b', 11),
+          google('c', 14),
+          google('free', 16, { transparency: 'transparent' }),
+        ],
+        nextSyncToken: 'tok-1',
+      });
+      // the same again: nothing changes
+      await call('calendar_sync', {
+        ...win,
+        events: [google('a', 9), google('b', 11), google('c', 14)],
+      });
+      // b moved, c deleted at the source (no longer listed), d new and declined
+      await call('calendar_sync', {
+        ...win,
+        events: [
+          google('a', 9),
+          google('b', 12),
+          google('d', 15, {
+            attendees: [{ email: 'alice@example.com', self: true, responseStatus: 'declined' }],
+          }),
+        ],
+      });
+      // incremental: a cancelled, nothing removed for being absent
+      await call('calendar_sync', {
+        ...win,
+        incremental: true,
+        events: [{ id: 'a', status: 'cancelled' }],
+        nextSyncToken: 'tok-2',
+      });
+      await call('calendar_free', {
+        member: 'alice',
+        from: '2030-01-07T07:00:00Z',
+        to: '2030-01-07T13:00:00Z',
+      });
+      await call('calendar_sync', { ...win, to: '2030-06-01T00:00:00Z', events: [] });
+    });
+    const outs = r.ts.calls.map((c) => (c as { out: Record<string, unknown> }).out);
+    expect(outs.slice(0, 4).map((o) => [o.upserted, o.deleted, o.unchanged])).toEqual([
+      [3, 0, 0],
+      [0, 0, 3],
+      [1, 1, 1],
+      [0, 1, 0],
+    ]);
+    expect(outs[0]).toMatchObject({ nextSyncToken: 'tok-1', mode: 'full', source: 'google' });
+    expect(outs[3]).toMatchObject({ nextSyncToken: 'tok-2', mode: 'incremental' });
+    // Only b is busy now (11:00 to 12:00 UTC): free before and after it.
+    expect(outs[4]).toMatchObject({ busyBlocks: 1 });
+    expect(JSON.stringify(outs[5])).toContain('62 days');
+    expect(r.go.calls).toEqual(r.ts.calls);
+    expect(r.go.docs).toEqual(r.ts.docs);
+  }, 120_000);
+
   it('calendar (item w9SAf): upsert, free across organizations, delete, errors', async () => {
     const r = await both(async (call) => {
       await put({
