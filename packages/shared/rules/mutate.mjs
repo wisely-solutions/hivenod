@@ -339,39 +339,74 @@ const MUTATIONS = [
       ],
     ],
   ],
-  ['inbox: Send approves another text', [['&& d.approved.reply == r.draft.reply', '']]],
   [
-    'inbox: any agent marks sent',
+    'inbox: agents decide outcomes',
     [
       [
-        "r.status == 'sending' && r.fetchedBy == me() && d.status == 'done'",
-        "r.status == 'sending' && d.status == 'done'",
+        '((inboxOwner(wid, resource.data) && inboxDecide(',
+        '(((inboxOwner(wid, resource.data) || isActiveAgent(wid)) && inboxDecide(',
+      ],
+      [
+        "'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed',",
+        "'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.approved',",
       ],
     ],
   ],
   [
-    'inbox: sent without Send',
+    'inbox: any agent carries out',
+    [
+      ["return r.state == 'approved' && r.executor == me()", "return r.state == 'approved'"],
+      ['&& inboxOutcomeOf(wid, d.lastEventId).executor == me()', ''],
+    ],
+  ],
+  [
+    'inbox: carried out before approval',
     [
       [
-        "r.status == 'sending' && r.fetchedBy == me() && d.status == 'done'",
-        "r.status in ['sending', 'yourCall'] && r.fetchedBy == me() && d.status == 'done'",
+        "return r.state == 'approved' && r.executor == me()",
+        "return r.state in ['approved', 'proposed'] && r.executor == me()",
       ],
     ],
+  ],
+  [
+    'inbox: forged executor',
+    [['&& d.executor == (d.type in outcomeImmediate() ? null : t.fetchedBy);', ';']],
+  ],
+  [
+    'inbox: unknown outcome fields',
+    [['return f is map && f.keys().hasOnly(outcomeFieldKeys()[type])', 'return f is map']],
   ],
   [
     "inbox: another member's subject",
-    [['&& getAfter(inboxSubjectPath(wid, sid)).data.memberUid == member;', ';']],
+    [["&& getAfter(inboxDoc(wid, 'inboxSubjects', sid)).data.memberUid == member;", ';']],
   ],
   [
     'inbox: people write agent events',
     [
       [
-        "'subject.split', 'subject.itemMade'])",
-        "'subject.split', 'subject.itemMade', 'inbox.sent'])",
+        "'subject.created', 'subject.renamed', 'subject.merged', 'subject.split'])",
+        "'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'outcome.done'])",
       ],
     ],
   ],
-  ['inbox: requests created as anyone', [['&& d.fetchedBy == me()\n', '\n']]],
+  [
+    'inbox: messages as anyone',
+    [['&& d.fetchedBy == me() && d.createdAt == request.time;', '&& d.createdAt == request.time;']],
+  ],
+  [
+    'inbox: no reopen',
+    [
+      [
+        "? d.state == 'investigating' && d.waiting == null\n              : d.state == r.state",
+        '? true\n              : d.state == r.state',
+      ],
+    ],
+  ],
+  [
+    'inbox: any after-state',
+    [['return d.state == outcomeAfter()[type]', 'return d.state is string']],
+  ],
+  ['inbox: early wake', [['&& r.waiting.until <= request.time', '']]],
 ];
 
 // Fail loudly, before any run: a search text that no longer matches (the rules were refactored)

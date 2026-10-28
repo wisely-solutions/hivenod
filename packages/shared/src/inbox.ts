@@ -1,27 +1,28 @@
 /**
- * Inbox (item 4PEHrOW5IfXBQWgOK9wo, design docs/INBOX.md): incoming requests that agents bring
- * in for a member (Teams, mail, Jira mentions, …), filed under lasting named subjects, drafted by
- * an agent and sent only after the member's Send.
+ * Inbox (item 4PEHrOW5IfXBQWgOK9wo, docs/INBOX.md): what people send a member (Teams, mail, Jira
+ * mentions, …), brought in by the organization's agents, in three levels:
  *
- * Records (separate from items and projects):
- *   workspaces/{wid}/inboxRequests/{rid}   one input waiting for an answer
- *   workspaces/{wid}/inboxSubjects/{sid}   a lasting topic that collects requests
- *   workspaces/{wid}/inboxEvents/{eid}     the tracking log (create-only), also the timeline
+ *   workspaces/{wid}/inboxSubjects/{sid}   a lasting, well-named topic (owned by the member)
+ *   workspaces/{wid}/inboxThreads/{tid}    one conversation in a subject: its state and outcomes
+ *   workspaces/{wid}/inboxMessages/{mid}   each input (or the member's own reply), immutable
+ *   workspaces/{wid}/inboxOutcomes/{oid}   what comes of a thread (./outcomes.ts), proposed by an
+ *                                          agent, approved or rejected by the member, then done
+ *   workspaces/{wid}/inboxEvents/{eid}     the tracking log (create-only) and the timeline
  *
- * Privacy (firestore.rules): a request, its subject and its events are readable only by the
- * member they belong to (`memberUid`) and by the organization's non-revoked agents; only that
- * member edits, sends or ignores. The workspace-wide `events` collection is never used for
- * inbox writes, so other members never see them.
+ * Thread states: investigating (an agent digs in) · needsYou (it asked the member) · yourCall
+ * (outcomes proposed) · waiting (on them, a third party, an item or a date) · done · ignored. A
+ * new message from them reopens a waiting, done or ignored thread.
  *
- * Flow: new (an agent brought it in) → drafting (filed under a subject) → yourCall (draft
- * written) → sending (the member pressed Send) → done (the fetching agent posted it), or
- * ignored. Nothing reaches `sending` without the member: agents can never write `approved`.
+ * Privacy (firestore.rules): all of it is readable only by the member it belongs to
+ * (`memberUid`) and by the organization's non-revoked agents; only that member decides.
+ * Nothing is carried out without the member's approval: agents never write an approval.
  *
  * Like ./actions, each action is ONE batch: the change plus exactly one inbox event.
  */
 import { z } from 'zod';
 import {
   ActionError,
+  arrayUnion,
   nid,
   requireAgent,
   requireHuman,
@@ -30,38 +31,65 @@ import {
   type ActionPlan,
   type WriteOp,
 } from './actions';
+import {
+  cleanOutcomeFields,
+  OUTCOME_TYPES,
+  OutcomeFieldError,
+  outcomeType,
+  type WaitingOn,
+} from './outcomes';
 import { timestamp } from './schema';
 
 // ---------- shapes ----------
 
-export const INBOX_STATUSES = [
-  'new',
-  'drafting',
+export const THREAD_STATES = [
+  'investigating',
+  'needsYou',
   'yourCall',
-  'sending',
+  'waiting',
   'done',
   'ignored',
 ] as const;
-export type InboxStatus = (typeof INBOX_STATUSES)[number];
-/** Statuses an agent may still work (file, draft). */
-export const INBOX_OPEN: readonly InboxStatus[] = ['new', 'drafting', 'yourCall'];
-/** Statuses that count as "waiting for the member". */
-export const INBOX_WAITING: readonly InboxStatus[] = ['yourCall'];
+export type ThreadState = (typeof THREAD_STATES)[number];
+/** States that wait for the member. */
+export const THREAD_FOR_MEMBER: readonly ThreadState[] = ['needsYou', 'yourCall'];
+/** Open threads (counted in a subject). */
+export const THREAD_OPEN: readonly ThreadState[] = [
+  'investigating',
+  'needsYou',
+  'yourCall',
+  'waiting',
+];
+/** A new message from them reopens these. */
+const REOPENS: readonly ThreadState[] = ['waiting', 'done', 'ignored'];
+
+export const OUTCOME_STATES = ['proposed', 'approved', 'rejected', 'done', 'failed'] as const;
+export type OutcomeState = (typeof OUTCOME_STATES)[number];
 
 export const INBOX_EVENT_TYPES = [
+  // agents
   'inbox.added',
-  'inbox.filed',
-  'inbox.drafted',
-  'inbox.edited',
-  'inbox.approved',
-  'inbox.ignored',
-  'inbox.restored',
-  'inbox.sent',
+  'thread.filed',
+  'thread.note',
+  'thread.asked',
+  'thread.woke',
+  'outcome.proposed',
+  'outcome.done',
+  'outcome.failed',
+  // agents and the member
+  'thread.titled',
+  // the member
+  'thread.answered',
+  'thread.ignored',
+  'thread.closed',
+  'thread.restored',
+  'thread.moved',
+  'outcome.approved',
+  'outcome.rejected',
   'subject.created',
   'subject.renamed',
   'subject.merged',
   'subject.split',
-  'subject.itemMade',
 ] as const;
 export type InboxEventType = (typeof INBOX_EVENT_TYPES)[number];
 
@@ -79,82 +107,116 @@ export const INBOX_LIMITS = {
   replyRef: 2000,
   attachments: 20,
   attachmentName: 200,
-  reply: 20_000,
-  actions: 10,
-  action: 500,
   subjectName: 120,
+  title: 200,
+  note: 8000,
+  question: 4000,
+  answer: 4000,
+  outcomeNote: 2000,
+  reason: 1000,
+  resultText: 20_000,
+  refs: 50,
 } as const;
 
-const httpUrl = (max: number) =>
-  z
-    .string()
-    .max(max)
-    .regex(/^https?:\/\/\S+$/);
-
-export const inboxSenderSchema = z.object({
-  name: z.string().min(1).max(INBOX_LIMITS.senderName),
-  handle: z.string().max(INBOX_LIMITS.senderHandle).nullable(),
-});
-export const inboxAttachmentSchema = z.object({
-  name: z.string().min(1).max(INBOX_LIMITS.attachmentName),
-  url: httpUrl(2048),
-});
-export const inboxDraftSchema = z.object({
-  reply: z.string().min(1).max(INBOX_LIMITS.reply),
-  actions: z.array(z.string().min(1).max(INBOX_LIMITS.action)).max(INBOX_LIMITS.actions),
-  by: z.object({ type: z.enum(['human', 'agent']), id: z.string() }),
-  at: timestamp,
-});
-export const inboxApprovedSchema = z.object({
-  reply: z.string().min(1).max(INBOX_LIMITS.reply),
-  actions: z.array(z.string()).max(INBOX_LIMITS.actions),
-  byUid: z.string(),
-  at: timestamp,
-});
-export const inboxSentSchema = z.object({
-  permalink: z.string().max(INBOX_LIMITS.permalink).nullable(),
-  by: z.string(),
-  at: timestamp,
-});
-
-export const inboxRequestSchema = z.object({
-  memberUid: z.string(),
-  subjectId: z.string().nullable(),
-  status: z.enum(INBOX_STATUSES),
-  source: z.string().regex(SOURCE_RE),
-  sender: inboxSenderSchema,
-  text: z.string().min(1).max(INBOX_LIMITS.text),
-  threadRef: z.string().min(1).max(INBOX_LIMITS.threadRef),
-  messageId: z.string().min(1).max(INBOX_LIMITS.messageId),
-  permalink: z.string().max(INBOX_LIMITS.permalink).nullable(),
-  replyRef: z.string().max(INBOX_LIMITS.replyRef).nullable(),
-  receivedAt: timestamp,
-  attachments: z.array(inboxAttachmentSchema).max(INBOX_LIMITS.attachments),
-  draft: inboxDraftSchema.nullable(),
-  approved: inboxApprovedSchema.nullable(),
-  sent: inboxSentSchema.nullable(),
-  /** The agent that brought it in; it is the one that posts the reply. */
-  fetchedBy: z.string(),
-  createdAt: timestamp,
-  updatedAt: timestamp,
-  lastEventId: z.string(),
-});
-export type InboxRequest = z.infer<typeof inboxRequestSchema>;
+const by = z.object({ type: z.enum(['human', 'agent']), id: z.string() });
 
 export const inboxSubjectSchema = z.object({
   memberUid: z.string(),
   name: z.string().min(1).max(INBOX_LIMITS.subjectName),
-  createdBy: z.object({ type: z.enum(['human', 'agent']), id: z.string() }),
+  createdBy: by,
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
 });
 export type InboxSubject = z.infer<typeof inboxSubjectSchema>;
 
+export const inboxThreadSchema = z.object({
+  memberUid: z.string(),
+  subjectId: z.string().nullable(),
+  state: z.enum(THREAD_STATES),
+  waiting: z
+    .object({ on: z.enum(['them', 'thirdParty', 'date', 'item']), until: timestamp.nullable() })
+    .nullable(),
+  question: z
+    .object({
+      text: z.string(),
+      by: z.string(),
+      at: timestamp,
+      answer: z.string().nullable(),
+      answeredAt: timestamp.nullable(),
+    })
+    .nullable(),
+  title: z.string().max(INBOX_LIMITS.title),
+  /** Hashes of member + source + threadRef of the source threads it gathers. */
+  refs: z.array(z.string()).max(INBOX_LIMITS.refs),
+  lastMessageAt: timestamp,
+  /** The agent that brought it in: it posts replies (it has the channel access). */
+  fetchedBy: z.string(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+  lastEventId: z.string(),
+});
+export type InboxThread = z.infer<typeof inboxThreadSchema>;
+
+export const inboxMessageSchema = z.object({
+  memberUid: z.string(),
+  threadId: z.string(),
+  /** in: from them; out: the member's own reply, seen by the agent (answered outside Hivenod). */
+  direction: z.enum(['in', 'out']),
+  source: z.string().regex(SOURCE_RE),
+  sender: z.object({ name: z.string(), handle: z.string().nullable() }),
+  text: z.string(),
+  threadRef: z.string(),
+  messageId: z.string(),
+  permalink: z.string().nullable(),
+  replyRef: z.string().nullable(),
+  receivedAt: timestamp,
+  attachments: z.array(z.object({ name: z.string(), url: z.string() })),
+  fetchedBy: z.string(),
+  createdAt: timestamp,
+  lastEventId: z.string(),
+});
+export type InboxMessage = z.infer<typeof inboxMessageSchema>;
+
+export const inboxOutcomeSchema = z.object({
+  memberUid: z.string(),
+  threadId: z.string(),
+  type: z.string(),
+  fields: z.record(z.string(), z.union([z.string(), z.boolean()])),
+  state: z.enum(OUTCOME_STATES),
+  /** The agent's why, for the member. */
+  note: z.string().max(INBOX_LIMITS.outcomeNote),
+  proposedBy: z.string(),
+  /** The agent that carries it out; null when it takes effect on approval. */
+  executor: z.string().nullable(),
+  decision: z
+    .object({
+      byUid: z.string(),
+      at: timestamp,
+      edited: z.boolean(),
+      reason: z.string().nullable(),
+    })
+    .nullable(),
+  result: z
+    .object({
+      text: z.string().nullable(),
+      permalink: z.string().nullable(),
+      itemId: z.string().nullable(),
+      error: z.string().nullable(),
+      by: z.string(),
+      at: timestamp,
+    })
+    .nullable(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+  lastEventId: z.string(),
+});
+export type InboxOutcome = z.infer<typeof inboxOutcomeSchema>;
+
 export const inboxEventSchema = z.object({
   actor: z.object({ type: z.enum(['human', 'agent']), id: z.string(), name: z.string() }),
   memberUid: z.string(),
-  requestId: z.string().nullable(),
+  threadId: z.string().nullable(),
   subjectId: z.string().nullable(),
   type: z.enum(INBOX_EVENT_TYPES),
   data: z.record(z.string(), z.unknown()),
@@ -163,44 +225,56 @@ export const inboxEventSchema = z.object({
 export type InboxEvent = z.infer<typeof inboxEventSchema>;
 
 export const inboxPaths = {
-  request: (w: string, r: string) => `workspaces/${w}/inboxRequests/${r}`,
-  requests: (w: string) => `workspaces/${w}/inboxRequests`,
   subject: (w: string, s: string) => `workspaces/${w}/inboxSubjects/${s}`,
-  subjects: (w: string) => `workspaces/${w}/inboxSubjects`,
+  thread: (w: string, t: string) => `workspaces/${w}/inboxThreads/${t}`,
+  message: (w: string, m: string) => `workspaces/${w}/inboxMessages/${m}`,
+  outcome: (w: string, o: string) => `workspaces/${w}/inboxOutcomes/${o}`,
   event: (w: string, e: string) => `workspaces/${w}/inboxEvents/${e}`,
-  events: (w: string) => `workspaces/${w}/inboxEvents`,
   /** Tombstone event id of a subject deleted by a merge. */
   deleteEventId: (subjectId: string) => `del-subject-${subjectId}`,
 } as const;
 
-/** What an action needs of a request (a listener's data). */
-export type InboxRequestState = Pick<
-  InboxRequest,
-  'memberUid' | 'subjectId' | 'status' | 'fetchedBy' | 'draft'
+/** What an action needs of a thread (a listener's data). */
+export type ThreadStateOf = Pick<
+  InboxThread,
+  'memberUid' | 'subjectId' | 'state' | 'fetchedBy' | 'refs'
+> & {
+  waiting?: { on: string; until: { toMillis(): number } | null } | null;
+  question?: InboxThread['question'];
+};
+export type OutcomeStateOf = Pick<
+  InboxOutcome,
+  'memberUid' | 'threadId' | 'type' | 'fields' | 'state' | 'executor'
 >;
 
-// ---------- dedup ----------
+// ---------- ids ----------
 
 /**
- * The deduplication key of an input: source + thread + message. Inputs with the same key are the
- * same request (agents bringing it in twice, or two agents seeing the same message). The request
- * id is `inboxRequestId(key)`: "rq" + the first 24 hex digits of SHA-256(key, UTF-8), computed by
- * the agent clients (node:crypto, Go crypto/sha256) since this module stays sync and SDK-free.
+ * Deduplication: a message is the same message when member + source + threadRef + messageId
+ * match; a source thread is the same when member + source + threadRef match. Ids are prefix +
+ * the first 24 hex digits of SHA-256 of the key (UTF-8), computed by the agent clients
+ * (node:crypto, Go crypto/sha256) since this module stays sync and SDK-free:
+ *   message id `im<h>`, thread ref `<h>`, the thread first made for a ref `it<h>`.
  */
-export function inboxRequestKey(source: string, threadRef: string, messageId: string): string {
-  return `${source}\u0000${threadRef}\u0000${messageId}`;
+export function inboxMessageKey(
+  member: string,
+  source: string,
+  threadRef: string,
+  messageId: string,
+) {
+  return [member, source, threadRef, messageId].join('\u0000');
 }
-/** The request id for a SHA-256 hex digest of the key. */
-export function inboxRequestIdFromDigest(hex: string): string {
-  return `rq${hex.slice(0, 24)}`;
+export function inboxThreadKey(member: string, source: string, threadRef: string) {
+  return [member, source, threadRef].join('\u0000');
 }
+export const digest24 = (hex: string) => hex.slice(0, 24);
 
 // ---------- plan ----------
 
 export function inboxPlan(
   ctx: ActionContext,
   type: InboxEventType,
-  scope: { memberUid: string; requestId?: string | null; subjectId?: string | null },
+  scope: { memberUid: string; threadId?: string | null; subjectId?: string | null },
   data: Record<string, unknown>,
   build: (eventId: string) => WriteOp[],
   eventId: string = nid(ctx),
@@ -211,7 +285,7 @@ export function inboxPlan(
     data: {
       actor: { type: ctx.actor.type, id: ctx.actor.id, name: ctx.actor.name },
       memberUid: scope.memberUid,
-      requestId: scope.requestId ?? null,
+      threadId: scope.threadId ?? null,
       subjectId: scope.subjectId ?? null,
       type,
       data,
@@ -224,53 +298,49 @@ export function inboxPlan(
 // ---------- checks ----------
 
 const tooLong = (what: string, max: number) => `${what} is at most ${max} characters.`;
-function len(s: string): number {
-  return s.length;
-}
+const LINK = /^https?:\/\/\S+$/;
 function need(cond: boolean, msg: string) {
   if (!cond) throw new ActionError(msg);
 }
-function requireOwner(ctx: ActionContext, r: InboxRequestState) {
+function owner(ctx: ActionContext, member: string) {
   requireHuman(ctx);
-  need(r.memberUid === ctx.actor.id, 'Only the person this request is for can do this.');
+  need(member === ctx.actor.id, 'Only the person this is for can do this.');
 }
-function cleanSubjectName(name: string): string {
+function cleanText(what: string, v: string, max: number): string {
+  const t = v.trim();
+  need(t.length > 0, `${what} is empty.`);
+  need(t.length <= max, tooLong(what, max));
+  return t;
+}
+export function cleanSubjectName(name: string): string {
   const n = name.trim().replace(/\s+/g, ' ');
   need(n.length > 0, 'A subject needs a name.');
-  need(len(n) <= INBOX_LIMITS.subjectName, tooLong('A subject name', INBOX_LIMITS.subjectName));
+  need(n.length <= INBOX_LIMITS.subjectName, tooLong('A subject name', INBOX_LIMITS.subjectName));
   return n;
 }
-function cleanReply(reply: string): string {
-  const r = reply.trim();
-  need(r.length > 0, 'The reply is empty.');
-  need(len(r) <= INBOX_LIMITS.reply, tooLong('A reply', INBOX_LIMITS.reply));
-  return r;
+/** A thread's title from its first message: the first non-empty line, at most 120 characters. */
+export function titleFrom(text: string): string {
+  const first = text.split('\n').find((l) => l.trim() !== '') ?? '';
+  return first.trim().replace(/\s+/g, ' ').slice(0, 120);
 }
-function cleanActions(actions: readonly string[]): string[] {
-  need(actions.length <= INBOX_LIMITS.actions, `At most ${INBOX_LIMITS.actions} actions.`);
-  return actions.map((a) => {
-    const t = a.trim();
-    need(
-      t.length > 0 && len(t) <= INBOX_LIMITS.action,
-      `An action is 1 to ${INBOX_LIMITS.action} characters.`,
-    );
-    return t;
-  });
+function liveThread(t: ThreadStateOf) {
+  need(t.state !== 'ignored', 'This thread was ignored: bring it back first.');
 }
-const OPEN_MSG: Record<InboxStatus, string> = {
-  new: '',
-  drafting: '',
-  yourCall: '',
-  sending: 'This request is being sent already.',
-  done: 'This request is done: it was sent.',
-  ignored: 'This request was ignored.',
-};
+const upd = (path: string, data: Record<string, unknown>, eventId: string): WriteOp => ({
+  kind: 'update',
+  path,
+  data: { ...data, updatedAt: SERVER_TIME, lastEventId: eventId },
+});
 
 // ---------- agents ----------
 
 export interface InboxAddInput {
-  requestId: string;
+  /** `im<h>` of the message key. */
+  messageDocId: string;
+  /** `<h>` of the thread key. */
+  ref: string;
   memberUid: string;
+  direction?: 'in' | 'out';
   source: string;
   sender: { name: string; handle?: string | null };
   text: string;
@@ -280,39 +350,51 @@ export interface InboxAddInput {
   replyRef?: string | null;
   receivedAt: Date;
   attachments?: readonly { name: string; url: string }[];
+  /** The thread it joins (found by ref, or named by the agent); absent = a new thread. */
+  thread?: { threadId: string; state: ThreadStateOf } | null;
+  /** The new thread's id (default `it<ref>`) and title (default from the text). */
+  newThreadId?: string;
+  title?: string;
 }
 
-/** An agent brings in a request it saw (inbox_add). It starts `new`, in no subject yet. */
-export function addInboxRequest(ctx: ActionContext, input: InboxAddInput): ActionPlan {
+/**
+ * An agent brings a message in (inbox_add): into the thread it belongs to (which a message from
+ * them reopens), or into a new thread that starts `investigating`, in no subject yet.
+ */
+export function addInboxMessage(
+  ctx: ActionContext,
+  input: InboxAddInput,
+): ActionPlan & { threadId: string; newThread: boolean; state: ThreadState } {
   requireAgent(ctx);
   const L = INBOX_LIMITS;
+  const direction = input.direction ?? 'in';
   need(SOURCE_RE.test(input.source), 'The source is one lowercase word, like teams, mail or jira.');
   const name = input.sender.name.trim();
   need(name.length > 0, 'Say who sent it (sender name).');
-  need(len(name) <= L.senderName, tooLong('The sender name', L.senderName));
+  need(name.length <= L.senderName, tooLong('The sender name', L.senderName));
   const handle = input.sender.handle?.trim() || null;
   need(
-    handle === null || len(handle) <= L.senderHandle,
+    handle === null || handle.length <= L.senderHandle,
     tooLong('The sender handle', L.senderHandle),
   );
-  need(input.text.trim().length > 0, 'The request has no text.');
-  need(len(input.text) <= L.text, tooLong('The text', L.text));
+  need(input.text.trim().length > 0, 'The message has no text.');
+  need(input.text.length <= L.text, tooLong('The text', L.text));
   need(
-    input.threadRef.length > 0 && len(input.threadRef) <= L.threadRef,
+    input.threadRef.length > 0 && input.threadRef.length <= L.threadRef,
     `The thread reference is 1 to ${L.threadRef} characters.`,
   );
   need(
-    input.messageId.length > 0 && len(input.messageId) <= L.messageId,
+    input.messageId.length > 0 && input.messageId.length <= L.messageId,
     `The message id is 1 to ${L.messageId} characters.`,
   );
   const permalink = input.permalink?.trim() || null;
   need(
-    permalink === null || (len(permalink) <= L.permalink && /^https?:\/\/\S+$/.test(permalink)),
+    permalink === null || (permalink.length <= L.permalink && LINK.test(permalink)),
     'The permalink is an http(s) link.',
   );
   const replyRef = input.replyRef?.trim() || null;
   need(
-    replyRef === null || len(replyRef) <= L.replyRef,
+    replyRef === null || replyRef.length <= L.replyRef,
     tooLong('The reply reference', L.replyRef),
   );
   need(!Number.isNaN(input.receivedAt.getTime()), 'receivedAt is not a valid time.');
@@ -324,25 +406,47 @@ export function addInboxRequest(ctx: ActionContext, input: InboxAddInput): Actio
   for (const a of attachments)
     need(
       a.name.length > 0 &&
-        len(a.name) <= L.attachmentName &&
-        len(a.url) <= 2048 &&
-        /^https?:\/\/\S+$/.test(a.url),
+        a.name.length <= L.attachmentName &&
+        a.url.length <= 2048 &&
+        LINK.test(a.url),
       'Each attachment is a name and an http(s) link.',
     );
-  const rid = input.requestId;
-  return inboxPlan(
+  const existing = input.thread ?? null;
+  if (existing && !existing.state.refs.includes(input.ref))
+    need(existing.state.refs.length < L.refs, `A thread gathers at most ${L.refs} source threads.`);
+  const memberUid = existing?.state.memberUid ?? input.memberUid;
+  need(memberUid === input.memberUid, 'That thread is for someone else.');
+  const threadId = existing?.threadId ?? input.newThreadId ?? `it${input.ref}`;
+  const title = existing
+    ? null
+    : (input.title?.trim().replace(/\s+/g, ' ') || titleFrom(input.text)).slice(0, L.title);
+  const before = existing?.state.state ?? null;
+  const state: ThreadState =
+    before === null
+      ? 'investigating'
+      : direction === 'in' && REOPENS.includes(before)
+        ? 'investigating'
+        : before;
+  const p = inboxPlan(
     ctx,
     'inbox.added',
-    { memberUid: input.memberUid, requestId: rid },
-    { source: input.source, sender: name },
+    { memberUid, threadId, subjectId: existing?.state.subjectId ?? null },
+    {
+      messageDocId: input.messageDocId,
+      source: input.source,
+      sender: name,
+      direction,
+      newThread: !existing,
+      ...(existing && state !== before ? { reopened: true } : {}),
+    },
     (eventId) => [
       {
         kind: 'set',
-        path: inboxPaths.request(ctx.workspaceId, rid),
+        path: inboxPaths.message(ctx.workspaceId, input.messageDocId),
         data: {
-          memberUid: input.memberUid,
-          subjectId: null,
-          status: 'new',
+          memberUid,
+          threadId,
+          direction,
           source: input.source,
           sender: { name, handle },
           text: input.text,
@@ -352,37 +456,51 @@ export function addInboxRequest(ctx: ActionContext, input: InboxAddInput): Actio
           replyRef,
           receivedAt: input.receivedAt,
           attachments,
-          draft: null,
-          approved: null,
-          sent: null,
           fetchedBy: ctx.actor.id,
           createdAt: SERVER_TIME,
-          updatedAt: SERVER_TIME,
           lastEventId: eventId,
         },
       },
+      existing
+        ? upd(
+            inboxPaths.thread(ctx.workspaceId, threadId),
+            {
+              ...(existing.state.refs.includes(input.ref) ? {} : { refs: arrayUnion(input.ref) }),
+              lastMessageAt: SERVER_TIME,
+              ...(state !== before ? { state, waiting: null } : {}),
+            },
+            eventId,
+          )
+        : {
+            kind: 'set',
+            path: inboxPaths.thread(ctx.workspaceId, threadId),
+            data: {
+              memberUid,
+              subjectId: null,
+              state,
+              waiting: null,
+              question: null,
+              title,
+              refs: [input.ref],
+              lastMessageAt: SERVER_TIME,
+              fetchedBy: ctx.actor.id,
+              createdAt: SERVER_TIME,
+              updatedAt: SERVER_TIME,
+              lastEventId: eventId,
+            },
+          },
     ],
   );
+  return { ...p, threadId, newThread: !existing, state };
 }
 
-/**
- * Files a request under a subject (subject_assign): an existing one of the same member, or a new
- * one named here. A new request moves on to `drafting`.
- */
+/** Files a thread under a subject of its member: an existing one, or a new one named here. */
 export function assignSubject(
   ctx: ActionContext,
-  input: {
-    requestId: string;
-    request: InboxRequestState;
-    /** An existing subject of the request's member. */
-    subjectId?: string;
-    /** Or a new subject with this name. */
-    newName?: string;
-  },
+  input: { threadId: string; thread: ThreadStateOf; subjectId?: string; newName?: string },
 ): ActionPlan & { subjectId: string; created: boolean } {
   requireAgent(ctx);
-  const r = input.request;
-  need(INBOX_OPEN.includes(r.status), OPEN_MSG[r.status]);
+  const t = input.thread;
   need(
     (input.subjectId === undefined) !== (input.newName === undefined),
     'Give either an existing subject id or a new subject name.',
@@ -390,12 +508,11 @@ export function assignSubject(
   const created = input.newName !== undefined;
   const name = created ? cleanSubjectName(input.newName!) : null;
   const subjectId = input.subjectId ?? nid(ctx);
-  const status = r.status === 'new' ? 'drafting' : r.status;
   const p = inboxPlan(
     ctx,
-    'inbox.filed',
-    { memberUid: r.memberUid, requestId: input.requestId, subjectId },
-    created ? { name, created: true } : { created: false },
+    'thread.filed',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId },
+    created ? { name, created: true, from: t.subjectId } : { created: false, from: t.subjectId },
     (eventId) => [
       ...(created
         ? [
@@ -403,7 +520,7 @@ export function assignSubject(
               kind: 'set' as const,
               path: inboxPaths.subject(ctx.workspaceId, subjectId),
               data: {
-                memberUid: r.memberUid,
+                memberUid: t.memberUid,
                 name,
                 createdBy: { type: ctx.actor.type, id: ctx.actor.id },
                 createdAt: SERVER_TIME,
@@ -413,209 +530,446 @@ export function assignSubject(
             },
           ]
         : []),
-      {
-        kind: 'update',
-        path: inboxPaths.request(ctx.workspaceId, input.requestId),
-        data: { subjectId, status, updatedAt: SERVER_TIME, lastEventId: eventId },
-      },
+      upd(inboxPaths.thread(ctx.workspaceId, input.threadId), { subjectId }, eventId),
     ],
   );
   return { ...p, subjectId, created };
 }
 
-/** The agent's proposed answer in the member's voice (inbox_draft): the request waits for them. */
-export function draftReply(
+/** An investigation note on the thread's timeline (inbox_note). Changes nothing else. */
+export function addThreadNote(
   ctx: ActionContext,
-  input: {
-    requestId: string;
-    request: InboxRequestState;
-    reply: string;
-    actions?: readonly string[];
-  },
+  input: { threadId: string; thread: ThreadStateOf; text: string },
 ): ActionPlan {
   requireAgent(ctx);
-  const r = input.request;
-  need(INBOX_OPEN.includes(r.status), OPEN_MSG[r.status]);
-  need(r.subjectId !== null, 'File the request under a subject first (subject_assign).');
-  const reply = cleanReply(input.reply);
-  const actions = cleanActions(input.actions ?? []);
+  const text = cleanText('The note', input.text, INBOX_LIMITS.note);
   return inboxPlan(
     ctx,
-    'inbox.drafted',
-    { memberUid: r.memberUid, requestId: input.requestId, subjectId: r.subjectId },
-    { reply, actions },
+    'thread.note',
+    {
+      memberUid: input.thread.memberUid,
+      threadId: input.threadId,
+      subjectId: input.thread.subjectId,
+    },
+    { text },
+    () => [],
+  );
+}
+
+/** The agent asks the member (inbox_ask): the thread goes to Needs you until they answer. */
+export function askMember(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf; question: string },
+): ActionPlan {
+  requireAgent(ctx);
+  const t = input.thread;
+  liveThread(t);
+  const text = cleanText('The question', input.question, INBOX_LIMITS.question);
+  return inboxPlan(
+    ctx,
+    'thread.asked',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { text },
     (eventId) => [
-      {
-        kind: 'update',
-        path: inboxPaths.request(ctx.workspaceId, input.requestId),
-        data: {
-          status: 'yourCall',
-          draft: { reply, actions, by: { type: 'agent', id: ctx.actor.id }, at: SERVER_TIME },
-          updatedAt: SERVER_TIME,
-          lastEventId: eventId,
+      upd(
+        inboxPaths.thread(ctx.workspaceId, input.threadId),
+        {
+          state: 'needsYou',
+          question: { text, by: ctx.actor.id, at: SERVER_TIME, answer: null, answeredAt: null },
         },
-      },
+        eventId,
+      ),
     ],
   );
 }
 
-/**
- * The fetching agent posted the approved reply in the source channel, as the member (inbox_sent).
- * Only after Send (`sending`), and only the agent that brought the request in.
- */
-export function markSent(
+/** The agent proposes an outcome (outcome_propose): the thread goes to Your call. */
+export function proposeOutcome(
   ctx: ActionContext,
-  input: { requestId: string; request: InboxRequestState; permalink?: string | null },
-): ActionPlan {
+  input: {
+    threadId: string;
+    thread: ThreadStateOf;
+    type: string;
+    fields: Readonly<Record<string, unknown>>;
+    note?: string;
+    outcomeId?: string;
+  },
+): ActionPlan & { outcomeId: string } {
   requireAgent(ctx);
-  const r = input.request;
-  need(
-    r.status === 'sending',
-    r.status === 'done'
-      ? OPEN_MSG.done
-      : 'Not approved: only a request its person pressed Send on can be sent.',
-  );
-  need(
-    r.fetchedBy === ctx.actor.id,
-    'Only the agent that brought this request in sends its reply.',
-  );
-  const permalink = input.permalink?.trim() || null;
-  need(
-    permalink === null ||
-      (len(permalink) <= INBOX_LIMITS.permalink && /^https?:\/\/\S+$/.test(permalink)),
-    'The permalink is an http(s) link.',
-  );
-  return inboxPlan(
+  const t = input.thread;
+  liveThread(t);
+  const type = outcomeType(input.type);
+  need(type !== null, `Unknown outcome type ${input.type}. Types: ${OUTCOME_TYPES.join(', ')}.`);
+  let fields: Record<string, string | boolean>;
+  try {
+    fields = cleanOutcomeFields(input.type, input.fields);
+  } catch (e) {
+    if (e instanceof OutcomeFieldError) throw new ActionError(e.message);
+    throw e;
+  }
+  const note = (input.note ?? '').trim();
+  need(note.length <= INBOX_LIMITS.outcomeNote, tooLong('The note', INBOX_LIMITS.outcomeNote));
+  const outcomeId = input.outcomeId ?? nid(ctx);
+  const p = inboxPlan(
     ctx,
-    'inbox.sent',
-    { memberUid: r.memberUid, requestId: input.requestId, subjectId: r.subjectId },
-    { permalink },
+    'outcome.proposed',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { outcomeId, type: input.type, fields },
     (eventId) => [
       {
-        kind: 'update',
-        path: inboxPaths.request(ctx.workspaceId, input.requestId),
+        kind: 'set',
+        path: inboxPaths.outcome(ctx.workspaceId, outcomeId),
         data: {
-          status: 'done',
-          sent: { permalink, by: ctx.actor.id, at: SERVER_TIME },
+          memberUid: t.memberUid,
+          threadId: input.threadId,
+          type: input.type,
+          fields,
+          state: 'proposed',
+          note,
+          proposedBy: ctx.actor.id,
+          executor: type!.executor === 'agent' ? t.fetchedBy : null,
+          decision: null,
+          result: null,
+          createdAt: SERVER_TIME,
           updatedAt: SERVER_TIME,
           lastEventId: eventId,
         },
       },
+      upd(
+        inboxPaths.thread(ctx.workspaceId, input.threadId),
+        { state: 'yourCall', waiting: null },
+        eventId,
+      ),
     ],
+  );
+  return { ...p, outcomeId };
+}
+
+/** The thread's state once an outcome of `type` is done. */
+export function threadAfter(
+  type: string,
+  fields: Readonly<Record<string, string | boolean>>,
+): { state: ThreadState; waiting: { on: WaitingOn; until: Date | null } | null } {
+  const t = outcomeType(type);
+  if (!t) throw new ActionError(`Unknown outcome type ${type}.`);
+  if (t.after.state !== 'waiting') return { state: t.after.state, waiting: null };
+  const f = t.untilField;
+  const until = f && typeof fields[f] === 'string' ? new Date(fields[f]) : null;
+  return { state: 'waiting', waiting: { on: t.after.waitingOn!, until } };
+}
+
+/**
+ * The executing agent reports an approved outcome (outcome_done): done (the thread moves to the
+ * type's after-state) or failed (the thread goes back to investigating).
+ */
+export function finishOutcome(
+  ctx: ActionContext,
+  input: {
+    outcomeId: string;
+    outcome: OutcomeStateOf;
+    thread: ThreadStateOf;
+    status: 'done' | 'failed';
+    result?: {
+      text?: string | null;
+      permalink?: string | null;
+      itemId?: string | null;
+      error?: string | null;
+    };
+  },
+): ActionPlan {
+  requireAgent(ctx);
+  const o = input.outcome;
+  need(
+    o.state === 'approved',
+    o.state === 'proposed'
+      ? 'Not approved: nothing is carried out before the person approves it.'
+      : `This outcome is ${o.state} already.`,
+  );
+  need(o.executor === ctx.actor.id, 'Only the agent that carries this outcome out reports it.');
+  const r = input.result ?? {};
+  const text = r.text?.trim() || null;
+  need(
+    text === null || text.length <= INBOX_LIMITS.resultText,
+    tooLong('The result', INBOX_LIMITS.resultText),
+  );
+  const permalink = r.permalink?.trim() || null;
+  need(
+    permalink === null || (permalink.length <= INBOX_LIMITS.permalink && LINK.test(permalink)),
+    'The permalink is an http(s) link.',
+  );
+  const itemId = r.itemId?.trim() || null;
+  need(itemId === null || itemId.length <= 128, 'The item id is at most 128 characters.');
+  const error = r.error?.trim() || null;
+  need(
+    error === null || error.length <= INBOX_LIMITS.reason,
+    tooLong('The error', INBOX_LIMITS.reason),
+  );
+  if (input.status === 'failed') need(error !== null, 'Say what went wrong (result.error).');
+  const after =
+    input.status === 'done'
+      ? threadAfter(o.type, o.fields)
+      : { state: 'investigating' as const, waiting: null };
+  return inboxPlan(
+    ctx,
+    input.status === 'done' ? 'outcome.done' : 'outcome.failed',
+    { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
+    { outcomeId: input.outcomeId, type: o.type, permalink, itemId, ...(error ? { error } : {}) },
+    (eventId) => [
+      upd(
+        inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
+        {
+          state: input.status,
+          result: { text, permalink, itemId, error, by: ctx.actor.id, at: SERVER_TIME },
+        },
+        eventId,
+      ),
+      upd(inboxPaths.thread(ctx.workspaceId, o.threadId), after, eventId),
+    ],
+  );
+}
+
+/** A snoozed thread whose date has come wakes up (thread_wake). */
+export function wakeThread(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf; nowMs: number },
+): ActionPlan {
+  requireAgent(ctx);
+  const t = input.thread;
+  const until = t.state === 'waiting' ? (t.waiting?.until ?? null) : null;
+  need(until !== null, 'This thread is not waiting for a date.');
+  need(until!.toMillis() <= input.nowMs, 'Not yet: it waits until its date.');
+  return inboxPlan(
+    ctx,
+    'thread.woke',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    {},
+    (eventId) => [
+      upd(
+        inboxPaths.thread(ctx.workspaceId, input.threadId),
+        { state: 'investigating', waiting: null },
+        eventId,
+      ),
+    ],
+  );
+}
+
+/** Retitles a thread (its agent or its member). */
+export function retitleThread(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf; title: string },
+): ActionPlan {
+  if (ctx.actor.type === 'human') owner(ctx, input.thread.memberUid);
+  const title = cleanText('The title', input.title.replace(/\s+/g, ' '), INBOX_LIMITS.title);
+  return inboxPlan(
+    ctx,
+    'thread.titled',
+    {
+      memberUid: input.thread.memberUid,
+      threadId: input.threadId,
+      subjectId: input.thread.subjectId,
+    },
+    { title },
+    (eventId) => [upd(inboxPaths.thread(ctx.workspaceId, input.threadId), { title }, eventId)],
   );
 }
 
 // ---------- the member ----------
 
-/** Edit: the member rewrites the draft; it stays waiting for their Send. */
-export function editDraft(
+/** The member answers the agent's question: the agent goes on investigating. */
+export function answerQuestion(
   ctx: ActionContext,
-  input: {
-    requestId: string;
-    request: InboxRequestState;
-    reply: string;
-    actions?: readonly string[];
-  },
+  input: { threadId: string; thread: ThreadStateOf; answer: string },
 ): ActionPlan {
-  const r = input.request;
-  requireOwner(ctx, r);
-  need(r.status === 'yourCall' && r.draft !== null, 'There is no draft to edit.');
-  const reply = cleanReply(input.reply);
-  const actions = cleanActions(input.actions ?? r.draft!.actions);
+  const t = input.thread;
+  owner(ctx, t.memberUid);
+  need(t.state === 'needsYou' && !!t.question, 'There is no question to answer.');
+  const answer = cleanText('The answer', input.answer, INBOX_LIMITS.answer);
   return inboxPlan(
     ctx,
-    'inbox.edited',
-    { memberUid: r.memberUid, requestId: input.requestId, subjectId: r.subjectId },
-    { reply, actions },
+    'thread.answered',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { question: t.question!.text, answer },
     (eventId) => [
-      {
-        kind: 'update',
-        path: inboxPaths.request(ctx.workspaceId, input.requestId),
-        data: {
-          draft: { reply, actions, by: { type: 'human', id: ctx.actor.id }, at: SERVER_TIME },
-          updatedAt: SERVER_TIME,
-          lastEventId: eventId,
-        },
-      },
+      upd(
+        inboxPaths.thread(ctx.workspaceId, input.threadId),
+        { state: 'investigating', 'question.answer': answer, 'question.answeredAt': SERVER_TIME },
+        eventId,
+      ),
     ],
   );
+}
+
+function sorted(f: Readonly<Record<string, unknown>>) {
+  return Object.fromEntries(Object.entries(f).sort(([a], [b]) => (a < b ? -1 : 1)));
 }
 
 /**
- * Send: the member approves the draft (as it stands, or with their last edit). The fetching agent
- * then posts exactly `approved.reply` and calls inbox_sent. The only way to `sending`.
+ * The member approves a proposed outcome, as proposed or with edited fields. An outcome that
+ * takes effect on approval (no_reply, snooze, ignore) is done at once and moves the thread.
  */
-export function sendReply(
+export function approveOutcome(
   ctx: ActionContext,
-  input: { requestId: string; request: InboxRequestState },
+  input: {
+    outcomeId: string;
+    outcome: OutcomeStateOf;
+    thread: ThreadStateOf;
+    fields?: Readonly<Record<string, unknown>>;
+  },
 ): ActionPlan {
-  const r = input.request;
-  requireOwner(ctx, r);
-  need(r.status === 'yourCall' && r.draft !== null, 'There is no draft to send yet.');
-  const { reply, actions } = r.draft!;
+  const o = input.outcome;
+  owner(ctx, o.memberUid);
+  need(o.state === 'proposed', 'Only a proposed outcome can be approved.');
+  let fields = o.fields;
+  if (input.fields) {
+    try {
+      fields = cleanOutcomeFields(o.type, input.fields);
+    } catch (e) {
+      if (e instanceof OutcomeFieldError) throw new ActionError(e.message);
+      throw e;
+    }
+  }
+  const edited = JSON.stringify(sorted(fields)) !== JSON.stringify(sorted(o.fields));
+  const immediate = outcomeType(o.type)?.executor === 'none';
   return inboxPlan(
     ctx,
-    'inbox.approved',
-    { memberUid: r.memberUid, requestId: input.requestId, subjectId: r.subjectId },
-    { reply, actions },
+    'outcome.approved',
+    { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
+    { outcomeId: input.outcomeId, type: o.type, edited, ...(edited ? { fields } : {}) },
     (eventId) => [
-      {
-        kind: 'update',
-        path: inboxPaths.request(ctx.workspaceId, input.requestId),
-        data: {
-          status: 'sending',
-          approved: { reply, actions: [...actions], byUid: ctx.actor.id, at: SERVER_TIME },
-          updatedAt: SERVER_TIME,
-          lastEventId: eventId,
+      upd(
+        inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
+        {
+          state: immediate ? 'done' : 'approved',
+          fields,
+          decision: { byUid: ctx.actor.id, at: SERVER_TIME, edited, reason: null },
         },
-      },
+        eventId,
+      ),
+      ...(immediate
+        ? [
+            upd(
+              inboxPaths.thread(ctx.workspaceId, o.threadId),
+              threadAfter(o.type, fields),
+              eventId,
+            ),
+          ]
+        : []),
     ],
   );
 }
 
-/** Ignore: no answer goes out. Undo with restoreRequest. */
-export function ignoreRequest(
+/** The member turns a proposal down; with none left, the agent investigates again. */
+export function rejectOutcome(
   ctx: ActionContext,
-  input: { requestId: string; request: InboxRequestState },
+  input: {
+    outcomeId: string;
+    outcome: OutcomeStateOf;
+    thread: ThreadStateOf;
+    reason?: string;
+    /** Other proposals of the thread still wait for the member. */
+    othersPending: boolean;
+  },
 ): ActionPlan {
-  const r = input.request;
-  requireOwner(ctx, r);
-  need(INBOX_OPEN.includes(r.status), OPEN_MSG[r.status]);
+  const o = input.outcome;
+  owner(ctx, o.memberUid);
+  need(o.state === 'proposed', 'Only a proposed outcome can be rejected.');
+  const reason = input.reason?.trim() || null;
+  need(
+    reason === null || reason.length <= INBOX_LIMITS.reason,
+    tooLong('The reason', INBOX_LIMITS.reason),
+  );
+  const back = !input.othersPending && input.thread.state === 'yourCall';
   return inboxPlan(
     ctx,
-    'inbox.ignored',
-    { memberUid: r.memberUid, requestId: input.requestId, subjectId: r.subjectId },
-    { from: r.status },
+    'outcome.rejected',
+    { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
+    { outcomeId: input.outcomeId, type: o.type, reason },
     (eventId) => [
-      {
-        kind: 'update',
-        path: inboxPaths.request(ctx.workspaceId, input.requestId),
-        data: { status: 'ignored', updatedAt: SERVER_TIME, lastEventId: eventId },
-      },
+      upd(
+        inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
+        {
+          state: 'rejected',
+          decision: { byUid: ctx.actor.id, at: SERVER_TIME, edited: false, reason },
+        },
+        eventId,
+      ),
+      ...(back
+        ? [
+            upd(
+              inboxPaths.thread(ctx.workspaceId, o.threadId),
+              { state: 'investigating', waiting: null },
+              eventId,
+            ),
+          ]
+        : []),
     ],
   );
 }
 
-/** Brings an ignored request back: to Your call with its draft, else to where an agent picks it up. */
-export function restoreRequest(
+function setThreadState(
   ctx: ActionContext,
-  input: { requestId: string; request: InboxRequestState },
-): ActionPlan {
-  const r = input.request;
-  requireOwner(ctx, r);
-  need(r.status === 'ignored', 'Only an ignored request can be brought back.');
-  const status: InboxStatus = r.draft ? 'yourCall' : r.subjectId ? 'drafting' : 'new';
+  type: 'thread.ignored' | 'thread.closed' | 'thread.restored',
+  input: { threadId: string; thread: ThreadStateOf },
+  state: ThreadState,
+) {
+  const t = input.thread;
+  owner(ctx, t.memberUid);
   return inboxPlan(
     ctx,
-    'inbox.restored',
-    { memberUid: r.memberUid, requestId: input.requestId, subjectId: r.subjectId },
-    { to: status },
+    type,
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { from: t.state },
     (eventId) => [
-      {
-        kind: 'update',
-        path: inboxPaths.request(ctx.workspaceId, input.requestId),
-        data: { status, updatedAt: SERVER_TIME, lastEventId: eventId },
-      },
+      upd(inboxPaths.thread(ctx.workspaceId, input.threadId), { state, waiting: null }, eventId),
+    ],
+  );
+}
+/** The member ignores a thread themselves. */
+export function ignoreThread(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf },
+) {
+  need(input.thread.state !== 'ignored', 'This thread is ignored already.');
+  return setThreadState(ctx, 'thread.ignored', input, 'ignored');
+}
+/** The member marks a thread done themselves (handled elsewhere). */
+export function closeThread(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf },
+) {
+  need(!['done', 'ignored'].includes(input.thread.state), 'This thread is closed already.');
+  return setThreadState(ctx, 'thread.closed', input, 'done');
+}
+/** Brings an ignored or done thread back to the agents. */
+export function restoreThread(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf },
+) {
+  need(
+    ['done', 'ignored'].includes(input.thread.state),
+    'Only a done or ignored thread can be brought back.',
+  );
+  return setThreadState(ctx, 'thread.restored', input, 'investigating');
+}
+
+/** Moves one thread to another of the member's subjects. */
+export function moveThread(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf; subjectId: string },
+): ActionPlan {
+  owner(ctx, input.thread.memberUid);
+  need(input.thread.subjectId !== input.subjectId, 'It is in that subject already.');
+  return inboxPlan(
+    ctx,
+    'thread.moved',
+    { memberUid: ctx.actor.id, threadId: input.threadId, subjectId: input.subjectId },
+    { from: input.thread.subjectId },
+    (eventId) => [
+      upd(
+        inboxPaths.thread(ctx.workspaceId, input.threadId),
+        { subjectId: input.subjectId },
+        eventId,
+      ),
     ],
   );
 }
@@ -625,33 +979,23 @@ export function renameSubject(
   ctx: ActionContext,
   input: { subjectId: string; subject: Pick<InboxSubject, 'memberUid' | 'name'>; name: string },
 ): ActionPlan {
-  requireHuman(ctx);
-  need(
-    input.subject.memberUid === ctx.actor.id,
-    'Only the person this subject is for can rename it.',
-  );
+  owner(ctx, input.subject.memberUid);
   const name = cleanSubjectName(input.name);
   return inboxPlan(
     ctx,
     'subject.renamed',
     { memberUid: ctx.actor.id, subjectId: input.subjectId },
     { from: input.subject.name, name },
-    (eventId) => [
-      {
-        kind: 'update',
-        path: inboxPaths.subject(ctx.workspaceId, input.subjectId),
-        data: { name, updatedAt: SERVER_TIME, lastEventId: eventId },
-      },
-    ],
+    (eventId) => [upd(inboxPaths.subject(ctx.workspaceId, input.subjectId), { name }, eventId)],
   );
 }
 
-/** At most this many requests move in one merge or split (one batch). */
+/** At most this many threads move in one merge or split (one batch). */
 export const MAX_MOVE = 400;
 
 /**
- * Merges subject `fromId` into `intoId`: every request of `from` moves to `into`, and `from` is
- * deleted (tombstone event `del-subject-<fromId>`). The caller passes all of from's request ids.
+ * Merges subject `fromId` into `intoId`: every thread of `from` moves to `into`, and `from` is
+ * deleted (tombstone event `del-subject-<fromId>`). The caller passes all of from's thread ids.
  */
 export function mergeSubjects(
   ctx: ActionContext,
@@ -660,16 +1004,16 @@ export function mergeSubjects(
     from: Pick<InboxSubject, 'memberUid' | 'name'>;
     intoId: string;
     into: Pick<InboxSubject, 'memberUid' | 'name'>;
-    requestIds: readonly string[];
+    threadIds: readonly string[];
   },
 ): ActionPlan {
-  requireHuman(ctx);
+  owner(ctx, input.from.memberUid);
   need(
-    input.from.memberUid === ctx.actor.id && input.into.memberUid === ctx.actor.id,
+    input.into.memberUid === ctx.actor.id,
     'Only the person these subjects are for can merge them.',
   );
   need(input.fromId !== input.intoId, 'Pick two different subjects.');
-  need(input.requestIds.length <= MAX_MOVE, `At most ${MAX_MOVE} requests move at once.`);
+  need(input.threadIds.length <= MAX_MOVE, `At most ${MAX_MOVE} threads move at once.`);
   return inboxPlan(
     ctx,
     'subject.merged',
@@ -678,48 +1022,40 @@ export function mergeSubjects(
       fromId: input.fromId,
       fromName: input.from.name,
       intoName: input.into.name,
-      requestIds: [...input.requestIds],
+      threadIds: [...input.threadIds],
     },
     (eventId) => [
-      ...input.requestIds.map((rid) => ({
-        kind: 'update' as const,
-        path: inboxPaths.request(ctx.workspaceId, rid),
-        data: { subjectId: input.intoId, updatedAt: SERVER_TIME, lastEventId: eventId },
-      })),
+      ...input.threadIds.map((tid) =>
+        upd(inboxPaths.thread(ctx.workspaceId, tid), { subjectId: input.intoId }, eventId),
+      ),
       { kind: 'delete', path: inboxPaths.subject(ctx.workspaceId, input.fromId) },
-      {
-        kind: 'update',
-        path: inboxPaths.subject(ctx.workspaceId, input.intoId),
-        data: { updatedAt: SERVER_TIME, lastEventId: eventId },
-      },
+      upd(inboxPaths.subject(ctx.workspaceId, input.intoId), {}, eventId),
     ],
     inboxPaths.deleteEventId(input.fromId),
   );
 }
 
-/** Splits some requests of a subject off into a new subject with its own name. */
+/** Splits some threads of a subject off into a new subject with its own name. */
 export function splitSubject(
   ctx: ActionContext,
   input: {
     fromId: string;
     from: Pick<InboxSubject, 'memberUid' | 'name'>;
     name: string;
-    requestIds: readonly string[];
-    /** The new subject's id; defaults to a new one. */
+    threadIds: readonly string[];
     newId?: string;
   },
 ): ActionPlan & { subjectId: string } {
-  requireHuman(ctx);
-  need(input.from.memberUid === ctx.actor.id, 'Only the person this subject is for can split it.');
-  need(input.requestIds.length > 0, 'Pick the requests that go to the new subject.');
-  need(input.requestIds.length <= MAX_MOVE, `At most ${MAX_MOVE} requests move at once.`);
+  owner(ctx, input.from.memberUid);
+  need(input.threadIds.length > 0, 'Pick the threads that go to the new subject.');
+  need(input.threadIds.length <= MAX_MOVE, `At most ${MAX_MOVE} threads move at once.`);
   const name = cleanSubjectName(input.name);
   const subjectId = input.newId ?? nid(ctx);
   const p = inboxPlan(
     ctx,
     'subject.split',
     { memberUid: ctx.actor.id, subjectId },
-    { fromId: input.fromId, fromName: input.from.name, name, requestIds: [...input.requestIds] },
+    { fromId: input.fromId, fromName: input.from.name, name, threadIds: [...input.threadIds] },
     (eventId) => [
       {
         kind: 'set',
@@ -733,25 +1069,10 @@ export function splitSubject(
           lastEventId: eventId,
         },
       },
-      ...input.requestIds.map((rid) => ({
-        kind: 'update' as const,
-        path: inboxPaths.request(ctx.workspaceId, rid),
-        data: { subjectId, updatedAt: SERVER_TIME, lastEventId: eventId },
-      })),
+      ...input.threadIds.map((tid) =>
+        upd(inboxPaths.thread(ctx.workspaceId, tid), { subjectId }, eventId),
+      ),
     ],
   );
   return { ...p, subjectId };
-}
-
-// ---------- reading ----------
-
-/** Waiting requests per subject id (requests at Your call). */
-export function waitingBySubject(
-  requests: readonly Pick<InboxRequest, 'subjectId' | 'status'>[],
-): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const r of requests)
-    if (r.subjectId && INBOX_WAITING.includes(r.status))
-      m.set(r.subjectId, (m.get(r.subjectId) ?? 0) + 1);
-  return m;
 }
