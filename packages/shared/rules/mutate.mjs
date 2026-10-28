@@ -105,7 +105,7 @@ const MUTATIONS = [
     'revoked agents active',
     [['return a != null && a.data.revokedAt == null;', 'return a != null;']],
   ],
-  ['agents unscoped', [["return ids == '*' || pid in ids;", 'return true;']]],
+  ['agents unscoped', [["&& (a.projectIds == '*' || pid in a.projectIds);", '&& true;']]],
   [
     'agents skip steps',
     [
