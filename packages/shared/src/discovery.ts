@@ -55,12 +55,12 @@ export type DiscoveryErrorCode =
   | 'missing-field'
   | 'bad-cli';
 
+// No parameter properties: vite.config.ts loads this file with Node's type stripping.
 export class DiscoveryError extends Error {
-  constructor(
-    readonly code: DiscoveryErrorCode,
-    message: string,
-  ) {
+  readonly code: DiscoveryErrorCode;
+  constructor(code: DiscoveryErrorCode, message: string) {
     super(message);
+    this.code = code;
     this.name = 'DiscoveryError';
   }
 }

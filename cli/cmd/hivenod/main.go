@@ -39,13 +39,15 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod version          the installed version (matches the Hivenod release)
 
   whoami and mcp use HIVENOD_TOKEN, or the token saved by connect or pair (~/.hivenod/agent.json).
+  --server https://your.host   connect or pair with a self-hosted Hivenod (saved with the token;
+                           HIVENOD_WEB_URL does the same); the default is https://hivenod.com
   --json prints machine-readable output.`
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 
 type opts struct {
 	json, channel, help, version, force, noStart bool
-	project, step, maxItems                      string
+	project, step, maxItems, server              string
 }
 
 func parse(args []string) (opts, []string, error) {
@@ -63,6 +65,7 @@ func parse(args []string) (opts, []string, error) {
 	fs.StringVar(&o.project, "project", "", "")
 	fs.StringVar(&o.step, "step", "", "")
 	fs.StringVar(&o.maxItems, "max-items", "", "")
+	fs.StringVar(&o.server, "server", "", "")
 	// Flags may come before or after the command words.
 	var pos []string
 	for len(args) > 0 {
@@ -113,16 +116,25 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
-	cfg := hive.FromEnv()
 	say := func(s string) { fmt.Fprintln(stdout, s) }
+	if o.server != "" && pos[0] != "connect" && pos[0] != "pair" {
+		fmt.Fprintln(stderr, "hivenod: --server goes with connect or pair; the other commands use the server saved with the token.")
+		return 2
+	}
+	// The server saved with the token belongs to that token: HIVENOD_TOKEN ignores it.
+	saved := (*credentials.Stored)(nil)
+	if os.Getenv("HIVENOD_TOKEN") == "" {
+		saved = credentials.Read()
+	}
+	resolve := func() (hive.Config, error) { return hive.Resolve(ctx, o.server, saved) }
 	switch pos[0] {
 	case "connect":
-		if err := connect(ctx, cfg, say, o.noStart); err != nil {
+		if err := connect(ctx, resolve, say, o.noStart); err != nil {
 			return fail(err)
 		}
 		return 0
 	case "pair":
-		if err := pair(ctx, cfg, say); err != nil {
+		if err := pair(ctx, resolve, say); err != nil {
 			return fail(err)
 		}
 		return 0
@@ -138,7 +150,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return 0
 	case "update":
-		u := &update.Updater{Site: cfg.WebURL, Say: say}
+		site, err := hive.Site("", saved)
+		if err != nil {
+			return fail(err)
+		}
+		u := &update.Updater{Site: site, Say: say}
 		msg, err := u.Run(ctx, o.force)
 		if err != nil {
 			return fail(err)
@@ -146,6 +162,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		say(msg)
 		return 0
 	case "whoami":
+		cfg, err := resolve()
+		if err != nil {
+			return fail(err)
+		}
 		c, err := hive.Connect(ctx, cfg, "")
 		if err != nil {
 			return fail(err)
@@ -162,6 +182,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return 0
 	case "mcp":
+		cfg, err := resolve()
+		if err != nil {
+			return fail(err)
+		}
 		if err := runMCP(ctx, cfg, o, stdin, stdout); err != nil {
 			return fail(err)
 		}
@@ -171,7 +195,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return 2
 }
 
-func pair(ctx context.Context, cfg hive.Config, say func(string)) error {
+func pair(ctx context.Context, resolve func() (hive.Config, error), say func(string)) error {
 	tok, src, err := credentials.Resolve()
 	if errors.Is(err, credentials.ErrDamaged) {
 		say(credentials.DamagedMessage() + " Pairing again replaces it.")
@@ -182,6 +206,10 @@ func pair(ctx context.Context, cfg hive.Config, say func(string)) error {
 			say(fmt.Sprintf("Already paired (%s). Run hivenod logout first to pair as another agent.", credentials.Path()))
 		}
 		return nil
+	}
+	cfg, err := resolve()
+	if err != nil {
+		return err
 	}
 	p, err := hive.PairTerminal(ctx, cfg, hive.PairOptions{CLI: "claude", Say: say})
 	if err != nil {

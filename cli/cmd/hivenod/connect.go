@@ -19,8 +19,8 @@ import (
 //
 // Then it sets up Claude Code (the plugin and its channel) and, in a terminal, starts it with
 // `hivenod claude`. noStart (--no-start, or no terminal) only prints how to start it.
-func connect(ctx context.Context, cfg hive.Config, say func(string), noStart bool) error {
-	if err := connectToken(ctx, cfg, say); err != nil {
+func connect(ctx context.Context, resolve func() (hive.Config, error), say func(string), noStart bool) error {
+	if err := connectToken(ctx, resolve, say); err != nil {
 		return err
 	}
 	if err := claudeSetup(say); err != nil {
@@ -40,7 +40,7 @@ func connect(ctx context.Context, cfg hive.Config, say func(string), noStart boo
 }
 
 // connectToken gets this machine its agent token, unless it already has one.
-func connectToken(ctx context.Context, cfg hive.Config, say func(string)) error {
+func connectToken(ctx context.Context, resolve func() (hive.Config, error), say func(string)) error {
 	tok, src, err := credentials.Resolve()
 	if errors.Is(err, credentials.ErrDamaged) {
 		say(credentials.DamagedMessage() + " Connecting again replaces it.")
@@ -48,11 +48,19 @@ func connectToken(ctx context.Context, cfg hive.Config, say func(string)) error 
 		if src == credentials.FromEnv {
 			say("HIVENOD_TOKEN is set: this machine already acts as that agent. Unset it to connect another one.")
 		} else if s := credentials.Read(); s != nil && s.AgentName != "" {
-			say(fmt.Sprintf("Already connected as %s (%s). Run hivenod logout first to connect as another agent.", s.AgentName, credentials.Path()))
+			at := ""
+			if s.Server != "" {
+				at = " at " + s.Server
+			}
+			say(fmt.Sprintf("Already connected as %s%s (%s). Run hivenod logout first to connect as another agent.", s.AgentName, at, credentials.Path()))
 		} else {
 			say(fmt.Sprintf("Already connected (%s). Run hivenod logout first to connect as another agent.", credentials.Path()))
 		}
 		return nil
+	}
+	cfg, err := resolve()
+	if err != nil {
+		return err
 	}
 	p, err := hive.PairTerminal(ctx, cfg, hive.PairOptions{CLI: "claude", Say: say, Connect: true, OpenBrowser: openBrowser})
 	if err != nil {
@@ -67,7 +75,13 @@ func connectToken(ctx context.Context, cfg hive.Config, say func(string)) error 
 
 // savePaired stores the token and, signed in as the new agent, removes the request.
 func savePaired(ctx context.Context, cfg hive.Config, p *hive.Paired) error {
-	if _, err := credentials.Save(credentials.Stored{Token: p.Token, WorkspaceID: p.WorkspaceID, AgentUID: p.AgentUID, AgentName: p.AgentName}); err != nil {
+	st := credentials.Stored{Token: p.Token, WorkspaceID: p.WorkspaceID, AgentUID: p.AgentUID, AgentName: p.AgentName}
+	// A self-hosted server is saved with the token, so mcp and whoami find it again; the hosted
+	// service is the default and is not written (older CLIs read the file the same way).
+	if cfg.Discovery != nil {
+		st.Server, st.Discovery = cfg.Discovery.Site, cfg.Discovery
+	}
+	if _, err := credentials.Save(st); err != nil {
 		return err
 	}
 	if c, err := hive.Connect(ctx, cfg, p.Token); err == nil {
