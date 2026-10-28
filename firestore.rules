@@ -1151,7 +1151,7 @@ service cloud.firestore {
                 && request.resource.data.memberUid == me()
                 && request.resource.data.type in ['thread.titled', 'thread.answered', 'thread.ignored',
                   'thread.closed', 'thread.restored', 'thread.moved', 'thread.itemMade', 'outcome.approved',
-                  'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split',
+                  'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged'])
                 && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))

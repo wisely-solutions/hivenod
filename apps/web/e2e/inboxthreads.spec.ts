@@ -85,7 +85,14 @@ async function agentOf(wid: string, ownerUid: string, name: string) {
     aid,
     async add(
       member: string,
-      m: { source: string; from: string; text: string; ref: string; id: string },
+      m: {
+        source: string;
+        from: string;
+        text: string;
+        ref: string;
+        id: string;
+        at?: Date;
+      },
     ) {
       const ref = h(inboxThreadKey(member, m.source, m.ref));
       const own = await getDoc(doc(db, inboxPaths.thread(wid, `it${ref}`)));
@@ -99,13 +106,13 @@ async function agentOf(wid: string, ownerUid: string, name: string) {
         threadRef: m.ref,
         messageId: m.id,
         permalink: `https://${m.source}.example.com/${m.ref}/${m.id}`,
-        receivedAt: new Date(),
+        receivedAt: m.at ?? new Date(),
         thread: own.exists() ? { threadId: own.id, state: own.data() as ThreadStateOf } : null,
       });
       await run(p);
       return p.threadId;
     },
-    async file(tid: string, to: { newName?: string; subjectId?: string }) {
+    async file(tid: string, to: { newName?: string; subjectId?: string; area?: string }) {
       const p = assignSubject(ctx, { threadId: tid, thread: await thread(tid), ...to });
       await run(p);
       return p.subjectId;
@@ -416,6 +423,88 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
       await expect(chip(page, 'waiting')).toBeVisible();
       await look(page, 'thread-390', 'iphone-se');
     }
+  } finally {
+    await agent.stop();
+  }
+});
+
+test('Inbox: subjects group by area; a quiet subject folds away and comes back', async ({
+  page,
+}, info) => {
+  test.setTimeout(180_000);
+  await fastTimers(page);
+  const me = person('Dora Areas');
+  await page.goto('/');
+  await signIn(page, me);
+  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect.poll(() => workspaceOf(me.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
+  const wid = await workspaceOf(me.email);
+  const uid = await uidOf(me.email);
+  const agent = await agentOf(wid, uid, 'Areas agent');
+  const days = (n: number) => new Date(Date.now() - n * 86_400_000);
+  const brought = (ref: string, from: string, at: Date) =>
+    agent.add(uid, { source: 'mail', from, text: `About ${ref}`, ref, id: `m-${ref}`, at });
+  try {
+    const t1 = await brought('refunds', 'Sam Example', days(1));
+    const t2 = await brought('payouts', 'Rita Ops', days(2));
+    const t3 = await brought('vpn', 'Ian Admin', days(3));
+    const t4 = await brought('lunch', 'Lia Plain', days(4));
+    const t5 = await brought('old', 'Olga Old', days(70));
+    const s1 = await agent.file(t1, { newName: 'Refunds', area: 'Payments' });
+    const s2 = await agent.file(t2, { newName: 'Payouts', area: ' payments ' });
+    const s3 = await agent.file(t3, { newName: 'VPN access', area: 'Admin' });
+    const s4 = await agent.file(t4, { newName: 'Lunch plans' });
+    const s5 = await agent.file(t5, { newName: 'Old contract', area: 'Admin' });
+
+    await page.goto('/inbox');
+    const areaOf = (name: string) => page.locator(`section[data-area="${name}"]`);
+    await expect(areaOf('Admin').locator(`[data-subject="${s3}"]`)).toBeVisible();
+    await expect(areaOf('Payments').locator(`[data-subject="${s1}"]`)).toBeVisible();
+    await expect(areaOf('Payments').locator(`[data-subject="${s2}"]`)).toBeVisible();
+    await expect(areaOf('').locator(`[data-subject="${s4}"]`)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No area', level: 2 })).toBeVisible();
+    const order = await page.locator('section[data-area] > h2').allTextContents();
+    expect(order).toEqual(['Admin', 'Payments', 'No area']);
+
+    // 70 days without a message: folded into Quiet, closed by default; never deleted.
+    const quiet = page.locator('details[data-quiet]');
+    await expect(quiet.getByText('Quiet (1)')).toBeVisible();
+    await expect(page.locator(`section[data-area] [data-subject="${s5}"]`)).toHaveCount(0);
+    await expect(quiet.locator(`[data-subject="${s5}"]`)).toBeHidden();
+    await look(page, 'areas', info.project.name);
+    await quiet.getByText('Quiet (1)').click();
+    await expect(quiet.locator(`[data-subject="${s5}"]`)).toBeVisible();
+    await look(page, 'areas-quiet', info.project.name);
+
+    // The quiet threshold is configurable (and can be turned off).
+    await page.getByLabel('Quiet subjects').selectOption('30');
+    await expect(quiet.getByText('Quiet (1)')).toBeVisible();
+    await page.getByLabel('Quiet subjects').selectOption('0');
+    await expect(page.locator('details[data-quiet]')).toHaveCount(0);
+    await expect(areaOf('Admin').locator(`[data-subject="${s5}"]`)).toBeVisible();
+    await page.getByLabel('Quiet subjects').selectOption('60');
+    await expect(quiet.getByText('Quiet (1)')).toBeVisible();
+
+    // The member sets an area on the subject page.
+    await page.goto(`/inbox/${wid}/s/${s4}`);
+    await page.getByRole('button', { name: 'Set area' }).click();
+    await page.getByLabel('Area or tag').fill('Admin');
+    await page.getByRole('button', { name: 'Save area' }).click();
+    await expect(page.getByRole('button', { name: 'Area: Admin' })).toBeVisible();
+    await page.goto('/inbox');
+    await expect(areaOf('Admin').locator(`[data-subject="${s4}"]`)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No area', level: 2 })).toHaveCount(0);
+
+    // A new message brings the quiet subject back.
+    await agent.add(uid, {
+      source: 'mail',
+      from: 'Olga Old',
+      text: 'Back again about the contract',
+      ref: 'old',
+      id: 'm-old-2',
+    });
+    await expect(page.locator('details[data-quiet]')).toHaveCount(0);
+    await expect(areaOf('Admin').locator(`[data-subject="${s5}"]`)).toBeVisible();
   } finally {
     await agent.stop();
   }
