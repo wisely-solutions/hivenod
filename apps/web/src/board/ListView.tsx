@@ -8,7 +8,7 @@ import { db } from '../lib/db';
 import { stash } from '../lib/pendingDecisions';
 import { useLiveQuery, type Row } from '../lib/live';
 import { timeAgo } from '../projects/logic';
-import { BAR_BUTTON, BAR_PRIMARY, SelectionBar } from './SelectionBar';
+import { BAR_BUTTON, BAR_PRIMARY, BarUndo, SelectionBar } from './SelectionBar';
 import { isTypingTarget } from '../shell/shortcuts';
 import { formatEur } from '../shell/logic';
 import { Badge } from '../ui/badge';
@@ -16,7 +16,7 @@ import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 import { Select } from '../ui/form';
 import { ActionMenu } from '../ui/menu';
-import { useToast } from '../ui/overlay';
+import { useCountdown, useToast } from '../ui/overlay';
 import { ItemActions, useHiddenItems } from './itemActions';
 import {
   bulkBlocker,
@@ -59,6 +59,8 @@ function typingInField(t: EventTarget | null): boolean {
   return isTypingTarget(t);
 }
 
+/** The one bulk Approve counting down on the List's selection bar. */
+const LIST_BULK_KEY = 'list:bulk';
 const TYPES: ItemType[] = ['idea', 'request', 'bug', 'task'];
 
 /**
@@ -86,6 +88,11 @@ export function ListView({
 }) {
   const { session, actionContext, run } = useReady();
   const toast = useToast();
+  const liveCountdown = useRef(false);
+  const bulkCountdown = useCountdown(LIST_BULK_KEY);
+  useEffect(() => {
+    liveCountdown.current = !!bulkCountdown;
+  }, [bulkCountdown]);
   const phone = useIsPhone();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const who = useMemo<Who>(
@@ -202,6 +209,7 @@ export function ListView({
   }, [picked, cursor, order, select]);
 
   function act(a: BulkAction, rows: ListRow[] = chosen) {
+    if (a.kind === 'approve' && liveCountdown.current) return; // already counting down
     const ctx = actionContext(session.workspaceId);
     if (!ctx) return;
     const planned = planBulk(ctx, a, rows, who);
@@ -210,7 +218,9 @@ export function ListView({
       toast.push({ message: 'You cannot do that to the items you picked.' });
       return;
     }
-    setPicked(new Set());
+    // Approve counts down on its button with the selection kept; the rest leave the bar at once.
+    const inline = a.kind === 'approve';
+    if (!inline) setPicked(new Set());
     const forget = stash(
       session.me.uid,
       session.workspaceId,
@@ -222,8 +232,16 @@ export function ListView({
       message: bulkMessage(a, planned.length, skipped),
       undoLabel: 'Undo',
       duration: 5000,
+      countdown: inline
+        ? {
+            key: LIST_BULK_KEY,
+            tag: 'approve',
+            announce: `${bulkMessage(a, planned.length, skipped)}. Undo available for 5 seconds`,
+          }
+        : undefined,
       onUndo: forget,
       onCommit: () => {
+        if (inline) setPicked(new Set());
         void Promise.allSettled(planned.map((p) => run(p.plan))).then((res) => {
           forget();
           const failed = res.filter((r) => r.status === 'rejected').length;
@@ -569,10 +587,12 @@ function BulkBar({
   onAct: (a: BulkAction) => void;
   onClear: () => void;
 }) {
+  const counting = useCountdown(LIST_BULK_KEY);
   const approvable = eligible(rows, { kind: 'approve' }, who).length;
   const steps = movableSteps(rows, who);
   const restorable = eligible(rows, { kind: 'restore' }, who).length;
   const bar = BAR_BUTTON;
+  const dim = !!counting;
   return (
     <SelectionBar count={rows.length} onHeight={onHeight} onClear={onClear}>
       {scope === 'archived' ? (
@@ -596,20 +616,24 @@ function BulkBar({
               onSelect: () => onAct({ kind: 'move', toStepId: s.id }),
             }))}
             trigger={
-              <button type="button" className={bar} disabled={steps.length === 0}>
+              <button type="button" className={bar} disabled={steps.length === 0 || dim}>
                 Move to step
               </button>
             }
           />
-          <button
-            type="button"
-            className={BAR_PRIMARY}
-            disabled={approvable === 0}
-            onClick={() => onAct({ kind: 'approve' })}
-          >
-            <Check size={16} aria-hidden />
-            Approve {approvable}
-          </button>
+          {counting ? (
+            <BarUndo countdown={counting} primary />
+          ) : (
+            <button
+              type="button"
+              className={BAR_PRIMARY}
+              disabled={approvable === 0}
+              onClick={() => onAct({ kind: 'approve' })}
+            >
+              <Check size={16} aria-hidden />
+              Approve {approvable}
+            </button>
+          )}
           <ActionMenu
             label="Change type"
             actions={TYPES.map((t) => ({
@@ -618,13 +642,18 @@ function BulkBar({
               onSelect: () => onAct({ kind: 'type', type: t }),
             }))}
             trigger={
-              <button type="button" className={bar}>
+              <button type="button" className={bar} disabled={dim}>
                 <Shapes size={16} aria-hidden />
                 Change type
               </button>
             }
           />
-          <button type="button" className={bar} onClick={() => onAct({ kind: 'archive' })}>
+          <button
+            type="button"
+            className={bar}
+            disabled={dim}
+            onClick={() => onAct({ kind: 'archive' })}
+          >
             <Archive size={16} aria-hidden />
             Archive
           </button>

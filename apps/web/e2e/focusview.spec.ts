@@ -287,10 +287,10 @@ test('reject and send back work from the focus view on the board', async ({ page
   await expect(dialog.getByRole('button', { name: 'Reject', exact: true })).toBeDisabled();
   await dialog.getByLabel('Why are you dropping it?').fill('Not worth doing this quarter');
   await dialog.getByRole('button', { name: 'Reject', exact: true }).click();
-  await expect(page.getByRole('status').last()).toContainText('Rejected');
+  await expect(view.locator('button[data-undo]')).toContainText(/Undo · \d/);
 });
 
-test('phone: the Undo toast sits right above the decision bar and the tab bar is inert', async ({
+test('phone: Undo is on the pressed button in the decision bar, with no toast, and the tab bar is inert', async ({
   page,
 }) => {
   const { pid } = await seed(page);
@@ -308,22 +308,16 @@ test('phone: the Undo toast sits right above the decision bar and the tab bar is
     false,
   );
   await view.getByRole('button', { name: 'Approve → Build' }).click();
-  const undo = page.locator('[data-toast-region]').getByRole('button', { name: 'Undo' });
-  await expect(undo).toBeVisible();
-  const toast = page.locator('[data-toast-region] [role="status"]').last();
   const bar = view.locator('[data-decision-bar]');
-  // Just above the bar (the region's 16 px padding), not 56 px higher for a tab bar that is covered.
-  // Polled: the toast slides in first.
-  await expect
-    .poll(async () => {
-      const t = (await toast.boundingBox())!;
-      const b = (await bar.boundingBox())!;
-      return Math.round(b.y - (t.y + t.height));
-    })
-    .toBeGreaterThanOrEqual(0);
-  const t = (await toast.boundingBox())!;
+  const undo = bar.locator('button[data-undo]');
+  await expect(undo).toBeVisible();
+  await expect(page.locator('[data-toast-region] [role="status"]')).toHaveCount(0);
+  // The button sits inside the bar, in the viewport, and is reachable (44 px high).
+  const u = (await undo.boundingBox())!;
   const b = (await bar.boundingBox())!;
-  expect(b.y - (t.y + t.height)).toBeLessThan(28);
+  expect(u.y).toBeGreaterThanOrEqual(b.y);
+  expect(u.y + u.height).toBeLessThanOrEqual(b.y + b.height);
+  expect(u.height).toBeGreaterThanOrEqual(44);
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => v.id)).toEqual([]);
   await page.screenshot({

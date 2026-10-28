@@ -145,10 +145,16 @@ test('select 3, Approve 3, one Undo brings all back, then approve for real', asy
   }
 
   await bar.getByRole('button', { name: 'Approve 3' }).click();
-  await expect(page.getByRole('status')).toContainText('3 approved');
-  await expect(page.getByRole('button', { name: /Alpha post/ })).toHaveCount(0);
-  await expect(bar).toBeHidden();
-  await page.getByRole('button', { name: 'Undo' }).click();
+  // The pressed button counts down as Undo (no toast); the rows and the bar stay meanwhile.
+  await expect(bar.locator('button[data-undo]')).toContainText(/Undo · \d/);
+  await expect(page.locator('[data-toast-region] [role="status"]')).toHaveCount(0);
+  await expect(page.getByTestId('undo-announcement')).toContainText(
+    '3 approved. Undo available for 5 seconds',
+  );
+  await expect(bar.getByRole('button', { name: 'Reject…' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Alpha post/ }).first()).toBeVisible();
+  await bar.locator('button[data-undo]').click();
+  await expect(bar.getByRole('button', { name: 'Approve 3' })).toBeEnabled();
   for (const t of TITLES.slice(0, 3))
     await expect(page.getByRole('button', { name: new RegExp(t) }).first()).toBeVisible();
   await page.waitForTimeout(UNDO_WAIT + 500);
@@ -176,8 +182,9 @@ test('Reject asks one reason (10+ characters) for all selected', async ({ page }
   await expect(go).toBeDisabled();
   await dialog.getByRole('textbox').fill('Not needed any more, thanks');
   await go.click();
-  await expect(page.getByRole('status')).toContainText('2 rejected');
-  await expect(page.getByRole('button', { name: /Beta post/ })).toHaveCount(0);
+  await expect(page.locator('button[data-undo]')).toContainText(/Undo · \d/);
+  await expect(page.locator('[data-toast-region] [role="status"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Beta post/ })).toHaveCount(0, { timeout: 15_000 });
   await expect.poll(() => field(wid, pid, 'i2', 'status'), { timeout: 15_000 }).toBe('stopped');
   expect(await field(wid, pid, 'i4', 'status')).toBe('stopped');
   expect(await field(wid, pid, 'i1', 'status')).toBe('waiting');
@@ -230,5 +237,9 @@ test('an item decided elsewhere meanwhile is skipped, and the toast says so', as
   );
   await expect(page.getByRole('button', { name: /Beta post/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Approve 3' }).click();
-  await expect(page.getByRole('status')).toContainText('2 approved, 1 had already moved');
+  // Not your own click, so it is news: it shows once the countdown ends.
+  await expect(page.locator('button[data-undo]')).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('2 approved, 1 had already moved', {
+    timeout: 15_000,
+  });
 });

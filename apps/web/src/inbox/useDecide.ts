@@ -87,7 +87,6 @@ export function useDecide() {
       d: Decision,
       onRestored?: () => void,
       onMoveOn?: () => void,
-      onHold?: () => void,
     ): string | null => {
       const ctx = actionContext(session.workspaceId);
       if (!ctx) return 'You are signed out.';
@@ -98,7 +97,10 @@ export function useDecide() {
         if (e instanceof ActionError) return e.message;
         throw e;
       }
-      show(entry.key, true);
+      // Approve and Reject (card eLSSIGOs) count down on their own button, with the entry still in
+      // place; every other decision leaves at once and shows an Undo toast, as before.
+      const inline = d.kind === 'approve' || d.kind === 'reject';
+      if (!inline) show(entry.key, true);
       const forget = stash(
         session.me.uid,
         session.workspaceId,
@@ -106,27 +108,38 @@ export function useDecide() {
         savedMessage(entry, d),
       );
       const final = !!prepared.pending;
-      if (final) {
-        clearTimeout(holdTimer.current);
-        setHeld({ entry, phase: 'releasing' });
-        onHold?.();
-      }
       haptic('decide');
+      const settled = () => {
+        forget();
+        show(entry.key, false);
+        if (final) {
+          clearTimeout(holdTimer.current);
+          setHeld(null);
+        }
+      };
       const id = toast.push({
         message: prepared.pending ?? prepared.message,
         undoLabel: 'Undo',
         duration: 5000,
+        countdown: inline
+          ? {
+              key: entry.key,
+              tag: d.kind,
+              announce: `${d.kind === 'approve' ? 'Approved' : 'Rejected'}. Undo available for 5 seconds`,
+            }
+          : undefined,
         onUndo: () => {
           forget();
           toasts.current.delete(entry.key);
           show(entry.key, false);
-          if (final) setHeld(null);
           onRestored?.();
         },
         onCommit: () => {
           toasts.current.delete(entry.key);
+          if (inline) show(entry.key, true);
           if (final) {
             // Released shows at once, together with the Done panel (not when the server answers).
+            clearTimeout(holdTimer.current);
             const releasedToast = toast.push({ message: prepared.message });
             setHeld({ entry, phase: 'done' });
             // The Released toast closes just before the move (its exit animation finishes first),
@@ -141,6 +154,8 @@ export function useDecide() {
                 onMoveOn?.();
               }, TOAST_EXIT_MS);
             }, DONE_HOLD_MS - TOAST_EXIT_MS);
+          } else if (inline) {
+            onMoveOn?.();
           }
           run(prepared.plan).then(
             () => {
@@ -148,12 +163,7 @@ export function useDecide() {
               show(entry.key, false);
             },
             () => {
-              forget();
-              show(entry.key, false);
-              if (final) {
-                clearTimeout(holdTimer.current);
-                setHeld(null);
-              }
+              settled();
               toast.push({ message: 'Could not save that decision. It is back in your inbox.' });
             },
           );
@@ -166,7 +176,7 @@ export function useDecide() {
   );
 
   /**
-   * Approve or reject several entries with ONE Undo toast (Needs you selection). Entries whose
+   * Approve or reject several entries with ONE Undo on the pressed button (Needs you selection). Entries whose
    * decision can no longer be prepared (someone else decided meanwhile) are skipped and counted.
    * `gone` is the number of selected entries that already left the inbox. Returns a problem in
    * plain words (so the dialog can show it), or null when queued.
@@ -176,7 +186,7 @@ export function useDecide() {
       entries: readonly InboxEntry[],
       d: Extract<Decision, { kind: 'approve' | 'reject' }>,
       gone: number,
-      onRestored?: () => void,
+      onCommitted?: () => void,
     ): string | null => {
       const ctx = actionContext(session.workspaceId);
       if (!ctx) return 'You are signed out.';
@@ -199,7 +209,6 @@ export function useDecide() {
         return null;
       }
       const keys = ready.map((r) => r.entry.key);
-      for (const k of keys) show(k, true);
       const forget = stash(
         session.me.uid,
         session.workspaceId,
@@ -212,17 +221,26 @@ export function useDecide() {
         toasts.current.delete(batchKey);
         for (const k of keys) show(k, false);
       };
+      // The rows stay while the pressed button counts down (card eLSSIGOs); they leave when it ends.
       const id = toast.push({
         message,
         undoLabel: 'Undo',
         duration: 5000,
+        countdown: {
+          key: batchKey,
+          tag: `batch-${d.kind}`,
+          announce: `${message}. Undo available for 5 seconds`,
+        },
         onUndo: () => {
           forget();
-          done();
-          onRestored?.();
+          toasts.current.delete(batchKey);
         },
         onCommit: () => {
           toasts.current.delete(batchKey);
+          for (const k of keys) show(k, true);
+          onCommitted?.();
+          // News that is not your own click: some had already moved on, so fewer were decided.
+          if (moved > 0) toast.push({ message });
           void Promise.allSettled(ready.map((r) => run(r.prepared.plan))).then((res) => {
             forget();
             done();

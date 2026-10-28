@@ -109,7 +109,7 @@ test('approve, reload within the Undo window: the decision still lands and you a
   await adminSet(itemPath(wid, pid, 'i1'), waitingItem(uid));
   const detail = await openRow(page, 'Launch post');
   await detail.getByRole('button', { name: 'Approve → Publish' }).click();
-  await expect(page.getByRole('status')).toContainText('Approved. Moved to Publish.');
+  await expect(detail.locator('button[data-undo]')).toBeVisible();
   await reloadWithoutWrites(page);
   await expect(page.getByText('Saved your approval of \u201cLaunch post\u201d')).toBeVisible({
     timeout: 20_000,
@@ -142,7 +142,7 @@ test('the replay write fails on the first load: the entry survives and lands on 
   await adminSet(itemPath(wid, pid, 'i1'), waitingItem(uid));
   const detail = await openRow(page, 'Launch post');
   await detail.getByRole('button', { name: 'Approve → Publish' }).click();
-  await expect(page.getByRole('status')).toContainText('Approved. Moved to Publish.');
+  await expect(detail.locator('button[data-undo]')).toBeVisible();
   // Every write fails for the whole first load (the page may also be killed again).
   await page.route(/Firestore\/Write/, (r) => r.abort());
   await page.reload();
@@ -163,7 +163,7 @@ test('a screen chunk that fails to load does not stop the replay', async ({ page
   await adminSet(itemPath(wid, pid, 'i1'), waitingItem(uid));
   const detail = await openRow(page, 'Launch post');
   await detail.getByRole('button', { name: 'Approve → Publish' }).click();
-  await expect(page.getByRole('status')).toContainText('Approved. Moved to Publish.');
+  await expect(detail.locator('button[data-undo]')).toBeVisible();
   await page.route(/\/assets\/(InboxPage|InboxDetail)-.*\.js/, (r) => r.abort());
   await page.reload();
   await expect.poll(() => stepOf(wid, pid, 'i1'), { timeout: 20_000 }).toBe('publish');

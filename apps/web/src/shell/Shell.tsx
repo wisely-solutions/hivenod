@@ -30,6 +30,7 @@ import { ShellPalette } from './palette';
 import { useAppBadge } from './pwa';
 import { useReplayPending } from './useReplayPending';
 import { ShortcutsProvider, useShortcut } from './shortcuts';
+import { useUndoLast } from '../ui/overlay';
 import { Sidebar } from './Sidebar';
 import { TabBar, useScrollHidden } from './TabBar';
 
@@ -68,6 +69,15 @@ function GoShortcut({ entry }: { entry: NavEntry }) {
 }
 
 function GoShortcuts({ onSearch }: { onSearch: () => void }) {
+  // Z takes back the decision that is counting down on its button (card eLSSIGOs).
+  const undoLast = useUndoLast();
+  useShortcut({
+    id: 'undo',
+    keys: ['z'],
+    label: 'Undo',
+    group: 'Item',
+    run: () => void undoLast(),
+  });
   useShortcut({ id: 'search', keys: ['/'], label: 'Search', group: 'Navigation', run: onSearch });
   return (
     <>

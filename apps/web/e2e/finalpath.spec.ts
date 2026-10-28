@@ -102,8 +102,7 @@ for (const [label, size] of [
     // No skipped step is offered as the next one.
     await expect(detail.getByRole('button', { name: /^Approve/ })).toHaveText(/^Approve\s*A?$/);
     await detail.getByRole('button', { name: /^Approve/ }).click();
-    const releasing = page.getByRole('status').filter({ hasText: 'Releasing “Skipped tail”' });
-    await expect(releasing).toBeVisible();
+    await expect(detail.locator('button[data-undo]')).toBeVisible();
     await expect(page.getByText(/Moved to/)).toHaveCount(0);
     // Through the whole Undo window the item stays on screen.
     await page.waitForTimeout(1500);
@@ -165,11 +164,7 @@ for (const [label, size] of [
     await row.click();
     const detail = stage(page).filter({ hasText: 'Skipped tail' });
     await detail.getByRole('button', { name: /^Approve/ }).click();
-    await page
-      .getByRole('status')
-      .filter({ hasText: 'Releasing' })
-      .getByRole('button', { name: 'Undo' })
-      .click();
+    await detail.locator('button[data-undo]').click();
     await expect(detail.getByRole('button', { name: /^Approve/ })).toBeEnabled();
     await expect(detail.getByTestId('done-panel')).toHaveCount(0);
     if (label === 'desktop')
@@ -187,7 +182,7 @@ test('Needs you names the real next step, never a skipped one', async ({ page })
   const detail = stage(page).filter({ hasText: 'Mid skip' });
   await expect(detail.getByRole('button', { name: /Approve → Publish/ })).toBeVisible();
   await detail.getByRole('button', { name: /^Approve/ }).click();
-  await expect(page.getByText('Approved. Moved to Publish.')).toBeVisible();
+  await expect(detail.locator('button[data-undo]')).toBeVisible();
   await expect(page.getByText(/Moved to Draft/)).toHaveCount(0);
 });
 
@@ -198,7 +193,7 @@ test('board panel: the Released toast is up when the Done panel appears', async 
   await page.goto(`/p/${pid}?item=fin`);
   const detail = page.getByRole('article', { name: /Skipped tail/ });
   await detail.getByRole('button', { name: /^Approve/ }).click();
-  await expect(page.getByText('Releasing “Skipped tail”')).toBeVisible();
+  await expect(detail.locator('button[data-undo]')).toBeVisible();
   const done = detail.getByTestId('done-panel');
   await expect(done).toBeVisible({ timeout: 15_000 });
   expect(await page.getByText('Released. “Skipped tail” is done.').isVisible()).toBe(true);

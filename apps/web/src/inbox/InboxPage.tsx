@@ -18,8 +18,9 @@ import { Eyebrow } from '../ui/badge';
 import { Button } from '../ui/button';
 import { EmptyState, Skeleton, WorkingDots } from '../ui/feedback';
 import { AnimatePresence } from '../ui/motion';
-import { Sheet } from '../ui/overlay';
-import { BAR_BUTTON, BAR_PRIMARY, SelectionBar } from '../board/SelectionBar';
+import { Sheet, useCountdowns } from '../ui/overlay';
+import { UndoButton } from '../ui/UndoButton';
+import { BAR_BUTTON, BAR_PRIMARY, BarUndo, SelectionBar } from '../board/SelectionBar';
 import { rangeKeys } from '../board/bulk';
 import { isTypingTarget } from '../shell/shortcuts';
 import { Check, X } from 'lucide-react';
@@ -133,6 +134,7 @@ export function InboxPage() {
     ],
   );
   const { hidden, decide, decideMany, held, release } = useDecide();
+  const countdowns = useCountdowns();
   const visible = useMemo(() => inbox.todo.filter((e) => !hidden.has(e.key)), [inbox.todo, hidden]);
   const counts = countByFilter(visible);
   // A finally-approved item stays in the list through the Undo window and the Done moment
@@ -146,6 +148,7 @@ export function InboxPage() {
     return out;
   }, [visible, held, heldAt]);
   const list = filterEntries(shown, filter);
+  const batch = countdowns.find((c) => c.tag.startsWith('batch-'));
   const waiting = inbox.waiting.filter((e) => !hidden.has(e.key));
 
   // The row that is highlighted (desktop: the first one until you pick), and the item opened in
@@ -213,6 +216,16 @@ export function InboxPage() {
   const [dialog, setDialog] = useState<{ mode: DialogMode | 'iterate'; key: string } | null>(null);
   const [quick, setQuick] = useState<string | null>(null);
   const dialogEntry = dialog ? ([...inbox.todo].find((e) => e.key === dialog.key) ?? null) : null;
+  const quickCountdown = countdowns.find((c) => c.key === quick);
+  // The quick sheet stays open while its Approve counts down, and closes when that ends.
+  const hadQuickCountdown = useRef(false);
+  useEffect(() => {
+    if (quickCountdown) hadQuickCountdown.current = true;
+    else if (hadQuickCountdown.current) {
+      hadQuickCountdown.current = false;
+      setQuick(null);
+    }
+  }, [quickCountdown]);
   const quickEntry = quick ? ([...inbox.todo].find((e) => e.key === quick) ?? null) : null;
 
   // Selecting several Approve/Accept rows to decide them together. Questions, findings and path
@@ -248,10 +261,8 @@ export function InboxPage() {
   };
   const decidePicked = (d: Parameters<typeof decideMany>[1]) => {
     const { live, gone } = pickedNow();
-    const keys = new Set(picked);
-    const problem = decideMany(live, d, gone, () => setPicked(keys));
-    if (!problem) clearPicked();
-    return problem;
+    // The selection and its bar stay while the button counts down; they clear when it ends.
+    return decideMany(live, d, gone, clearPicked);
   };
 
   const go = (key: string | null, replace = true) =>
@@ -269,12 +280,13 @@ export function InboxPage() {
 
   // The next item slides into focus when the current one leaves.
   const decideEntry = (e: InboxEntry, d: Parameters<typeof decide>[1]) => {
+    // Already counting down on its button: a second press (or the A key) does nothing.
+    if (countdowns.some((c) => c.key === e.key)) return null;
     const following = nextKey(list, e.key);
     const fromDetail = sel === e.key;
-    // A final approval keeps the item on screen (Releasing, then Done); then, if the person is
-    // still looking at it, move on the way Needs you normally does.
-    let isFinal = false;
     setHeldAt(list.findIndex((x) => x.key === e.key));
+    // Approve and Reject count down on their button with the item still on screen; when the
+    // window ends the item moves on (a final approval first shows its Done panel).
     const problem = decide(
       e,
       d,
@@ -289,11 +301,10 @@ export function InboxPage() {
         if (cur.sel === e.key) cur.go(cur.desktop ? following : null);
         else release();
       },
-      () => {
-        isFinal = true;
-      },
     );
-    if (!problem && !isFinal && sel === e.key) go(desktop ? following : null);
+    // Other decisions (an answer, a suggestion) leave at once.
+    if (!problem && d.kind !== 'approve' && d.kind !== 'reject' && sel === e.key)
+      go(desktop ? following : null);
     return problem;
   };
 
@@ -608,17 +619,20 @@ export function InboxPage() {
           <div className="flex flex-col gap-2">
             {quickEntry.kind === 'approval' ? (
               <>
-                <Button
-                  variant="approve"
-                  onClick={() => {
-                    decideEntry(quickEntry, { kind: 'approve', rationale: '' });
-                    setQuick(null);
-                  }}
-                >
-                  Approve
-                </Button>
+                {quickCountdown ? (
+                  <UndoButton countdown={quickCountdown} variant="approve" />
+                ) : (
+                  <Button
+                    variant="approve"
+                    disabled={!!quickCountdown}
+                    onClick={() => decideEntry(quickEntry, { kind: 'approve', rationale: '' })}
+                  >
+                    Approve
+                  </Button>
+                )}
                 <Button
                   variant="sendback"
+                  disabled={!!quickCountdown}
                   onClick={() => {
                     setDialog({ mode: 'iterate', key: quickEntry.key });
                     setQuick(null);
@@ -628,6 +642,7 @@ export function InboxPage() {
                 </Button>
                 <Button
                   variant="sendback"
+                  disabled={!!quickCountdown}
                   onClick={() => {
                     setDialog({ mode: 'reject', key: quickEntry.key });
                     setQuick(null);
@@ -704,18 +719,32 @@ export function InboxPage() {
             style={{ height: `calc(${barHeight}px + 80px + env(safe-area-inset-bottom))` }}
           />
           <SelectionBar count={picked.size} onHeight={setBarHeight} onClear={clearPicked}>
-            <button
-              type="button"
-              className={BAR_PRIMARY}
-              onClick={() => decidePicked({ kind: 'approve', rationale: '' })}
-            >
-              <Check size={16} aria-hidden />
-              Approve {picked.size}
-            </button>
-            <button type="button" className={BAR_BUTTON} onClick={() => setBulkReject(true)}>
-              <X size={16} aria-hidden />
-              Reject…
-            </button>
+            {batch?.tag === 'batch-approve' ? (
+              <BarUndo countdown={batch} primary />
+            ) : (
+              <button
+                type="button"
+                className={BAR_PRIMARY}
+                disabled={!!batch}
+                onClick={() => decidePicked({ kind: 'approve', rationale: '' })}
+              >
+                <Check size={16} aria-hidden />
+                Approve {picked.size}
+              </button>
+            )}
+            {batch?.tag === 'batch-reject' ? (
+              <BarUndo countdown={batch} />
+            ) : (
+              <button
+                type="button"
+                className={BAR_BUTTON}
+                disabled={!!batch}
+                onClick={() => setBulkReject(true)}
+              >
+                <X size={16} aria-hidden />
+                Reject…
+              </button>
+            )}
           </SelectionBar>
         </>
       ) : null}
