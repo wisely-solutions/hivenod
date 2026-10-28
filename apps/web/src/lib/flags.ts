@@ -11,9 +11,8 @@
  *  and the noreply@hivenod.com sender and action URL are set up. */
 const EMAIL_SIGNIN_PRODUCTION = true;
 
-/** The GitHub links on the landing page. The open-source card turns this on in the same release
- *  that makes the repository public. */
-const GITHUB_LINKS_PRODUCTION = false;
+/** The GitHub links on the landing page, to the public repository (open since 2026-10-28). */
+const GITHUB_LINKS_PRODUCTION = true;
 
 export const EMAIL_SIGNIN =
   import.meta.env.VITE_USE_EMULATOR === '1' ||
