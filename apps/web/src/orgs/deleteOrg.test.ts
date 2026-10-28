@@ -49,7 +49,11 @@ const tree = [
   `${W}/invites/c`,
   `${W}/notified/n`,
   `${W}/members/u`,
-  `${W}/calendar/c`,
+  `${W}/calendar/ann_x`,
+  `${W}/calendar/bob_y`,
+  'users/ann/busy/w1_ann_x',
+  'users/bob/busy/w1_bob_y',
+  'users/ann/busy/w2_ann_z',
   'workspaces/w2',
   'workspaces/w2/events/keep',
 ];
@@ -58,9 +62,16 @@ describe('purgeOrg', () => {
   it('removes every document below the organization, children first, its own document last', async () => {
     const f = fake(tree);
     const n = await purgeOrg(f.store, 'w1');
-    expect([...f.all].sort()).toEqual(['workspaces/w2', 'workspaces/w2/events/keep']);
+    expect([...f.all].sort()).toEqual([
+      'users/ann/busy/w2_ann_z',
+      'workspaces/w2',
+      'workspaces/w2/events/keep',
+    ]);
     expect(f.removed.at(-1)).toBe(W);
-    expect(n).toBe(tree.length - 2);
+    expect(n).toBe(tree.length - 5);
+    // The members' busy blocks of this organization go with it; another organization's stay.
+    expect(f.removed).toContain('users/ann/busy/w1_ann_x');
+    expect(f.removed).toContain('users/bob/busy/w1_bob_y');
     // Agents (and so every token) go before anything else.
     expect(f.removed[0]).toBe(`${W}/agents/a1`);
   });
@@ -76,7 +87,11 @@ describe('purgeOrg', () => {
     expect(f.all.has(W)).toBe(true);
     const again = fake([...f.all]);
     await purgeOrg(again.store, 'w1');
-    expect([...again.all].sort()).toEqual(['workspaces/w2', 'workspaces/w2/events/keep']);
+    expect([...again.all].sort()).toEqual([
+      'users/ann/busy/w2_ann_z',
+      'workspaces/w2',
+      'workspaces/w2/events/keep',
+    ]);
   });
   it('an organization that is already empty is just removed', async () => {
     const f = fake([W]);
