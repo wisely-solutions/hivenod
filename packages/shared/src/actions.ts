@@ -632,6 +632,22 @@ export function revokeAgent(
   ]);
 }
 
+/** Removes a revoked agent for good (admins only; the rules refuse a live agent). */
+export function removeAgent(
+  ctx: ActionContext,
+  input: { agentUid: string; name: string },
+): ActionPlan {
+  requireHuman(ctx);
+  return plan(
+    ctx,
+    'agent.removed',
+    {},
+    { agentUid: input.agentUid, name: input.name },
+    () => [{ kind: 'delete', path: paths.agent(ctx.workspaceId, input.agentUid) }],
+    paths.deleteEventId('agents', input.agentUid),
+  );
+}
+
 // ---------- projects ----------
 
 export function createProject(

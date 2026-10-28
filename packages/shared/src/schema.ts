@@ -124,6 +124,7 @@ export const EVENT_TYPES = [
   'run.ended',
   'agent.created',
   'agent.revoked',
+  'agent.removed',
   'agent.rotated',
   'agent.updated',
   'project.created',
@@ -718,6 +719,6 @@ export const paths = {
   logLine: (w: string, r: string, n: number) => `workspaces/${w}/runs/${r}/log/${n}`,
   event: (w: string, e: string) => `workspaces/${w}/events/${e}`,
   /** Deterministic tombstone event id required for hard deletes. */
-  deleteEventId: (kind: 'groups' | 'invites' | 'projects' | 'items', docId: string) =>
+  deleteEventId: (kind: 'groups' | 'invites' | 'projects' | 'items' | 'agents', docId: string) =>
     `del-${kind}-${docId}`,
 } as const;

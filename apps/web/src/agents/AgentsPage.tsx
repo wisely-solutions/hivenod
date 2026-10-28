@@ -1,6 +1,6 @@
 import type { Agent } from '@hive/shared';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { Bot, KeyRound, MoreHorizontal, Plus, ShieldOff } from 'lucide-react';
+import { Bot, KeyRound, MoreHorizontal, Plus, ShieldOff, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useReady } from '../auth/context';
 import { PageHeader } from '../pages/Chrome';
@@ -19,6 +19,7 @@ import { revokeAgentFlow, rotateAgentFlow } from './flow';
 import { openRunsOf } from './openRuns';
 import { agentStatus, colorIndex, scopeText, statusText, todayStats } from './logic';
 import { NewAgentModal } from './NewAgentModal';
+import { RemoveAgentDialog } from './RemoveAgentDialog';
 import { TokenDialog } from './TokenDialog';
 
 interface Issued {
@@ -53,6 +54,7 @@ export function AgentsPage() {
   const [issued, setIssued] = useState<Issued | null>(null);
   const [revoking, setRevoking] = useState<Row<Agent> | null>(null);
   const [rotating, setRotating] = useState<Row<Agent> | null>(null);
+  const [removing, setRemoving] = useState<Row<Agent> | null>(null);
   const [busy, setBusy] = useState(false);
 
   const active = agents.filter((a) => !a.data.revokedAt);
@@ -234,6 +236,27 @@ export function AgentsPage() {
                   </div>
                 </dl>
 
+                {isAdmin && isRevoked ? (
+                  <div className="flex justify-end">
+                    <ActionMenu
+                      label={`Actions for ${a.data.name}`}
+                      actions={[
+                        {
+                          id: 'remove',
+                          label: 'Remove…',
+                          icon: Trash2,
+                          tone: 'danger',
+                          onSelect: () => setRemoving(a),
+                        },
+                      ]}
+                      trigger={
+                        <IconButton label={`Actions for ${a.data.name}`} className="text-text-2">
+                          <Icon icon={MoreHorizontal} size={16} />
+                        </IconButton>
+                      }
+                    />
+                  </div>
+                ) : null}
                 {isAdmin && !isRevoked ? (
                   <div className="flex justify-end">
                     <ActionMenu
@@ -298,6 +321,8 @@ export function AgentsPage() {
           </>
         }
       />
+
+      <RemoveAgentDialog agent={removing} onClose={() => setRemoving(null)} />
 
       <Dialog
         open={rotating !== null}

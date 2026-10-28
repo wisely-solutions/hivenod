@@ -27,6 +27,7 @@ import type { CliAdapter } from './adapter';
 import { ADAPTERS } from './clis';
 import { updateNeeded, versionLine } from './version';
 import { HIVENOD_WEB_URL } from './pair';
+import { activeSite, resolveServer, serverFields } from './server';
 import { isRunCli } from '@hive/shared';
 import { claudeArgsProblem, describeExtraArgs, isBypass } from './claude';
 
@@ -42,6 +43,8 @@ const HELP = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod pair                                         pairs this machine with Hivenod (shows a code
                                                     an admin confirms) and saves the token; then
                                                     install the hivenod plugin in Claude Code
+  hivenod pair --server https://your.host              the same with a self-hosted Hivenod (saved
+                                                    with the token; HIVENOD_WEB_URL does the same)
 
   hivenod --version                                    the installed version (matches the Hivenod release)
   hivenod logout                                       forgets the token saved by pairing
@@ -189,6 +192,7 @@ const OPTIONS = {
   channel: { type: 'boolean' },
   'max-minutes': { type: 'string' },
   'max-items': { type: 'string' },
+  server: { type: 'string' },
 } as const;
 
 type Opts = ReturnType<typeof parse>['values'];
@@ -595,6 +599,7 @@ async function hiveRun(cli: string, o: Opts, extraArgs: string[] = []): Promise<
   process.on('SIGTERM', onTerm);
   let client: HiveClient | undefined;
   try {
+    const server = await resolveServer(o.server);
     let resolved = resolveToken();
     let saved: string | undefined;
     let pairedCode: string | undefined;
@@ -605,6 +610,7 @@ async function hiveRun(cli: string, o: Opts, extraArgs: string[] = []): Promise<
         workspaceId: p.workspaceId,
         agentUid: p.agentUid,
         agentName: p.agentName,
+        ...serverFields(server),
       });
       pairedCode = p.code;
       resolved = { token: p.token, source: 'file' };
@@ -634,7 +640,7 @@ async function hiveRun(cli: string, o: Opts, extraArgs: string[] = []): Promise<
     if (!client) return EXIT.interrupted;
     // A CLI too old for what Hivenod now sends (e.g. shaping jobs) stops before taking work.
     if (!process.env.FIRESTORE_EMULATOR_HOST) {
-      const update = await updateNeeded(HIVENOD_WEB_URL);
+      const update = await updateNeeded(activeSite());
       if (update) {
         say(`✗ ${update}`);
         return EXIT.error;
@@ -691,7 +697,7 @@ async function hiveRun(cli: string, o: Opts, extraArgs: string[] = []): Promise<
  * `hivenod pair` (card KLCTVnX8): pairs this machine like `hivenod run` does the first time, and
  * saves the token for `hivenod mcp` (the Claude Code plugin). The token is never printed.
  */
-async function pairOnly(): Promise<number> {
+async function pairOnly(server?: string): Promise<number> {
   const say = (line: string) => process.stdout.write(`${line}\n`);
   let have: ReturnType<typeof resolveToken> = null;
   try {
@@ -707,6 +713,7 @@ async function pairOnly(): Promise<number> {
     );
     return 0;
   }
+  const resolved = await resolveServer(server);
   const abort = new AbortController();
   const onInt = () => abort.abort();
   process.once('SIGINT', onInt);
@@ -717,6 +724,7 @@ async function pairOnly(): Promise<number> {
       workspaceId: p.workspaceId,
       agentUid: p.agentUid,
       agentName: p.agentName,
+      ...serverFields(resolved),
     });
     const c = await HiveClient.connect({ token: p.token }).catch(() => null);
     await c?.deletePairing(p.code);
@@ -839,6 +847,12 @@ export async function main(rawArgv: string[]): Promise<number> {
     return 1;
   };
   if (pos[0] === 'hook' && pos[1] === 'permission') return permissionHook(o.bridge);
+  if (o.server && pos[0] !== 'pair' && pos[0] !== 'run')
+    return fail(
+      new HiveError(
+        '--server goes with pair; the other commands use the server saved with the token.',
+      ),
+    );
   if (pos[0] === 'mcp') {
     try {
       if (o.run || o.bridge) {
@@ -871,6 +885,7 @@ export async function main(rawArgv: string[]): Promise<number> {
       const maxItems = o.channel
         ? (flag ?? parseMaxItems(process.env.HIVENOD_MAX_ITEMS, 'HIVENOD_MAX_ITEMS'))
         : undefined;
+      await resolveServer();
       await runMcp(
         o.channel ? { channel: { projectId: o.project, stepId: o.step, maxItems } } : {},
       );
@@ -883,7 +898,7 @@ export async function main(rawArgv: string[]): Promise<number> {
   setLogLevel('silent');
   if (pos[0] === 'pair') {
     try {
-      return await pairOnly();
+      return await pairOnly(o.server);
     } catch (e) {
       return fail(e);
     }
@@ -906,6 +921,7 @@ export async function main(rawArgv: string[]): Promise<number> {
   }
   let client: HiveClient | undefined;
   try {
+    await resolveServer();
     client = await HiveClient.connect();
     const cmd = await dispatch(client, pos, o);
     process.stdout.write(

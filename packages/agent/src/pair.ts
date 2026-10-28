@@ -23,8 +23,10 @@ import { deleteApp } from 'firebase/app';
 import { deleteDoc, doc, onSnapshot, setDoc, terminate } from 'firebase/firestore';
 import { firebaseApp, type ConnectOptions } from './client';
 import { errorCode, HiveError } from './errors';
+import { activeSite } from './server';
 
-// Self-hosting: HIVENOD_WEB_URL points the CLI at your own deployment (docs/SELF-HOST.md).
+// Self-hosting: --server or HIVENOD_WEB_URL points the CLI at your own deployment (server.ts,
+// docs/SELF-HOST.md). This is the start-up value; activeSite() is the resolved one.
 export const HIVENOD_WEB_URL = process.env.HIVENOD_WEB_URL || 'https://hivenod.com';
 
 export interface Paired {
@@ -70,7 +72,7 @@ export async function pairTerminal(opts: PairOptions): Promise<Paired> {
         if (errorCode(e) !== 'permission-denied' || attempt >= 4) throw e;
       }
     }
-    const web = process.env.HIVENOD_WEB_URL || HIVENOD_WEB_URL;
+    const web = activeSite();
     const ttl = opts.timeoutMs ?? PAIRING_TTL_MS;
     opts.say(`This terminal is not connected to Hivenod yet. To connect it, open`);
     opts.say(`  ${pairingUrl(web, code)}`);

@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/wisely-solutions/hivenod/cli/internal/discovery"
 	"github.com/wisely-solutions/hivenod/cli/internal/token"
 )
 
@@ -25,6 +26,11 @@ type Stored struct {
 	AgentUID    string `json:"agentUid"`
 	AgentName   string `json:"agentName"`
 	SavedAt     string `json:"savedAt"`
+	// Server is the self-hosted Hivenod this token belongs to (item 07W4gCboOicS0lM1bqwZ), with its
+	// discovery file as read when connecting. Both are absent for https://hivenod.com, so files
+	// saved before servers existed mean the hosted service, as they always did.
+	Server    string               `json:"server,omitempty"`
+	Discovery *discovery.Discovery `json:"discovery,omitempty"`
 }
 
 // Home is the folder of the saved pairing.
@@ -91,7 +97,39 @@ func Inspect() (State, *Stored) {
 			return string(b)
 		}
 	}
-	return OK, &Stored{Token: tok, WorkspaceID: str("workspaceId"), AgentUID: str("agentUid"), AgentName: str("agentName"), SavedAt: str("savedAt")}
+	out := &Stored{Token: tok, WorkspaceID: str("workspaceId"), AgentUID: str("agentUid"), AgentName: str("agentName"), SavedAt: str("savedAt")}
+	if srv, ok := m["server"].(string); ok && srv != "" {
+		site, err := discovery.NormalizeSite(srv)
+		if err != nil {
+			return Damaged, nil
+		}
+		if !discovery.IsHosted(site) {
+			out.Server = site
+			out.Discovery = storedDiscovery(site, m["discovery"])
+		}
+	}
+	return OK, out
+}
+
+// storedDiscovery checks the saved copy of a discovery file again; nil (read it anew) when it
+// does not fit the server.
+func storedDiscovery(site string, v any) *discovery.Discovery {
+	if v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	var d discovery.Discovery
+	if json.Unmarshal(b, &d) != nil || d.Site != site || d.Backend != "firestore" || d.Protocol < 1 || d.Protocol > discovery.Protocol ||
+		d.Firebase.APIKey == "" || d.Firebase.ProjectID == "" || d.Firebase.AuthDomain == "" {
+		return nil
+	}
+	if d.Emulators != nil && !discovery.IsLoopback(site) {
+		d.Emulators = nil
+	}
+	return &d
 }
 
 // Read returns the saved credentials, or nil when there are none or they are unusable.

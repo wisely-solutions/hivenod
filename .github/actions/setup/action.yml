@@ -1,0 +1,41 @@
+name: Set up the workspace
+description: Node, pnpm, install; optionally Java (emulators), Firebase emulator jars and Playwright's Chromium.
+inputs:
+  emulators:
+    description: 'true to set up Java and cache the Firebase emulator jars'
+    default: 'false'
+  browser:
+    description: 'true to install (and cache) Playwright Chromium'
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+    - if: inputs.emulators == 'true'
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 21
+    - if: inputs.emulators == 'true'
+      name: Cache the Firebase emulator jars
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/firebase/emulators
+        key: fb-emulators-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: fb-emulators-${{ runner.os }}-
+    - run: pnpm install --frozen-lockfile
+      shell: bash
+    - if: inputs.browser == 'true'
+      name: Cache Playwright browsers
+      id: pw
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+    - if: inputs.browser == 'true'
+      run: pnpm --filter @hive/web exec playwright install --with-deps chromium
+      shell: bash

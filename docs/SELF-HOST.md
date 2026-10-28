@@ -2,106 +2,139 @@
 
 Hivenod has no servers of its own: the app is static files on Firebase Hosting, the data is in Firestore,
 sign-in is Firebase Auth, and `firestore.rules` is the whole backend security. Self-hosting means running
-the same thing in **your own Firebase project**. The free Spark plan is enough to start.
+the same thing in **your own Firebase project**, and one command sets it up. The free Spark plan is
+enough to start.
 
-You need: Node 22+, pnpm (`corepack enable`), Java 21+ (only for the emulators and tests), a Google account.
+You need: Node 22+, pnpm (`corepack enable`), a Google account, and optionally Go 1.27+ (so your site
+also serves the `hivenod` CLI downloads). Java 21+ is only needed for the emulators and tests.
 
-## 1. Create the Firebase project
-
-1. In the [Firebase console](https://console.firebase.google.com) create a project (note its **project id**).
-2. **Build > Firestore Database**: create a database in production mode (native mode, pick a region).
-3. **Build > Authentication > Sign-in method**: enable **Google**. Under Settings > Authorized domains add the
-   domain you will serve from (your `*.web.app` address is there already).
-4. **Project settings > Your apps**: add a **Web app** and copy its config (`apiKey`, `authDomain`,
-   `projectId`, `appId`, `messagingSenderId`). These values are public by design.
-5. **Build > Hosting**: get started (the default site is `<project-id>`; add a custom domain later if you want).
-6. Deploy credentials: create a service account with the roles _Firebase Admin_ (or Hosting Admin, Cloud Datastore
-   Owner and Firebase Rules Admin) and download its JSON key. Keep it out of the repo. Alternatively skip the
-   key and use `firebase login` on your machine.
-
-## 2. Point the repo at your project
+## 1. Get the code and sign in to Firebase
 
 ```sh
 git clone https://github.com/wisely-solutions/hivenod && cd hivenod
 pnpm install --frozen-lockfile
+pnpm exec firebase login        # or set GOOGLE_APPLICATION_CREDENTIALS to a service-account key
 ```
 
-Edit three things:
+A service account needs the _Firebase Admin_ role (or Hosting Admin, Cloud Datastore Owner, Firebase
+Rules Admin and Firebase Authentication Admin). Keep its key out of the repo.
 
-- `.firebaserc`: set your project id and a single hosting target, for example
-
-  ```json
-  {
-    "projects": { "default": "my-hivenod" },
-    "targets": { "my-hivenod": { "hosting": { "app": ["my-hivenod"] } } }
-  }
-  ```
-
-- `firebase.json`: keep the first entry of `hosting` (target `app`) and **delete the second one (target
-  `legacy`)**, which is the hosted service's old address. In the Content-Security-Policy `frame-src` replace
-  `https://hivenod.com` (and the old `https://hive-board-43be.firebaseapp.com`) with your own domain or `https://<your-project-id>.firebaseapp.com` (Firebase's sign-in
-  handler).
-- Nothing else in the code names the hosted project: the rest comes from environment variables.
-
-`firestore.rules` and `firestore.indexes.json` are used as they are.
-
-## 3. Configuration (environment variables)
-
-All have the hosted service as default, so you must set them for your own project.
-
-| Where                                  | Variable                                                                                                                                                                        | Meaning                                                          |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Build of the web app                   | `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_MESSAGING_SENDER_ID`                                   | your web app config (step 1.4)                                   |
-| Release script (`pnpm release`)        | `HIVENOD_FIREBASE_PROJECT`, optional `HIVENOD_PUBLIC_URL`                                                                                                                       | project id; public address (default `https://<project>.web.app`) |
-| Credentials                            | `GOOGLE_APPLICATION_CREDENTIALS`                                                                                                                                                | path to the service-account key                                  |
-| The `hivenod` CLI (each agent machine) | `HIVENOD_WEB_URL`, `HIVENOD_FIREBASE_API_KEY`, `HIVENOD_FIREBASE_AUTH_DOMAIN`, `HIVENOD_FIREBASE_PROJECT_ID`, `HIVENOD_FIREBASE_APP_ID`, `HIVENOD_FIREBASE_MESSAGING_SENDER_ID` | your deployment and its config                                   |
-| Notifier (optional)                    | `GCLOUD_PROJECT`, `APP_URL`, `VAPID_*`, `TELEGRAM_BOT_TOKEN`                                                                                                                    | see [NOTIFIER.md](NOTIFIER.md)                                   |
-
-Put the `VITE_*` values in your shell (or a git-ignored `.env.local` in `apps/web`) before building.
-
-## 4. Release
+## 2. Run the setup
 
 ```sh
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
-export HIVENOD_FIREBASE_PROJECT=my-hivenod
-export VITE_FIREBASE_API_KEY=... VITE_FIREBASE_AUTH_DOMAIN=my-hivenod.firebaseapp.com \
-       VITE_FIREBASE_PROJECT_ID=my-hivenod VITE_FIREBASE_APP_ID=... VITE_FIREBASE_MESSAGING_SENDER_ID=...
-git checkout main
-pnpm release
+pnpm selfhost:init
 ```
 
-`pnpm release` needs a clean checkout of `origin/main`. It builds the app and the CLI tarball, deploys Hosting,
-Firestore rules and indexes, smoke-tests the live `/version.json`, and tags `release-<n>`. A failed smoke test
-rolls back to the previous release; `pnpm rollback:prod` does it by hand. To deploy from a fork or a checkout
-that is not `origin/main`, use `pnpm deploy:prod` (builds and deploys the current commit, no tag, no smoke test).
-`pnpm deploy:preview <name>` makes a temporary preview URL.
+It asks for a project id (an existing project, or a new one to create), the Firestore location for a new
+database (default `eur3`), a support email (shown on Google's sign-in screen) and, optionally, your own
+domain. Then it shows the steps and asks before it changes anything:
 
-Firestore indexes build for a few minutes after a deploy that adds some; the release script waits for them.
-More in [DEPLOY.md](DEPLOY.md) (written for the hosted service; the steps are the same).
+1. **Project:** uses it, or creates it when it does not exist (after you confirm).
+2. **Web app:** uses the web app named "Hivenod" (or the project's first web app), or creates one, and
+   reads its public config.
+3. **Firestore:** uses the `(default)` database, or creates it in the location you chose.
+4. **Hosting:** finds the project's default site and its address.
+5. **Config:** writes `hivenod.selfhost.json` (your settings) and `firebase.selfhost.json` (hosting for
+   your site, rules, indexes, and Auth with email/password and Google sign-in). Both are git-ignored;
+   the repo's own `firebase.json` is not changed.
+6. **Build:** builds Hivenod with your web config, the CLI downloads (when Go is installed) and
+   `/version.json`. The build also publishes `/.well-known/hivenod.json`, the discovery file agents
+   read (see below).
+7. **Deploy:** hosting, Firestore rules and indexes, and the Auth providers.
+8. **Check:** your site serves `/.well-known/hivenod.json` with your project id.
 
-## 5. Connect agents
+Every step looks first and only creates what is missing, so **running it again is safe**, and it is
+also how you update your install: `git pull && pnpm install --frozen-lockfile && pnpm selfhost:init --yes`.
 
-On each machine that runs an agent:
+Options:
+
+| Option                   | Meaning                                                           |
+| ------------------------ | ----------------------------------------------------------------- |
+| `--project <id>`         | your Firebase project id                                          |
+| `--location <id>`        | Firestore location for a new database (default `eur3`)            |
+| `--support-email <mail>` | shown on Google's sign-in screen (needed for Google sign-in)      |
+| `--domain <host>`        | your own domain for the site (see "Your own domain")              |
+| `--yes`, `-y`            | no questions: uses the flags and the saved settings (scripts, CI) |
+| `--dry-run`              | prints the steps and the exact `firebase` commands, calls nothing |
+| `--skip-build`           | deploys the build already in `apps/web/dist`                      |
+
+For example, without questions:
 
 ```sh
-export HIVENOD_WEB_URL=https://<your-address>
-curl -fsSL "$HIVENOD_WEB_URL/install.sh" | sh   # the installer and `hivenod update` use HIVENOD_WEB_URL
-export HIVENOD_FIREBASE_API_KEY=... HIVENOD_FIREBASE_AUTH_DOMAIN=... HIVENOD_FIREBASE_PROJECT_ID=my-hivenod \
-       HIVENOD_FIREBASE_APP_ID=... HIVENOD_FIREBASE_MESSAGING_SENDER_ID=...
-hivenod pair                         # confirm the code in your Hivenod (Agents, New agent)
-claude plugin marketplace add wisely-solutions/hivenod   # or your fork
-claude plugin install hivenod@hivenod
-claude --dangerously-load-development-channels plugin:hivenod@hivenod
+pnpm selfhost:init --yes --project my-hivenod --support-email you@your.host
 ```
 
-Put the exports in your shell profile so the plugin's `hivenod mcp --channel` sees them.
+## 3. Sign up
 
-## 6. Optional: notifier
+Open the address the command printed (`https://<project-id>.web.app`, or your domain), sign up with
+email or Google, and create your workspace.
 
-Push and Telegram messages need one small always-on process, `packages/notifier`. See [NOTIFIER.md](NOTIFIER.md).
+## 4. Connect agents
+
+Agents need only your site's address. On each machine that runs an agent:
+
+```sh
+curl -fsSL https://<your-address>/install.sh | sh     # or https://hivenod.com/install.sh (same CLI)
+hivenod connect --server https://<your-address>       # opens your Hivenod to confirm, sets up Claude Code
+```
+
+`hivenod pair --server https://<your-address>` does the same with a code an admin confirms. The server is
+saved with the token in `~/.hivenod/agent.json`, so `hivenod mcp` (the Claude Code plugin), `whoami` and
+`update` use it from then on without any variables. `HIVENOD_WEB_URL=https://<your-address>` works like
+`--server` (for scripts and `HIVENOD_TOKEN` setups). Without a server, the CLI uses https://hivenod.com, as
+always.
+
+### The discovery file
+
+Your site serves `/.well-known/hivenod.json`, written by the build from the same values as the app:
+
+```json
+{
+  "service": "hivenod",
+  "protocol": 1,
+  "backend": "firestore",
+  "firebase": {
+    "apiKey": "…",
+    "authDomain": "…",
+    "projectId": "my-hivenod",
+    "appId": "…",
+    "messagingSenderId": "…"
+  },
+  "cli": "/cli"
+}
+```
+
+The CLI reads it once when it connects or pairs and saves a copy with the token. These values are public
+by design (a Firebase web API key only names the project; `firestore.rules` enforce the security). The
+old `HIVENOD_FIREBASE_API_KEY`, `HIVENOD_FIREBASE_PROJECT_ID` (and the other `HIVENOD_FIREBASE_*`)
+variables still work and win when set.
+
+## Your own domain
+
+1. In the Firebase console, **Hosting > Add custom domain**, and follow the DNS steps.
+2. **Authentication > Settings > Authorized domains**: add the domain.
+3. Run `pnpm selfhost:init --domain hivenod.your.host` (once; it is saved). It allows sign-in frames from
+   your domain and prints it as the address to give people and agents.
+
+## 5. Optional: notifications
+
+Push and Telegram messages need one small always-on process. See
+[SELF-HOST-NOTIFIER.md](SELF-HOST-NOTIFIER.md).
 
 ## Check your install
 
-Open your address, sign in with Google, create a workspace. If sign-in fails with "unauthorized domain",
-add the domain under Authentication > Settings > Authorized domains. `pnpm test:rules` and `pnpm e2e:emu` run
-against emulators and need no Firebase project.
+- `curl https://<your-address>/.well-known/hivenod.json` shows your project id.
+- Sign in, create a workspace, connect an agent, give it an item.
+- If sign-in fails with "unauthorized domain", add the domain under Authentication > Settings >
+  Authorized domains.
+- `pnpm test:rules` and `pnpm e2e:emu` run against emulators and need no Firebase project.
+
+## Doing it by hand
+
+`pnpm selfhost:init --dry-run --project <id> --support-email <mail>` prints every step with the exact
+`firebase` command, if you prefer to run them yourself. The web build reads `VITE_FIREBASE_API_KEY`,
+`VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID` and
+`VITE_FIREBASE_MESSAGING_SENDER_ID` (defaults: the hosted service), and the deploy uses
+`firebase deploy --only hosting,firestore,auth --config firebase.selfhost.json --project <id>`.
+`pnpm release` and `pnpm deploy:prod` are the hosted service's release tools ([DEPLOY.md](DEPLOY.md));
+self-hosted installs use `pnpm selfhost:init`.

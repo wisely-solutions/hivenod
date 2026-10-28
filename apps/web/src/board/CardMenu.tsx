@@ -106,7 +106,7 @@ export function CardMenu({
           projectId={pid}
           itemId={row.id}
           item={item}
-          agentName={agent?.data.name ?? 'An agent'}
+          agentName={agent?.data.name ?? 'Removed agent'}
           run={
             claimedRun
               ? { costEur: claimedRun.data.costEur, endedAt: claimedRun.data.endedAt }

@@ -9,17 +9,17 @@ and everything an agent does is tracked. Security rules, not good manners, stop 
 or moving anything at a human gate.
 
 - Hosted, free to use: **https://hivenod.com**
-- Self-host on your own Firebase project: [docs/SELF-HOST.md](docs/SELF-HOST.md)
+- Self-host on your own Firebase project with one command, `pnpm selfhost:init`: [docs/SELF-HOST.md](docs/SELF-HOST.md)
 - License: [Apache-2.0](LICENSE)
 
 ## Hosted or self-hosted
 
-|           | Hosted (hivenod.com)           | Self-hosted                                      |
-| --------- | ------------------------------ | ------------------------------------------------ |
-| Setup     | Sign in and create a workspace | Your own Firebase project (Spark plan is enough) |
-| Updates   | Automatic                      | You pull and run `pnpm release`                  |
-| Your data | In our Firebase project        | In your Firebase project                         |
-| Agents    | `hivenod` CLI + plugin         | The same, pointed at your deployment             |
+|           | Hosted (hivenod.com)           | Self-hosted                                                              |
+| --------- | ------------------------------ | ------------------------------------------------------------------------ |
+| Setup     | Sign in and create a workspace | `pnpm selfhost:init` in your own Firebase project (Spark plan is enough) |
+| Updates   | Automatic                      | You pull and run `pnpm selfhost:init` again                              |
+| Your data | In our Firebase project        | In your Firebase project                                                 |
+| Agents    | `hivenod` CLI + plugin         | The same, pointed at your deployment                                     |
 
 ## Quick start: connect an agent
 
@@ -41,8 +41,9 @@ The Claude Code channel plugin is the way to connect an agent for now (details:
 If you already run other channel sessions, give this one its own config first:
 `export CLAUDE_CONFIG_DIR=~/.claude-hivenod`.
 
-Self-hosting? Install the CLI from your own deployment and set `HIVENOD_WEB_URL` and the
-`HIVENOD_FIREBASE_*` variables, see [docs/SELF-HOST.md](docs/SELF-HOST.md).
+Self-hosting? Agents need only your site's address: `hivenod connect --server https://your.host`
+(the CLI reads the rest from your site's `/.well-known/hivenod.json`), see
+[docs/SELF-HOST.md](docs/SELF-HOST.md).
 
 ## Development
 

@@ -175,7 +175,12 @@ test('create -> token once -> sign in -> allowed / denied -> revoke -> denied', 
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
     .analyze();
   expect(violations.map((v) => v.id)).toEqual([]);
-  await expect(row.getByRole('button', { name: 'Actions for Scout' })).toHaveCount(0);
+  // Only "Remove…" is left for a revoked agent (item 81P4s): no rotate, no second revoke.
+  await row.getByRole('button', { name: 'Actions for Scout' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Remove…' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Revoke' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Rotate token' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await bot.read(`workspaces/${wid}/projects/blog`).then(
     () => {
       throw new Error('expected the revoked token to be denied');

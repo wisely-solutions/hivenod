@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { createSign } from 'node:crypto';
 import {
   authHeaderProblems,
+  discoveryProblems,
   existingTagFor,
   legacyRedirectProblems,
   authInitProblems,
@@ -180,6 +181,25 @@ async function smoke(commit, checkAuthHeaders = true, cwd = process.cwd()) {
         console.log(
           `Smoke test: CLI ${v.cli} served (${tarballs.join(', ')}: ${sizes.join(', ')} bytes)`,
         );
+      }
+      // The discovery file (item 07W4gCboOicS0lM1bqwZ): CLIs pointed at this site read their config
+      // from it. Older commits (rollbacks) have none.
+      if (v.commit === commit && existsSync(join(cwd, 'apps/web/dist/well-known/hivenod.json'))) {
+        const r = await fetch(`${prodUrl}/.well-known/hivenod.json?t=${Date.now()}`, {
+          cache: 'no-store',
+        });
+        const bad = discoveryProblems(
+          r.status,
+          r.headers.get('content-type'),
+          await r.text().catch(() => ''),
+          project,
+        );
+        if (bad.length) {
+          console.log(`Smoke test: ${bad.join('; ')}; retrying`);
+          await new Promise((r) => setTimeout(r, 3000));
+          continue;
+        }
+        console.log(`Smoke test: ${prodUrl}/.well-known/hivenod.json served`);
       }
       // Two sites: the old address must 301 pages to the new one, but still serve the CLI tarballs
       // (existing installs and the `hive` stub live there), with no redirect.

@@ -20,6 +20,13 @@ import {
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { decodeToken } from '@hive/shared';
+import {
+  DISCOVERY_PROTOCOL,
+  isHostedSite,
+  isLoopbackSite,
+  normalizeSite,
+  type Discovery,
+} from '@hive/shared/discovery';
 import { HiveError } from './errors';
 
 export interface StoredCredentials {
@@ -28,6 +35,12 @@ export interface StoredCredentials {
   agentUid: string;
   agentName: string;
   savedAt: string;
+  /**
+   * The self-hosted Hivenod this token belongs to, with its discovery file as read when connecting
+   * (item 07W4gCboOicS0lM1bqwZ). Absent for https://hivenod.com, as in every older file.
+   */
+  server?: string;
+  discovery?: Discovery;
 }
 
 export function hiveHome(): string {
@@ -68,19 +81,58 @@ export function inspectCredentials(): SavedState {
     const c = JSON.parse(raw) as Partial<StoredCredentials> | null;
     if (!c || typeof c.token !== 'string') return { state: 'damaged' };
     decodeToken(c.token);
-    return {
-      state: 'ok',
-      credentials: {
-        token: c.token,
-        workspaceId: String(c.workspaceId ?? ''),
-        agentUid: String(c.agentUid ?? ''),
-        agentName: String(c.agentName ?? ''),
-        savedAt: String(c.savedAt ?? ''),
-      },
+    const credentials: StoredCredentials = {
+      token: c.token,
+      workspaceId: String(c.workspaceId ?? ''),
+      agentUid: String(c.agentUid ?? ''),
+      agentName: String(c.agentName ?? ''),
+      savedAt: String(c.savedAt ?? ''),
     };
+    if (typeof c.server === 'string' && c.server) {
+      const site = normalizeSite(c.server); // throws: damaged
+      if (!isHostedSite(site)) {
+        credentials.server = site;
+        const d = storedDiscovery(site, c.discovery);
+        if (d) credentials.discovery = d;
+      }
+    }
+    return { state: 'ok', credentials };
   } catch {
     return { state: 'damaged' };
   }
+}
+
+/** The saved copy of a discovery file, checked again; undefined (read it anew) when it does not fit. */
+function storedDiscovery(site: string, v: unknown): Discovery | undefined {
+  const d = v as Partial<Discovery> | null | undefined;
+  const f = d?.firebase;
+  if (
+    !d ||
+    d.site !== site ||
+    d.backend !== 'firestore' ||
+    typeof d.protocol !== 'number' ||
+    d.protocol < 1 ||
+    d.protocol > DISCOVERY_PROTOCOL ||
+    !f?.apiKey ||
+    !f.projectId ||
+    !f.authDomain
+  )
+    return undefined;
+  const out: Discovery = {
+    protocol: d.protocol,
+    backend: 'firestore',
+    site,
+    firebase: {
+      apiKey: String(f.apiKey),
+      authDomain: String(f.authDomain),
+      projectId: String(f.projectId),
+      appId: String(f.appId ?? ''),
+      messagingSenderId: String(f.messagingSenderId ?? ''),
+    },
+    cli: String(d.cli ?? ''),
+  };
+  if (d.emulators && isLoopbackSite(site)) out.emulators = d.emulators;
+  return out;
 }
 
 /** The saved credentials, or null when there are none (or the file is not usable). */

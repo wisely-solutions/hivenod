@@ -1,7 +1,47 @@
 /// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig, type Plugin } from 'vite';
+import { discoveryDocument, HOSTED_FIREBASE } from '@hive/shared/discovery';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
+
+/**
+ * The site's discovery file (item 07W4gCboOicS0lM1bqwZ): the CLIs read /.well-known/hivenod.json
+ * to find this deployment's Firebase config, so an agent needs only the site's address. Hosting
+ * skips dot folders, so it is written to /well-known/hivenod.json and firebase.json rewrites the
+ * public path to it. Same values as the app's own config (src/lib/app.ts).
+ */
+function discoveryFile(mode: string): Plugin {
+  return {
+    name: 'hive-discovery',
+    apply: 'build',
+    generateBundle() {
+      const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env };
+      const emulators =
+        env.VITE_USE_EMULATOR === '1'
+          ? {
+              auth: `127.0.0.1:${env.VITE_AUTH_EMULATOR_PORT ?? 9099}`,
+              firestore: `127.0.0.1:${env.VITE_FIRESTORE_EMULATOR_PORT ?? 8080}`,
+            }
+          : undefined;
+      const doc = discoveryDocument(
+        {
+          apiKey: env.VITE_FIREBASE_API_KEY || HOSTED_FIREBASE.apiKey,
+          authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || HOSTED_FIREBASE.authDomain,
+          projectId: env.VITE_FIREBASE_PROJECT_ID || HOSTED_FIREBASE.projectId,
+          appId: env.VITE_FIREBASE_APP_ID || HOSTED_FIREBASE.appId,
+          messagingSenderId:
+            env.VITE_FIREBASE_MESSAGING_SENDER_ID || HOSTED_FIREBASE.messagingSenderId,
+        },
+        { emulators },
+      );
+      this.emitFile({
+        type: 'asset',
+        fileName: 'well-known/hivenod.json',
+        source: `${JSON.stringify(doc, null, 2)}\n`,
+      });
+    },
+  };
+}
 
 /**
  * Starts fetching the signed-in code (Firebase and the first screen) in parallel with the entry
@@ -98,9 +138,10 @@ function preloadSignedIn(): Plugin {
 }
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
+    discoveryFile(mode),
     tailwindcss(),
     preloadSignedIn(),
     VitePWA({
@@ -174,4 +215,4 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
   },
-});
+}));
