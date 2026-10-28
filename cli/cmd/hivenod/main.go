@@ -43,6 +43,11 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod calendar delete <id>... | --source S [--member M] <sourceEventId>...
   hivenod calendar free --from T --to T [--member M] [--min N]
                            free time across all the member's organizations (busy time only)
+  hivenod calendar sync <events.json|-> [--source google] [--member M] [--from T --to T]
+                           [--incremental] [--busy-only] [--state FILE]
+                           syncs a calendar you read yourself (a Google Calendar events list,
+                           single events): adds, updates, removes; default window -1 day to
+                           +30 days; --state saves its nextSyncToken for the next --incremental run
   hivenod logout           forgets the token saved by pairing
   hivenod mcp              MCP stdio server for Claude Code
   hivenod mcp --channel [--project P] [--step S] [--max-items N]
@@ -66,6 +71,8 @@ type opts struct {
 	title, description                           string
 	member, source, from, to, min                string
 	attach                                       multi
+	incremental, busyOnly                        bool
+	state                                        string
 }
 
 // multi is a flag that may be given several times.
@@ -99,6 +106,9 @@ func parse(args []string) (opts, []string, error) {
 	fs.StringVar(&o.from, "from", "", "")
 	fs.StringVar(&o.to, "to", "", "")
 	fs.StringVar(&o.min, "min", "", "")
+	fs.BoolVar(&o.incremental, "incremental", false, "")
+	fs.BoolVar(&o.busyOnly, "busy-only", false, "")
+	fs.StringVar(&o.state, "state", "", "")
 	// Flags may come before or after the command words.
 	var pos []string
 	for len(args) > 0 {

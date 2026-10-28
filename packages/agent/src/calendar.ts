@@ -11,7 +11,14 @@ import {
   calendarUpsert,
   DEFAULT_FREE_MIN_MINUTES,
   freeSlots,
+  MAX_CALENDAR_EVENTS_PER_WRITE,
   paths,
+  planCalendarSync,
+  SYNC_AHEAD_MS,
+  SYNC_PAST_MS,
+  type GoogleEvent,
+  type SyncedEvent,
+  type SyncMode,
   type ActionContext,
   type ActionPlan,
   type CalendarEventInput,
@@ -27,6 +34,7 @@ import {
   where,
   type Firestore,
 } from 'firebase/firestore';
+import { writeFileSync } from 'node:fs';
 import { HiveError } from './errors';
 
 /** RFC 3339 with a zone (Z or ±hh:mm), seconds optional: what both CLIs read the same way. */
@@ -199,4 +207,153 @@ export async function freeTime(
     busyBlocks: busy.length,
     note: 'Free time across all the organizations the member is in (busy time only, never details). Times are UTC; propose slots in the member’s own time zone and working hours.',
   };
+}
+
+// ---------- sync (item fJnu6) ----------
+
+/**
+ * What the agent read from the source with its own access: a Google Calendar API events list
+ * (`{ items, nextSyncToken }`, single events expanded) or a plain array of events. Hivenod never
+ * connects to Google; the personal agent fills this, and tests use a stub.
+ */
+export interface SyncFeed {
+  items: GoogleEvent[];
+  nextSyncToken?: string;
+}
+
+/** Reads a feed from JSON text: `{ "items": [...], "nextSyncToken": "…" }` or `[...]`. */
+export function parseFeed(text: string, name: string): SyncFeed {
+  let v: unknown;
+  try {
+    v = JSON.parse(text);
+  } catch {
+    throw new HiveError(`${name}: not JSON.`);
+  }
+  if (Array.isArray(v)) return { items: v as GoogleEvent[] };
+  const o = v as { items?: unknown; nextSyncToken?: unknown } | null;
+  if (!o || typeof o !== 'object' || !Array.isArray(o.items))
+    throw new HiveError(
+      `${name}: give a Google Calendar events list ({"items": [...]}) or an array of events.`,
+    );
+  return {
+    items: o.items as GoogleEvent[],
+    ...(typeof o.nextSyncToken === 'string' ? { nextSyncToken: o.nextSyncToken } : {}),
+  };
+}
+
+export interface SyncArgs {
+  member?: string;
+  source?: string;
+  incremental?: boolean;
+  busyOnly?: boolean;
+  from?: string;
+  to?: string;
+  feed: SyncFeed;
+  /** For tests: the clock. */
+  now?: number;
+}
+
+/**
+ * Syncs a member's calendar from a source into this organization: adds and updates what
+ * changed, removes what is gone (cancelled, declined, free, or, in a full sync, no longer listed in
+ * the window), in batches of 100, each with its busy blocks.
+ */
+export async function syncEvents(d: Deps, a: SyncArgs) {
+  const memberUid = await resolveMember(d, a.member);
+  const source = (a.source ?? 'google').trim();
+  const now = a.now ?? Date.now();
+  const from = a.from ? parseTime(a.from, 'from') : new Date(now - SYNC_PAST_MS);
+  const to = a.to ? parseTime(a.to, 'to') : new Date(now + SYNC_AHEAD_MS);
+  const mode: SyncMode = a.incremental ? 'incremental' : 'full';
+  wrap(() => planCalendarSync({ source, mode, from, to, existing: [], items: [] }));
+  const snap = await getDocs(
+    query(
+      collection(d.db, `workspaces/${d.ctx.workspaceId}/calendar`),
+      where('memberUid', '==', memberUid),
+      where('end', '>', Timestamp.fromDate(from)),
+    ),
+  );
+  const existing: SyncedEvent[] = [];
+  for (const s of snap.docs) {
+    const e = s.data() as {
+      source: string;
+      sourceEventId: string;
+      title: string;
+      start: Timestamp;
+      end: Timestamp;
+      allDay: boolean;
+      attendees: string[];
+      busyOnly: boolean;
+      deleted: boolean;
+    };
+    if (e.source !== source) continue;
+    existing.push({
+      sourceEventId: e.sourceEventId,
+      title: e.title,
+      start: e.start.toDate(),
+      end: e.end.toDate(),
+      allDay: e.allDay,
+      attendees: e.attendees,
+      busyOnly: e.busyOnly,
+      deleted: e.deleted,
+    });
+  }
+  existing.sort((x, y) =>
+    x.sourceEventId < y.sourceEventId ? -1 : x.sourceEventId > y.sourceEventId ? 1 : 0,
+  );
+  const p = wrap(() =>
+    planCalendarSync({
+      source,
+      mode,
+      from,
+      to,
+      busyOnly: a.busyOnly,
+      existing,
+      items: a.feed.items,
+    }),
+  );
+  const n = MAX_CALENDAR_EVENTS_PER_WRITE;
+  for (let i = 0; i < p.upserts.length; i += n)
+    await d.write(
+      wrap(() => calendarUpsert(d.ctx, { memberUid, events: p.upserts.slice(i, i + n) })),
+    );
+  for (let i = 0; i < p.deletes.length; i += n)
+    await d.write(
+      wrap(() =>
+        calendarDelete(d.ctx, {
+          events: p.deletes
+            .slice(i, i + n)
+            .map((sid) => ({ id: calendarEventId(memberUid, source, sid), memberUid })),
+        }),
+      ),
+    );
+  return {
+    member: memberUid,
+    source,
+    mode,
+    from: iso(from),
+    to: iso(to),
+    upserted: p.upserts.length,
+    deleted: p.deletes.length,
+    unchanged: p.unchanged,
+    skipped: p.skipped,
+    nextSyncToken: a.feed.nextSyncToken ?? null,
+    note: `Synced ${source} (${mode}): ${p.upserts.length} added or updated, ${p.deletes.length} removed, ${p.unchanged} unchanged${p.skipped.length ? `, ${p.skipped.length} skipped` : ''}.`,
+  };
+}
+
+/**
+ * `--state FILE`: keeps the source's sync token for the next incremental run (mode 600). Only the
+ * token, the source, the member and when: never events. Nothing is written without a token.
+ */
+export function saveSyncState(
+  file: string,
+  r: { source: string; member: string; nextSyncToken: string | null },
+): void {
+  if (!r.nextSyncToken) return;
+  writeFileSync(
+    file,
+    `${JSON.stringify({ source: r.source, member: r.member, syncToken: r.nextSyncToken, syncedAt: new Date().toISOString() }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
 }
