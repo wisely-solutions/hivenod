@@ -164,7 +164,9 @@ const toMs = (t: { toMillis(): number } | null | undefined) => (t ? t.toMillis()
  * that has, among themselves by their last change; the item id breaks ties.
  */
 export function arrivalKey(item: Pick<Item, 'stepAt' | 'updatedAt'>, itemId: string) {
-  return [toMs(item.stepAt) ?? 0, toMs(item.updatedAt) ?? 0, itemId] as const;
+  // Whole milliseconds, like the Go CLI (toMillis keeps a fraction of the nanoseconds).
+  const ms = (t: { toMillis(): number } | undefined) => Math.floor(toMs(t) ?? 0);
+  return [ms(item.stepAt), ms(item.updatedAt), itemId] as const;
 }
 type ArrivalKey = ReturnType<typeof arrivalKey>;
 export function compareArrival(a: ArrivalKey, b: ArrivalKey): number {
