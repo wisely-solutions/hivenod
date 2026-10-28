@@ -854,6 +854,38 @@ export function setShapeNewItems(
   );
 }
 
+/**
+ * Admins and the project's creator: whether agents may create items in this project (item DhsO9).
+ * Off by default; the rules enforce who may switch it and that agents create only while it is on.
+ */
+export function setAgentsMayCreateItems(
+  ctx: ActionContext,
+  input: { projectId: string; on: boolean },
+): ActionPlan {
+  requireHuman(ctx);
+  return plan(
+    ctx,
+    'project.updated',
+    { projectId: input.projectId },
+    { agentsMayCreateItems: input.on },
+    (eventId) => [
+      {
+        kind: 'update',
+        path: paths.project(ctx.workspaceId, input.projectId),
+        data: { agentsMayCreateItems: input.on, lastEventId: eventId },
+      },
+    ],
+  );
+}
+
+/** Whether agents may create items in the project (absent = off). */
+export function agentsMayCreateItems(project: { agentsMayCreateItems?: boolean }): boolean {
+  return project.agentsMayCreateItems === true;
+}
+
+export const AGENT_CREATE_OFF_MESSAGE =
+  'This project does not let agents create items. An admin or the project creator can switch on "Agents may create items" in Settings, Projects.';
+
 /** Hides a project from lists and the board. Undo with `restoreProject`. */
 export function archiveProject(ctx: ActionContext, input: { projectId: string; name: string }) {
   requireHuman(ctx);
@@ -875,14 +907,25 @@ export function archiveProject(ctx: ActionContext, input: { projectId: string; n
 /** Edits a project's name, emoji and description (Settings > Projects). */
 export function updateProject(
   ctx: ActionContext,
-  input: { projectId: string; name: string; emoji: string; description: string },
+  input: {
+    projectId: string;
+    name: string;
+    emoji: string;
+    description: string;
+    /** Item DhsO9: only when it changes (admins and the project's creator). */
+    agentsMayCreateItems?: boolean;
+  },
 ) {
   requireHuman(ctx);
+  const setting =
+    input.agentsMayCreateItems === undefined
+      ? {}
+      : { agentsMayCreateItems: input.agentsMayCreateItems };
   return plan(
     ctx,
     'project.updated',
     { projectId: input.projectId },
-    { name: input.name },
+    { name: input.name, ...setting },
     (eventId) => [
       {
         kind: 'update',
@@ -891,6 +934,7 @@ export function updateProject(
           name: input.name,
           emoji: input.emoji,
           description: input.description,
+          ...setting,
           lastEventId: eventId,
         },
       },
@@ -917,10 +961,15 @@ export function restoreProject(ctx: ActionContext, input: { projectId: string; n
 
 // ---------- items ----------
 
+/**
+ * A new item at the project's first step: a person's quick-add, or an agent's create_item (item
+ * DhsO9), which the project must allow (agentsMayCreateItems). Either way it is ordinary work;
+ * createdBy and the item.created event name the actor.
+ */
 export function createItem(
   ctx: ActionContext,
   input: {
-    project: ProjectState;
+    project: ProjectState & { agentsMayCreateItems?: boolean };
     projectId: string;
     itemId?: string;
     title: string;
@@ -933,7 +982,9 @@ export function createItem(
     unshaped?: boolean;
   },
 ): ActionPlan & { itemId: string } {
-  requireHuman(ctx);
+  const byAgent = ctx.actor.type === 'agent';
+  if (byAgent && !agentsMayCreateItems(input.project))
+    throw new ActionError(AGENT_CREATE_OFF_MESSAGE);
   const itemId = input.itemId ?? nid(ctx);
   const first = input.project.steps[0];
   if (!first) throw new ActionError('This project has no steps');
@@ -952,8 +1003,11 @@ export function createItem(
             title: input.title,
             type: input.type,
             summary: input.summary ?? '',
-            source: input.source ?? { kind: 'manual', label: ctx.actor.name },
-            createdBy: { type: 'human', id: ctx.actor.id },
+            source: input.source ?? {
+              kind: byAgent ? 'agent' : 'manual',
+              label: ctx.actor.name.slice(0, 200),
+            },
+            createdBy: { type: ctx.actor.type, id: ctx.actor.id },
             parentItemId: input.parentItemId ?? null,
             sourceRunId: null,
             progress: null,

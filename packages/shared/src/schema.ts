@@ -369,6 +369,11 @@ export const projectSchema = z
      * from before paths: read with shapesNewItems().
      */
     shapeNewItems: z.boolean().optional(),
+    /**
+     * Item DhsO9: agents of this workspace allowed on the project may create items in it
+     * (create_item). Off when absent. Admins and the project's creator switch it.
+     */
+    agentsMayCreateItems: z.boolean().optional(),
     createdBy: uid,
     createdAt: timestamp,
     archivedAt: timestamp.nullable(),

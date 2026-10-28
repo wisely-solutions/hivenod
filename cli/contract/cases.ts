@@ -22,6 +22,7 @@ import {
   checkSendBackTarget,
   claimItem,
   completeStep,
+  createItem,
   endRun,
   firstOnPath,
   guardrailsOf,
@@ -506,6 +507,62 @@ function build(): ContractCase[] {
     parent: { title: 'x', claim: null },
     title: 'A',
     details: '',
+  });
+
+  // ---------- createItem (item DhsO9: agents create items) ----------
+  const make = (name: string, actor: Actor, input: Parameters<typeof createItem>[1]) =>
+    act(`createItem/${name}`, 'createItem', actor, input, createItem);
+  const OPEN = { steps: LIB, agentsMayCreateItems: true };
+  make('by an agent', AGENT, {
+    project: OPEN,
+    projectId: 'p1',
+    title: 'Fix the checkout timeout',
+    type: 'task',
+    summary: 'Asked on Telegram.',
+  });
+  make('by an agent, unshaped, own id', AGENT, {
+    project: { ...OPEN, shapeNewItems: true },
+    projectId: 'p1',
+    itemId: 'n1',
+    title: 'Look at the logs',
+    type: 'bug',
+    unshaped: true,
+  });
+  make('by an agent at a people first step', AGENT, {
+    project: {
+      steps: [humanStep('approve', 'Approve'), agentStep('build', 'Build')],
+      agentsMayCreateItems: true,
+    },
+    projectId: 'p1',
+    title: 'Approve the banner',
+    type: 'request',
+    parentItemId: 'i1',
+    order: 5,
+  });
+  make('by an agent, setting off', AGENT, {
+    project: { steps: LIB, agentsMayCreateItems: false },
+    projectId: 'p1',
+    title: 'x',
+    type: 'task',
+  });
+  make('by an agent, setting absent', AGENT, {
+    project: PROJECT,
+    projectId: 'p1',
+    title: 'x',
+    type: 'task',
+  });
+  make('by an agent, no steps', AGENT, {
+    project: { steps: [], agentsMayCreateItems: true },
+    projectId: 'p1',
+    title: 'x',
+    type: 'task',
+  });
+  make('by a person', HUMAN, {
+    project: PROJECT,
+    projectId: 'p1',
+    title: 'Quick one',
+    type: 'idea',
+    source: { kind: 'telegram', label: 'Telegram' },
   });
 
   // ---------- agentSendBack ----------

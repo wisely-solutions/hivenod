@@ -115,10 +115,12 @@ type Project struct {
 	MemberUIDs    []string            `firestore:"memberUids" json:"memberUids"`
 	StepAgents    map[string][]string `firestore:"stepAgents" json:"stepAgents"`
 	ShapeNewItems *bool               `firestore:"shapeNewItems" json:"shapeNewItems"`
-	CreatedBy     string              `firestore:"createdBy" json:"createdBy"`
-	CreatedAt     time.Time           `firestore:"createdAt" json:"createdAt"`
-	ArchivedAt    *time.Time          `firestore:"archivedAt" json:"archivedAt"`
-	LastEventID   string              `firestore:"lastEventId" json:"lastEventId"`
+	// AgentsMayCreateItems (item DhsO9): agents may create items here (absent = off).
+	AgentsMayCreateItems *bool      `firestore:"agentsMayCreateItems" json:"agentsMayCreateItems,omitempty"`
+	CreatedBy            string     `firestore:"createdBy" json:"createdBy"`
+	CreatedAt            time.Time  `firestore:"createdAt" json:"createdAt"`
+	ArchivedAt           *time.Time `firestore:"archivedAt" json:"archivedAt"`
+	LastEventID          string     `firestore:"lastEventId" json:"lastEventId"`
 }
 
 // DecisionMark is one approval or rejection at a gate.
