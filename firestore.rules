@@ -943,6 +943,161 @@ service cloud.firestore {
         }
       }
 
+      // ---------- inbox (item 4PEHrOW5IfXBQWgOK9wo, packages/shared/src/inbox.ts) ----------
+      // Requests, subjects and their events belong to one member (memberUid). Only that member
+      // (while in the organization) and the organization's non-revoked agents read them; admins
+      // and other members never do. Agents bring requests in, file and draft them, and mark as
+      // sent only what the member approved: 'sending' and `approved` are written by the member
+      // alone (Send), so nothing goes out without it. Inbox writes are tracked in inboxEvents
+      // (same rules as events: one per batch, actor == me, at == request.time, create-only),
+      // never in the organization-wide events, which every member may read.
+      function inboxEventPath(wid, eid) { return /databases/$(database)/documents/workspaces/$(wid)/inboxEvents/$(eid); }
+      function inboxSubjectPath(wid, sid) { return /databases/$(database)/documents/workspaces/$(wid)/inboxSubjects/$(sid); }
+      function inboxMember(wid, uid) { return uid is string && uid in get(wsPath(wid)).data.memberRoles; }
+      function inboxOwner(wid, d) { return isMember(wid) && d.memberUid == me(); }
+      function inboxReader(wid, d) { return inboxOwner(wid, d) || isActiveAgent(wid); }
+      // The inbox event `eid` is written in this batch by me, now, with one of `types`, for `member`.
+      function inboxTracked(wid, eid, types, member) {
+        let e = getAfter(inboxEventPath(wid, eid));
+        return eid is string && e != null && e.data.actor.id == me() && e.data.at == request.time
+          && e.data.type in types && e.data.memberUid == member;
+      }
+      function inboxTrackedFor(wid, eid, types, member, rid) {
+        return inboxTracked(wid, eid, types, member)
+          && getAfter(inboxEventPath(wid, eid)).data.requestId == rid;
+      }
+      // The subject `sid` exists after the batch and belongs to `member`.
+      function inboxSubjectOf(wid, sid, member) {
+        return sid is string && existsAfter(inboxSubjectPath(wid, sid))
+          && getAfter(inboxSubjectPath(wid, sid)).data.memberUid == member;
+      }
+      function inboxDraftOk(dr, byType) {
+        return exactKeys(dr, ['reply', 'actions', 'by', 'at']) && str(dr.reply, 1, 20000)
+          && dr.actions is list && dr.actions.size() <= 10
+          && dr.by == me_(byType) && dr.at == request.time;
+      }
+
+      match /inboxEvents/{eid} {
+        allow read: if inboxReader(wid, resource.data);
+        allow create: if signedIn() && !isDeleting(wid)
+          && exactKeys(request.resource.data, ['actor', 'memberUid', 'requestId', 'subjectId', 'type', 'data', 'at'])
+          && exactKeys(request.resource.data.actor, ['type', 'id', 'name'])
+          && request.resource.data.actor.id == me()
+          && str(request.resource.data.actor.name, 0, 200)
+          && request.resource.data.at == request.time
+          && request.resource.data.data is map
+          && strOrNull(request.resource.data.requestId, 128)
+          && strOrNull(request.resource.data.subjectId, 128)
+          && ((request.resource.data.actor.type == 'human' && isMember(wid)
+                && request.resource.data.memberUid == me()
+                && request.resource.data.type in ['inbox.edited', 'inbox.approved', 'inbox.ignored',
+                  'inbox.restored', 'subject.created', 'subject.renamed', 'subject.merged',
+                  'subject.split', 'subject.itemMade'])
+            || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
+                && inboxMember(wid, request.resource.data.memberUid)
+                && request.resource.data.type in ['inbox.added', 'inbox.filed', 'inbox.drafted', 'inbox.sent']));
+        allow update, delete: if false;
+      }
+
+      match /inboxRequests/{rid} {
+        // Members list theirs with where('memberUid', '==', uid).
+        allow read: if inboxReader(wid, resource.data);
+        // An agent brings a request in (inbox_add). Its id is the dedup key's hash, so the same
+        // input twice is an update of an existing request, which this never allows.
+        allow create: if isActiveAgent(wid)
+          && inboxNew(request.resource.data)
+          && inboxTrackedFor(wid, request.resource.data.lastEventId, ['inbox.added'],
+               request.resource.data.memberUid, rid);
+        allow update: if request.resource.data.updatedAt == request.time
+          && ((isActiveAgent(wid) && inboxAgentUpdate(wid, rid, request.resource.data, resource.data))
+            || (inboxOwner(wid, resource.data) && inboxOwnerUpdate(wid, rid, request.resource.data, resource.data)));
+        allow delete: if false;
+
+        function inboxNew(d) {
+          return exactKeys(d, ['memberUid', 'subjectId', 'status', 'source', 'sender', 'text',
+              'threadRef', 'messageId', 'permalink', 'replyRef', 'receivedAt', 'attachments',
+              'draft', 'approved', 'sent', 'fetchedBy', 'createdAt', 'updatedAt', 'lastEventId'])
+            && inboxMember(wid, d.memberUid)
+            && d.subjectId == null && d.status == 'new'
+            && d.source is string && d.source.matches('^[a-z][a-z0-9_-]{0,39}$')
+            && exactKeys(d.sender, ['name', 'handle'])
+            && str(d.sender.name, 1, 200) && strOrNull(d.sender.handle, 320)
+            && str(d.text, 1, 50000) && str(d.threadRef, 1, 1000) && str(d.messageId, 1, 500)
+            && strOrNull(d.permalink, 2048) && strOrNull(d.replyRef, 2000)
+            && d.receivedAt is timestamp
+            && d.attachments is list && d.attachments.size() <= 20
+            && d.draft == null && d.approved == null && d.sent == null
+            && d.fetchedBy == me()
+            && d.createdAt == request.time && d.updatedAt == request.time;
+        }
+        // Agents: file under a subject of the same member; draft; mark sent (fetching agent, only
+        // after the member's Send).
+        function inboxAgentUpdate(wid, rid, d, r) {
+          return (changed(['subjectId', 'status', 'updatedAt', 'lastEventId'])
+              && r.status in ['new', 'drafting', 'yourCall']
+              && d.status == (r.status == 'new' ? 'drafting' : r.status)
+              && inboxSubjectOf(wid, d.subjectId, r.memberUid)
+              && inboxTrackedFor(wid, d.lastEventId, ['inbox.filed'], r.memberUid, rid))
+            || (changed(['draft', 'status', 'updatedAt', 'lastEventId'])
+              && r.status in ['new', 'drafting', 'yourCall'] && r.subjectId != null
+              && d.status == 'yourCall' && inboxDraftOk(d.draft, 'agent')
+              && inboxTrackedFor(wid, d.lastEventId, ['inbox.drafted'], r.memberUid, rid))
+            || (changed(['status', 'sent', 'updatedAt', 'lastEventId'])
+              && r.status == 'sending' && r.fetchedBy == me() && d.status == 'done'
+              && exactKeys(d.sent, ['permalink', 'by', 'at'])
+              && strOrNull(d.sent.permalink, 2048) && d.sent.by == me() && d.sent.at == request.time
+              && inboxTrackedFor(wid, d.lastEventId, ['inbox.sent'], r.memberUid, rid));
+        }
+        // The member: edit the draft, Send it exactly as it stands, ignore, bring back, move it to
+        // another of their subjects (merge, split).
+        function inboxOwnerUpdate(wid, rid, d, r) {
+          return (changed(['draft', 'updatedAt', 'lastEventId'])
+              && r.status == 'yourCall' && r.draft != null && inboxDraftOk(d.draft, 'human')
+              && inboxTrackedFor(wid, d.lastEventId, ['inbox.edited'], me(), rid))
+            || (changed(['status', 'approved', 'updatedAt', 'lastEventId'])
+              && r.status == 'yourCall' && r.draft != null && d.status == 'sending'
+              && exactKeys(d.approved, ['reply', 'actions', 'byUid', 'at'])
+              && d.approved.reply == r.draft.reply && d.approved.actions == r.draft.actions
+              && d.approved.byUid == me() && d.approved.at == request.time
+              && inboxTrackedFor(wid, d.lastEventId, ['inbox.approved'], me(), rid))
+            || (changed(['status', 'updatedAt', 'lastEventId'])
+              && r.status in ['new', 'drafting', 'yourCall'] && d.status == 'ignored'
+              && inboxTrackedFor(wid, d.lastEventId, ['inbox.ignored'], me(), rid))
+            || (changed(['status', 'updatedAt', 'lastEventId'])
+              && r.status == 'ignored'
+              && d.status == (r.draft != null ? 'yourCall' : (r.subjectId != null ? 'drafting' : 'new'))
+              && inboxTrackedFor(wid, d.lastEventId, ['inbox.restored'], me(), rid))
+            || (changed(['subjectId', 'updatedAt', 'lastEventId'])
+              && inboxSubjectOf(wid, d.subjectId, me())
+              && inboxTracked(wid, d.lastEventId, ['subject.merged', 'subject.split'], me()));
+        }
+      }
+
+      match /inboxSubjects/{sid} {
+        allow read: if inboxReader(wid, resource.data);
+        // An agent names a new subject while filing a request; the member makes one by a split.
+        allow create: if exactKeys(request.resource.data, ['memberUid', 'name', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
+          && str(request.resource.data.name, 1, 120)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && ((isActiveAgent(wid) && inboxMember(wid, request.resource.data.memberUid)
+                && request.resource.data.createdBy == me_('agent')
+                && inboxTracked(wid, request.resource.data.lastEventId, ['inbox.filed'], request.resource.data.memberUid)
+                && getAfter(inboxEventPath(wid, request.resource.data.lastEventId)).data.subjectId == sid)
+            || (isMember(wid) && request.resource.data.memberUid == me()
+                && request.resource.data.createdBy == me_('human')
+                && inboxTracked(wid, request.resource.data.lastEventId, ['subject.split', 'subject.created'], me())));
+        // Only the member renames (or touches it in a merge or "Make it work").
+        allow update: if inboxOwner(wid, resource.data)
+          && changed(['name', 'updatedAt', 'lastEventId'])
+          && str(request.resource.data.name, 1, 120)
+          && request.resource.data.updatedAt == request.time
+          && inboxTracked(wid, request.resource.data.lastEventId, ['subject.renamed', 'subject.merged', 'subject.itemMade'], me());
+        // A merge deletes the subject it empties, with the tombstone event del-subject-<sid>.
+        allow delete: if inboxOwner(wid, resource.data)
+          && inboxTracked(wid, 'del-subject-' + sid, ['subject.merged'], me());
+      }
+
       // ---------- projects ----------
 
       match /projects/{pid} {

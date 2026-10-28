@@ -320,6 +320,58 @@ const MUTATIONS = [
       ['request.resource.data.bytes <= 921600', 'request.resource.data.bytes <= 2000000'],
     ],
   ],
+  // Inbox (item 4PEHrOW5IfXBQWgOK9wo)
+  [
+    'inbox: other members read',
+    [
+      [
+        'function inboxOwner(wid, d) { return isMember(wid) && d.memberUid == me(); }',
+        'function inboxOwner(wid, d) { return isMember(wid); }',
+      ],
+    ],
+  ],
+  [
+    'inbox: for anyone',
+    [
+      [
+        'function inboxMember(wid, uid) { return uid is string && uid in get(wsPath(wid)).data.memberRoles; }',
+        'function inboxMember(wid, uid) { return uid is string; }',
+      ],
+    ],
+  ],
+  ['inbox: Send approves another text', [['&& d.approved.reply == r.draft.reply', '']]],
+  [
+    'inbox: any agent marks sent',
+    [
+      [
+        "r.status == 'sending' && r.fetchedBy == me() && d.status == 'done'",
+        "r.status == 'sending' && d.status == 'done'",
+      ],
+    ],
+  ],
+  [
+    'inbox: sent without Send',
+    [
+      [
+        "r.status == 'sending' && r.fetchedBy == me() && d.status == 'done'",
+        "r.status in ['sending', 'yourCall'] && r.fetchedBy == me() && d.status == 'done'",
+      ],
+    ],
+  ],
+  [
+    "inbox: another member's subject",
+    [['&& getAfter(inboxSubjectPath(wid, sid)).data.memberUid == member;', ';']],
+  ],
+  [
+    'inbox: people write agent events',
+    [
+      [
+        "'subject.split', 'subject.itemMade'])",
+        "'subject.split', 'subject.itemMade', 'inbox.sent'])",
+      ],
+    ],
+  ],
+  ['inbox: requests created as anyone', [['&& d.fetchedBy == me()\n', '\n']]],
 ];
 
 // Fail loudly, before any run: a search text that no longer matches (the rules were refactored)
@@ -339,10 +391,16 @@ if (stale.length) {
 
 const runSuite = (verbose = false) => {
   try {
-    execFileSync('npx', ['vitest', 'run', '-c', 'vitest.rules.config.ts', '--reporter=dot'], {
-      cwd: new URL('..', import.meta.url),
-      stdio: 'pipe',
-    });
+    // MUTATE_FILES="rules/inbox.test.ts" runs only those test files (a quick check of new mutations).
+    const files = process.env.MUTATE_FILES?.split(',').map((f) => f.trim()) ?? [];
+    execFileSync(
+      'npx',
+      ['vitest', 'run', '-c', 'vitest.rules.config.ts', '--reporter=dot', ...files],
+      {
+        cwd: new URL('..', import.meta.url),
+        stdio: 'pipe',
+      },
+    );
     return true;
   } catch (e) {
     if (verbose)
