@@ -76,16 +76,16 @@ To add a type, add one entry, then run `UPDATE_GO_CONTRACT=1 pnpm test:scripts`.
 
 The initial types:
 
-| Type           | Fields                  | Carried out by           | Thread state when done   |
-| -------------- | ----------------------- | ------------------------ | ------------------------ |
-| `reply`        | text, holding?          | the home agent           | waiting on them          |
-| `reply_book`   | text, slot, with        | the home agent           | waiting on them          |
-| `no_reply`     | reason?                 | takes effect on approval | done                     |
-| `make_it_work` | title, brief?, project? | the home agent           | waiting on the item      |
-| `handover`     | to, note?               | the home agent           | waiting on a third party |
-| `snooze`       | until                   | takes effect on approval | waiting until the date   |
-| `nudge`        | text                    | the home agent           | waiting on them          |
-| `ignore`       | reason?                 | takes effect on approval | ignored                  |
+| Type           | Fields                         | Carried out by                                   | Thread state when done   |
+| -------------- | ------------------------------ | ------------------------------------------------ | ------------------------ |
+| `reply`        | text, holding?                 | the home agent                                   | waiting on them          |
+| `reply_book`   | text, start, end, with, title? | the home agent (the booking is made on approval) | waiting on them          |
+| `no_reply`     | reason?                        | takes effect on approval                         | done                     |
+| `make_it_work` | title, brief?, project?        | the home agent                                   | waiting on the item      |
+| `handover`     | to, note?                      | the home agent                                   | waiting on a third party |
+| `snooze`       | until                          | takes effect on approval                         | waiting until the date   |
+| `nudge`        | text                           | the home agent                                   | waiting on them          |
+| `ignore`       | reason?                        | takes effect on approval                         | ignored                  |
 
 An outcome's life:
 
@@ -98,6 +98,15 @@ An outcome's life:
    the thread's home agent, `fetchedBy`, because it has the channel access. It reports
    `outcome_done`: `done` moves the thread to the type's state, and `failed` sends it back to
    `investigating`.
+
+### Bookings (`reply_book`, item w9SAf)
+
+Approving a `reply_book` outcome also books the meeting, in the same batch: `approveOutcome`
+adds a `calendarUpsert` as the member, for the member's own calendar in this organization
+(source `hivenod`, sourceEventId = the outcome id, so `bookingEventId(member, outcomeId)` finds
+it; title = `title` or "Meeting with <with>"; attendees from `with`). The member's busy time is
+updated with it, so `calendar_free` sees the slot taken at once. The home agent then sends the
+reply and the invite, mirrors the event to the source calendar and reports `outcome_done`.
 
 ## Rules (firestore.rules, "inbox")
 
@@ -148,5 +157,5 @@ the emulators and requires equal results and documents.
 - **Part 2:** `inbox` channel events to the organization's main agent, outside `max_items`.
 - **Part 3:** the Inbox view (per workspace and across workspaces), decisions on outcomes,
   rename, merge, split and move, and notifier notices, including urgent pings.
-- **Later slices:** the Calendar (which completes `reply_book`), personal Google sync, and
+- **Later slices:** personal Google sync, and
   per-workspace auto-OK per outcome type.
