@@ -353,6 +353,7 @@ describe('busy blocks after leaving or deleting an organization', () => {
     expect(await exists(p.aliceW)).toBe(false);
     expect(await exists(p.aliceC)).toBe(true);
     // what an agent of the client's organization now sees as alice's busy time
+    await put({ [calendarPaths.agentHome(AC)]: { workspaceId: CLIENT } });
     const seen = await getDocs(collection(agentIn(AC, CLIENT).db, calendarPaths.busy('alice')));
     expect(seen.docs.map((d) => d.data().workspaceId)).toEqual([CLIENT]);
   });
