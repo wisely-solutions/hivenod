@@ -27,6 +27,11 @@ describe('hivenod mcp', () => {
       'complete',
       'create_item',
       'end_run',
+      'inbox_add',
+      'inbox_draft',
+      'inbox_list',
+      'inbox_read',
+      'inbox_sent',
       'list_work',
       'log',
       'progress',
@@ -38,6 +43,8 @@ describe('hivenod mcp', () => {
       'send_back',
       'shape_item',
       'skip_step',
+      'subject_assign',
+      'subject_list',
       'wait_for_work',
     ]);
     const make = tools.find((t) => t.name === 'create_item')!;

@@ -83,6 +83,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import { prepareAttachment } from './attach';
+import { InboxOps } from './inbox';
 import { CreateLimiter } from './ratelimit';
 import { resolveToken } from './credentials';
 import {
@@ -507,6 +508,18 @@ export class HiveClient {
       if (e instanceof ActionError) throw new HiveError(e.message);
       throw e;
     }
+  }
+
+  private inboxOps: InboxOps | null = null;
+  /** The inbox tools (item 4PEHrOW5IfXBQWgOK9wo): requests for members, subjects, drafts. */
+  inbox(): InboxOps {
+    return (this.inboxOps ??= new InboxOps({
+      db: this.db,
+      workspaceId: this.workspaceId,
+      uid: this.uid,
+      ctx: this.ctx,
+      agentCreatedBy: async () => (await this.refreshAgent()).createdBy,
+    }));
   }
 
   // ---------- operations (SPEC section 10) ----------

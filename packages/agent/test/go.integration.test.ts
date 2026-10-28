@@ -17,6 +17,9 @@ import {
   paths,
   sealToken,
   sendBack,
+  sendReply,
+  inboxPaths,
+  type InboxRequestState,
   type ItemState,
 } from '@hive/shared';
 import { toFirestoreValue } from '@hive/shared/firestore';
@@ -177,6 +180,9 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
     };
     await read(`workspaces/${W}/agents`);
     await read(`workspaces/${W}/events`);
+    await read(`workspaces/${W}/inboxRequests`);
+    await read(`workspaces/${W}/inboxSubjects`);
+    await read(`workspaces/${W}/inboxEvents`);
     for (const r of await read(`workspaces/${W}/runs`)) await read(`workspaces/${W}/runs/${r}/log`);
     for (const p of await read(`workspaces/${W}/projects`)) {
       await read(`workspaces/${W}/projects/${p}/decisions`);
@@ -331,6 +337,109 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     } finally {
       delete process.env.HIVENOD_HOME;
     }
+  }, 120_000);
+
+  it('inbox (item 4PEHr): add, dedup, file, reuse subjects, draft, Send by the person, sent', async () => {
+    const r = await both(async (call) => {
+      const base = {
+        source: 'teams',
+        sender: { name: 'Sam Example', handle: 'sam@example.com' },
+        text: 'Can we move the review to Thursday?',
+        threadRef: 'thread-1',
+        receivedAt: '2026-10-28T09:00:00Z',
+        permalink: 'https://teams.example.com/m/1',
+        replyRef: 'conv:1',
+        attachments: [{ name: 'agenda.pdf', url: 'https://files.example.com/a.pdf' }],
+      };
+      const r1 = out(await call('inbox_add', base)).requestId as string;
+      await call('inbox_add', base); // the same input again: a duplicate
+      const r2 = out(
+        await call('inbox_add', {
+          ...base,
+          member: 'alice',
+          messageId: 'm-2',
+          permalink: undefined,
+          attachments: undefined,
+        }),
+      ).requestId as string;
+      await call('inbox_add', { ...base, member: 'eve', messageId: 'x' });
+      await call('inbox_add', { ...base, receivedAt: 'yesterday' });
+      await call('inbox_add', { ...base, source: 'Teams', messageId: 'y' });
+      await call('inbox_list', {});
+      await call('subject_list', {});
+      const s1 = out(
+        await call('subject_assign', { requestId: r1, name: 'Review date (Payments)' }),
+      ).subjectId as string;
+      const sa = out(
+        await call('subject_assign', { requestId: r2, name: 'review date (payments)' }),
+      ).subjectId as string;
+      const r3 = out(
+        await call('inbox_add', {
+          ...base,
+          text: 'Also: Friday?',
+          messageId: 'm-3',
+          receivedAt: '2026-10-28T10:00:00Z',
+        }),
+      ).requestId as string;
+      await call('subject_assign', { requestId: r3, name: ' Review   DATE (payments) ' });
+      await call('subject_assign', { requestId: r3, subjectId: sa });
+      await call('subject_assign', { requestId: r3 });
+      await call('subject_list', {});
+      await call('inbox_draft', {
+        requestId: r1,
+        reply: 'Thursday works.',
+        actions: ['book Thu 10:00 with Sam'],
+      });
+      await call('inbox_sent', { requestId: r1 });
+      // The person presses Send in the app.
+      const owner = as('owner');
+      const state = (await snap(inboxPaths.request(W, r1))) as unknown as InboxRequestState;
+      await owner.run(sendReply(owner.ctx, { requestId: r1, request: state }));
+      await call('inbox_read', { requestId: r1 });
+      await call('inbox_list', {});
+      await call('inbox_sent', { requestId: r1, permalink: 'https://teams.example.com/m/9' });
+      await call('inbox_sent', { requestId: r1 });
+      await call('inbox_read', { requestId: r3 });
+      await call('inbox_draft', { requestId: r1, reply: 'again' });
+      await call('inbox_read', { requestId: 'nope' });
+      await call('subject_list', { member: 'alice' });
+      expect(s1).not.toBe(sa);
+    });
+    const oks = r.ts.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+    ]);
+    expect(r.ts.calls[1]).toMatchObject({ out: { duplicate: true } });
+    expect(r.ts.calls[11]).toMatchObject({
+      out: { created: false, name: 'Review date (Payments)' },
+    });
+    expect(r.ts.calls[17]).toMatchObject({ out: { status: 'sending', fetchedByMe: true } });
+    expect(r.go.calls).toEqual(r.ts.calls);
+    expect(r.go.docs).toEqual(r.ts.docs);
   }, 120_000);
 
   it('errors: gate, not claimed, wrong run, unknown item, oversized file, bad progress', async () => {

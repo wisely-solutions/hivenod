@@ -169,6 +169,134 @@ export const TOOLS: ToolDef[] = [
         (a.attachments as string[] | undefined) ?? [],
       ),
   }),
+  // ---------- Inbox (item 4PEHrOW5IfXBQWgOK9wo) ----------
+  tool({
+    name: 'inbox_add',
+    description:
+      'Bring a request someone sent to a person of your organization into their Hivenod Inbox (a Teams or Slack message, a mail, a Jira, GitLab or GitHub mention, …), so it gets a draft answer that the person sends with one tap. Bring in what needs an answer from them, with the full text. The same source + threadRef + messageId is never added twice. Next: file it with subject_assign (after subject_list), then write the answer with inbox_draft. Nothing is ever sent before the person presses Send.',
+    input: {
+      source: z
+        .string()
+        .min(1)
+        .max(40)
+        .describe(
+          'Where it came from, one lowercase word: teams, mail, gitlab, jira, github, telegram, slack, …',
+        ),
+      sender: z
+        .object({
+          name: z.string().min(1).max(200).describe("The sender's name"),
+          handle: z.string().max(320).optional().describe('Their address or handle in that source'),
+        })
+        .describe('Who sent it'),
+      text: z.string().min(1).max(50000).describe('The full text of the message'),
+      threadRef: z
+        .string()
+        .min(1)
+        .max(1000)
+        .describe('The thread or conversation it belongs to, in the source (what you reply to)'),
+      receivedAt: z.string().min(1).describe('When it was sent, ISO 8601 (2026-10-28T09:00:00Z)'),
+      messageId: z
+        .string()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe("The message's own id in the source; defaults to receivedAt"),
+      permalink: z.string().max(2048).optional().describe('An http(s) link to the message'),
+      replyRef: z
+        .string()
+        .max(2000)
+        .optional()
+        .describe('Whatever you need later to post the reply in the same place (ids, channel, …)'),
+      member: z
+        .string()
+        .min(1)
+        .max(128)
+        .optional()
+        .describe(
+          'User id of the person it is for; defaults to the person who connected this agent',
+        ),
+      attachments: z
+        .array(z.object({ name: z.string().min(1).max(200), url: z.string().min(1).max(2048) }))
+        .max(20)
+        .optional()
+        .describe('Links to its files'),
+    },
+    run: (c, a) => c.inbox().add(a as never),
+  }),
+  tool({
+    name: 'inbox_list',
+    description:
+      'List the Inbox requests of your organization waiting for agents: toFile (new: file them with subject_assign), toDraft (filed: answer them with inbox_draft) and toSend (approved by their person and brought in by you: post approved.reply, then inbox_sent).',
+    input: {},
+    run: (c) => c.inbox().list(),
+  }),
+  tool({
+    name: 'inbox_read',
+    description:
+      'Read one Inbox request in full: sender, source, text, thread and reply reference, its subject and the other requests in that subject (with what was answered before), the draft, what the person approved, and what to do next.',
+    input: { requestId: z.string().min(1).describe('Inbox request id') },
+    run: (c, a) => c.inbox().readRequest(a.requestId as string),
+  }),
+  tool({
+    name: 'subject_list',
+    description:
+      'A person\'s Inbox subjects: lasting, well-named topics that collect every request about them, from any source and sender (e.g. "Klarna refunds (M&S Payments)"). Read them before subject_assign and reuse the one a request belongs to; make a new one only for a new topic.',
+    input: {
+      member: z
+        .string()
+        .min(1)
+        .max(128)
+        .optional()
+        .describe('User id of the person; defaults to the person who connected this agent'),
+    },
+    run: (c, a) => c.inbox().subjects(a.member as string | undefined),
+  }),
+  tool({
+    name: 'subject_assign',
+    description:
+      'File an Inbox request under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. "Grafana access (Pairpoint)"). A name that matches an existing subject reuses it. Give exactly one of the two.',
+    input: {
+      requestId: z.string().min(1).describe('Inbox request id'),
+      subjectId: z.string().min(1).optional().describe('An existing subject'),
+      name: z.string().min(1).max(120).optional().describe('Or the name of a new subject'),
+    },
+    run: (c, a) =>
+      c
+        .inbox()
+        .assign(
+          a.requestId as string,
+          a.subjectId as string | undefined,
+          a.name as string | undefined,
+        ),
+  }),
+  tool({
+    name: 'inbox_draft',
+    description:
+      'Write the proposed answer to an Inbox request, in its person\'s own voice and style, using the context you can reach (the subject\'s earlier requests, knowledge bases, repos, tickets). It waits for them to Send, Edit or Ignore it in Hivenod: nothing is sent before their Send. You may draft again while it waits. actions are follow-ups to do once sent, in plain words ("book Thu 10:00-10:30 with Sam").',
+    input: {
+      requestId: z.string().min(1).describe('Inbox request id'),
+      reply: z.string().min(1).max(20000).describe('The answer, ready to send as written'),
+      actions: z.array(z.string().min(1).max(500)).max(10).optional(),
+    },
+    run: (c, a) =>
+      c
+        .inbox()
+        .draft(a.requestId as string, a.reply as string, (a.actions as string[] | undefined) ?? []),
+  }),
+  tool({
+    name: 'inbox_sent',
+    description:
+      'Mark an Inbox request as sent, after you posted its approved reply (approved.reply from inbox_read, exactly as written) in the same thread of its source, as its person. Only for a request its person pressed Send on (status sending) and that you brought in.',
+    input: {
+      requestId: z.string().min(1).describe('Inbox request id'),
+      permalink: z
+        .string()
+        .max(2048)
+        .optional()
+        .describe('An http(s) link to the reply you posted'),
+    },
+    run: (c, a) => c.inbox().sent(a.requestId as string, a.permalink as string | undefined),
+  }),
   tool({
     name: 'release',
     description:

@@ -9,6 +9,7 @@ import (
 
 	"github.com/wisely-solutions/hivenod/cli/internal/actions"
 	"github.com/wisely-solutions/hivenod/cli/internal/mcpserver"
+	"github.com/wisely-solutions/hivenod/cli/internal/model"
 )
 
 // Lazy connects on the first tool call, so Claude Code can list the tools before the token works;
@@ -89,6 +90,11 @@ func (a Args) outcome() Outcome {
 	return o
 }
 
+func asMap(v any) map[string]any {
+	m, _ := v.(map[string]any)
+	return m
+}
+
 // Run is a tool's work with a connected client.
 type Run func(ctx context.Context, c *Client, a Args) (any, error)
 
@@ -127,6 +133,37 @@ var ToolRuns = map[string]Run{
 	},
 	"create_item": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.CreateItem(ctx, a.S("project"), a.S("title"), a.S("description"), a.Strings("attachments"))
+	},
+	// Inbox (item 4PEHrOW5IfXBQWgOK9wo)
+	"inbox_add": func(ctx context.Context, c *Client, a Args) (any, error) {
+		in := InboxAddIn{Source: a.S("source"), Text: a.S("text"), ThreadRef: a.S("threadRef"), ReceivedAt: a.S("receivedAt"), MessageID: a.SP("messageId"), Permalink: a.SP("permalink"), ReplyRef: a.SP("replyRef"), Member: a.S("member")}
+		if snd, ok := a["sender"].(map[string]any); ok {
+			sa := Args(snd)
+			in.SenderName, in.Handle = sa.S("name"), sa.SP("handle")
+		}
+		if arr, ok := a["attachments"].([]any); ok {
+			for _, e := range arr {
+				m := Args(asMap(e))
+				in.Attachments = append(in.Attachments, model.InboxAttachment{Name: m.S("name"), URL: m.S("url")})
+			}
+		}
+		return c.InboxAdd(ctx, in)
+	},
+	"inbox_list": func(ctx context.Context, c *Client, a Args) (any, error) { return c.InboxList(ctx) },
+	"inbox_read": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.InboxRead(ctx, a.S("requestId"))
+	},
+	"subject_list": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.SubjectList(ctx, a.S("member"))
+	},
+	"subject_assign": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.SubjectAssign(ctx, a.S("requestId"), a.SP("subjectId"), a.SP("name"))
+	},
+	"inbox_draft": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.InboxDraft(ctx, a.S("requestId"), a.S("reply"), a.Strings("actions"))
+	},
+	"inbox_sent": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.InboxSent(ctx, a.S("requestId"), a.SP("permalink"))
 	},
 	// park / unpark exist in channel sessions only (ChannelTools gives them the session).
 	"park":   func(context.Context, *Client, Args) (any, error) { return nil, Errf(parkNoSession) },

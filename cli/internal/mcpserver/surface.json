@@ -328,6 +328,262 @@
         }
       },
       {
+        "name": "inbox_add",
+        "description": "Bring a request someone sent to a person of your organization into their Hivenod Inbox (a Teams or Slack message, a mail, a Jira, GitLab or GitHub mention, …), so it gets a draft answer that the person sends with one tap. Bring in what needs an answer from them, with the full text. The same source + threadRef + messageId is never added twice. Next: file it with subject_assign (after subject_list), then write the answer with inbox_draft. Nothing is ever sent before the person presses Send.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "description": "Where it came from, one lowercase word: teams, mail, gitlab, jira, github, telegram, slack, …"
+            },
+            "sender": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "The sender's name"
+                },
+                "handle": {
+                  "description": "Their address or handle in that source",
+                  "type": "string",
+                  "maxLength": 320
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "description": "Who sent it"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50000,
+              "description": "The full text of the message"
+            },
+            "threadRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "description": "The thread or conversation it belongs to, in the source (what you reply to)"
+            },
+            "receivedAt": {
+              "type": "string",
+              "minLength": 1,
+              "description": "When it was sent, ISO 8601 (2026-10-28T09:00:00Z)"
+            },
+            "messageId": {
+              "description": "The message's own id in the source; defaults to receivedAt",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "permalink": {
+              "description": "An http(s) link to the message",
+              "type": "string",
+              "maxLength": 2048
+            },
+            "replyRef": {
+              "description": "Whatever you need later to post the reply in the same place (ids, channel, …)",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "member": {
+              "description": "User id of the person it is for; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "attachments": {
+              "description": "Links to its files",
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "url": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "name",
+                  "url"
+                ]
+              }
+            }
+          },
+          "required": [
+            "source",
+            "sender",
+            "text",
+            "threadRef",
+            "receivedAt"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_list",
+        "description": "List the Inbox requests of your organization waiting for agents: toFile (new: file them with subject_assign), toDraft (filed: answer them with inbox_draft) and toSend (approved by their person and brought in by you: post approved.reply, then inbox_sent).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_read",
+        "description": "Read one Inbox request in full: sender, source, text, thread and reply reference, its subject and the other requests in that subject (with what was answered before), the draft, what the person approved, and what to do next.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Inbox request id"
+            }
+          },
+          "required": [
+            "requestId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "subject_list",
+        "description": "A person's Inbox subjects: lasting, well-named topics that collect every request about them, from any source and sender (e.g. \"Klarna refunds (M&S Payments)\"). Read them before subject_assign and reuse the one a request belongs to; make a new one only for a new topic.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member": {
+              "description": "User id of the person; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "subject_assign",
+        "description": "File an Inbox request under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. \"Grafana access (Pairpoint)\"). A name that matches an existing subject reuses it. Give exactly one of the two.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Inbox request id"
+            },
+            "subjectId": {
+              "description": "An existing subject",
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "description": "Or the name of a new subject",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "required": [
+            "requestId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_draft",
+        "description": "Write the proposed answer to an Inbox request, in its person's own voice and style, using the context you can reach (the subject's earlier requests, knowledge bases, repos, tickets). It waits for them to Send, Edit or Ignore it in Hivenod: nothing is sent before their Send. You may draft again while it waits. actions are follow-ups to do once sent, in plain words (\"book Thu 10:00-10:30 with Sam\").",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Inbox request id"
+            },
+            "reply": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20000,
+              "description": "The answer, ready to send as written"
+            },
+            "actions": {
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          },
+          "required": [
+            "requestId",
+            "reply"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_sent",
+        "description": "Mark an Inbox request as sent, after you posted its approved reply (approved.reply from inbox_read, exactly as written) in the same thread of its source, as its person. Only for a request its person pressed Send on (status sending) and that you brought in.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Inbox request id"
+            },
+            "permalink": {
+              "description": "An http(s) link to the reply you posted",
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "requestId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "release",
         "description": "Give an item you hold back to the queue without finishing it (for example after a run that ended without complete). Any agent can then claim it. Ending a run as failed already does this.",
         "inputSchema": {
@@ -1110,6 +1366,262 @@
           "required": [
             "project",
             "title"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_add",
+        "description": "Bring a request someone sent to a person of your organization into their Hivenod Inbox (a Teams or Slack message, a mail, a Jira, GitLab or GitHub mention, …), so it gets a draft answer that the person sends with one tap. Bring in what needs an answer from them, with the full text. The same source + threadRef + messageId is never added twice. Next: file it with subject_assign (after subject_list), then write the answer with inbox_draft. Nothing is ever sent before the person presses Send.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
+              "description": "Where it came from, one lowercase word: teams, mail, gitlab, jira, github, telegram, slack, …"
+            },
+            "sender": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "The sender's name"
+                },
+                "handle": {
+                  "description": "Their address or handle in that source",
+                  "type": "string",
+                  "maxLength": 320
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "description": "Who sent it"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50000,
+              "description": "The full text of the message"
+            },
+            "threadRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "description": "The thread or conversation it belongs to, in the source (what you reply to)"
+            },
+            "receivedAt": {
+              "type": "string",
+              "minLength": 1,
+              "description": "When it was sent, ISO 8601 (2026-10-28T09:00:00Z)"
+            },
+            "messageId": {
+              "description": "The message's own id in the source; defaults to receivedAt",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "permalink": {
+              "description": "An http(s) link to the message",
+              "type": "string",
+              "maxLength": 2048
+            },
+            "replyRef": {
+              "description": "Whatever you need later to post the reply in the same place (ids, channel, …)",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "member": {
+              "description": "User id of the person it is for; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "attachments": {
+              "description": "Links to its files",
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "url": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "name",
+                  "url"
+                ]
+              }
+            }
+          },
+          "required": [
+            "source",
+            "sender",
+            "text",
+            "threadRef",
+            "receivedAt"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_list",
+        "description": "List the Inbox requests of your organization waiting for agents: toFile (new: file them with subject_assign), toDraft (filed: answer them with inbox_draft) and toSend (approved by their person and brought in by you: post approved.reply, then inbox_sent).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_read",
+        "description": "Read one Inbox request in full: sender, source, text, thread and reply reference, its subject and the other requests in that subject (with what was answered before), the draft, what the person approved, and what to do next.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Inbox request id"
+            }
+          },
+          "required": [
+            "requestId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "subject_list",
+        "description": "A person's Inbox subjects: lasting, well-named topics that collect every request about them, from any source and sender (e.g. \"Klarna refunds (M&S Payments)\"). Read them before subject_assign and reuse the one a request belongs to; make a new one only for a new topic.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member": {
+              "description": "User id of the person; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "subject_assign",
+        "description": "File an Inbox request under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. \"Grafana access (Pairpoint)\"). A name that matches an existing subject reuses it. Give exactly one of the two.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Inbox request id"
+            },
+            "subjectId": {
+              "description": "An existing subject",
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "description": "Or the name of a new subject",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "required": [
+            "requestId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_draft",
+        "description": "Write the proposed answer to an Inbox request, in its person's own voice and style, using the context you can reach (the subject's earlier requests, knowledge bases, repos, tickets). It waits for them to Send, Edit or Ignore it in Hivenod: nothing is sent before their Send. You may draft again while it waits. actions are follow-ups to do once sent, in plain words (\"book Thu 10:00-10:30 with Sam\").",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Inbox request id"
+            },
+            "reply": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20000,
+              "description": "The answer, ready to send as written"
+            },
+            "actions": {
+              "maxItems": 10,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          },
+          "required": [
+            "requestId",
+            "reply"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "inbox_sent",
+        "description": "Mark an Inbox request as sent, after you posted its approved reply (approved.reply from inbox_read, exactly as written) in the same thread of its source, as its person. Only for a request its person pressed Send on (status sending) and that you brought in.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Inbox request id"
+            },
+            "permalink": {
+              "description": "An http(s) link to the reply you posted",
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "requestId"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
