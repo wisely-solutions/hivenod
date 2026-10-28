@@ -1,0 +1,406 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------
+   Hivenod design tokens (SPEC section 7). Light is the default, the dark
+   block overrides. theme-init.js always sets data-theme before paint.
+   ------------------------------------------------------------------ */
+:root {
+  --ink: #15171b;
+  --text-2: #4b5160;
+  --text-3: #5b6270;
+  --surface: #ffffff;
+  --surface-2: #fafbfc;
+  --canvas: #f4f5f7;
+  --line: #e1e4ea;
+  --line-strong: #8a92a0;
+
+  --gate: #f2b32a;
+  --gate-bg: #fff7e5;
+  --gate-text: #9a6200;
+
+  --agent: #2f5fd0;
+  --agent-soft: #f2f5ff;
+
+  --approve: #1e8e5a;
+  --approve-solid: #187a4d;
+  --approve-bg: #eaf7f0;
+  --approve-text: #17704a;
+
+  --sendback: #a93622;
+  --sendback-border: #e8b4a8;
+  --sendback-bg: #fdf1ee;
+
+  --focus: #2f5fd0;
+  --on-solid: #ffffff;
+  --on-gate: #15171b;
+  --overlay: rgb(21 23 27 / 0.45);
+
+  --shadow-1: 0 1px 2px rgb(21 23 27 / 0.06), 0 1px 1px rgb(21 23 27 / 0.04);
+  --shadow-2: 0 4px 12px rgb(21 23 27 / 0.08), 0 1px 3px rgb(21 23 27 / 0.06);
+  --shadow-3: 0 16px 40px rgb(21 23 27 / 0.16), 0 4px 12px rgb(21 23 27 / 0.08);
+
+  /* eight distinguishable agent colours (white initial on each) */
+  --agent-1: #2f5fd0;
+  --agent-2: #6d4ac9;
+  --agent-3: #a8337f;
+  --agent-4: #b0401f;
+  --agent-5: #86600a;
+  --agent-6: #1b7a4e;
+  --agent-7: #0e7580;
+  --agent-8: #4b5563;
+
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --ink: #f2f3f5;
+  --text-2: #b4bac6;
+  --text-3: #98a0ae;
+  --surface: #171a1f;
+  --surface-2: #1e2228;
+  --canvas: #0e1013;
+  --line: #2a2e36;
+  --line-strong: #6b7384;
+
+  --gate: #f2b32a;
+  --gate-bg: #2a2110;
+  --gate-text: #f2b32a;
+
+  --agent: #8ab0ff;
+  --agent-soft: #172036;
+
+  --approve: #4cc38a;
+  --approve-solid: #187a4d;
+  --approve-bg: #12261c;
+  --approve-text: #4cc38a;
+
+  --sendback: #ff8f78;
+  --sendback-border: #6b2e22;
+  --sendback-bg: #2a1713;
+
+  --focus: #8ab0ff;
+  --on-solid: #ffffff;
+  --overlay: rgb(0 0 0 / 0.6);
+
+  --shadow-1: 0 0 0 1px rgb(255 255 255 / 0.03);
+  --shadow-2: 0 4px 12px rgb(0 0 0 / 0.35);
+  --shadow-3: 0 16px 40px rgb(0 0 0 / 0.5);
+
+  --agent-1: #3f6fe0;
+  --agent-2: #7b57d6;
+  --agent-3: #b8408c;
+  --agent-4: #bd4a26;
+  --agent-5: #8f680d;
+  --agent-6: #1b7a4e;
+  --agent-7: #0e7580;
+  --agent-8: #5a6475;
+
+  color-scheme: dark;
+}
+
+/* Tailwind theme: every token is a utility (bg-surface, text-text-2, ...) */
+@theme inline {
+  --font-sans: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --color-ink: var(--ink);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-canvas: var(--canvas);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-gate: var(--gate);
+  --color-gate-bg: var(--gate-bg);
+  --color-gate-text: var(--gate-text);
+  --color-agent: var(--agent);
+  --color-agent-soft: var(--agent-soft);
+  --color-approve: var(--approve);
+  --color-approve-solid: var(--approve-solid);
+  --color-approve-bg: var(--approve-bg);
+  --color-approve-text: var(--approve-text);
+  --color-sendback: var(--sendback);
+  --color-sendback-border: var(--sendback-border);
+  --color-sendback-bg: var(--sendback-bg);
+  --color-focus: var(--focus);
+  --color-on-solid: var(--on-solid);
+  --color-on-gate: var(--on-gate);
+  --color-overlay: var(--overlay);
+
+  --text-13: 13px;
+  --text-13--line-height: 1.45;
+  --text-14: 14px;
+  --text-14--line-height: 1.5;
+  --text-16: 16px;
+  --text-16--line-height: 1.5;
+  --text-20: 20px;
+  --text-20--line-height: 1.3;
+  --text-28: 28px;
+  --text-28--line-height: 1.15;
+  --text-34: 34px;
+  --text-34--line-height: 1.1;
+
+  --radius-btn: 7px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+
+  --shadow-e1: var(--shadow-1);
+  --shadow-e2: var(--shadow-2);
+  --shadow-e3: var(--shadow-3);
+
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-heartbeat: heartbeat 1.6s var(--ease-standard) infinite;
+  --animate-dots: dots 1.2s ease-in-out infinite;
+  --animate-countdown: countdown linear forwards;
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Forced states so the kit can show hover, active and focus side by side */
+@custom-variant hov (&:hover, &[data-force='hover']);
+@custom-variant act (&:active, &[data-force='active']);
+@custom-variant foc (&:focus-visible, &[data-force='focus']);
+
+@keyframes heartbeat {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+@keyframes dots {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes drop-highlight {
+  from {
+    background-color: var(--gate-bg);
+    box-shadow: 0 0 0 2px var(--gate);
+  }
+  to {
+    background-color: var(--surface);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.drop-in-highlight {
+  animation: drop-highlight 2s var(--ease) forwards;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scrollbar-gutter: stable;
+  }
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  h1 {
+    font-size: 34px;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    margin: 0;
+  }
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gate-text);
+}
+
+/* Reduced motion: no movement. Opacity changes still run (cross-fade). */
+@media (prefers-reduced-motion: reduce) {
+  *:not([data-keep-motion]),
+  *:not([data-keep-motion])::before,
+  *:not([data-keep-motion])::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Sign-in backdrop: folded columns drift slowly. Off under reduced motion. */
+@keyframes fold-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+.fold-mask {
+  mask-image: linear-gradient(to bottom, transparent 0%, black 38%, black 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 38%, black 100%);
+}
+/* Phone: the headline spans the middle of a tall screen, so the columns stay in the bottom
+   strip, faded, and never run through the text. */
+@media (max-width: 639px) {
+  .fold-mask {
+    opacity: 0.6;
+    mask-image: linear-gradient(to bottom, transparent 0%, transparent 74%, black 92%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, transparent 74%, black 92%);
+  }
+}
+.fold-strip {
+  animation: fold-drift 10s ease-in-out infinite;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fold-strip {
+    animation: none;
+    will-change: auto;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Route transitions. Browsers with View Transitions cross-fade the page
+   while the sidebar, tab bar and header stay put. Others get a CSS fade.
+   ------------------------------------------------------------------ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-base);
+  animation-timing-function: var(--ease);
+}
+::view-transition-group(shell-sidebar),
+::view-transition-group(shell-tabs),
+::view-transition-group(shell-header) {
+  animation: none;
+}
+@keyframes route-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+html[data-no-vt] .route-fade {
+  animation: route-fade var(--dur-base) var(--ease);
+}
+
+/* The keyboard is up: the tab bar steps aside so the field and the action bar have the room. */
+[data-keyboard='open'] nav[aria-label='Tabs'] {
+  display: none;
+}
+[data-keyboard='open'] body {
+  padding-bottom: var(--kb);
+}
+
+/* Sheets close in ~300 ms instead of vaul's 500 ms (card ASU73ciy). */
+[data-vaul-drawer],
+[data-vaul-overlay] {
+  transition-duration: 300ms !important;
+  /* vaul's own stylesheet drives open/close with keyframes (slideToBottom, fadeOut), not transitions */
+  animation-duration: 300ms !important;
+}
+
+/* A toast never covers an open sheet's fields: while a sheet is up, toasts show at the top. */
+body:has([data-vaul-drawer]) [role='region'][aria-label='Notifications'] {
+  top: max(8px, env(safe-area-inset-top)) !important;
+  bottom: auto !important;
+}
+
+/* ------------------------------------------------------------------
+   Moments of delight (card bSB9O2gW). Each runs once, 300 ms or less, on
+   transform and opacity only, over absolutely placed layers (no layout shift).
+   ------------------------------------------------------------------ */
+@keyframes hex-burst {
+  0% {
+    opacity: 0.95;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1);
+  }
+}
+.hex-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.hex-burst > span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 16px;
+  background: var(--gate);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  opacity: 0;
+  animation: hex-burst 280ms var(--ease) forwards;
+}
+@keyframes added-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--gate);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+[data-just-added='true'] {
+  animation: added-pulse 300ms var(--ease) 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hex-burst {
+    display: none;
+  }
+  [data-just-added='true'] {
+    animation: none;
+  }
+}

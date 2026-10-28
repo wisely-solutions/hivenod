@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: data: blob:; font-src https: data:; media-src data:; frame-src about:; base-uri 'none'; form-action 'none'"
+    />
+    <title>Hivenod viewer frame</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #fff;
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+  Host page for agent-made HTML (SPEC 9.6). It is served with its own, looser script policy than the
+  app (inline scripts allowed, no network except https images and fonts) so reports with inline
+  scripts work, and the app's strict policy stays untouched. The report itself runs in a nested
+  iframe with sandbox="allow-scripts allow-popups" (never allow-same-origin): an opaque origin,
+  so it cannot read this page, the app, cookies or storage, and it cannot navigate the top page.
+  This page only accepts the document from whoever embedded or opened it, never from the report.
+-->
+    <script>
+      (function () {
+        var host = window.parent !== window ? window.parent : window.opener;
+        if (!host) return;
+        var frame = null;
+        window.addEventListener('message', function (e) {
+          if (e.source !== host) return;
+          var d = e.data;
+          if (!d || d.hive !== 'doc' || typeof d.html !== 'string') return;
+          if (typeof d.title === 'string' && d.title) document.title = d.title;
+          if (frame) frame.remove();
+          frame = document.createElement('iframe');
+          frame.setAttribute('sandbox', 'allow-scripts allow-popups');
+          frame.setAttribute('title', typeof d.title === 'string' ? d.title : 'Document');
+          frame.srcdoc = d.html;
+          document.body.appendChild(frame);
+        });
+        host.postMessage({ hive: 'ready' }, '*');
+      })();
+    </script>
+  </body>
+</html>

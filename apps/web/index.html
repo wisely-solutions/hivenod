@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Hivenod</title>
+    <meta name="description" content="Agents do the work. You make the decisions." />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1013" media="(prefers-color-scheme: dark)" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Hivenod" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/375x667-light.png"
+      media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/375x667-dark.png"
+      media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/390x844-light.png"
+      media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/390x844-dark.png"
+      media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/393x852-light.png"
+      media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/393x852-dark.png"
+      media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/430x932-light.png"
+      media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: light)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/430x932-dark.png"
+      media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/820x1180-light.png"
+      media="(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: light)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/820x1180-dark.png"
+      media="(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)"
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+      /* The app shell skeleton: painted from the HTML alone, before any script runs, for people
+         who look signed in (theme-init.js sets data-auth). React renders the same markup
+         (components/AppSkeleton.tsx) until the session and the first data are in. */
+      /* The skeleton sits in #hv-boot, an overlay next to React's #root, so React replacing #root
+         never leaves a blank frame: main.tsx removes the overlay once the app has painted. */
+      #hv-boot {
+        display: none;
+      }
+      [data-auth] #hv-boot {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        overflow: hidden;
+      }
+      .hv-sk {
+        display: none;
+      }
+      [data-auth] .hv-sk {
+        display: flex;
+        min-height: 100dvh;
+        background: var(--canvas, #f4f5f7);
+      }
+      .hv-sk * {
+        box-sizing: border-box;
+      }
+      .hv-side {
+        display: none;
+        width: 4rem;
+        flex-shrink: 0;
+        border-right: 1px solid var(--line, #e1e4ea);
+        background: var(--surface, #fff);
+      }
+      .hv-col {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        flex-direction: column;
+      }
+      .hv-head {
+        display: flex;
+        height: 3rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 1rem;
+        border-bottom: 1px solid transparent;
+        background: var(--surface, #fff);
+      }
+      .hv-main {
+        width: 100%;
+        max-width: 72rem;
+        margin: 0 auto;
+        padding: 1rem 1rem 6rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .hv-b {
+        border-radius: 7px;
+        background: var(--line, #e1e4ea);
+        animation: hv-sh 1.6s ease-in-out infinite;
+      }
+      .hv-card {
+        height: 6rem;
+        border-radius: 12px;
+        border: 1px solid var(--line, #e1e4ea);
+        background: var(--surface, #fff);
+      }
+      .hv-tabs {
+        position: fixed;
+        inset: auto 0 0 0;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        height: 3.5rem;
+        padding-bottom: env(safe-area-inset-bottom);
+        border-top: 1px solid var(--line, #e1e4ea);
+        background: var(--surface, #fff);
+      }
+      .hv-tabs i {
+        display: block;
+        width: 1.5rem;
+        height: 1.5rem;
+        margin: 1rem auto 0;
+        border-radius: 7px;
+        background: var(--line, #e1e4ea);
+      }
+      @keyframes hv-sh {
+        50% {
+          opacity: 0.55;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .hv-b {
+          animation: none;
+        }
+      }
+      @media (min-width: 640px) {
+        .hv-side {
+          display: block;
+        }
+        .hv-head,
+        .hv-tabs {
+          display: none;
+        }
+        .hv-main {
+          padding: 2rem 1rem 4rem;
+        }
+      }
+      @media (min-width: 1280px) {
+        .hv-side {
+          width: 16rem;
+        }
+      }
+    </style>
+    <script src="/theme-init.js"></script>
+  </head>
+  <body>
+    <div id="hv-boot">
+      <div class="hv-sk" data-skeleton aria-hidden="true">
+        <div class="hv-side"></div>
+        <div class="hv-col">
+          <div class="hv-head">
+            <div class="hv-b" style="width: 1.6rem; height: 1.6rem"></div>
+            <div class="hv-b" style="width: 5rem; height: 1.5rem"></div>
+          </div>
+          <div class="hv-main">
+            <div class="hv-b" style="width: 12rem; height: 2.25rem"></div>
+            <div class="hv-card"></div>
+            <div class="hv-card"></div>
+            <div class="hv-card"></div>
+          </div>
+        </div>
+        <div class="hv-tabs"><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

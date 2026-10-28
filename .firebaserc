@@ -1,0 +1,11 @@
+{
+  "projects": { "default": "hive-board-43be" },
+  "targets": {
+    "hive-board-43be": {
+      "hosting": {
+        "app": ["hivenod"],
+        "legacy": ["hive-board-43be"]
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+node_modules
+dist
+.firebase
+*.log
+.env*
+playwright-report
+test-results
+coverage
+.DS_Store

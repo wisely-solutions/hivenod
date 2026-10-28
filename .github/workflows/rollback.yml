@@ -1,0 +1,50 @@
+name: Rollback
+# One tap: GitHub mobile/web -> Actions -> Rollback -> Run workflow.
+# Redeploys the release before the latest one (tags release-<n>). Needs GCP_SA_KEY like Release.
+on:
+  workflow_dispatch:
+concurrency:
+  group: release
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pick the previous release
+        run: |
+          latest=$(git tag -l 'release-*' | sort -t- -k2 -n | tail -1)
+          prev=$(git tag -l 'release-*' | sort -t- -k2 -n | tail -2 | head -1)
+          if [ -z "$latest" ] || [ "$latest" = "$prev" ]; then echo "No previous release to roll back to"; exit 1; fi
+          echo "Rolling back from $latest to $prev"
+          git checkout --detach "$prev"
+          echo "RELEASE_TAG=$prev" >> "$GITHUB_ENV"
+          echo "RELEASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy previous release
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -z "$GCP_SA_KEY" ]; then
+            echo "::notice::GCP_SA_KEY is not set, so GitHub does not deploy. The agent deploys from its VM: pnpm release / pnpm rollback:prod (docs/DEPLOY.md)."
+            echo "SKIP_RELEASE=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          umask 077
+          printf '%s' "$GCP_SA_KEY" > "$RUNNER_TEMP/gcp.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gcp.json"
+          pnpm deploy:prod
+          rm -f "$RUNNER_TEMP/gcp.json"

@@ -1,0 +1,26 @@
+{
+  "name": "@hive/notifier",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/notifier.mjs --external:firebase-admin --external:web-push --banner:js=\"import{createRequire as __cr}from'module';const require=__cr(import.meta.url);\"",
+    "test": "vitest run --passWithNoTests",
+    "start": "node dist/notifier.mjs",
+    "init-keys": "node dist/notifier.mjs init",
+    "test:integration": "vitest run -c vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@hive/shared": "workspace:*",
+    "firebase-admin": "^13.0.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/web-push": "^3.6.4",
+    "vitest": "5.0.5",
+    "esbuild": "^0.28.2"
+  }
+}

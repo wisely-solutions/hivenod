@@ -1,0 +1,50 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:scripts
+      - run: pnpm build
+      - run: pnpm size
+      - name: Rules tests (emulator)
+        run: pnpm test:rules
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm --filter @hive/web exec playwright install --with-deps chromium
+      - name: E2E (against the auth + firestore emulators)
+        run: pnpm e2e:emu
+        env:
+          CI: 'true'
+          # The 5-minute limit is for the 8-CPU VM; the hosted runner has 4 CPUs.
+          E2E_BUDGET_MIN: '12'
+      - name: First-load speed on a throttled phone (numbers only, shared runners are noisy)
+        run: |
+          PERF_DIR="$PWD/perf-out" pnpm perf:emu
+          node -e "const r=require('./perf-out/load.json');const row=(n,m)=>'| '+n+' | '+m.shell+' | '+m.heading+' | '+m.item+' | '+m.lcp+' | '+m.kb+' |';console.log('### First load, '+r.profile+'\n\n| run | shell ms | heading ms | first item ms | LCP ms | KB |\n|---|---|---|---|---|---|\n'+row('cold',r.cold)+'\n'+row('warm',r.warm)+'\n\nBudget: shell < '+r.budget.shellMs+', cold LCP < '+r.budget.coldLcpMs+', warm LCP < '+r.budget.warmLcpMs)" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          CI: 'true'

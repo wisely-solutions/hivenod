@@ -1,0 +1,193 @@
+package hive
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/wisely-solutions/hivenod/cli/internal/actions"
+	"github.com/wisely-solutions/hivenod/cli/internal/mcpserver"
+)
+
+// Lazy connects on the first tool call, so Claude Code can list the tools before the token works;
+// a failed sign-in is tried again on the next call.
+type Lazy struct {
+	Connect func(ctx context.Context) (*Client, error)
+	mu      sync.Mutex
+	c       *Client
+}
+
+// Get returns the client, connecting first if needed.
+func (l *Lazy) Get(ctx context.Context) (*Client, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.c != nil {
+		return l.c, nil
+	}
+	c, err := l.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	l.c = c
+	return c, nil
+}
+
+// Current is the connected client, or nil.
+func (l *Lazy) Current() *Client {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.c
+}
+
+// Args reads tool arguments (already checked against the schema).
+type Args map[string]any
+
+// S is a string argument ("" when absent).
+func (a Args) S(k string) string {
+	s, _ := a[k].(string)
+	return s
+}
+
+// Has reports whether an argument was given.
+func (a Args) Has(k string) bool { _, ok := a[k]; return ok }
+
+// F is a number argument (nil when absent).
+func (a Args) F(k string) *float64 {
+	if v, ok := a[k].(float64); ok {
+		return &v
+	}
+	return nil
+}
+
+// SP is an optional string argument.
+func (a Args) SP(k string) *string {
+	if v, ok := a[k].(string); ok {
+		return &v
+	}
+	return nil
+}
+
+func (a Args) outcome() Outcome {
+	o := Outcome{CostEur: a.F("costEur"), TokensIn: a.F("tokensIn"), TokensOut: a.F("tokensOut"), TokensCached: a.F("tokensCached"), Summary: a.SP("summary")}
+	if a.Has("model") {
+		o.ModelSet, o.Model = true, a.SP("model")
+	}
+	return o
+}
+
+// Run is a tool's work with a connected client.
+type Run func(ctx context.Context, c *Client, a Args) (any, error)
+
+// ToolRuns are the agent operations by tool name (packages/agent/src/tools.ts).
+var ToolRuns = map[string]Run{
+	"list_work": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.ListWork(ctx, Filter{ProjectID: a.S("project"), StepID: a.S("step")})
+	},
+	"wait_for_work": func(ctx context.Context, c *Client, a Args) (any, error) {
+		secs := 300.0
+		if v := a.F("timeoutSeconds"); v != nil {
+			secs = *v
+		}
+		return c.WaitForWork(ctx, Filter{ProjectID: a.S("project"), StepID: a.S("step")}, time.Duration(secs*float64(time.Second)), nil)
+	},
+	"claim": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.Claim(ctx, a.S("itemId"), a.S("project"))
+	},
+	"read_item": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.ReadItem(ctx, a.S("itemId"), a.S("project"))
+	},
+	"log": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.Log(ctx, a.S("runId"), a.S("text"), a.S("level"))
+	},
+	"attach": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.Attach(ctx, a.S("itemId"), a.S("source"), a.S("name"), a.S("project"))
+	},
+	"ask": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.Ask(ctx, a.S("itemId"), a.S("question"), a.S("project"))
+	},
+	"progress": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.Progress(ctx, a.S("itemId"), *a.F("done"), *a.F("total"), a.S("project"))
+	},
+	"raise_finding": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.RaiseFinding(ctx, a.S("itemId"), a.S("title"), a.S("details"), a.S("project"))
+	},
+	"release": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.Release(ctx, a.S("itemId"), a.S("project"))
+	},
+	"end_run": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.EndRun(ctx, a.S("runId"), a.S("status"), a.outcome())
+	},
+	"complete": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.Complete(ctx, a.S("itemId"), a.S("runId"), a.outcome(), a.S("project"))
+	},
+	"send_back": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.SendBack(ctx, a.S("itemId"), a.S("runId"), a.S("toStep"), a.S("reason"), a.outcome(), a.S("project"))
+	},
+	"add_note": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.AddNote(ctx, a.S("itemId"), a.S("text"), a.S("project"))
+	},
+	"shape_item": func(ctx context.Context, c *Client, a Args) (any, error) {
+		var skips []Skip
+		if arr, ok := a["skips"].([]any); ok {
+			for _, e := range arr {
+				m, _ := e.(map[string]any)
+				id, _ := m["stepId"].(string)
+				r, _ := m["reason"].(string)
+				skips = append(skips, Skip{id, r})
+			}
+		}
+		return c.Shape(ctx, a.S("itemId"), a.S("runId"), skips, a.S("note"), Outcome{}, a.S("project"))
+	},
+	"skip_step": func(ctx context.Context, c *Client, a Args) (any, error) {
+		skip, _ := a["skip"].(bool)
+		return c.SkipStep(ctx, a.S("itemId"), a.S("stepId"), skip, a.S("reason"), a.S("project"))
+	},
+	"ask_path_change": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.AskPathChange(ctx, a.S("itemId"), a.S("stepId"), a.S("reason"), a.S("project"))
+	},
+	"propose_step": func(ctx context.Context, c *Client, a Args) (any, error) {
+		p := actions.ProposalInput{Name: a.S("name"), Kind: a.S("kind"), Description: a.S("description"), Instructions: a.SP("instructions"), AfterStepID: a.S("afterStepId"), Reason: a.S("reason")}
+		if arr, ok := a["outputs"].([]any); ok {
+			p.Outputs = []string{}
+			for _, e := range arr {
+				if s, ok := e.(string); ok {
+					p.Outputs = append(p.Outputs, s)
+				}
+			}
+		}
+		return c.ProposeStep(ctx, a.S("itemId"), p, a.S("project"))
+	},
+	"report_usage": func(ctx context.Context, c *Client, a Args) (any, error) {
+		u := Usage{TokensIn: *a.F("tokensIn"), TokensOut: *a.F("tokensOut"), TokensCached: a.F("tokensCached")}
+		if a.Has("model") {
+			u.ModelSet, u.Model = true, a.SP("model")
+		}
+		return c.ReportUsage(ctx, a.S("runId"), u)
+	},
+}
+
+// PlainTools are the tools of `hivenod mcp` (no channel), in the TypeScript order.
+func PlainTools(lazy *Lazy) []mcpserver.Tool {
+	sf := mcpserver.LoadSurface()
+	out := make([]mcpserver.Tool, 0, len(sf.Plain.Tools))
+	for _, spec := range sf.Plain.Tools {
+		run, ok := ToolRuns[spec.Name]
+		if !ok {
+			panic(fmt.Sprintf("hive: no Go handler for tool %s", spec.Name))
+		}
+		out = append(out, mcpserver.Tool{Spec: spec, Run: func(ctx context.Context, args map[string]any) (any, error) {
+			c, err := lazy.Get(ctx)
+			if err != nil {
+				return nil, err
+			}
+			res, err := run(ctx, c, Args(args))
+			if err != nil {
+				return nil, errors.New(Message(err))
+			}
+			return res, nil
+		}})
+	}
+	return out
+}

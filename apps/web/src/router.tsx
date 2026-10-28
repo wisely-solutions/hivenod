@@ -1,0 +1,293 @@
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  lazyRouteComponent,
+  Navigate,
+  Outlet,
+  redirect,
+} from '@tanstack/react-router';
+import { lazy, Suspense, useEffect } from 'react';
+import { releaseBoot } from './lib/boot';
+import { useRouterState } from '@tanstack/react-router';
+import { useAuthHint } from './auth/hint';
+import { LoadingMark } from './components/Loading';
+import { SignInPage } from './pages/SignInPage';
+import { isSettingsTab, type SettingsTab } from './pages/settingsTabs';
+import { MotionProvider } from './ui/motion';
+
+// Firebase Auth and Firestore are most of the app's weight. They load only for people who may be
+// signed in (or are opening an invite), so the sign-in page paints without them.
+const SignedIn = lazy(() => import('./auth/SignedIn'));
+const ActionPage = lazy(() =>
+  import('./pages/ActionPage').then((m) => ({ default: m.ActionPage })),
+);
+// The signed-out front page and the Privacy page are their own pieces: signed-in loads skip them.
+const LandingPage = lazy(() => import('./landing/LandingPage'));
+const PrivacyPage = lazy(() => import('./landing/PrivacyPage'));
+const JoinPage = lazy(() => import('./pages/JoinPage').then((m) => ({ default: m.JoinPage })));
+
+function Root() {
+  const hint = useAuthHint();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  // The app has rendered its own first frame (its skeleton or content): the HTML skeleton can go.
+  useEffect(releaseBoot, []);
+  let body;
+  if (path.startsWith('/kit')) {
+    body = <Outlet />;
+  } else if (path === '/auth/action') {
+    // The links in Hivenod's emails (confirm address, reset password): for anyone, signed in or not.
+    body = (
+      <Suspense fallback={<LoadingMark />}>
+        <ActionPage />
+      </Suspense>
+    );
+  } else if (path === '/privacy') {
+    body = (
+      <Suspense fallback={<LoadingMark />}>
+        <PrivacyPage />
+      </Suspense>
+    );
+  } else if (!hint && path === '/') {
+    body = (
+      <Suspense fallback={<LoadingMark />}>
+        <LandingPage />
+      </Suspense>
+    );
+  } else if (!hint && !path.startsWith('/join/')) {
+    body = <SignInPage />;
+  } else {
+    body = (
+      <Suspense fallback={<LoadingMark />}>
+        <SignedIn>
+          <Outlet />
+        </SignedIn>
+      </Suspense>
+    );
+  }
+  return <MotionProvider>{body}</MotionProvider>;
+}
+
+const rootRoute = createRootRoute({ component: Root });
+const indexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): { sel?: string; f?: 'approvals' | 'questions' | 'findings' } => ({
+    ...(typeof s.sel === 'string' && s.sel ? { sel: s.sel } : {}),
+    ...(s.f === 'approvals' || s.f === 'questions' || s.f === 'findings' ? { f: s.f } : {}),
+  }),
+  component: lazyRouteComponent(() => import('./inbox/InboxPage'), 'InboxPage'),
+});
+// The style guide is route-split, so it never counts toward the initial JS budget.
+const kitRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/kit',
+  component: lazyRouteComponent(() => import('./kit/KitPage')),
+});
+// Settings is one page with tabs. The old Me pages forward to the matching tab.
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings',
+  beforeLoad: () => {
+    throw redirect({ to: '/settings/$tab', params: { tab: 'profile' }, replace: true });
+  },
+});
+const settingsTabRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/$tab',
+  beforeLoad: ({ params }) => {
+    if (!isSettingsTab(params.tab))
+      throw redirect({ to: '/settings/$tab', params: { tab: 'profile' }, replace: true });
+  },
+  component: lazyRouteComponent(() => import('./pages/SettingsPage'), 'SettingsPage'),
+});
+const legacyMe = (path: string, tab: SettingsTab) =>
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path,
+    beforeLoad: () => {
+      throw redirect({ to: '/settings/$tab', params: { tab }, replace: true });
+    },
+  });
+const meRoute = legacyMe('/me', 'profile');
+const membersRoute = legacyMe('/me/members', 'members');
+const groupsRoute = legacyMe('/me/groups', 'groups');
+const notificationsRoute = legacyMe('/me/notifications', 'notifications');
+const rangeSearch = (s: Record<string, unknown>): { range?: 7 | 30 | 90 } =>
+  s.range === 7 || s.range === 30 || s.range === 90 ? { range: s.range } : {};
+const projectsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects',
+  validateSearch: (s: Record<string, unknown>): { new?: 1 } =>
+    s.new === 1 || s.new === '1' ? { new: 1 } : {},
+  component: lazyRouteComponent(() => import('./projects/ProjectsPage'), 'ProjectsPage'),
+});
+const bellRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/notifications',
+  component: lazyRouteComponent(() => import('./bell/Bell'), 'NotificationsHistoryPage'),
+});
+const allItemsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/items',
+  component: lazyRouteComponent(() => import('./board/AllItemsPage'), 'AllItemsPage'),
+});
+const projectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/p/$pid',
+  validateSearch: (s: Record<string, unknown>): { view?: 'list'; item?: string } => ({
+    ...(s.view === 'list' ? { view: 'list' as const } : {}),
+    ...(typeof s.item === 'string' && s.item ? { item: s.item } : {}),
+  }),
+  component: lazyRouteComponent(() => import('./board/BoardPage'), 'ProjectPage'),
+});
+const viewerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/p/$pid/i/$iid/view/$aid',
+  component: lazyRouteComponent(() => import('./review/ViewerPage'), 'ViewerPage'),
+});
+const processRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/p/$pid/process',
+  component: lazyRouteComponent(() => import('./process/ProcessPage'), 'ProcessPage'),
+});
+const insightsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/insights',
+  validateSearch: (s: Record<string, unknown>): { range?: 7 | 30 | 90; project?: string } => ({
+    ...rangeSearch(s),
+    ...(typeof s.project === 'string' && s.project ? { project: s.project } : {}),
+  }),
+  component: lazyRouteComponent(() => import('./insights/InsightsPage'), 'InsightsPage'),
+});
+const projectInsightsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/p/$pid/insights',
+  validateSearch: rangeSearch,
+  component: lazyRouteComponent(() => import('./insights/InsightsPage'), 'ProjectInsightsPage'),
+});
+const activityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/activity',
+  component: lazyRouteComponent(() => import('./activity/ActivityPage'), 'ActivityPage'),
+});
+const agentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/agents',
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): {
+    connect?: string;
+    new?: 1;
+    token?: 1;
+    agent?: string;
+  } => ({
+    ...(typeof s.agent === 'string' && s.agent ? { agent: s.agent } : {}),
+    ...(typeof s.connect === 'string' && s.connect ? { connect: s.connect } : {}),
+    ...(s.new === 1 || s.new === '1' ? { new: 1 as const } : {}),
+    ...(s.token === 1 || s.token === '1' ? { token: 1 as const } : {}),
+  }),
+  // The old links: `hivenod pair` used to print /agents?connect=CODE, and ?new=1 opened the dialog.
+  // Both now open the Connect page, so CLIs already installed keep working.
+  beforeLoad: ({ search }) => {
+    if (search.connect || search.new)
+      throw redirect({
+        to: '/agents/connect',
+        search: search.connect ? { code: search.connect } : {},
+        replace: true,
+      });
+  },
+  component: lazyRouteComponent(() => import('./agents/AgentsPage'), 'AgentsPage'),
+});
+const connectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/agents/connect',
+  validateSearch: (s: Record<string, unknown>): { code?: string } =>
+    typeof s.code === 'string' && s.code ? { code: s.code } : {},
+  component: lazyRouteComponent(() => import('./agents/ConnectPage'), 'ConnectPage'),
+});
+const agentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/agents/$id',
+  component: lazyRouteComponent(() => import('./activity/AgentPage'), 'AgentPage'),
+});
+const actionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/auth/action',
+  component: () => null, // Root renders ActionPage itself
+});
+// Signed-out visitors see the sign-in page at /signin; anyone already signed in goes home.
+const signinRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/signin',
+  validateSearch: (s: Record<string, unknown>): { mode?: 'create' } =>
+    s.mode === 'create' ? { mode: 'create' } : {},
+  component: function SignInRedirect() {
+    return <Navigate to="/" replace />;
+  },
+});
+const privacyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/privacy',
+  component: () => null, // Root renders PrivacyPage itself
+});
+const joinRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/join/$wid/$code',
+  component: function Join() {
+    const { wid, code } = joinRoute.useParams();
+    return (
+      <Suspense fallback={<LoadingMark />}>
+        <JoinPage wid={wid} code={code} />
+      </Suspense>
+    );
+  },
+});
+
+export const router = createRouter({
+  routeTree: rootRoute.addChildren([
+    indexRoute,
+    kitRoute,
+    settingsRoute,
+    settingsTabRoute,
+    meRoute,
+    membersRoute,
+    groupsRoute,
+    notificationsRoute,
+    projectsRoute,
+    bellRoute,
+    allItemsRoute,
+    projectRoute,
+    viewerRoute,
+    processRoute,
+    insightsRoute,
+    projectInsightsRoute,
+    activityRoute,
+    agentsRoute,
+    connectRoute,
+    agentRoute,
+    joinRoute,
+    actionRoute,
+    privacyRoute,
+    signinRoute,
+  ]),
+  // Hover and touchstart start loading a route's code before the tap lands.
+  defaultPreload: 'intent',
+  defaultPreloadDelay: 20,
+  defaultPendingMs: 150,
+});
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router;
+  }
+}
+
+// Screen changes cross-fade (View Transitions). Switched on after the first load so opening the
+// app never runs a transition, and the page is never inert while it starts.
+const stopWaiting = router.subscribe('onResolved', () => {
+  stopWaiting();
+  router.update({ defaultViewTransition: true });
+});

@@ -1,0 +1,196 @@
+import { Link, useRouterState } from '@tanstack/react-router';
+import { Bot, Search, Settings } from 'lucide-react';
+import { useReady } from '../auth/context';
+import { Logo } from '../components/Logo';
+import { PersonAvatar } from '../components/PersonAvatar';
+import { Badge } from '../ui/badge';
+import { cn } from '../ui/cn';
+import { Icon } from '../ui/icon';
+import { Tooltip } from '../ui/overlay';
+import { useShellData } from './data';
+import { spendText } from './logic';
+import { ME, NAV } from './nav';
+import { OrgSwitcher } from '../orgs/OrgSwitcher';
+import { BellButton } from '../bell/Bell';
+
+const item =
+  'group relative flex min-h-11 items-center gap-3 rounded-btn px-3 text-14 text-text-2 transition-colors ' +
+  'hover:bg-canvas hover:text-ink data-[status=active]:bg-canvas data-[status=active]:font-medium data-[status=active]:text-ink ' +
+  'max-xl:justify-center max-xl:px-0';
+
+/** Left sidebar for tablet and desktop. Full labels from 1280 px, icons only below. */
+export function Sidebar({ onSearch }: { onSearch: () => void }) {
+  const { session } = useReady();
+  const { projects, needs: liveNeeds, needsReady, activity, spend } = useShellData();
+  // Hidden until the count is final, so the badge never climbs.
+  const needs = needsReady ? liveNeeds : { total: 0, byProject: {} as Record<string, number> };
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const live = projects.filter((p) => !p.data.archivedAt);
+  const total = activity.working + activity.idle;
+  // Card cGSENsRF: an agent may work on several items at once; say so only then.
+  const items = activity.items > activity.working ? ` on ${activity.items} items` : '';
+
+  return (
+    <aside
+      aria-label="Main"
+      style={{ viewTransitionName: 'shell-sidebar' }}
+      className="sticky top-0 hidden h-dvh max-h-dvh w-16 shrink-0 flex-col overflow-y-auto overflow-x-hidden border-r border-line bg-surface sm:flex xl:w-64"
+    >
+      <div className="flex h-14 items-center gap-2.5 px-4 max-xl:justify-center max-xl:px-0">
+        <Link to="/" aria-label="Hivenod home" className="flex items-center gap-2.5 rounded-btn">
+          <Logo />
+          <span className="font-mono text-12 font-medium uppercase tracking-[0.08em] text-gate-text max-xl:hidden">
+            Hivenod
+          </span>
+        </Link>
+      </div>
+
+      <div className="px-2 pb-2">
+        <div className="xl:hidden">
+          <div className="flex flex-col">
+            <OrgSwitcher compact />
+          </div>
+          <div className="mt-1 flex justify-center">
+            <BellButton />
+          </div>
+        </div>
+        <div className="flex items-center gap-1 max-xl:hidden">
+          <div className="min-w-0 flex-1">
+            <OrgSwitcher />
+          </div>
+          <BellButton />
+        </div>
+      </div>
+
+      <div className="px-2">
+        <button
+          type="button"
+          onClick={onSearch}
+          aria-label="Search ⌘K"
+          aria-keyshortcuts="Control+K Meta+K"
+          className="flex min-h-11 w-full items-center gap-2 rounded-btn border border-line bg-canvas px-3 text-14 text-text-2 transition-colors hover:border-line-strong max-xl:justify-center max-xl:px-0"
+        >
+          <Icon icon={Search} />
+          <span className="flex-1 text-left max-xl:hidden">Search</span>
+          <kbd className="font-mono text-12 text-text-3 max-xl:hidden">⌘K</kbd>
+        </button>
+      </div>
+
+      <nav aria-label="Primary" className="mt-3 flex flex-col gap-0.5 px-2">
+        {NAV.map((n) => (
+          <Link
+            key={n.to}
+            to={n.to}
+            activeOptions={{ exact: n.to === '/' }}
+            aria-label={n.badge && needs.total > 0 ? `${n.label} ${needs.total} waiting` : n.label}
+            title={n.label}
+            className={item}
+          >
+            <Icon icon={n.icon} size={18} />
+            <span className="flex-1 max-xl:hidden">{n.label}</span>{' '}
+            {n.badge && needs.total > 0 ? (
+              <>
+                <Badge tone="gate" count={needs.total} className="max-xl:hidden" />
+                <span
+                  aria-hidden
+                  className="absolute right-2.5 top-2 size-2 rounded-full bg-gate xl:hidden"
+                />
+              </>
+            ) : null}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="mt-5 min-h-0 flex-1 overflow-y-auto px-2 [@media(max-height:560px)]:min-h-fit [@media(max-height:560px)]:flex-none [@media(max-height:560px)]:overflow-visible">
+        <p className="px-3 pb-1 font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3 max-xl:hidden">
+          Projects
+        </p>
+        <ul className="flex flex-col gap-0.5">
+          {live.map((p) => {
+            const n = needs.byProject[p.id] ?? 0;
+            return (
+              <li key={p.id}>
+                <Link
+                  to="/p/$pid"
+                  params={{ pid: p.id }}
+                  title={p.data.name}
+                  className={cn(item, path === `/p/${p.id}` && 'bg-canvas font-medium text-ink')}
+                >
+                  <span aria-hidden className="w-[18px] text-center text-16 leading-none">
+                    {p.data.emoji || p.data.name.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="flex-1 truncate max-xl:sr-only">{p.data.name}</span>
+                  {n > 0 ? (
+                    <Badge tone="gate" className="max-xl:absolute max-xl:right-1 max-xl:top-1">
+                      <span className="sr-only">Needs you: </span>
+                      {n}
+                    </Badge>
+                  ) : null}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div className="shrink-0 border-t border-line p-2">
+        <div
+          className="mb-1 px-3 py-1 text-13 text-text-2 max-xl:hidden"
+          aria-label="Organization status"
+        >
+          <p className="flex items-center gap-2">
+            <span className="relative flex size-2">
+              {activity.working > 0 ? (
+                <span className="absolute inset-0 animate-heartbeat rounded-full bg-agent" />
+              ) : null}
+              <span
+                className={cn(
+                  'relative size-2 rounded-full',
+                  activity.working > 0 ? 'bg-agent' : 'bg-line-strong',
+                )}
+              />
+            </span>
+            {activity.working} {activity.working === 1 ? 'agent' : 'agents'} working{items} ·{' '}
+            {activity.idle} idle
+          </p>
+          <p className="mt-0.5 tabular-nums">
+            Spend this month {spendText(spend.spent, spend.known, 'org')}
+          </p>
+        </div>
+        <div className="mb-1 hidden justify-center xl:hidden sm:flex">
+          <Tooltip
+            content={`${activity.working} ${activity.working === 1 ? 'agent' : 'agents'} working${items} · ${activity.idle} idle. Spend ${spendText(spend.spent, spend.known, 'org')}`}
+          >
+            <button
+              type="button"
+              aria-label={`${activity.working} of ${total} ${total === 1 ? 'agent' : 'agents'} working. Spend this month ${spendText(spend.spent, spend.known, 'org')}`}
+              className="relative grid size-11 place-items-center text-text-2"
+            >
+              <Icon icon={Bot} size={18} />
+              {activity.working > 0 ? (
+                <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-agent" />
+              ) : null}
+            </button>
+          </Tooltip>
+        </div>
+        <Link
+          to={ME.to}
+          title="Settings"
+          className={item}
+          aria-label={`${session.profile.name}, Settings`}
+        >
+          {session.status === 'ready' ? (
+            <PersonAvatar
+              name={session.profile.name}
+              photoURL={session.profile.photoURL}
+              color={session.profile.color}
+              size="sm"
+            />
+          ) : null}
+          <span className="flex-1 truncate max-xl:hidden">{session.profile.name}</span>
+          <Icon icon={Settings} size={16} className="text-text-2 max-xl:hidden" />
+        </Link>
+      </div>
+    </aside>
+  );
+}

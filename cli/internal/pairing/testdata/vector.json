@@ -1,0 +1,11 @@
+{
+  "privateD": "fcYINyGH7d8QRjw3baIFiCnsi_m3xCgucuQVpwK1qJg",
+  "publicKey": "BKZO_2FAqkE9sfGZOZPN3UqmQgB6-4Bp6vLFjh6Hf_RFgauEl4OW17bZe4SAyZ6b2rX_fGrDPngVcL2KvNkV99c",
+  "code": "K7QX29PD",
+  "token": "hive_agt_example-token-for-the-test-vector",
+  "sealed": {
+    "epk": "BF_faB61OZYCn1PbTockoji8k0oJDAyuigxQpVdTLTAuCCcknfj5arOQ8lex05rIuBW_N9Ns5sBVY4WUFn9vnyU",
+    "iv": "tRsuLG1qd2W6PUrN",
+    "ct": "aX_bfJd8TcT4nQSFSYaLVpfXMfBHgnEsIXOzx-odI_fL2D9VreVlVS2euXq0aqnUYupLn9D8mOl7Ag"
+  }
+}

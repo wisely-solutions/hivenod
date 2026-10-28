@@ -1,0 +1,4 @@
+pnpm-lock.yaml
+dist
+docs/SPEC.md
+cli/internal/mcpserver/surface.json

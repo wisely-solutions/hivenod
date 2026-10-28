@@ -1,0 +1,14 @@
+{
+  "name": "hivenod",
+  "description": "Hivenod for Claude Code: a live session becomes a Hivenod agent and gets its work pushed in.",
+  "owner": {
+    "name": "Hivenod"
+  },
+  "plugins": [
+    {
+      "name": "hivenod",
+      "source": "./plugins/hivenod",
+      "description": "Hivenod channel: work handed over to this session (claimed, one item at a time), people's notes, answers and Stop work pushed in, and the Hivenod tools."
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+name: Release
+# Automatic Release after Accept (decision B1). Accept = the PR is merged to main.
+# Runs only after CI succeeded on main for that exact commit; no human gate here.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+concurrency:
+  group: release
+  cancel-in-progress: false
+permissions:
+  contents: write # push the release-<n> tag
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy to production (Firebase hosting + firestore rules)
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -z "$GCP_SA_KEY" ]; then
+            echo "::notice::GCP_SA_KEY is not set, so GitHub does not deploy. The agent deploys from its VM: pnpm release / pnpm rollback:prod (docs/DEPLOY.md)."
+            echo "SKIP_RELEASE=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          umask 077
+          printf '%s' "$GCP_SA_KEY" > "$RUNNER_TEMP/gcp.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gcp.json"
+          pnpm deploy:prod
+          rm -f "$RUNNER_TEMP/gcp.json"
+      - name: Tag the release (rollback point)
+        if: env.SKIP_RELEASE != '1'
+        run: |
+          tag="release-${{ github.run_number }}"
+          git tag "$tag" "$RELEASE_SHA"
+          git push origin "$tag"
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"

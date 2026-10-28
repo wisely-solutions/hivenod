@@ -1,0 +1,47 @@
+{
+  "name": "hive",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n web,emu \"pnpm --filter @hive/web dev\" \"firebase emulators:start --only firestore,auth\"",
+    "dev:web": "pnpm --filter @hive/web dev",
+    "build": "pnpm -r build",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:rules:mutate": "node scripts/with-lock.mjs firebase emulators:exec --only firestore,auth \"node packages/shared/rules/mutate.mjs\"",
+    "test:rules": "node scripts/with-lock.mjs firebase emulators:exec --only firestore,auth \"pnpm --filter @hive/shared test:rules && pnpm --filter @hive/agent test:integration && pnpm --filter @hive/notifier test:integration\"",
+    "e2e": "pnpm --filter @hive/web e2e",
+    "e2e:emu": "node scripts/e2e-emu.mjs",
+    "size": "pnpm --filter @hive/web size",
+    "perf:emu": "E2E_SERVE_GZIP=1 E2E_WORKERS=1 node scripts/e2e-emu.mjs perf-load",
+    "test:scripts": "vitest run --root scripts",
+    "check:indexes": "node scripts/check-firestore-indexes.mjs",
+    "deploy:preview": "node scripts/deploy.mjs preview",
+    "deploy:prod": "node scripts/deploy.mjs prod",
+    "smoke:claude": "node scripts/smoke-claude.mjs",
+    "release": "node scripts/deploy.mjs release",
+    "rollback:prod": "node scripts/deploy.mjs rollback"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.13.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "firebase": "^13.1.0",
+    "firebase-tools": "^15.34.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.0",
+    "vitest": "^5.0.5"
+  },
+  "type": "module"
+}

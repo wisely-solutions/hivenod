@@ -1,0 +1,32 @@
+{
+  "instructionsForMax2": true,
+  "capabilities": {
+    "experimental": {
+      "claude/channel": {}
+    },
+    "tools": {
+      "listChanged": true
+    }
+  },
+  "firstHandoverMs": 4440,
+  "secondHandoverMs": 2690,
+  "secondMeta": {
+    "holding": "2",
+    "item_id": "<id>",
+    "kind": "work",
+    "max_items": "2",
+    "project": "Spike",
+    "project_id": "<id>",
+    "run_id": "<id>",
+    "step": "Build",
+    "step_id": "<id>",
+    "why": "arrived"
+  },
+  "noteLatencyMs": 641,
+  "stopLatencyMs": 342,
+  "stoppedToolRefused": true,
+  "completeOk": true,
+  "offlineAfterExit": true,
+  "events": ["work", "work", "note", "stop"],
+  "pass": true
+}

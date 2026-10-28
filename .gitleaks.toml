@@ -1,0 +1,9 @@
+# Known, reviewed findings (see the audit): the Firebase web apiKey is public by design, and the AWS-looking
+# string is a fake token used to test that secrets are scrubbed from logs.
+[allowlist]
+description = "reviewed false positives"
+paths = [
+  '''apps/web/src/lib/app\.ts''',
+  '''packages/agent/src/client\.ts''',
+  '''packages/agent/src/claude\.test\.ts''',
+]

@@ -1,0 +1,360 @@
+import { eventSchema, itemSchema, type HiveEvent } from '@hive/shared';
+import { countReads } from '../lib/reads';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  startAfter,
+  where,
+  type DocumentData,
+  type Query,
+  type QueryDocumentSnapshot,
+} from 'firebase/firestore';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { z } from 'zod';
+import { db } from '../lib/db';
+import type { Live, Row } from '../lib/live';
+import {
+  feedConstraints,
+  INDEX_BUILDING,
+  isIndexBuilding,
+  PAGE_SIZE,
+  type FeedFilters,
+} from './logic';
+
+/** A clock that re-renders every `ms` milliseconds. */
+export function useNow(ms: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
+}
+
+function parse<S extends z.ZodType>(
+  docs: QueryDocumentSnapshot<DocumentData>[],
+  schema: S,
+): Row<z.infer<S>>[] {
+  const rows: Row<z.infer<S>>[] = [];
+  for (const d of docs) {
+    const r = schema.safeParse(d.data({ serverTimestamps: 'estimate' }));
+    if (r.success) rows.push({ id: d.id, data: r.data as z.infer<S> });
+  }
+  return rows;
+}
+
+// ---------- the feed: one listener on the newest page, older pages on demand ----------
+
+export interface Feed {
+  state: 'loading' | 'ready' | 'error';
+  rows: Row<HiveEvent>[];
+  /** Ids that arrived live after the first load (they get the soft highlight). */
+  fresh: ReadonlySet<string>;
+  hasMore: boolean;
+  /** The server has answered and there is nothing older. */
+  complete: boolean;
+  loadingMore: boolean;
+  loadMore: () => void;
+  /** The query failed because a Firestore index is still being built (try again in minutes). */
+  indexBuilding: boolean;
+}
+
+interface FeedStore {
+  key: string;
+  map: Map<string, Row<HiveEvent>>;
+  cursor: QueryDocumentSnapshot<DocumentData> | null;
+  exhausted: boolean;
+  /** True once an older page was read: the head snapshot no longer decides the cursor. */
+  paged: boolean;
+  /** The server (not just the cache) has answered the newest page. */
+  settled: boolean;
+  state: 'loading' | 'ready' | 'error';
+  building: boolean;
+}
+const emptyStore = (key: string): FeedStore => ({
+  key,
+  map: new Map(),
+  cursor: null,
+  exhausted: false,
+  paged: false,
+  settled: false,
+  state: 'loading',
+  building: false,
+});
+
+/**
+ * The activity feed. Exactly one live listener (the newest 50 events for the filters); older
+ * pages of 50 are read once, on demand, with a cursor. Rows seen once stay, so an event that
+ * scrolls out of the live window is never lost.
+ */
+export function useActivityFeed(wid: string, filters: FeedFilters, enabled: boolean): Feed {
+  const key = `${wid}|${filters.projectId}|${filters.actor}|${filters.group}`;
+  const [store, setStore] = useState<FeedStore>(() => emptyStore(key));
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
+  const [loadingMore, setLoadingMore] = useState(false);
+  const live = store.key === key ? store : null;
+
+  const build = useCallback(
+    (after?: QueryDocumentSnapshot<DocumentData>): Query => {
+      const parts = [
+        collection(db, `workspaces/${wid}/events`),
+        ...feedConstraints(filters).map(([f, op, v]) => where(f, op, v)),
+        orderBy('at', 'desc'),
+        ...(after ? [startAfter(after)] : []),
+        limit(PAGE_SIZE),
+      ] as const;
+      const [col, ...rest] = parts;
+      return query(col, ...rest);
+    },
+    // filters is rebuilt each render; its parts are in `key`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key],
+  );
+
+  useEffect(() => {
+    if (!enabled) return;
+    // Rows that arrive after the first server answer are "new"; the cache fill-in is not.
+    let settled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const stop = onSnapshot(
+      build(),
+      // Metadata changes tell us when the server (not just the cache) has answered.
+      { includeMetadataChanges: true },
+      (snap) => {
+        countReads(snap);
+        const wasSettled = settled;
+        if (!snap.metadata.fromCache) settled = true;
+        const added = snap.docChanges().filter((c) => c.type === 'added');
+        setStore((cur) => {
+          const base = cur.key === key ? cur : emptyStore(key);
+          // The first server answer replaces whatever the cache offered.
+          const map = new Map(!wasSettled && !snap.metadata.fromCache ? [] : base.map);
+          for (const r of parse(snap.docs, eventSchema)) map.set(r.id, r);
+          return {
+            key,
+            map,
+            cursor: base.paged ? base.cursor : (snap.docs[snap.docs.length - 1] ?? null),
+            exhausted: base.paged
+              ? base.exhausted
+              : snap.size < PAGE_SIZE && !snap.metadata.fromCache,
+            paged: base.paged,
+            settled: base.settled || !snap.metadata.fromCache,
+            state: 'ready',
+            building: false,
+          };
+        });
+        if (wasSettled && added.length) {
+          const ids = added.map((c) => c.doc.id);
+          setFresh((cur) => new Set([...cur, ...ids]));
+          timers.push(
+            setTimeout(
+              () =>
+                setFresh((cur) => {
+                  const next = new Set(cur);
+                  ids.forEach((i) => next.delete(i));
+                  return next;
+                }),
+              2400,
+            ),
+          );
+        }
+      },
+      (err) =>
+        setStore((cur) => ({
+          ...(cur.key === key ? cur : emptyStore(key)),
+          state: 'error',
+          building: isIndexBuilding(err),
+        })),
+    );
+    return () => {
+      stop();
+      timers.forEach(clearTimeout);
+    };
+  }, [enabled, key, build]);
+
+  const busy = useRef(false);
+  const loadMore = useCallback(() => {
+    const cursor = live?.cursor;
+    if (!cursor || !live?.settled || live.exhausted || busy.current) return;
+    busy.current = true;
+    setLoadingMore(true);
+    getDocs(build(cursor))
+      .then((snap) => {
+        setStore((cur) => {
+          if (cur.key !== key) return cur;
+          const map = new Map(cur.map);
+          for (const r of parse(snap.docs, eventSchema)) map.set(r.id, r);
+          return {
+            ...cur,
+            map,
+            cursor: snap.docs[snap.docs.length - 1] ?? cur.cursor,
+            exhausted: snap.size < PAGE_SIZE,
+            paged: true,
+            settled: true,
+          };
+        });
+      })
+      .catch((err) =>
+        setStore((cur) =>
+          cur.key === key ? { ...cur, state: 'error', building: isIndexBuilding(err) } : cur,
+        ),
+      )
+      .finally(() => {
+        busy.current = false;
+        setLoadingMore(false);
+      });
+  }, [live, build, key]);
+
+  const rows = useMemo(
+    () =>
+      live
+        ? [...live.map.values()].sort(
+            (a, b) => b.data.at.toMillis() - a.data.at.toMillis() || b.id.localeCompare(a.id),
+          )
+        : [],
+    [live],
+  );
+  return {
+    state: live ? live.state : 'loading',
+    rows,
+    fresh,
+    hasMore: Boolean(live && live.settled && !live.exhausted && live.cursor),
+    complete: Boolean(live && live.settled && live.exhausted),
+    loadingMore,
+    loadMore,
+    indexBuilding: Boolean(live?.building),
+  };
+}
+
+// ---------- reads that a plain member can only make one project at a time ----------
+
+/**
+ * Live rows for something the rules only let a member read per project (runs, decisions).
+ * Admins use `admin` (one listener for the whole organization); members get one per project.
+ */
+export function useScopedQuery<S extends z.ZodType>(opts: {
+  key: string;
+  enabled: boolean;
+  isAdmin: boolean;
+  projectIds: readonly string[];
+  admin: () => Query;
+  perProject: (pid: string) => Query;
+  schema: S;
+}): Live<Row<z.infer<S>>[]> {
+  const { key, enabled, isAdmin, projectIds, schema } = opts;
+  const adminRef = useRef(opts.admin);
+  const projRef = useRef(opts.perProject);
+  useEffect(() => {
+    adminRef.current = opts.admin;
+    projRef.current = opts.perProject;
+  });
+  const pkey = projectIds.join('|');
+  const full = `${key}|${isAdmin ? 'admin' : pkey}`;
+  const [state, setState] = useState<{
+    key: string;
+    parts: Record<string, Row<z.infer<S>>[]>;
+    error: boolean;
+    building: boolean;
+  }>({ key: '', parts: {}, error: false, building: false });
+
+  useEffect(() => {
+    if (!enabled) return;
+    const targets = isAdmin ? [''] : pkey ? pkey.split('|') : [];
+    const stops = targets.map((pid) =>
+      onSnapshot(
+        pid ? projRef.current(pid) : adminRef.current(),
+        (snap) => {
+          countReads(snap);
+          setState((cur) => ({
+            key: full,
+            parts: { ...(cur.key === full ? cur.parts : {}), [pid]: parse(snap.docs, schema) },
+            error: false,
+            building: false,
+          }));
+        },
+        (err) =>
+          setState((cur) => ({
+            key: full,
+            parts: cur.key === full ? cur.parts : {},
+            error: true,
+            building: isIndexBuilding(err),
+          })),
+      ),
+    );
+    return () => stops.forEach((s) => s());
+  }, [enabled, full, isAdmin, pkey, schema]);
+
+  return useMemo<Live<Row<z.infer<S>>[]>>(() => {
+    if (!enabled) return { state: 'loading' };
+    const targets = isAdmin ? [''] : pkey ? pkey.split('|') : [];
+    if (state.key === full && state.error)
+      return { state: 'error', code: state.building ? INDEX_BUILDING : 'denied' };
+    if (targets.length === 0) return { state: 'ready', data: [] };
+    if (state.key !== full || targets.some((t) => !state.parts[t])) return { state: 'loading' };
+    return { state: 'ready', data: targets.flatMap((t) => state.parts[t] ?? []) };
+  }, [enabled, isAdmin, pkey, state, full]);
+}
+
+// ---------- item titles ----------
+
+const titleCache = new Map<string, string | null>();
+
+/**
+ * Titles of the items the given events point at. Titles the shell already knows are used first;
+ * the rest are read once each (not listened to) and remembered.
+ */
+export function useItemTitles(
+  wid: string,
+  events: ReadonlyArray<{ projectId: string | null; itemId: string | null }>,
+  known: (pid: string, iid: string) => string | undefined,
+): ((pid: string | null, iid: string | null) => string | null) & { settled: boolean } {
+  const [, bump] = useState(0);
+  const knownRef = useRef(known);
+  useEffect(() => {
+    knownRef.current = known;
+  });
+  const wanted = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of events) if (e.projectId && e.itemId) s.add(`${e.projectId}/${e.itemId}`);
+    return [...s];
+  }, [events]);
+  useEffect(() => {
+    let live = true;
+    const missing = wanted.filter((k) => {
+      const [p, i] = k.split('/') as [string, string];
+      return !titleCache.has(`${wid}/${k}`) && !knownRef.current(p, i);
+    });
+    if (!missing.length) return;
+    void Promise.all(
+      missing.map(async (k) => {
+        const [p, i] = k.split('/') as [string, string];
+        try {
+          const snap = await getDoc(doc(db, `workspaces/${wid}/projects/${p}/items/${i}`));
+          const parsed = snap.exists() ? itemSchema.safeParse(snap.data()) : null;
+          titleCache.set(`${wid}/${k}`, parsed?.success ? parsed.data.title : null);
+        } catch {
+          titleCache.set(`${wid}/${k}`, null);
+        }
+      }),
+    ).then(() => live && bump((n) => n + 1));
+    return () => {
+      live = false;
+    };
+  }, [wid, wanted]);
+  // True once every title has an answer (found or not), so rows no longer change length.
+  const settled = wanted.every((k) => {
+    const [p, i] = k.split('/') as [string, string];
+    return titleCache.has(`${wid}/${k}`) || Boolean(known(p, i));
+  });
+  const titleOf = (pid: string | null, iid: string | null) => {
+    if (!pid || !iid) return null;
+    return known(pid, iid) ?? titleCache.get(`${wid}/${pid}/${iid}`) ?? null;
+  };
+  return Object.assign(titleOf, { settled });
+}

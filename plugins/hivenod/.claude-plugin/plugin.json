@@ -1,0 +1,7 @@
+{
+  "name": "hivenod",
+  "description": "Hivenod channel for Claude Code: this session works as a Hivenod agent. Items reaching its steps are handed over already claimed, one at a time; people's notes, answers and Stop work arrive as channel events.",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "keywords": ["hivenod", "channel", "mcp", "agents"]
+}

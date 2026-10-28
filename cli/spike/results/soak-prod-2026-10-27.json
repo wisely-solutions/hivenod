@@ -1,0 +1,25 @@
+{
+  "sessionMinutes": 120,
+  "changes": 242,
+  "writeFailures": 1,
+  "missed": [],
+  "supersededDuringDrops": ["held item edit 6"],
+  "normalChanges": 205,
+  "latencyMs": {
+    "p50": 287,
+    "p95": 529,
+    "max": 653
+  },
+  "over2s": [],
+  "drops": 5,
+  "changesDuringDrops": 36,
+  "dropChangesSeen": 35,
+  "listenerErrors": [],
+  "presenceWrites": 121,
+  "presenceFails": 7,
+  "presenceFailsOutsideDrops": 0,
+  "tokenRefreshes": 2,
+  "revokedSeen": true,
+  "deniedAfterRevoke": 5,
+  "pass": true
+}
