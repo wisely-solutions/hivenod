@@ -20,6 +20,37 @@ export function guardrailsOf(agent: Pick<Agent, 'guardrails'>): Guardrails {
   };
 }
 
+/**
+ * True for an agent limited to Inbox and Calendar (item fJnu6): it never touches development
+ * items. The rules enforce it (firestore.rules `agentCanProject`); change both together.
+ */
+export function inboxOnly(agent: Pick<Agent, 'scope'>): boolean {
+  return agent.scope === 'inbox';
+}
+
+/**
+ * Tool name prefixes an Inbox-only agent may use: the Calendar tools and the Inbox tools
+ * (requests, threads, subjects, outcomes). Every other tool works on development items and is
+ * refused up front, with a clear message (the rules refuse the writes anyway). Mirrored in Go by
+ * cli/internal/hive/scope.go.
+ */
+export const INBOX_SCOPE_TOOL_PREFIXES = [
+  'calendar_',
+  'inbox_',
+  'thread_',
+  'subject_',
+  'outcome_',
+] as const;
+
+/** Whether an agent of this scope may call this tool. */
+export function toolInScope(agent: Pick<Agent, 'scope'>, tool: string): boolean {
+  if (!inboxOnly(agent)) return true;
+  return INBOX_SCOPE_TOOL_PREFIXES.some((p) => tool.startsWith(p));
+}
+
+export const INBOX_SCOPE_REFUSAL =
+  'This agent is limited to Inbox and Calendar (scope "inbox"): it cannot work on development items. Use the calendar_* and inbox tools.';
+
 export function isPaused(agent: Pick<Agent, 'pausedAt'>): boolean {
   return !!agent.pausedAt;
 }
