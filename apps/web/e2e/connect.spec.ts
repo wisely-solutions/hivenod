@@ -33,7 +33,7 @@ import {
 } from './helpers';
 
 /** What `hivenod connect` does before it has a token: a connect request, no sign-in. */
-async function asTerminal(kind: 'connect' | undefined = 'connect') {
+async function asTerminal(kind: 'connect' | null = 'connect') {
   const app = initializeApp(
     { apiKey: 'fake', projectId: 'hive-board-43be' },
     `terminal-${Math.random().toString(36).slice(2)}`,
@@ -198,7 +198,7 @@ test('an expired request is refused; Decline stops the terminal; a pair code goe
   expect((await term.read()).exists()).toBe(false);
   await term.done();
 
-  const pair = await asTerminal(undefined);
+  const pair = await asTerminal(null);
   await page.goto(pair.link);
   await expect(page).toHaveURL(/\/agents\/connect\?code=/);
   await pair.done();
@@ -206,7 +206,7 @@ test('an expired request is refused; Decline stops the terminal; a pair code goe
 
 for (const theme of ['light', 'dark'] as const) {
   test(`the confirm page is axe-clean in ${theme}`, async ({ page }, info) => {
-    await page.addInitScript((t) => localStorage.setItem('hive-theme', t), theme);
+    await page.emulateMedia({ colorScheme: theme });
     await asMember(page, 'Axel Confirm');
     const term = await asTerminal();
     const shots = process.env.SHOTS_DIR;
@@ -227,6 +227,7 @@ for (const theme of ['light', 'dark'] as const) {
     };
     await page.goto('/connect');
     await expect(page.getByLabel('Code from the terminal')).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await settle(page);
     await axe();
     await snap('1-enter-code');

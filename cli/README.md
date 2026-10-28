@@ -1,6 +1,7 @@
 # hivenod CLI (Go)
 
-The Hivenod agent CLI as one native binary (item zLwtX2WEEg3mER4CR74g): `pair`, `whoami`,
+The Hivenod agent CLI as one native binary (item zLwtX2WEEg3mER4CR74g): `connect` (one-click
+browser confirm by any member, item EJ2Cxq4k), `pair`, `whoami`,
 `logout`, `mcp` (the MCP stdio server for Claude Code), `update`, `version`. It replaces the
 TypeScript CLI in `packages/agent` for agents; the web app stays TypeScript.
 
