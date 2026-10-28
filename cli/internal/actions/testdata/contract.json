@@ -21618,6 +21618,232 @@
       "output": { "error": "An event id is missing" }
     },
     {
+      "name": "calendarMirror/booking to google",
+      "action": "calendarMirror",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "replacedId": "joao_aGl2ZW5vZApvMQ",
+        "event": {
+          "source": "google",
+          "sourceEventId": "gcal-123",
+          "title": "  Standup  ",
+          "start": { "__hive": "timestamp", "ms": 1800003600000 },
+          "end": { "__hive": "timestamp", "ms": 1800005400000 },
+          "attendees": ["sam@x.io"]
+        }
+      },
+      "output": {
+        "id": "joao_Z29vZ2xlCmdjYWwtMTIz",
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/calendar/joao_Z29vZ2xlCmdjYWwtMTIz",
+            "data": {
+              "memberUid": "joao",
+              "title": "Standup",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "allDay": false,
+              "attendees": ["sam@x.io"],
+              "source": "google",
+              "sourceEventId": "gcal-123",
+              "busyOnly": false,
+              "deleted": false,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "users/joao/busy/w1_joao_Z29vZ2xlCmdjYWwtMTIz",
+            "data": {
+              "workspaceId": "w1",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "deleted": false,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/calendar/joao_aGl2ZW5vZApvMQ",
+            "data": {
+              "title": "",
+              "attendees": [],
+              "deleted": true,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "users/joao/busy/w1_joao_aGl2ZW5vZApvMQ",
+            "data": {
+              "deleted": true,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": null,
+              "itemId": null,
+              "runId": null,
+              "type": "calendar.changed",
+              "data": { "memberUids": ["joao"], "upserted": 1, "deleted": 1 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "calendarMirror/same event",
+      "action": "calendarMirror",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "replacedId": "joao_Z29vZ2xlCmcx",
+        "event": {
+          "source": "google",
+          "sourceEventId": "g1",
+          "title": "  Standup  ",
+          "start": { "__hive": "timestamp", "ms": 1800003600000 },
+          "end": { "__hive": "timestamp", "ms": 1800005400000 }
+        }
+      },
+      "output": { "error": "That is the same event: give the other calendar's event id" }
+    },
+    {
+      "name": "calendarMirror/no replaced",
+      "action": "calendarMirror",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "replacedId": "",
+        "event": {
+          "source": "google",
+          "sourceEventId": "g1",
+          "title": "  Standup  ",
+          "start": { "__hive": "timestamp", "ms": 1800003600000 },
+          "end": { "__hive": "timestamp", "ms": 1800005400000 }
+        }
+      },
+      "output": { "error": "Name the event it replaces" }
+    },
+    {
+      "name": "calendarMirror/person for someone else",
+      "action": "calendarMirror",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "memberUid": "joao",
+        "replacedId": "joao_aGl2ZW5vZApvMQ",
+        "event": {
+          "source": "google",
+          "sourceEventId": "g1",
+          "title": "  Standup  ",
+          "start": { "__hive": "timestamp", "ms": 1800003600000 },
+          "end": { "__hive": "timestamp", "ms": 1800005400000 }
+        }
+      },
+      "output": {
+        "id": "joao_Z29vZ2xlCmcx",
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/calendar/joao_Z29vZ2xlCmcx",
+            "data": {
+              "memberUid": "joao",
+              "title": "Standup",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "allDay": false,
+              "attendees": [],
+              "source": "google",
+              "sourceEventId": "g1",
+              "busyOnly": false,
+              "deleted": false,
+              "updatedBy": { "type": "human", "id": "joao" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "users/joao/busy/w1_joao_Z29vZ2xlCmcx",
+            "data": {
+              "workspaceId": "w1",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "deleted": false,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/calendar/joao_aGl2ZW5vZApvMQ",
+            "data": {
+              "title": "",
+              "attendees": [],
+              "deleted": true,
+              "updatedBy": { "type": "human", "id": "joao" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "users/joao/busy/w1_joao_aGl2ZW5vZApvMQ",
+            "data": {
+              "deleted": true,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "human", "id": "joao", "name": "João" },
+              "projectId": null,
+              "itemId": null,
+              "runId": null,
+              "type": "calendar.changed",
+              "data": { "memberUids": ["joao"], "upserted": 1, "deleted": 1 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "calendarMirror/bad event",
+      "action": "calendarMirror",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "replacedId": "joao_aGl2ZW5vZApvMQ",
+        "event": {
+          "source": "google",
+          "sourceEventId": "g1",
+          "title": "  Standup  ",
+          "start": { "__hive": "timestamp", "ms": 1800003600000 },
+          "end": { "__hive": "timestamp", "ms": 1800000600000 }
+        }
+      },
+      "output": { "error": "Event 1: end must be after start" }
+    },
+    {
       "name": "calendarEventId/ascii",
       "action": "calendarEventId",
       "input": { "memberUid": "joao", "source": "google", "sourceEventId": "abc_123" },

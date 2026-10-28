@@ -196,6 +196,7 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
       await read(`workspaces/${W}/${c}`);
     await read(`workspaces/${W}/calendar`);
     await read('users/alice/busy');
+    await read('users/owner/busy');
     await read('agentHomes');
     for (const r of await read(`workspaces/${W}/runs`)) await read(`workspaces/${W}/runs/${r}/log`);
     for (const p of await read(`workspaces/${W}/projects`)) {
@@ -797,6 +798,81 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     expect(outs[4]).toMatchObject({ busyBlocks: 1 });
     expect(JSON.stringify(outs[5])).toContain('62 days');
     expect(r.go.calls).toEqual(r.ts.calls);
+  });
+
+  it('calendar_mirror (item fJnu6): an approved booking becomes the Google event, once', async () => {
+    const r = await both(async (call) => {
+      const owner = as('owner');
+      const t = out(
+        await call('inbox_add', {
+          source: 'mail',
+          sender: { name: 'Sam Example', handle: 'sam@example.com' },
+          text: 'Coffee on Thursday?',
+          threadRef: 'mail-1',
+          receivedAt: '2030-01-06T09:00:00Z',
+        }),
+      ).threadId as string;
+      const o = out(
+        await call('outcome_propose', {
+          threadId: t,
+          type: 'reply_book',
+          fields: {
+            text: 'Thursday 10:00 works.',
+            start: '2030-01-10T10:00:00Z',
+            end: '2030-01-10T10:30:00Z',
+            with: 'sam@example.com',
+          },
+        }),
+      ).outcomeId as string;
+      // not approved yet: refused
+      await call('calendar_mirror', { outcomeId: o, sourceEventId: 'gcal-1' });
+      await owner.run(
+        approveOutcome(owner.ctx, {
+          outcomeId: o,
+          outcome: (await snap(inboxPaths.outcome(W, o))) as unknown as OutcomeStateOf,
+          thread: (await snap(inboxPaths.thread(W, t))) as unknown as ThreadStateOf,
+        }),
+      );
+      await call('calendar_free', {
+        member: 'owner',
+        from: '2030-01-10T09:00:00Z',
+        to: '2030-01-10T12:00:00Z',
+      });
+      await call('calendar_mirror', { outcomeId: o, sourceEventId: 'gcal-1' });
+      // again: already mirrored, nothing written
+      await call('calendar_mirror', { outcomeId: o, sourceEventId: 'gcal-1' });
+      await call('calendar_free', {
+        member: 'owner',
+        from: '2030-01-10T09:00:00Z',
+        to: '2030-01-10T12:00:00Z',
+      });
+      await call('calendar_mirror', { outcomeId: 'nope', sourceEventId: 'gcal-1' });
+      await call('calendar_mirror', { outcomeId: o, sourceEventId: ' ' });
+      await call('outcome_done', { outcomeId: o, status: 'done' });
+    });
+    const outs = r.ts.calls.map((c) => c as { ok: boolean; out: Record<string, unknown> });
+    expect(outs.map((c) => c.ok)).toEqual([
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+    ]);
+    expect(outs[2]!.out).toContain('not approved');
+    expect(outs[4]!.out).toMatchObject({ mirrored: true });
+    expect(outs[5]!.out).toMatchObject({ mirrored: false });
+    // one busy block before and after: the meeting is never counted twice
+    expect(outs[3]!.out).toMatchObject({ busyBlocks: 1 });
+    expect(outs[6]!.out).toMatchObject({ busyBlocks: 1 });
+    // the replaced id derives from the random outcome id
+    const noReplaced = (cs: unknown[]) =>
+      cs.map((c) => JSON.stringify(c).replace(/"replaced":"[^"]*"/g, '"replaced":"<id>"'));
+    expect(noReplaced(r.go.calls)).toEqual(noReplaced(r.ts.calls));
     expect(r.go.docs).toEqual(r.ts.docs);
   }, 120_000);
 

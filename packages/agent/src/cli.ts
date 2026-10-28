@@ -12,6 +12,7 @@ import {
   parseFeed,
   saveSyncState,
   syncEvents,
+  mirrorBooking,
   upsertEvents,
   type CalendarEventArg,
 } from './calendar';
@@ -90,6 +91,9 @@ const HELP = `hivenod: work in Hivenod as an agent, through the Claude Code chan
                        syncs a calendar you read yourself (a Google Calendar events list,
                        single events): adds, updates, removes; default window -1 day to +30 days;
                        --state saves its nextSyncToken for the next --incremental run
+  hivenod calendar mirror <outcomeId> <sourceEventId> [--source google] [--from T --to T] [--title T]
+                       an approved booking, once you created it in the member's own calendar,
+                       becomes that event (the next sync updates it, never twice)
   hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
                        creates an item (work at the first step) where the project lets agents
                        create items; at most 30 an hour
@@ -668,6 +672,17 @@ async function dispatch(c: HiveClient, pos: string[], o: Opts): Promise<Command>
             ...r.skipped.map((k) => `  skipped ${k.sourceEventId || '(no id)'}: ${k.reason}`),
           ].join('\n'),
       };
+    }
+    case 'calendar mirror': {
+      const r = await mirrorBooking(c.calendarDeps(), {
+        outcomeId: need(pos, 2, 'outcome id (the approved reply_book)'),
+        sourceEventId: need(pos, 3, "the event's id in the member's calendar"),
+        source: o.source,
+        start: o.from,
+        end: o.to,
+        title: o.title,
+      });
+      return { result: r, text: () => r.note };
     }
     case 'calendar free': {
       if (!o.from || !o.to)

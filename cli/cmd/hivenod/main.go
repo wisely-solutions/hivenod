@@ -48,6 +48,9 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
                            syncs a calendar you read yourself (a Google Calendar events list,
                            single events): adds, updates, removes; default window -1 day to
                            +30 days; --state saves its nextSyncToken for the next --incremental run
+  hivenod calendar mirror <outcomeId> <sourceEventId> [--source google] [--from T --to T] [--title T]
+                           an approved booking, once you created it in the member's own
+                           calendar, becomes that event (the next sync updates it, never twice)
   hivenod logout           forgets the token saved by pairing
   hivenod mcp              MCP stdio server for Claude Code
   hivenod mcp --channel [--project P] [--step S] [--max-items N]

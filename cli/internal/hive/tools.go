@@ -280,6 +280,9 @@ var ToolRuns = map[string]Run{
 		busy, _ := a["busyOnly"].(bool)
 		return c.CalendarSync(ctx, SyncArgs{Member: a.S("member"), Source: a.S("source"), From: a.S("from"), To: a.S("to"), Incremental: inc, BusyOnly: busy, Feed: feed})
 	},
+	"calendar_mirror": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.CalendarMirror(ctx, MirrorArgs{OutcomeID: a.S("outcomeId"), SourceEventID: a.S("sourceEventId"), Source: a.S("source"), Start: a.S("start"), End: a.S("end"), Title: a.SP("title")})
+	},
 	"report_usage": func(ctx context.Context, c *Client, a Args) (any, error) {
 		u := Usage{TokensIn: *a.F("tokensIn"), TokensOut: *a.F("tokensOut"), TokensCached: a.F("tokensCached")}
 		if a.Has("model") {

@@ -111,6 +111,25 @@ it; title = `title` or "Meeting with <with>"; attendees from `with`). The member
 updated with it, so `calendar_free` sees the slot taken at once. The home agent then sends the
 reply and the invite, mirrors the event to the source calendar and reports `outcome_done`.
 
+**Mirroring the booking (item fJnu6).** The home agent creates the meeting in the member's own
+calendar with its own access (for the personal agent in the Personal organization: their Google
+Calendar, inviting the people in `with`; Hivenod never connects to Google). Then it calls
+`calendar_mirror` (`hivenod calendar mirror <outcomeId> <sourceEventId> [--source google]`) with
+that calendar's event id. In one batch (`calendarMirror`), the booking becomes that event: the
+`hivenod` event is soft-deleted and its busy block freed, and the same meeting is saved as
+`google/<event id>` with its busy block. So the agent's next calendar sync updates it instead of
+counting the meeting twice. It is refused unless the outcome is an approved (or done)
+`reply_book`, and calling it again changes nothing. Pass `--from/--to` (MCP `start`/`end`) or
+`--title` only when the calendar changed the meeting. Then it sends the reply and reports
+`outcome_done`. The order for the personal agent:
+
+1. `inbox_list`: the approved `reply_book` outcomes it carries out (`toCarryOut`).
+2. Create the event in Google (its fields: `start`, `end`, `title` or "Meeting with <with>",
+   attendees from `with`), with the invites.
+3. `calendar_mirror` with the Google event id.
+4. Send the reply (`text`) on the thread's channel, as the member.
+5. `outcome_done` with the reply's permalink.
+
 ## Related subjects
 
 Two subjects of one member can be linked as related: the same client, project or problem seen
