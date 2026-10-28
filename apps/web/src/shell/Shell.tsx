@@ -28,6 +28,7 @@ import { ModalProvider } from './modals';
 import { ME, NAV, type NavEntry } from './nav';
 import { ShellPalette } from './palette';
 import { useAppBadge } from './pwa';
+import { useCleanStaleBusy } from './useCleanStaleBusy';
 import { useReplayPending } from './useReplayPending';
 import { ShortcutsProvider, useShortcut } from './shortcuts';
 import { useUndoLast } from '../ui/overlay';
@@ -134,6 +135,7 @@ function useCondensedTitle(path: string) {
 function Frame({ children }: { children?: ReactNode }) {
   const [palette, setPalette] = useState(false);
   useReplayPending();
+  useCleanStaleBusy();
   const { needs, needsReady, unreachable, retry, retrying } = useShellData();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const hidden = useScrollHidden();
