@@ -185,6 +185,7 @@ describe('areas and quiet subjects', () => {
   it('groups by area, case-blind, areas A to Z, no area last', () => {
     const { groups } = groupByArea(rowsOf(), 60, NOW);
     expect(groups.map((g) => g.label)).toEqual(['Admin', 'Payments', null]);
+    expect(groups[1]!.label).toBe('Payments'); // the same either row order
     expect(groups[1]!.rows.map((r) => r.name).sort()).toEqual(['Payouts', 'Refunds']);
   });
 

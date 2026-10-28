@@ -41,8 +41,8 @@ const QUIET_KEY = 'hive.inbox.quietDays';
 
 function loadQuietDays(): number {
   try {
-    const n = Number(localStorage.getItem(QUIET_KEY));
-    if (QUIET.some((o) => o.value === String(n))) return n;
+    const saved = localStorage.getItem(QUIET_KEY);
+    if (saved !== null && QUIET.some((o) => o.value === saved)) return Number(saved);
   } catch {
     /* storage can be blocked: the default applies */
   }
@@ -228,7 +228,7 @@ export function InboxListPage() {
               <summary className="min-h-11 cursor-pointer px-4 py-3 text-14 font-medium text-text-2 foc:outline-2 foc:outline-focus">
                 Quiet ({grouped.quiet.length})
               </summary>
-              <ul className="flex flex-col gap-3 p-3" aria-label="Quiet subjects">
+              <ul className="flex flex-col gap-3 p-3" aria-label="Subjects with no recent messages">
                 {grouped.quiet.map((r) => (
                   <SubjectCard
                     key={`${r.wid}/${r.id ?? ''}`}

@@ -98,6 +98,7 @@ export function subjectRows(
 ): SubjectRow[] {
   const by = new Map<string, SubjectRow>();
   const key = (wid: string, id: string | null) => `${wid}/${id ?? ''}`;
+  const withThreads = new Set<string>();
   for (const s of subjects)
     by.set(key(s.wid, s.id), {
       wid: s.wid,
@@ -132,6 +133,11 @@ export function subjectRows(
     row.threads.push(t);
     if (forMember(t.data.state)) row.waiting++;
     if (isOpen(t.data.state)) row.open++;
+    // Activity is the latest message; a subject without threads falls back to its creation.
+    if (!withThreads.has(row.wid + '/' + (row.id ?? ''))) {
+      withThreads.add(row.wid + '/' + (row.id ?? ''));
+      row.activityAt = 0;
+    }
     row.activityAt = Math.max(row.activityAt, ms(t.data.lastMessageAt));
     row.lastAt = Math.max(row.lastAt, ms(t.data.lastMessageAt), ms(t.data.updatedAt));
   }
@@ -444,6 +450,8 @@ export function groupByArea(
     const key = r.area ? r.area.toLowerCase() : '';
     let g = by.get(key);
     if (!g) by.set(key, (g = { key, label: r.area, rows: [] }));
+    // Spellings that differ only in case share a group; its label does not depend on row order.
+    if (r.area && g.label !== null && r.area < g.label) g.label = r.area;
     g.rows.push(r);
   }
   const groups = [...by.values()].sort(

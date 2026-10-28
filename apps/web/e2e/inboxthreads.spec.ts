@@ -35,6 +35,7 @@ import { mkdirSync } from 'node:fs';
 import {
   adminDoc,
   adminSet,
+  adminUpdate,
   AUTH_PORT,
   expectNoHorizontalScroll,
   fastTimers,
@@ -450,6 +451,18 @@ test('Inbox: subjects group by area; a quiet subject folds away and comes back',
     const t3 = await brought('vpn', 'Ian Admin', days(3));
     const t4 = await brought('lunch', 'Lia Plain', days(4));
     const t5 = await brought('old', 'Olga Old', days(70));
+    // The thread's last message is when it was brought in (the server's clock): age them.
+    for (const [tid, n] of [
+      [t1, 1],
+      [t2, 2],
+      [t3, 3],
+      [t4, 4],
+      [t5, 70],
+    ] as const)
+      await adminUpdate(inboxPaths.thread(wid, tid), {
+        lastMessageAt: days(n),
+        updatedAt: days(n),
+      });
     const s1 = await agent.file(t1, { newName: 'Refunds', area: 'Payments' });
     const s2 = await agent.file(t2, { newName: 'Payouts', area: ' payments ' });
     const s3 = await agent.file(t3, { newName: 'VPN access', area: 'Admin' });
@@ -457,7 +470,7 @@ test('Inbox: subjects group by area; a quiet subject folds away and comes back',
     const s5 = await agent.file(t5, { newName: 'Old contract', area: 'Admin' });
 
     await page.goto('/inbox');
-    const areaOf = (name: string) => page.locator(`section[data-area="${name}"]`);
+    const areaOf = (name: string) => page.locator(`section[data-area="${name}" i]`);
     await expect(areaOf('Admin').locator(`[data-subject="${s3}"]`)).toBeVisible();
     await expect(areaOf('Payments').locator(`[data-subject="${s1}"]`)).toBeVisible();
     await expect(areaOf('Payments').locator(`[data-subject="${s2}"]`)).toBeVisible();
