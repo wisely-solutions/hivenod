@@ -673,7 +673,6 @@ export function InboxPage() {
           <FirstRun
             state={first}
             project={firstProject}
-            isAdmin={session.isAdmin}
             onDismiss={() => {
               void setDoc(doc(db, firstRunPath(uid, wid)), { ...first, dismissed: true }).catch(
                 () => undefined,

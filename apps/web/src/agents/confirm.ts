@@ -131,3 +131,25 @@ export async function confirmConnectFlow(
   }
   return { agentUid };
 }
+
+/** Clocks of the browser and the server differ a little: an agent made just before counts too. */
+const SKEW_MS = 60_000;
+
+/**
+ * The agent this person connected since `sinceMs` (the Connect Claude Code page opened), newest
+ * first, or null. The page flips live to "Connected" when it appears (item EJ2Cxq4k).
+ */
+export function newlyConnected<
+  A extends {
+    id: string;
+    data: { createdBy: string; createdAt: { toMillis(): number } | null; revokedAt: unknown };
+  },
+>(agents: readonly A[], uid: string, sinceMs: number): A | null {
+  let best: A | null = null;
+  for (const a of agents) {
+    const at = a.data.createdAt?.toMillis() ?? 0;
+    if (a.data.createdBy !== uid || a.data.revokedAt || at < sinceMs - SKEW_MS) continue;
+    if (!best || at > (best.data.createdAt?.toMillis() ?? 0)) best = a;
+  }
+  return best;
+}

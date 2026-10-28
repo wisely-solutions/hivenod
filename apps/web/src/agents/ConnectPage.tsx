@@ -82,7 +82,13 @@ export function ConnectPage() {
     return (
       <>
         <PageHeader title="Connect an agent" />
-        <p className="text-14 text-text-2">An admin connects agents. Ask one to do it.</p>
+        <p className="text-14 text-text-2">
+          An admin pairs terminals with a code here. You can{' '}
+          <Link to="/connect" className="font-medium text-ink underline underline-offset-4">
+            connect Claude Code in one line
+          </Link>{' '}
+          yourself, for your projects.
+        </p>
       </>
     );
   }
@@ -221,6 +227,16 @@ export function ConnectPage() {
         title="Connect an agent"
         subtitle="Install, pair, then start a Claude Code session with the Hivenod plugin."
       />
+      <p className="mb-4 text-14 text-text-2">
+        Quickest:{' '}
+        <Link
+          to="/connect"
+          className="inline-flex min-h-11 items-center font-medium text-ink underline underline-offset-4 foc:outline-2 foc:outline-offset-2 foc:outline-focus"
+        >
+          Connect Claude Code in one line
+        </Link>{' '}
+        (any member, one click to confirm).
+      </p>
       <p
         role="status"
         className="mb-4 flex items-center gap-1.5 rounded-card border border-line bg-surface px-3.5 py-2.5 text-14 text-ink"

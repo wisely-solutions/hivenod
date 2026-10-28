@@ -4,6 +4,7 @@ import {
   checkConnect,
   CONNECT_ERRORS,
   initialChoice,
+  newlyConnected,
   stepsLeftOut,
   withAgentOnSteps,
 } from './confirm';
@@ -71,5 +72,19 @@ describe('projects and steps', () => {
     });
     expect(stepsLeftOut({ uid: 'alice', isAdmin: false }, [p('alice'), p('owner')])).toBe(1);
     expect(stepsLeftOut({ uid: 'owner', isAdmin: true }, [p('alice')])).toBe(0);
+  });
+});
+
+describe('newlyConnected', () => {
+  const a = (id: string, createdBy: string, minutesAgo: number, revokedAt: unknown = null) => ({
+    id,
+    data: { createdBy, createdAt: at(minutesAgo), revokedAt },
+  });
+  it('finds the newest agent this person made since the page opened', () => {
+    const since = Date.now() - 5 * 60_000;
+    expect(newlyConnected([a('old', 'me', 30), a('new', 'me', 1)], 'me', since)?.id).toBe('new');
+    expect(newlyConnected([a('x', 'other', 1)], 'me', since)).toBeNull();
+    expect(newlyConnected([a('r', 'me', 1, at(0))], 'me', since)).toBeNull();
+    expect(newlyConnected([a('old', 'me', 30)], 'me', since)).toBeNull();
   });
 });

@@ -18,6 +18,7 @@ import {
   stepsLeftOut,
   type ConnectLookup,
 } from './confirm';
+import { ConnectClaudeCode } from './ConnectClaudeCode';
 import { suggestedName } from './connect';
 import { colorValue } from './logic';
 
@@ -167,7 +168,36 @@ export function ConfirmConnectPage() {
       </section>
     );
   } else if (!linked || (current && !current.ok)) {
-    body = (
+    const codeForm = (
+      <form
+        className="mt-4 flex flex-col gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (typed.trim())
+            void navigate({ to: '/connect', search: { code: typed.trim().toUpperCase() } });
+        }}
+      >
+        <Input
+          label="Code from the terminal"
+          placeholder="K7QX-29PD"
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          maxLength={12}
+          className="font-mono uppercase"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+        />
+        <div>
+          <Button type="submit" variant={linked ? 'primary' : 'secondary'}>
+            Continue
+          </Button>
+        </div>
+      </form>
+    );
+    body = !linked ? (
+      <ConnectClaudeCode codeForm={codeForm} />
+    ) : (
       <section aria-labelledby="connect-title" className={card}>
         <h1 id="connect-title" className="text-20 font-semibold text-ink">
           Connect Claude Code
@@ -180,29 +210,7 @@ export function ConfirmConnectPage() {
             {current.error}
           </p>
         ) : null}
-        <form
-          className="mt-4 flex flex-col gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (typed.trim())
-              void navigate({ to: '/connect', search: { code: typed.trim().toUpperCase() } });
-          }}
-        >
-          <Input
-            label="Code from the terminal"
-            placeholder="K7QX-29PD"
-            autoComplete="off"
-            autoCapitalize="characters"
-            spellCheck={false}
-            maxLength={12}
-            className="font-mono uppercase"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-          />
-          <div>
-            <Button type="submit">Continue</Button>
-          </div>
-        </form>
+        {codeForm}
       </section>
     );
   } else if (!found || loading) {

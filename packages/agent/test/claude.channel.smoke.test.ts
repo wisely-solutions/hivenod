@@ -19,19 +19,25 @@
  * Then, item QjTTL, one session with max_items 1:
  *  9. the model parks its item with a reason: it stays claimed and parked, and the next item is
  *     handed over and finished; a person's note on the parked item reaches the session and wakes it.
- * `pnpm smoke:claude --only basic|max-items|park` runs one of the parts.
+ * Item EJ2Cxq4k, first and only with HIVENOD_SMOKE_GO=1: `hivenod connect` (Go) confirmed by a
+ * plain member installs the plugin itself, and `hivenod claude` gets an item and finishes it.
+ * `pnpm smoke:claude --only connect|basic|max-items|park` runs one of the parts.
  */
 import { goBinary } from './gobin';
 import { createAgentIdentity } from '@hive/shared/agent-auth';
 import {
   buildStepIndex,
+  createAgent,
+  pairingCompletion,
+  pairingPath,
   paths,
   postMessage,
+  sealToken,
   stopWork,
   type ItemState,
   type Step,
 } from '@hive/shared';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -149,8 +155,11 @@ function prepare() {
         timeout: 120_000,
         env: cleanEnv(),
       });
-    claude(['plugin', 'marketplace', 'add', REPO, '--scope', 'local']);
-    claude(['plugin', 'install', 'hivenod@hivenod', '--scope', 'local']);
+    // The connect part (first) installs the plugin itself, from this repo, with hivenod connect.
+    if (!/hivenod@hivenod/.test(claude(['plugin', 'list']))) {
+      claude(['plugin', 'marketplace', 'add', REPO, '--scope', 'local']);
+      claude(['plugin', 'install', 'hivenod@hivenod', '--scope', 'local']);
+    }
   })();
   return prepared;
 }
@@ -201,7 +210,7 @@ async function smokeAgent(name: string) {
 async function start(
   name: string,
   prompt: string | null,
-  opts: { env?: string; tools?: string } = {},
+  opts: { env?: string; tools?: string; launcher?: string } = {},
 ) {
   tmux(
     'new-session',
@@ -214,7 +223,7 @@ async function start(
     '50',
     '-c',
     PROJECT_DIR(),
-    `env -i HOME=${join(DIR, 'home')} PATH=${BIN()}:${process.env.PATH} TERM=xterm-256color CLAUDE_CONFIG_DIR=${CONFIG} ${opts.env ?? ''} claude --model ${MODEL} --allowedTools ${opts.tools ?? 'mcp__plugin_hivenod_hivenod'} --dangerously-load-development-channels plugin:hivenod@hivenod`,
+    `env -i HOME=${join(DIR, 'home')} PATH=${BIN()}:${process.env.PATH} TERM=xterm-256color CLAUDE_CONFIG_DIR=${CONFIG} ${opts.env ?? ''} ${opts.launcher ?? 'claude --dangerously-load-development-channels plugin:hivenod@hivenod'} --model ${MODEL} --allowedTools ${opts.tools ?? 'mcp__plugin_hivenod_hivenod'}`,
   );
   // Answer the start-up dialogs (folder trust, development channels) as they come.
   await until(
@@ -321,6 +330,99 @@ async function messagesOf(itemId: string) {
 }
 
 describe.skipIf(!run)('hivenod plugin: real Claude Code sessions', () => {
+  // Item EJ2Cxq4k: the connect flow with the Go binary. `hivenod connect` (no browser) shows a
+  // code; a plain member confirms it; connect saves the token and installs the plugin into the
+  // private Claude config itself; `hivenod claude` starts the session and work arrives.
+  it.skipIf((!!ONLY && ONLY !== 'connect') || process.env.HIVENOD_SMOKE_GO !== '1')(
+    'connect: hivenod connect, a member confirms, hivenod claude gets the work',
+    async () => {
+      for (const d of [BIN(), PROJECT_DIR(), join(DIR, 'home'), join(DIR, 'connect-home')])
+        mkdirSync(d, { recursive: true });
+      await put({
+        [P('p1')]: projectDoc({}, { steps: LIB, stepIndex: buildStepIndex(LIB) }),
+        [I('i0')]: itemDoc({ stepId: 'review', status: 'stopped' }),
+      });
+      // `hivenod` without a token: connect gets one. HIVENOD_PLUGIN_MARKETPLACE: this repo.
+      writeFileSync(
+        join(BIN(), 'hivenod'),
+        `#!/bin/sh\nexec env FIRESTORE_EMULATOR_HOST=${FS_HOST} FIREBASE_AUTH_EMULATOR_HOST=${AUTH_HOST} HIVENOD_PROJECT_ID=hive-rules-test HIVENOD_FIREBASE_API_KEY=fake-api-key HIVENOD_HOME=${join(DIR, 'connect-home')} HIVENOD_NO_BROWSER=1 HIVENOD_PLUGIN_MARKETPLACE=${REPO} ${goBinary()} "$@"\n`,
+      );
+      chmodSync(join(BIN(), 'hivenod'), 0o755);
+      const child = spawn(join(BIN(), 'hivenod'), ['connect', '--no-start'], {
+        cwd: PROJECT_DIR(),
+        env: cleanEnv(),
+      });
+      let said = '';
+      child.stdout.on('data', (d: Buffer) => (said += d.toString()));
+      child.stderr.on('data', (d: Buffer) => (said += d.toString()));
+      const exited = new Promise<number | null>((r) => child.once('exit', r));
+      await until('connect shows a code', 30_000, () => /enter the code/.test(said));
+      const code = /code=([A-Z0-9]{4})-([A-Z0-9]{4})/.exec(said)!.slice(1).join('');
+      out(`hivenod connect is waiting (code ${code.slice(0, 4)}-…)`);
+
+      // Alice, a plain member of p1, confirms (what the /connect page does).
+      const { uid, token } = await createAgentIdentity(
+        { apiKey: 'fake-api-key', projectId: 'hive-rules-test' },
+        W,
+        { authEmulatorUrl: `http://${AUTH_HOST}` },
+      );
+      const alice = as('alice');
+      await alice.run(
+        createAgent(alice.ctx, {
+          agentUid: uid,
+          name: 'Connect smoke',
+          color: '#2F5FD0',
+          projectIds: ['p1'],
+          tokenHint: 'a7f3',
+        }),
+      );
+      const req = await read(pairingPath(code));
+      const sealed = await sealToken(token, req.publicKey as string, code);
+      await alice.run({
+        ops: [
+          {
+            kind: 'update',
+            path: pairingPath(code),
+            data: pairingCompletion({
+              workspaceId: W,
+              agentUid: uid,
+              agentName: 'Connect smoke',
+              pairedBy: 'alice',
+              sealed,
+            }),
+          },
+        ],
+      });
+      const status = await Promise.race([exited, pause(240_000).then(() => 'timeout')]);
+      expect(status, said).toBe(0);
+      expect(said).toContain('Connected: this machine is now the agent Connect smoke');
+      expect(said).toContain('Claude Code has the hivenod plugin');
+      expect(said).not.toContain(token);
+      out('CHECK connect: confirmed by a plain member, token saved, plugin installed: PASS');
+
+      await start('c1', STANDING, { launcher: 'hivenod claude' });
+      out('hivenod claude session up');
+      await put({
+        [I('c1')]: itemDoc({
+          stepId: 'build',
+          title: 'Connect smoke item',
+          summary: 'Write a one-line greeting with add_note, then finish the step with complete.',
+          order: 1,
+        }),
+      });
+      await until(
+        'connect item done',
+        180_000,
+        async () => (await read(I('c1'))).stepId === 'review',
+        'c1',
+      );
+      expect((await read(I('c1'))).claim).toBeNull();
+      out('CHECK hivenod claude: the connected agent got the item and finished it: PASS');
+      await quit('c1');
+    },
+    600_000,
+  );
+
   it.skipIf(!!ONLY && ONLY !== 'basic')(
     'handover, note, stop, busy, quit and restart',
     async () => {
