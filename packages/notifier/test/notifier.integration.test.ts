@@ -315,10 +315,14 @@ describe('notifier end to end', () => {
         log: () => undefined,
       }),
     );
+    // One sweep at a time, like main.ts (its kick never runs two sweeps at once).
+    let chain = Promise.resolve();
     const stop = watchAll(
       db,
       engine,
-      () => void engine.sweep(),
+      () => {
+        chain = chain.then(() => engine.sweep());
+      },
       () => undefined,
     );
     try {
