@@ -171,7 +171,7 @@ export function ItemDetail({
   const profiles = useProfiles(wid, people);
   const who = (a: { type: string; id: string }) =>
     a.type === 'agent'
-      ? (agents.find((x) => x.id === a.id)?.data.name ?? 'An agent')
+      ? (agents.find((x) => x.id === a.id)?.data.name ?? 'Removed agent')
       : displayName(profiles[a.id], a.id);
 
   const [view, setView] = useState<'details' | 'timeline'>('details');
@@ -453,7 +453,7 @@ export function ItemDetail({
             projectId={pid}
             itemId={itemId}
             item={item}
-            agentName={agent?.data.name ?? 'An agent'}
+            agentName={agent?.data.name ?? 'Removed agent'}
             run={
               claimedRun
                 ? { costEur: claimedRun.data.costEur, endedAt: claimedRun.data.endedAt }
@@ -607,7 +607,7 @@ export function ItemDetail({
                               >
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                                   <span className="font-medium text-ink">
-                                    {a?.data.name ?? 'An agent'}
+                                    {a?.data.name ?? 'Removed agent'}
                                   </span>
                                   <span className="text-text-2">
                                     {timeAgo(ts(r.data.startedAt), now)}

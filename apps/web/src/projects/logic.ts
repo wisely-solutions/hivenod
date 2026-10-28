@@ -68,6 +68,7 @@ export const VERBS: Record<EventType, string> = {
   'run.ended': 'ended a run',
   'agent.created': 'created an agent',
   'agent.revoked': 'revoked an agent',
+  'agent.removed': 'removed an agent',
   'agent.rotated': 'rotated an agent token',
   'agent.updated': 'updated an agent',
   'project.created': 'created a project',

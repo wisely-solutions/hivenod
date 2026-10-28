@@ -9,11 +9,12 @@ import {
   type Decision,
   type Run,
 } from '@hive/shared';
-import { getRouteApi, Link } from '@tanstack/react-router';
+import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { collection, collectionGroup, orderBy, query, Timestamp, where } from 'firebase/firestore';
 import { Bot, ChevronDown, ChevronLeft, ChevronRight, Hand } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AgentSettings, PausedBanner } from '../agents/AgentSettings';
+import { RemoveAgentDialog } from '../agents/RemoveAgentDialog';
 import { agentStatus, colorIndex, presenceText, scopeText } from '../agents/logic';
 import { useReady } from '../auth/context';
 import { db } from '../lib/db';
@@ -115,6 +116,8 @@ function Profile({
   const wid = session.workspaceId;
   const isAdmin = session.isAdmin;
   const now = useNow(1000);
+  const navigate = useNavigate();
+  const [removing, setRemoving] = useState(false);
   const [since] = useState(() => Timestamp.fromMillis(Date.now() - 30 * DAY));
   const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
 
@@ -265,7 +268,17 @@ function Profile({
           </p>
           <p className="text-13 text-text-2">{scopeText(agent.data, projects)}</p>
         </div>
+        {isAdmin && status.kind === 'revoked' ? (
+          <Button variant="sendback" className="ml-auto shrink-0" onClick={() => setRemoving(true)}>
+            Remove…
+          </Button>
+        ) : null}
       </header>
+      <RemoveAgentDialog
+        agent={removing ? agent : null}
+        onClose={() => setRemoving(false)}
+        onRemoved={() => void navigate({ to: '/agents' })}
+      />
 
       <PausedBanner agentId={id} agent={agent.data} isAdmin={isAdmin} />
       <AgentSettings agentId={id} agent={agent.data} projects={projects} />

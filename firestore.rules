@@ -644,7 +644,11 @@ service cloud.firestore {
             && request.resource.data.signedOutAt == request.time)
           || (signedIn() && aid == me() && isActiveAgent(wid) && keepsStreak(wid));
 
-        allow delete: if false;
+        // Removing a revoked agent for good (item 81P4s): an admin only, and only once it is revoked.
+        // Its past work keeps the name (events carry actor.name). A live agent, a member or an agent
+        // (itself included) is refused.
+        allow delete: if isAdmin(wid) && resource.data.revokedAt != null
+          && trackedDelete(wid, 'agents', aid, 'agent.removed');
 
         // `hivenod connect` confirmed by a plain member (item EJ2Cxq4k): only projects they are
         // in, at most 5 (no '*'), default guardrails and permissions. THE ONE PLACE for this rule;
@@ -730,7 +734,7 @@ service cloud.firestore {
                 && request.resource.data.type in [
                   'item.created', 'item.moved', 'item.updated', 'item.deleted', 'item.released', 'item.archived', 'item.restored', 'item.erasing', 'attachment.added', 'message.posted',
                   'decision.approved', 'decision.sentBack', 'decision.stopped', 'decision.answered',
-                  'finding.triaged', 'agent.created', 'agent.revoked', 'agent.rotated', 'agent.updated',
+                  'finding.triaged', 'agent.created', 'agent.revoked', 'agent.removed', 'agent.rotated', 'agent.updated',
                   'project.created', 'project.updated', 'project.processChanged', 'project.archived',
                   'project.deleted', 'project.membersChanged', 'workspace.created', 'workspace.updated', 'workspace.deleting', 'member.invited',
                   'member.joined', 'member.roleChanged', 'member.removed', 'member.inviteRevoked',
