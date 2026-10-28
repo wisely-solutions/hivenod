@@ -160,7 +160,18 @@ service cloud.firestore {
     }
     // A child of an item that is erased in this same batch.
     function eraseWith(wid, pid, iid) {
-      return !existsAfter(itemPath(wid, pid, iid)) && mayEraseItem(wid, pid, iid);
+      return (!existsAfter(itemPath(wid, pid, iid)) && mayEraseItem(wid, pid, iid))
+        || erasingItem(wid, pid, iid);
+    }
+    // The item was flagged `erasing` (beginItemErase): its creator or an admin may now delete what
+    // hangs below it, log lines included, in as many batches as it takes (resumable). Never an
+    // agent, never while an agent holds it.
+    function erasingItem(wid, pid, iid) {
+      let it = get(itemPath(wid, pid, iid)).data;
+      return it.get('erasing', false) == true
+        && canProject(wid, pid)
+        && (isAdmin(wid) || it.createdBy == me_('human'))
+        && it.claim == null;
     }
     function changed(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
@@ -688,7 +699,7 @@ service cloud.firestore {
                 && (request.resource.data.projectId == null
                     || canProjectAfter(wid, request.resource.data.projectId))
                 && request.resource.data.type in [
-                  'item.created', 'item.moved', 'item.updated', 'item.deleted', 'item.released', 'item.archived', 'item.restored', 'attachment.added', 'message.posted',
+                  'item.created', 'item.moved', 'item.updated', 'item.deleted', 'item.released', 'item.archived', 'item.restored', 'item.erasing', 'attachment.added', 'message.posted',
                   'decision.approved', 'decision.sentBack', 'decision.stopped', 'decision.answered',
                   'finding.triaged', 'agent.created', 'agent.revoked', 'agent.rotated', 'agent.updated',
                   'project.created', 'project.updated', 'project.processChanged', 'project.archived',
@@ -892,7 +903,10 @@ service cloud.firestore {
             && request.resource.data.at == request.time
             && request.resource.data.level in ['info', 'warn', 'error']
             && str(request.resource.data.text, 0, 4000);
-          allow update, delete: if false;
+          allow update: if false;
+          // Only while the run's item is being erased (see erasingItem).
+          allow delete: if erasingItem(wid, get(runPath(wid, rid)).data.projectId,
+                                       get(runPath(wid, rid)).data.itemId);
         }
       }
 
@@ -1400,7 +1414,7 @@ service cloud.firestore {
               || releaseStaleIt(wid, pid, iid, r) || unholdIt(wid, pid, iid, r)
               || releaseRevokedIt(wid, r) || attachCounted(wid, pid, iid, r)
               || moveIt(wid, pid, iid, r, p) || archiveIt(wid, pid, iid, r, p)
-              || restoreIt(wid, pid, iid, r, p);
+              || restoreIt(wid, pid, iid, r, p) || beginEraseIt(wid, pid, iid, r);
           }
           // Move to step (card O2Ehb9CG): an open item nobody holds goes to another step, arriving
           // like a new item. Anyone on the project may send it back to an earlier step; only an
@@ -1431,12 +1445,26 @@ service cloud.firestore {
               && (r.createdBy == me_('human') || isAdmin(wid))
               && trackedFor(wid, d.lastEventId, ['item.archived'], pid, iid);
           }
+          // Delete for good, step 1: flag the item (stopped, archived) so its history can be erased
+          // in chunks. The creator or an admin, nobody holding it. Idempotent.
+          function beginEraseIt(wid, pid, iid, r) {
+            let d = request.resource.data;
+            return changed(['erasing', 'status', 'claim', 'gate', 'archivedAt', 'updatedAt', 'lastEventId'])
+              && d.updatedAt == request.time
+              && r.claim == null
+              && d.erasing == true
+              && d.status == 'stopped' && d.claim == null && d.gate == null
+              && d.archivedAt == request.time
+              && (r.createdBy == me_('human') || isAdmin(wid))
+              && trackedFor(wid, d.lastEventId, ['item.erasing'], pid, iid);
+          }
           function restoreIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
             return changed(['status', 'claim', 'gate', 'archivedAt', 'stepAt', 'updatedAt', 'lastEventId'])
               && d.updatedAt == request.time
               // Any stopped item: archived in bulk, or rejected at a gate (card lvPPSnV2).
               && r.status == 'stopped' && r.get('workStopped', null) == null
+              && r.get('erasing', false) != true
               && d.archivedAt == null
               && hasStep(p, r.stepId) && arrivesAt(d, p, p.stepIndex[r.stepId])
               && d.stepId == r.stepId

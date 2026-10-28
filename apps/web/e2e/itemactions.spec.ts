@@ -139,6 +139,19 @@ async function seed(page: Page, name = 'Ana Admin') {
       summary: null,
       lastEventId: 'seed',
     });
+  // Agent log lines (up to 500 per run): 1000 under the item that gets deleted, 2 under the other.
+  const line = (n: number) => ({ at: new Date(), level: 'info', text: `line ${n}` });
+  for (const [rid, count] of [
+    ['r2', 500],
+    ['r2b', 500],
+    ['r1', 2],
+  ] as const)
+    for (let from = 0; from < count; from += 50)
+      await Promise.all(
+        Array.from({ length: Math.min(50, count - from) }, (_, k) =>
+          adminSet(`${base}/runs/${rid}/log/${from + k}`, line(from + k)),
+        ),
+      );
   return { wid, uid, base };
 }
 
@@ -268,6 +281,15 @@ test('Delete…: confirm, erases the item with its notes, files and runs, one Ac
   expect(await adminDoc(`${base}/projects/blog/items/i2/attachments/a1`)).toBeNull();
   expect(await adminDoc(`${base}/runs/r2`)).toBeNull();
   expect(await adminDoc(`${base}/runs/r2b`)).toBeNull();
+  // ~1000 agent log lines under its runs are gone too; the other item's stay.
+  for (const [rid, n] of [
+    ['r2', 0],
+    ['r2', 499],
+    ['r2b', 250],
+    ['r2b', 499],
+  ] as const)
+    expect(await adminDoc(`${base}/runs/${rid}/log/${n}`)).toBeNull();
+  expect(await adminDoc(`${base}/runs/r1/log/0`)).not.toBeNull();
   // The other item's run stays.
   expect(await adminDoc(`${base}/runs/r1`)).not.toBeNull();
   const tomb = await adminDoc(`workspaces/${wid}/events/del-items-i2`);

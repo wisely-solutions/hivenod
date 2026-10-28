@@ -451,8 +451,11 @@ export function canEditItem(
 }
 
 /** Why a stopped item is in the Archived list (card rLntxm7C): what the person sees, in a word. */
-export type StoppedKind = 'Cancelled' | 'Archived' | 'Rejected';
-export function stoppedKind(item: Pick<Item, 'workStopped' | 'archivedAt'>): StoppedKind {
+export type StoppedKind = 'Cancelled' | 'Archived' | 'Rejected' | 'Deleting';
+export function stoppedKind(
+  item: Pick<Item, 'workStopped' | 'archivedAt'> & { erasing?: boolean },
+): StoppedKind {
+  if (item.erasing) return 'Deleting';
   if (item.workStopped) return 'Cancelled';
   if (item.archivedAt) return 'Archived';
   return 'Rejected';

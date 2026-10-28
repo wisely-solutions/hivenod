@@ -1,15 +1,14 @@
-import { archiveItem, deleteItem, type Item, type Project } from '@hive/shared';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { archiveItem, type Item, type Project } from '@hive/shared';
 import { Archive, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useReady } from '../auth/context';
 import { ResponsiveModal } from '../components/ResponsiveModal';
-import { db } from '../lib/db';
 import { stash } from '../lib/pendingDecisions';
 import { Button, IconButton } from '../ui/button';
 import { Icon } from '../ui/icon';
 import { ActionMenu, type MenuAction } from '../ui/menu';
 import { useToast } from '../ui/overlay';
+import { eraseItem } from './eraseItem';
 import { canEditItem } from './logic';
 
 /**
@@ -128,7 +127,7 @@ export function useItemActions({
   if (mayDelete)
     actions.push({
       id: 'delete',
-      label: 'Delete…',
+      label: item.erasing ? 'Continue deleting…' : 'Delete…',
       icon: Trash2,
       tone: 'danger',
       onSelect: () => {
@@ -165,7 +164,7 @@ export function DeleteItemDialog({
   onOpenChange: (open: boolean) => void;
   onDeleted?: () => void;
 }) {
-  const { session, actionContext, run } = useReady();
+  const { session, actionContext } = useReady();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,35 +175,17 @@ export function DeleteItemDialog({
     setBusy(true);
     setError(null);
     try {
-      const wid = session.workspaceId;
-      const base = `workspaces/${wid}/projects/${pid}/items/${itemId}`;
-      const [att, msg, runs] = await Promise.all([
-        getDocs(collection(db, `${base}/attachments`)),
-        getDocs(collection(db, `${base}/messages`)),
-        getDocs(
-          query(
-            collection(db, `workspaces/${wid}/runs`),
-            where('projectId', '==', pid),
-            where('itemId', '==', itemId),
-          ),
-        ),
-      ]);
-      await run(
-        deleteItem(ctx, {
-          projectId: pid,
-          itemId,
-          item,
-          attachmentIds: att.docs.map((d) => d.id),
-          messageIds: msg.docs.map((d) => d.id),
-          runIds: runs.docs.map((d) => d.id),
-        }),
-      );
+      await eraseItem(ctx, { projectId: pid, itemId, item });
       setHidden(pid, itemId, true);
       toast.push({ message: `Deleted “${item.title}”.` });
       onOpenChange(false);
       onDeleted?.();
     } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : 'Could not delete it. Try again.');
+      setError(
+        e instanceof Error && e.message
+          ? `${e.message} Deleting stopped; choose Delete again to continue.`
+          : 'Deleting stopped. Choose Delete again to continue.',
+      );
     } finally {
       setBusy(false);
     }
