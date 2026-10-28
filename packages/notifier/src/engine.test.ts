@@ -573,7 +573,7 @@ describe('silence (item AzveC)', () => {
     expect(w.sentPush.map((p) => p.endpoint).sort()).toEqual(['https://p/ana', 'https://p/bo']);
     expect(w.sentPush[0]!.notice).toMatchObject({
       title: 'No update: Post',
-      body: 'Blog · Hive · no update for 41 min',
+      body: 'Blog · Hive · no activity for 41 min',
       url: '/p/p?item=i1',
     });
     expect(w.sentTg).toHaveLength(1);

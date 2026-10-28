@@ -586,7 +586,7 @@ export class Engine {
             itemTitle: clipText(w.item.title, 300),
             stepName: '',
             actorName: clipText(w.agentName, 200),
-            text: `no update for ${minutes} min`,
+            text: `no activity for ${minutes} min`,
             at: now,
             readAt: null,
           });

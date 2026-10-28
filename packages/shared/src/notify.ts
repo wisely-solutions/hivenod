@@ -240,7 +240,7 @@ export function silenceNotice(a: {
 }): Notice {
   return {
     title: `No update: ${clip(a.itemTitle, 80)}`,
-    body: `${a.projectName} · ${a.agentName ? `${clip(a.agentName, 60)} · ` : ''}no update for ${a.minutes} min`,
+    body: `${a.projectName} · ${a.agentName ? `${clip(a.agentName, 60)} · ` : ''}no activity for ${a.minutes} min`,
     url: itemLink(a.projectId, a.itemId),
   };
 }
