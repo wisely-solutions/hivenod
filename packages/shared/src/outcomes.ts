@@ -73,11 +73,24 @@ export const OUTCOMES = {
   reply_book: {
     label: 'Reply and book',
     approve: 'Send and book',
-    description: 'Answer them and book a meeting (the booking itself comes with the calendar).',
+    description:
+      "Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then send the reply and the invite, mirror the event to the source calendar and report outcome_done.",
     fields: {
       text: text('Reply', 'The answer, ready to send as written'),
-      slot: line('When', 'The slot, e.g. 2026-11-03 10:00-10:30 Europe/Lisbon'),
-      with: line('With', 'Who is invited'),
+      start: {
+        kind: 'datetime',
+        label: 'Starts',
+        required: true,
+        help: 'ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00',
+      },
+      end: {
+        kind: 'datetime',
+        label: 'Ends',
+        required: true,
+        help: 'ISO 8601 with its offset, after start',
+      },
+      with: line('With', 'Who is invited: names or emails, separated by commas'),
+      title: line('Title', 'What the calendar shows; by default "Meeting with <with>"', false),
     },
     executor: 'agent',
     after: { state: 'waiting', waitingOn: 'them' },

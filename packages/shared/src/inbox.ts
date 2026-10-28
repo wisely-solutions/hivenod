@@ -38,6 +38,7 @@ import {
   outcomeType,
   type WaitingOn,
 } from './outcomes';
+import { calendarEventId, calendarUpsert } from './calendar';
 import { timestamp } from './schema';
 
 // ---------- shapes ----------
@@ -871,7 +872,7 @@ export function approveOutcome(
   }
   const edited = JSON.stringify(sorted(fields)) !== JSON.stringify(sorted(o.fields));
   const immediate = outcomeType(o.type)?.executor === 'none';
-  return inboxPlan(
+  const approval = inboxPlan(
     ctx,
     'outcome.approved',
     { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
@@ -897,6 +898,54 @@ export function approveOutcome(
         : []),
     ],
   );
+  if (o.type !== 'reply_book') return approval;
+  // The booking goes into the member's calendar in the same batch (Inbox item w9SAf).
+  const booking = bookingPlan(ctx, input.outcomeId, o.memberUid, fields);
+  return { eventId: approval.eventId, ops: [...approval.ops, ...booking.ops] };
+}
+
+/** The calendar event of an approved reply_book outcome: source hivenod, id from the outcome. */
+export function bookingEventId(memberUid: string, outcomeId: string): string {
+  return calendarEventId(memberUid, BOOKING_SOURCE, outcomeId);
+}
+export const BOOKING_SOURCE = 'hivenod';
+
+function bookingPlan(
+  ctx: ActionContext,
+  outcomeId: string,
+  memberUid: string,
+  fields: Readonly<Record<string, string | boolean>>,
+): ActionPlan {
+  const str = (k: string) => (typeof fields[k] === 'string' ? (fields[k] as string) : '');
+  const start = new Date(str('start'));
+  const end = new Date(str('end'));
+  need(
+    !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start,
+    'The meeting must end after it starts.',
+  );
+  const who = str('with');
+  const attendees = who
+    .split(/[,;]/)
+    .map((a) => a.trim())
+    .filter((a) => a !== '');
+  try {
+    return calendarUpsert(ctx, {
+      memberUid,
+      events: [
+        {
+          source: BOOKING_SOURCE,
+          sourceEventId: outcomeId,
+          title: str('title') || `Meeting with ${who}`,
+          start,
+          end,
+          attendees,
+        },
+      ],
+    });
+  } catch (e) {
+    if (e instanceof ActionError) throw new ActionError(`The booking: ${e.message}`);
+    throw e;
+  }
 }
 
 /** The member turns a proposal down; with none left, the agent investigates again. */

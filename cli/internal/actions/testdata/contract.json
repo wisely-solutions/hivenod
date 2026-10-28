@@ -16413,7 +16413,12 @@
           "waiting": null
         },
         "type": "reply_book",
-        "fields": { "text": "Booked.", "slot": "Thu 10:00-10:30", "with": "Sam" }
+        "fields": {
+          "text": "Booked.",
+          "start": "2026-11-05T10:00:00+01:00",
+          "end": "2026-11-05T10:30:00+01:00",
+          "with": "Sam"
+        }
       },
       "output": {
         "eventId": "id02",
@@ -16425,7 +16430,12 @@
               "memberUid": "joao",
               "threadId": "it1",
               "type": "reply_book",
-              "fields": { "text": "Booked.", "slot": "Thu 10:00-10:30", "with": "Sam" },
+              "fields": {
+                "text": "Booked.",
+                "start": "2026-11-05T09:00:00.000Z",
+                "end": "2026-11-05T09:30:00.000Z",
+                "with": "Sam"
+              },
               "state": "proposed",
               "note": "",
               "proposedBy": "agentA",
@@ -16459,7 +16469,12 @@
               "data": {
                 "outcomeId": "id01",
                 "type": "reply_book",
-                "fields": { "text": "Booked.", "slot": "Thu 10:00-10:30", "with": "Sam" }
+                "fields": {
+                  "text": "Booked.",
+                  "start": "2026-11-05T09:00:00.000Z",
+                  "end": "2026-11-05T09:30:00.000Z",
+                  "with": "Sam"
+                }
               },
               "at": { "__hive": "serverTime" }
             }
@@ -16998,9 +17013,9 @@
           "waiting": null
         },
         "type": "reply_book",
-        "fields": { "text": "x", "slot": "y" }
+        "fields": { "text": "x", "start": "2026-11-05T10:00:00Z", "with": "y" }
       },
-      "output": { "error": "reply_book needs with." }
+      "output": { "error": "reply_book needs end." }
     },
     {
       "name": "proposeOutcome/field not text",

@@ -1457,7 +1457,12 @@ function build(): ContractCase[] {
   });
   propose('reply_book', AGENT, {
     type: 'reply_book',
-    fields: { text: 'Booked.', slot: 'Thu 10:00-10:30', with: 'Sam' },
+    fields: {
+      text: 'Booked.',
+      start: '2026-11-05T10:00:00+01:00',
+      end: '2026-11-05T10:30:00+01:00',
+      with: 'Sam',
+    },
   });
   propose('no_reply', AGENT, { type: 'no_reply', fields: {} });
   propose('make_it_work', AGENT, {
@@ -1471,7 +1476,10 @@ function build(): ContractCase[] {
   propose('own id, from waiting', AGENT, { outcomeId: 'o9', thread: TH({ state: 'waiting' }) });
   propose('unknown type', AGENT, { type: 'launch' });
   propose('unknown field', AGENT, { fields: { text: 'x', bcc: 'all' } });
-  propose('missing field', AGENT, { type: 'reply_book', fields: { text: 'x', slot: 'y' } });
+  propose('missing field', AGENT, {
+    type: 'reply_book',
+    fields: { text: 'x', start: '2026-11-05T10:00:00Z', with: 'y' },
+  });
   propose('field not text', AGENT, { fields: { text: 3 } });
   propose('field not boolean', AGENT, { fields: { text: 'x', holding: 'yes' } });
   propose('field too long', AGENT, { type: 'handover', fields: { to: 't'.repeat(301) } });
