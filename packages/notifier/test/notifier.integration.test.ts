@@ -390,6 +390,32 @@ describe('notifier end to end', () => {
 });
 
 describe('silence end to end (item AzveC)', () => {
+  const run = (itemId: string, startedAt: ReturnType<typeof minutesAgo>) => ({
+    agentUid: 'agentA',
+    projectId: 'p1',
+    itemId,
+    stepId: 'draft',
+    startedAt,
+    heartbeatAt: minutesAgo(1),
+    heartbeatEventAt: minutesAgo(1),
+    endedAt: null,
+    status: 'running',
+    costEur: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+    model: null,
+    summary: null,
+    lastEventId: 'seed',
+  });
+  const event = (itemId: string, runId: string, type: string, at: ReturnType<typeof minutesAgo>) => ({
+    actor: { type: 'agent', id: 'agentA', name: 'Agent A' },
+    projectId: 'p1',
+    itemId,
+    runId,
+    type,
+    data: {},
+    at,
+  });
   it('flags a silent worked item on the item and tells the decider once on Telegram', async () => {
     const ago = minutesAgo;
     await put({
@@ -422,6 +448,27 @@ describe('silence end to end (item AzveC)', () => {
         stepId: 'draft',
         status: 'working',
         claim: { runId: 'run-s', agentUid: 'agentA', heartbeatAt: ago(1) },
+      }),
+      // Heartbeats are not activity.
+      [paths.event(W, 'hb-s')]: event('quiet', 'run-s', 'run.heartbeat', ago(2)),
+      // Busy: a log line 5 minutes ago, no status at all.
+      [paths.run(W, 'run-l')]: run('logs', ago(60)),
+      [paths.logLine(W, 'run-l', 0)]: { at: ago(5), level: 'info', text: 'Running tests' },
+      [I('logs')]: itemDoc({
+        title: 'Logging one',
+        stepId: 'draft',
+        status: 'working',
+        claim: { runId: 'run-l', agentUid: 'agentA', heartbeatAt: ago(1) },
+      }),
+      // Busy: a note 3 minutes ago (an event of the agent), behind newer heartbeats.
+      [paths.run(W, 'run-n')]: run('notes', ago(60)),
+      [paths.event(W, 'note-n')]: event('notes', 'run-n', 'message.posted', ago(3)),
+      [paths.event(W, 'hb-n')]: event('notes', 'run-n', 'run.heartbeat', ago(1)),
+      [I('notes')]: itemDoc({
+        title: 'Noting one',
+        stepId: 'draft',
+        status: 'working',
+        claim: { runId: 'run-n', agentUid: 'agentA', heartbeatAt: ago(1) },
       }),
     });
     const { calls, bot } = fakeTelegram();
@@ -457,6 +504,9 @@ describe('silence end to end (item AzveC)', () => {
       await sweep();
       await sweep();
       expect(toAlice()).toHaveLength(1);
+      // The items with recent activity (a log line, a note) are not silent.
+      expect((await db.doc(I('logs')).get()).data()!.silence ?? null).toBeNull();
+      expect((await db.doc(I('notes')).get()).data()!.silence ?? null).toBeNull();
       // A status ends it: the flag is cleared.
       await db.doc(I('quiet')).update({
         statusUpdate: {

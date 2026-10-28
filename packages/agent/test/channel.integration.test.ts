@@ -871,10 +871,10 @@ for (const impl of IMPLS)
       expect(statuses(s).length).toBe(n);
     });
 
-    it('interval off: none; a person asking sends one at once', async () => {
+    it('off by default (no statusEvery): none; a person asking sends one at once', async () => {
       const { token } = await newAgent();
       await put({
-        [P('p1')]: projectDoc({}, { steps: LIB, stepIndex: buildStepIndex(LIB), statusEvery: 0 }),
+        [P('p1')]: projectDoc({}, { steps: LIB, stepIndex: buildStepIndex(LIB) }),
         [I('a')]: itemDoc({ stepId: 'build', title: 'Docs' }),
       });
       const s = await session(token, 1, undefined, 100);

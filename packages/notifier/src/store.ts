@@ -65,6 +65,40 @@ export function firestorePorts(
         if ((e as { code?: number }).code !== 5) throw e;
       }
     },
+    async lastActivity(wid, iid, runId, agentUid, afterMs) {
+      const after = Timestamp.fromMillis(afterMs);
+      const ms = (v: unknown) => (v as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
+      let best = 0;
+      const log = await db
+        .collection(`workspaces/${wid}/runs/${runId}/log`)
+        .where('at', '>', after)
+        .orderBy('at', 'desc')
+        .limit(1)
+        .get();
+      for (const d of log.docs) best = Math.max(best, ms(d.data().at));
+      // The agent's tool writes on the item (progress, notes, attachments, status...): its events,
+      // heartbeats aside. Newest first, page by page, only those after `afterMs`.
+      let q = db
+        .collection(`workspaces/${wid}/events`)
+        .where('itemId', '==', iid)
+        .where('at', '>', after)
+        .orderBy('at', 'desc')
+        .limit(100);
+      for (;;) {
+        const page = await q.get();
+        const hit = page.docs.find((d) => {
+          const e = d.data();
+          return e.actor?.id === agentUid && e.type !== 'run.heartbeat';
+        });
+        if (hit) {
+          best = Math.max(best, ms(hit.data().at));
+          break;
+        }
+        if (page.size < 100) break;
+        q = q.startAfter(page.docs[page.size - 1]!);
+      }
+      return best || null;
+    },
     async addBell(uid, id, entry) {
       try {
         await db.doc(bellPath.entry(uid, id)).create(entry);

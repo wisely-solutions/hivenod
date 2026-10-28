@@ -1449,10 +1449,11 @@ service cloud.firestore {
           // shapeNewItems (card st5INNZj): new items wait to be shaped by an agent.
           && request.resource.data.keys().hasOnly(['name', 'emoji', 'color', 'templateId',
                'steps', 'stepIndex', 'memberUids', 'createdBy', 'createdAt', 'archivedAt',
-               'shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'lastEventId'])
+               'shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter', 'lastEventId'])
           && request.resource.data.get('shapeNewItems', false) is bool
           && request.resource.data.get('agentsMayCreateItems', false) is bool
-          && request.resource.data.get('statusEvery', 30) in [0, 15, 30, 60]
+          && request.resource.data.get('statusEvery', 0) in [0, 15, 30, 60]
+          && request.resource.data.get('silenceAfter', 40) in [0, 20, 40, 60, 120]
           && validProject(request.resource.data)
           && (isAdmin(wid) || request.resource.data.memberUids == [me()])
           && request.resource.data.createdBy == me()
@@ -1463,17 +1464,18 @@ service cloud.firestore {
         allow update: if (canProject(wid, pid)
             && changed(['name', 'emoji', 'description', 'color', 'templateId', 'steps', 'stepIndex',
                         'archivedAt', 'memberUids', 'stepAgents', 'shapeNewItems',
-                        'agentsMayCreateItems', 'statusEvery', 'lastEventId'])
+                        'agentsMayCreateItems', 'statusEvery', 'silenceAfter', 'lastEventId'])
             && validProject(request.resource.data)
-            // Shaping new items (card st5INNZj), "Agents may create items" (item DhsO9) and the
-            // status interval (item AzveC) are switched by admins and the project's creator. One check for both: long processes
-            // are close to the rules budget.
+            // Shaping new items (card st5INNZj), "Agents may create items" (item DhsO9), the status
+            // interval and the silence threshold (item AzveC) are switched by admins and the
+            // project's creator. One check for all: long processes are close to the rules budget.
             && (!request.resource.data.diff(resource.data).affectedKeys()
-                  .hasAny(['shapeNewItems', 'agentsMayCreateItems', 'statusEvery'])
+                  .hasAny(['shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter'])
                 || (canSetStepAgents(wid, resource.data)
                     && request.resource.data.get('shapeNewItems', false) is bool
                     && request.resource.data.get('agentsMayCreateItems', false) is bool
-                    && request.resource.data.get('statusEvery', 30) in [0, 15, 30, 60]))
+                    && request.resource.data.get('statusEvery', 0) in [0, 15, 30, 60]
+                    && request.resource.data.get('silenceAfter', 40) in [0, 20, 40, 60, 120]))
             && gatesAllowed(wid, resource.data, request.resource.data)
             // Unchanged per-step agents cost little: long processes are close to the rules budget.
             && (request.resource.data.get('stepAgents', {}) == resource.data.get('stepAgents', {})

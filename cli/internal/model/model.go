@@ -122,7 +122,7 @@ type Project struct {
 	ShapeNewItems *bool               `firestore:"shapeNewItems" json:"shapeNewItems"`
 	// AgentsMayCreateItems (item DhsO9): agents may create items here (absent = off).
 	AgentsMayCreateItems *bool `firestore:"agentsMayCreateItems" json:"agentsMayCreateItems,omitempty"`
-	// StatusEvery (item AzveC): status checks every N minutes (15, 30, 60; 0 = off; absent = 30).
+	// StatusEvery (item AzveC): status checks every N minutes (15, 30, 60; 0 = off; absent = off).
 	StatusEvery *int64     `firestore:"statusEvery" json:"statusEvery,omitempty"`
 	CreatedBy   string     `firestore:"createdBy" json:"createdBy"`
 	CreatedAt   time.Time  `firestore:"createdAt" json:"createdAt"`
@@ -194,7 +194,7 @@ type StatusAsk struct {
 const MaxStatusTextChars = 200
 
 // DefaultStatusEvery is the status interval in minutes when a project sets none.
-const DefaultStatusEvery = 30
+const DefaultStatusEvery = 0
 
 // MaxParkReasonChars is the longest park reason.
 const MaxParkReasonChars = 200

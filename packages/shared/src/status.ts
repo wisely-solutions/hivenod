@@ -1,14 +1,16 @@
 /**
  * Status checks on ongoing work (item AzveC).
  *
- *  - A project asks the agent holding an actively worked item for a one-line status every
- *    `statusEvery` minutes (15, 30, 60; 0 = off; default 30). The channel session keeps the clock
- *    and pushes a `status` event; the agent answers with the `status` tool (reportStatus), which
- *    replaces the previous status of the item.
+ *  - A project may ask the agent holding an actively worked item for a one-line status every
+ *    `statusEvery` minutes (15, 30, 60; 0 = off, the default). The channel session keeps the
+ *    clock and pushes a `status` event; the agent answers with the `status` tool (reportStatus),
+ *    which replaces the previous status of the item.
  *  - A person may press "Ask for status" (askForStatus): the holder gets a status event at once.
  *    At most once per STATUS_ASK_EVERY_MS per item.
- *  - When no status arrives within the interval plus SILENCE_GRACE_MS, or SILENCE_GRACE_MS after
- *    a person asked, the notifier flags the item (`silence`) and tells its deciders once.
+ *  - Silence is counted from the item's last activity: the claim, any log line of the run, any
+ *    tool write by the holder (progress, note, attachment, status...). With none for the
+ *    project's `silenceAfter` minutes (default 40), or SILENCE_GRACE_MS after a person asked, the
+ *    notifier flags the item (`silence`) and tells its deciders once per silence.
  *
  * "Actively worked": claimed, working, not parked, not waiting for an answer, not stopped.
  */
@@ -26,15 +28,18 @@ import {
   type ItemState,
 } from './actions';
 import {
+  DEFAULT_SILENCE_AFTER,
   DEFAULT_STATUS_EVERY,
   MAX_STATUS_TEXT_CHARS,
   paths,
+  SILENCE_AFTER_CHOICES,
   SILENCE_GRACE_MS,
   STATUS_ASK_EVERY_MS,
   STATUS_EVERY_CHOICES,
   type Item,
   type Project,
   type Silence,
+  type SilenceAfter,
   type StatusAsk,
   type StatusEvery,
   type StatusUpdate,
@@ -49,6 +54,14 @@ export function statusEveryOf(project: { statusEvery?: number }): StatusEvery {
   return v !== undefined && (STATUS_EVERY_CHOICES as readonly number[]).includes(v)
     ? (v as StatusEvery)
     : DEFAULT_STATUS_EVERY;
+}
+
+/** The project's silence threshold in minutes (0 = never flagged). */
+export function silenceAfterOf(project: { silenceAfter?: number }): SilenceAfter {
+  const v = project.silenceAfter;
+  return v !== undefined && (SILENCE_AFTER_CHOICES as readonly number[]).includes(v)
+    ? (v as SilenceAfter)
+    : DEFAULT_SILENCE_AFTER;
 }
 
 type Claimed = Pick<ItemState, 'claim' | 'parked' | 'statusUpdate' | 'statusAsk'>;
@@ -73,7 +86,8 @@ export function statusAskOpen(item: Claimed): boolean {
   return !s || s.at.toMillis() < a.at.toMillis();
 }
 
-/** The silence flag in force (the notifier's), unless a status came after it. */
+/** The silence flag in force (the notifier's), unless a status came after it (the notifier
+ * clears it on any other activity). */
 export function silenceOf(item: Claimed & { silence?: Silence | null }): Silence | null {
   const f = item.silence;
   if (!f || !item.claim || item.claim.runId !== f.runId) return null;
@@ -202,33 +216,60 @@ export function setStatusEvery(
   );
 }
 
+/** Admins and the project's creator: after how many minutes without activity an item is flagged. */
+export function setSilenceAfter(
+  ctx: ActionContext,
+  input: { projectId: string; after: SilenceAfter },
+): ActionPlan {
+  requireHuman(ctx);
+  if (!SILENCE_AFTER_CHOICES.includes(input.after))
+    throw new ActionError('Flag silence after 20, 40, 60 or 120 minutes, or never');
+  return plan(
+    ctx,
+    'project.updated',
+    { projectId: input.projectId },
+    { silenceAfter: input.after },
+    (eventId) => [
+      {
+        kind: 'update',
+        path: paths.project(ctx.workspaceId, input.projectId),
+        data: { silenceAfter: input.after, lastEventId: eventId },
+      },
+    ],
+  );
+}
+
 /**
  * The notifier's silence check: whether an item is silent now, and since when (ms: its last
- * status on this claim, or the claim's start). Null when it is not silent. `startedMs` is the
- * run's start (the claim time).
+ * activity on this claim). Null when it is not silent. `startedMs` is the run's start (the claim
+ * time); `activityMs` the latest log line or tool write of the holder on this run, when known
+ * (null: none, or not looked up yet; an upper bound, so the notifier only looks it up when the
+ * item would otherwise be silent).
  */
 export function silenceDue(input: {
   item: Pick<
     Item,
     'status' | 'claim' | 'parked' | 'awaitingAnswer' | 'workStopped' | 'statusUpdate' | 'statusAsk'
   >;
-  project: { statusEvery?: number };
+  project: { silenceAfter?: number };
   startedMs: number;
+  activityMs: number | null;
   nowMs: number;
 }): { runId: string; since: number; asked: boolean } | null {
   const { item, nowMs } = input;
   if (!activelyWorked(item) || !item.claim) return null;
-  const last = statusOf(item)?.at.toMillis() ?? null;
-  const since = last ?? input.startedMs;
-  const every = statusEveryOf(input.project);
-  const periodic = every > 0 && nowMs > since + every * 60_000 + SILENCE_GRACE_MS;
+  const since = Math.max(
+    input.startedMs,
+    statusOf(item)?.at.toMillis() ?? 0,
+    input.activityMs ?? 0,
+  );
+  const after = silenceAfterOf(input.project);
+  const quiet = after > 0 && nowMs > since + after * 60_000;
   const ask = statusAskOf(item);
   const asked =
-    !!ask &&
-    (last === null || ask.at.toMillis() > last) &&
-    nowMs > ask.at.toMillis() + SILENCE_GRACE_MS;
-  if (!periodic && !asked) return null;
-  return { runId: item.claim.runId, since, asked: asked && !periodic };
+    !!ask && ask.at.toMillis() > since && nowMs > ask.at.toMillis() + SILENCE_GRACE_MS;
+  if (!quiet && !asked) return null;
+  return { runId: item.claim.runId, since, asked: asked && !quiet };
 }
 
 /** "No update for 42 min" (or hours past two hours). */

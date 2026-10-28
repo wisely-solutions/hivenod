@@ -21,6 +21,8 @@ function world(over: { prefs?: Record<string, NotifyPrefs>; remindAfterHours?: n
   const deleted: string[] = [];
   const bells = new Map<string, BellEntry>();
   const silences: { iid: string; silence: unknown }[] = [];
+  /** The holder's activity (item AzveC): what lastActivity finds, and every read. */
+  const activity: { ms: number | null; reads: number[] } = { ms: null, reads: [] };
   const ports: Ports = {
     addBell: async (uid, id, entry) => {
       if (!bells.has(`${uid}/${id}`)) bells.set(`${uid}/${id}`, entry);
@@ -55,6 +57,10 @@ function world(over: { prefs?: Record<string, NotifyPrefs>; remindAfterHours?: n
       return true;
     },
     setSilence: async (_w, _p, iid, silence) => void silences.push({ iid, silence }),
+    lastActivity: async (_w, _i, _r, _a, afterMs) => {
+      activity.reads.push(afterMs);
+      return activity.ms !== null && activity.ms > afterMs ? activity.ms : null;
+    },
     log: () => undefined,
   };
   const project = {
@@ -105,6 +111,7 @@ function world(over: { prefs?: Record<string, NotifyPrefs>; remindAfterHours?: n
     deleted,
     bells,
     silences,
+    activity,
     engine: new Engine(ports),
   };
 }
@@ -522,12 +529,12 @@ describe('silence (item AzveC)', () => {
     w: ReturnType<typeof world>,
     startedAgo: number,
     extra: Partial<Item> = {},
-    every?: number,
+    after?: number,
   ): WorkingItem => ({
     wid: 'w',
     pid: 'p',
     iid: 'i1',
-    project: { ...w.project, statusEvery: every } as Project,
+    project: { ...w.project, silenceAfter: after } as Project,
     startedMs: w.t.now - startedAgo,
     agentName: 'Hive',
     item: {
@@ -542,22 +549,25 @@ describe('silence (item AzveC)', () => {
     } as unknown as Item,
   });
 
-  it('flags an item silent past the interval plus 10 min, and tells the deciders once', async () => {
+  it('flags an item with no activity past the threshold (default 40 min), and tells the deciders once', async () => {
     const w = world();
     w.engine.setWorking(working(w, 39 * M), 'k');
     await w.engine.sweep();
     expect(w.silences).toHaveLength(0);
     expect(w.sentPush).toHaveLength(0);
-    // 41 minutes after the claim, no status: silent (30 + 10).
+    // Not silent on the item alone: the log and the events are not read.
+    expect(w.activity.reads).toHaveLength(0);
+    // 41 minutes after the claim, no activity at all: silent.
     w.engine.setWorking(working(w, 41 * M), 'k');
     await w.engine.sweep();
+    expect(w.activity.reads).toEqual([w.t.now - 41 * M]);
     expect(w.silences).toEqual([
       { iid: 'i1', silence: { runId: 'r1', since: w.t.now - 41 * M, at: w.t.now } },
     ]);
     expect(w.sentPush.map((p) => p.endpoint).sort()).toEqual(['https://p/ana', 'https://p/bo']);
     expect(w.sentPush[0]!.notice).toMatchObject({
       title: 'No update: Post',
-      body: 'Blog · Hive · no status for 41 min',
+      body: 'Blog · Hive · no update for 41 min',
       url: '/p/p?item=i1',
     });
     expect(w.sentTg).toHaveLength(1);
@@ -578,27 +588,60 @@ describe('silence (item AzveC)', () => {
     expect(w.silences).toHaveLength(1);
   });
 
-  it('a status ends the silence (flag cleared); the next silence is told again', async () => {
+  it('an agent that logs or writes every few minutes is never flagged, without a status', async () => {
+    const w = world();
+    for (let min = 0; min <= 120; min += 5) {
+      w.activity.ms = w.t.now - 2 * M;
+      w.engine.setWorking(working(w, 60 * M + min * M), 'k');
+      await w.engine.sweep();
+      w.t.now += 5 * M;
+    }
+    expect(w.silences).toHaveLength(0);
+    expect(w.sentPush).toHaveLength(0);
+    // Each read asks only for what came after the last one (with a little overlap).
+    expect(w.activity.reads.length).toBeGreaterThan(1);
+    const [first, second] = w.activity.reads;
+    // The first read starts at the claim (60 min ago); the next at the first read, less 2 min.
+    expect(second! - first!).toBe(58 * M);
+  });
+
+  it('activity ends the silence (flag cleared); the next silence is told again', async () => {
     const w = world();
     const since = w.t.now - 50 * M;
     const silence = { runId: 'r1', since, at: w.t.now - 5 * M };
     w.engine.setWorking(working(w, 50 * M), 'k');
     await w.engine.sweep();
     expect(w.sentPush).toHaveLength(2);
-    const status = { runId: 'r1', text: 'Tests', pct: null, at: ts(w.t.now), by: 'hive' };
-    w.engine.setWorking(working(w, 50 * M, { silence, statusUpdate: status }), 'k');
+    // A log line a minute ago (read a minute later: reads are at most once a minute).
+    w.t.now += M;
+    w.activity.ms = w.t.now - 30_000;
+    w.engine.setWorking(working(w, 51 * M, { silence }), 'k');
     await w.engine.sweep();
     expect(w.silences.at(-1)).toEqual({ iid: 'i1', silence: null });
     expect(w.sentPush).toHaveLength(2);
-    // 41 minutes after that status, silent again: a new notice.
+    // 41 minutes after that log line, silent again: a new notice.
+    const last = w.activity.ms;
     w.t.now += 41 * M;
-    w.engine.setWorking(working(w, 91 * M, { statusUpdate: status }), 'k');
+    w.engine.setWorking(working(w, 92 * M), 'k');
     await w.engine.sweep();
     expect(w.sentPush).toHaveLength(4);
+    expect(w.silences.at(-1)!.silence).toMatchObject({ since: last });
+  });
+
+  it('a status counts as activity, as does the project threshold', async () => {
+    const w = world();
+    const status = { runId: 'r1', text: 'Tests', pct: null, at: ts(w.t.now - 30 * M), by: 'hive' };
+    w.engine.setWorking(working(w, 3 * H, { statusUpdate: status }), 'k');
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(0);
+    // 20 min threshold: 30 min since the status is silent.
+    w.engine.setWorking(working(w, 3 * H, { statusUpdate: status }, 20), 'k');
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(2);
     expect(w.silences.at(-1)!.silence).toMatchObject({ since: status.at.toMillis() });
   });
 
-  it('a person asking: silent 10 minutes later even with the interval off', async () => {
+  it('a person asking: silent 10 minutes later without activity, even with the threshold off', async () => {
     const w = world();
     const ask = { runId: 'r1', byUid: 'ana', at: ts(w.t.now - 9 * M) };
     w.engine.setWorking(working(w, 5 * 60 * M, { statusAsk: ask }, 0), 'k');
@@ -611,7 +654,17 @@ describe('silence (item AzveC)', () => {
     expect(w.silences).toHaveLength(1);
   });
 
-  it('never for a parked item, one waiting for an answer, or off without an ask', async () => {
+  it('a person asking: a log line after the ask is an answer', async () => {
+    const w = world();
+    const ask = { runId: 'r1', byUid: 'ana', at: ts(w.t.now - 11 * M) };
+    w.activity.ms = w.t.now - 5 * M;
+    w.engine.setWorking(working(w, 20 * M, { statusAsk: ask }), 'k');
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(0);
+    expect(w.silences).toHaveLength(0);
+  });
+
+  it('never for a parked item, one waiting for an answer, or with the threshold off', async () => {
     const w = world();
     const park = { runId: 'r1', reason: 'release', at: ts(w.t.now - 3 * H) };
     w.engine.setWorking(working(w, 3 * H, { parked: park }), 'a');

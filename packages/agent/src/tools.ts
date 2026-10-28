@@ -128,7 +128,7 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: 'status',
     description:
-      'Say in one line where the work on the item you hold stands, with an optional percentage done (e.g. "Running release checks, e2e batch 2 of 3", 70). It replaces your previous status and shows on the card and in the item\'s history. Answer every <channel kind="status"> event with it; people are told when an item stays silent.',
+      'Say in one line where the work on the item you hold stands, with an optional percentage done (e.g. "Running release checks, e2e batch 2 of 3", 70). It replaces your previous status and shows on the card and in the item\'s history. Answer every <channel kind="status"> event with it. People are told when an item you hold shows no activity (no log line, note, progress or status) for a while.',
     input: {
       itemId,
       text: z

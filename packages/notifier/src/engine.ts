@@ -15,10 +15,10 @@
  *    Telegram. An urgent thread skips quiet hours and the summary.
  *  - After the gate's remindAfterHours a reminder goes out once, and only then is `remindedAt` set,
  *    which the app shows as "reminder sent".
- *  - Silence (item AzveC): an actively worked item with no status within its project's interval
- *    plus 10 minutes (or 10 minutes after a person asked) is flagged on the item, and its deciders
- *    are told once per silence (bell, push, Telegram). A status ends the silence; the next one is
- *    a new silence.
+ *  - Silence (item AzveC): an actively worked item with no activity (log line, tool write, status)
+ *    for its project's silenceAfter minutes (or 10 minutes after a person asked) is flagged on the
+ *    item, and its deciders are told once per silence (bell, push, Telegram). Any activity ends
+ *    the silence; the next one is a new silence.
  */
 import {
   approvalNotice,
@@ -73,6 +73,18 @@ export interface Ports {
   sendTelegram(chatId: number, notice: Notice, action?: ApprovalAction): Promise<boolean>;
   /** Sets or clears the silence flag on an item (item AzveC). */
   setSilence(wid: string, pid: string, iid: string, silence: Silence | null): Promise<void>;
+  /**
+   * The holder's newest activity on a run after `afterMs` (item AzveC), in ms: its newest log
+   * line, or its newest tool write on the item (an event of the agent, heartbeats aside). Null:
+   * none since then.
+   */
+  lastActivity(
+    wid: string,
+    iid: string,
+    runId: string,
+    agentUid: string,
+    afterMs: number,
+  ): Promise<number | null>;
   /** Writes a bell entry unless one with this id exists (users/{uid}/notifications/{id}). */
   addBell(uid: string, id: string, entry: BellEntry): Promise<void>;
   log(line: string): void;
@@ -91,6 +103,10 @@ export interface WaitingItem {
   item: Item;
 }
 /** An item an agent holds (item AzveC), with its run's start. */
+/** The last activity of a silent-looking item is read again after this long (item AzveC). */
+export const ACTIVITY_READ_EVERY_MS = 55_000;
+const ACTIVITY_OVERLAP_MS = 2 * 60_000;
+
 export interface WorkingItem {
   wid: string;
   pid: string;
@@ -210,6 +226,28 @@ export class Engine {
     if (t) this.inbox.set(key, t);
     else this.inbox.delete(key);
   }
+  /**
+   * The last activity per item (item AzveC): the newest found so far and up to when it was read.
+   * Each read only asks for what came after the last one, at most once a minute.
+   */
+  private activityCache = new Map<
+    string,
+    { runId: string; ms: number | null; readAt: number; readTo: number }
+  >();
+  private async activity(w: WorkingItem, runId: string, agentUid: string): Promise<number | null> {
+    const key = `${w.wid}/${w.iid}`;
+    const now = this.p.now();
+    let hit = this.activityCache.get(key);
+    if (hit && hit.runId !== runId) hit = undefined;
+    if (hit && now - hit.readAt < ACTIVITY_READ_EVERY_MS) return hit.ms;
+    // A little overlap: server times and the notifier's clock may differ by a few seconds.
+    const after = hit ? hit.readTo - ACTIVITY_OVERLAP_MS : w.startedMs;
+    const found = await this.p.lastActivity(w.wid, w.iid, runId, agentUid, after);
+    const ms = Math.max(hit?.ms ?? 0, found ?? 0) || null;
+    this.activityCache.set(key, { runId, ms, readAt: now, readTo: now });
+    return ms;
+  }
+
   setWorking(w: WorkingItem | null, key: string) {
     if (w) this.working.set(key, w);
     else this.working.delete(key);
@@ -494,14 +532,18 @@ export class Engine {
         this.p.log(`inbox ${t.tid}: ${String(e)}`);
       }
     }
+    const workingNow = new Set([...this.working.values()].map((w) => `${w.wid}/${w.iid}`));
+    for (const k of this.activityCache.keys()) if (!workingNow.has(k)) this.activityCache.delete(k);
     for (const w of [...this.working.values()]) {
       try {
-        const due = silenceDue({
-          item: w.item,
-          project: w.project,
-          startedMs: w.startedMs,
-          nowMs: now,
-        });
+        const at = { item: w.item, project: w.project, startedMs: w.startedMs, nowMs: now };
+        // Silence counts from the last activity. The item alone gives an upper bound, so the
+        // log and the events are only read when the item would be silent without them.
+        let due = silenceDue({ ...at, activityMs: null });
+        if (due && w.item.claim) {
+          const activityMs = await this.activity(w, w.item.claim.runId, w.item.claim.agentUid);
+          due = silenceDue({ ...at, activityMs });
+        }
         const flag = w.item.silence ?? null;
         if (!due) {
           if (flag) {
@@ -544,7 +586,7 @@ export class Engine {
             itemTitle: clipText(w.item.title, 300),
             stepName: '',
             actorName: clipText(w.agentName, 200),
-            text: `no status for ${minutes} min`,
+            text: `no update for ${minutes} min`,
             at: now,
             readAt: null,
           });
