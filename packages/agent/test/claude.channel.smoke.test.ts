@@ -21,7 +21,12 @@
  *     handed over and finished; a person's note on the parked item reaches the session and wakes it.
  * Item EJ2Cxq4k, first and only with HIVENOD_SMOKE_GO=1: `hivenod connect` (Go) confirmed by a
  * plain member installs the plugin itself, and `hivenod claude` gets an item and finishes it.
- * `pnpm smoke:claude --only connect|basic|max-items|park` runs one of the parts.
+ * Then, item 4PEHr, one session with max_items 1 holding an item:
+ * 10. an Inbox thread brought in by the agent arrives as an inbox event although max_items is
+ *     full; a sub-agent investigates it and proposes an outcome (the item stays held);
+ * 11. the person approves the outcome: the carry-out event reaches the session and a sub-agent
+ *     reports it with outcome_done.
+ * `pnpm smoke:claude --only connect|basic|max-items|park|inbox` runs one of the parts.
  */
 import { goBinary } from './gobin';
 import { createAgentIdentity } from '@hive/shared/agent-auth';
@@ -34,6 +39,7 @@ import {
   postMessage,
   sealToken,
   stopWork,
+  approveOutcome,
   type ItemState,
   type Step,
 } from '@hive/shared';
@@ -165,6 +171,8 @@ function prepare() {
 }
 
 /** A fresh emulator agent on project p1, and the `hivenod` stub on PATH signed in as it. */
+/** The token of the last smoke agent (the inbox part brings a message in as it). */
+let lastToken = '';
 async function smokeAgent(name: string) {
   await prepare();
   const { uid, token } = await createAgentIdentity(
@@ -203,6 +211,7 @@ async function smokeAgent(name: string) {
     `#!/bin/sh\nexec env FIRESTORE_EMULATOR_HOST=${FS_HOST} FIREBASE_AUTH_EMULATOR_HOST=${AUTH_HOST} HIVENOD_PROJECT_ID=hive-rules-test HIVENOD_FIREBASE_API_KEY=fake-api-key HIVENOD_HOME=${join(DIR, 'hivenod-home')} HIVENOD_TOKEN=${token} ${cli}"$@"\n`,
   );
   chmodSync(join(BIN(), 'hivenod'), 0o755);
+  lastToken = token;
   return uid;
 }
 
@@ -798,5 +807,101 @@ describe.skipIf(!run)('hivenod plugin: real Claude Code sessions', () => {
       await quit('k');
     },
     600_000,
+  );
+
+  it.skipIf(!!ONLY && ONLY !== 'inbox')(
+    'inbox: events arrive while max_items is full; an approved outcome is carried out',
+    async () => {
+      const uid = await smokeAgent('Channel smoke (inbox)');
+      await start(
+        'x',
+        `${STANDING_MULTI} For a hivenod channel event of kind inbox, do the same: one new background sub-agent with the brief in the event. This is a test organization: to carry out a reply outcome, just report it with outcome_done (status done, result text "smoke").`,
+        { tools: 'mcp__plugin_hivenod_hivenod,Agent,Task,SendMessage,TaskStop' },
+      );
+      out('inbox session up (max_items 1)');
+      await put({
+        [I('x1')]: itemDoc({
+          stepId: 'build',
+          title: 'Smoke inbox hold',
+          summary:
+            'Add the note HOLDING with add_note, then report back WITHOUT calling complete, end_run or release (the item and its run must stay open).',
+          order: 1,
+        }),
+      });
+      await until(
+        'x1 claimed',
+        120_000,
+        async () => ((await read(I('x1'))).claim as { agentUid?: string } | null)?.agentUid === uid,
+        'x',
+      );
+      const { HiveClient } = await import('../src/client');
+      const c = await HiveClient.connect({
+        token: lastToken,
+        projectId: 'hive-rules-test',
+        authEmulator: AUTH_HOST,
+      });
+      const added = await c.inbox().add({
+        source: 'teams',
+        sender: { name: 'Sam Example', handle: 'sam@example.com' },
+        text: 'Hi! Can we move our review from Wednesday to Thursday at 10:00?',
+        threadRef: 'smoke-thread',
+        receivedAt: new Date().toISOString(),
+      });
+      await c.close();
+      const tid = added.threadId;
+      const thread = () => read(`workspaces/${W}/inboxThreads/${tid}`);
+      await until(
+        'the thread investigated and an outcome proposed',
+        300_000,
+        async () => (await thread()).state === 'yourCall',
+        'x',
+      );
+      expect(await read(I('x1'))).toMatchObject({ stepId: 'build', claim: { agentUid: uid } });
+      out(
+        'CHECK inbox: the thread arrived with max_items full and a sub-agent proposed an outcome; x1 stayed held: PASS',
+      );
+      let oid = '';
+      let o: Record<string, unknown> = {};
+      await getEnv().withSecurityRulesDisabled(async (db) => {
+        const snap = await db
+          .firestore()
+          .collection(`workspaces/${W}/inboxOutcomes`)
+          .where('threadId', '==', tid)
+          .get();
+        const d = snap.docs.find((x) => x.data().state === 'proposed')!;
+        oid = d.id;
+        o = d.data();
+      });
+      const owner = as('owner');
+      const t = await thread();
+      await owner.run(
+        approveOutcome(owner.ctx, {
+          outcomeId: oid,
+          outcome: o as never,
+          thread: t as never,
+          // Whatever was proposed, carry out a plain reply when it is one.
+        }),
+      );
+      const immediate = ['no_reply', 'snooze', 'ignore'].includes(String(o.type));
+      if (!immediate) {
+        await until(
+          'the approved outcome carried out',
+          300_000,
+          async () => {
+            const got = await read(`workspaces/${W}/inboxOutcomes/${oid}`);
+            return got.state === 'done' || got.state === 'failed';
+          },
+          'x',
+        );
+        out(
+          `CHECK carry out: the approved ${String(o.type)} outcome reached the session and was reported with outcome_done: PASS`,
+        );
+      } else
+        out(
+          `NOTE carry out: the model proposed ${String(o.type)}, which takes effect on approval (nothing to carry out)`,
+        );
+      await quit('x');
+    },
+    900_000,
   );
 });

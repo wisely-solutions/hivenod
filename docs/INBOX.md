@@ -202,9 +202,56 @@ The contract tests cover the agent actions: `cli/contract/cases.ts` against the 
 `packages/agent/test/go.integration.test.ts`, which runs the inbox scenario through both CLIs on
 the emulators and requires equal results and documents.
 
+## Channel events (part 2)
+
+A channel session (`hivenod mcp --channel`, TypeScript `packages/agent/src/inboxfeed.ts`, Go
+`cli/internal/hive/inboxfeed.go`) pushes `<channel source="hivenod" kind="inbox">` events for
+the threads that need agent work. They don't count toward `max_items` and are never claimed:
+the session runs each in a background sub-agent of its own, with the brief in the event, and
+keeps development items first (the channel instructions say so).
+
+**Who gets what.** Each event goes to exactly one agent's session:
+
+- **Investigating a thread** goes to the thread's home agent (`fetchedBy`), the agent that
+  brought it in. It is the organization's main agent for that inbox. Reasons: `new` (a new
+  thread), `message` (a new message), `answered` (the member answered `inbox_ask`), `woke` (a
+  snooze is over), `rejected` (the member turned the proposal down), `failed` (carrying out
+  failed), `restored` (the member brought it back), `resume` (still investigating when a new
+  session starts).
+- **A nudge due** (`nudge_due`) also goes to the home agent: the thread has waited on them for
+  `nudgeAfter` (3 days) since its last change. Noting why not (`inbox_note`) restarts the wait.
+- **Carrying out an approved outcome** (`carry_out`, with `outcome_id` and `outcome_type`) goes
+  to its executor, which the rules fix to the home agent.
+- A due snooze is woken by the home agent's session itself (`thread_wake`), and the wake then
+  sends `woke`.
+
+Meta: `kind: inbox, thread_id, reason, member, inbox_cap, inbox_active`, plus `outcome_id` and
+`outcome_type` for `carry_out`. `update: true` means a sub-agent already works on that thread,
+so the session passes the event on instead of starting another one.
+
+**Dedupe.** It's one event per thread state change. The session remembers, per thread, the
+last event id it handled (`lastEventId`):
+
+- Notes, filing and titles aren't triggers.
+- A listener that reconnects delivers the same documents, and nothing is pushed twice.
+- An approved outcome is sent once per session.
+- A new session (a restart) sends each thread that still needs work once more, since the old
+  session's sub-agents are gone. This stays within the same cap and rate.
+
+**Flow control.**
+
+- At most `maxInbox` threads are in flight at once (`--max-inbox N` or `HIVENOD_MAX_INBOX`,
+  0-10, default 3; 0 turns inbox events off).
+- A thread is in flight from its event until it leaves the state it was sent for (or the
+  outcome leaves `approved`), or for at most 30 minutes.
+- At most 10 events go out a minute.
+- Waiting ones go out in this order: approved outcomes, answers, new messages, the rest, then
+  nudges. Oldest first within each.
+- Tuning and tests: `HIVENOD_INBOX_PER_MIN`, and in milliseconds `HIVENOD_INBOX_NUDGE_MS`,
+  `HIVENOD_INBOX_LEASE_MS` and `HIVENOD_INBOX_TICK_MS`.
+
 ## Still to come
 
-- **Part 2:** `inbox` channel events to the organization's main agent, outside `max_items`.
 - **Part 3:** the Inbox view (per workspace and across workspaces), decisions on outcomes,
   rename, merge, split and move, and notifier notices, including urgent pings.
 - **Later slices:** personal Google sync, and

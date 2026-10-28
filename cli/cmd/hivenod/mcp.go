@@ -29,6 +29,18 @@ func parseMaxItems(v, from string) (int, error) {
 	return int(n), nil
 }
 
+// parseMaxInbox reads --max-inbox / HIVENOD_MAX_INBOX: a whole number 0..10, or -1 when unset.
+func parseMaxInbox(v, from string) (int, error) {
+	if strings.TrimSpace(v) == "" {
+		return -1, nil
+	}
+	n, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+	if err != nil || n != float64(int(n)) || n < 0 || n > hive.MaxInboxLimit {
+		return 0, hive.Errf(from + " must be a whole number from 0 to " + strconv.Itoa(hive.MaxInboxLimit) + ` (got "` + v + `").`)
+	}
+	return int(n), nil
+}
+
 func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdout io.Writer) error {
 	if !o.channel {
 		tok, _, err := credentials.Resolve()
@@ -45,6 +57,18 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 	}
 	if flag != 0 && !o.channel {
 		return hive.Errf("--max-items needs hivenod mcp --channel.")
+	}
+	maxInbox, err := parseMaxInbox(o.maxInbox, "--max-inbox")
+	if err != nil {
+		return err
+	}
+	if o.maxInbox != "" && !o.channel {
+		return hive.Errf("--max-inbox needs hivenod mcp --channel.")
+	}
+	if maxInbox < 0 {
+		if maxInbox, err = parseMaxInbox(os.Getenv("HIVENOD_MAX_INBOX"), "HIVENOD_MAX_INBOX"); err != nil {
+			return err
+		}
 	}
 	lazy := &hive.Lazy{Connect: func(ctx context.Context) (*hive.Client, error) { return hive.Connect(ctx, cfg, "") }}
 	sf := mcpserver.LoadSurface()
@@ -72,7 +96,9 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 		push := func(e hive.Event) { _ = srv.Notify("notifications/claude/channel", e) }
 		opts := hive.ChannelOptions{ProjectID: o.project, StepID: o.step, MaxItems: maxItems,
 			Presence: msEnv("HIVENOD_PRESENCE_MS"), Retry: msEnv("HIVENOD_CHANNEL_RETRY_MS"),
-			ParkCheck: msEnv("HIVENOD_PARK_CHECK_MS")}
+			ParkCheck: msEnv("HIVENOD_PARK_CHECK_MS"),
+			Inbox: hive.InboxOptions{MaxInbox: maxInbox, PerMinute: int(msEnv("HIVENOD_INBOX_PER_MIN") / time.Millisecond),
+				NudgeAfter: msEnv("HIVENOD_INBOX_NUDGE_MS"), Lease: msEnv("HIVENOD_INBOX_LEASE_MS"), Tick: msEnv("HIVENOD_INBOX_TICK_MS")}}
 		srv.OnInitialized = func() {
 			c, err := lazy.Get(ctx)
 			if err == nil {

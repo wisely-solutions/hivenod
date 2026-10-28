@@ -9,6 +9,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { channelInstructions, MAX_ITEMS_LIMIT, workText } from './channel';
 import type { HiveClient } from './client';
+import { inboxText, type InboxEventInfo } from './inboxfeed';
 import { createMcpServer } from './mcp';
 
 async function list(channel: boolean, maxItems = 1) {
@@ -41,6 +42,7 @@ export async function mcpSurface() {
     channel: { capabilities: channel.capabilities, tools: channel.tools },
     channelInstructions: instructions,
     workText: workTextSamples(),
+    inboxText: inboxTextSamples(),
   };
 }
 
@@ -69,4 +71,29 @@ function workTextSamples() {
       for (const maxItems of [1, 3])
         out.push({ row, why, maxItems, text: workText(row, why, maxItems) });
   return out;
+}
+
+/** inboxText for every reason, long texts and updates (the Go port is checked against it). */
+function inboxTextSamples() {
+  const long = 'é'.repeat(3100);
+  const infos: InboxEventInfo[] = [
+    { reason: 'new', threadId: 't1', title: 'Move the review?' },
+    { reason: 'new', threadId: 't1', title: '' },
+    { reason: 'message', threadId: 't1', title: 'Move the review?' },
+    { reason: 'message', threadId: 't1', title: 'Move the review?', update: true },
+    { reason: 'answered', threadId: 't1', title: 'T', question: 'Thursday?', answer: 'Yes' },
+    { reason: 'answered', threadId: 't1', title: 'T', answer: long, question: long },
+    { reason: 'answered', threadId: 't1', title: 'T', answer: '' },
+    { reason: 'woke', threadId: 't1', title: 'T' },
+    { reason: 'rejected', threadId: 't1', title: 'T', why: 'Too formal' },
+    { reason: 'rejected', threadId: 't1', title: 'T' },
+    { reason: 'failed', threadId: 't1', title: 'T', why: 'Teams said 403' },
+    { reason: 'failed', threadId: 't1', title: 'T' },
+    { reason: 'restored', threadId: 't1', title: 'T' },
+    { reason: 'resume', threadId: 't1', title: long },
+    { reason: 'nudge_due', threadId: 't1', title: 'T', nudgeDays: 3 },
+    { reason: 'carry_out', threadId: 't1', outcomeId: 'o1', outcomeType: 'reply' },
+    { reason: 'carry_out', threadId: 't1', outcomeId: 'o1', outcomeType: 'reply', update: true },
+  ];
+  return infos.map((info) => ({ info, text: inboxText(info) }));
 }

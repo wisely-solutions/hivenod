@@ -40,8 +40,20 @@ import {
   type ThreadStateOf,
 } from '@hive/shared';
 import { applyPlan } from '@hive/shared/firestore';
-import { collection, doc, getDoc, getDocs, query, where, type Firestore } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  where,
+  type Firestore,
+  type Query,
+  type QuerySnapshot,
+} from 'firebase/firestore';
 import { errorCode, HiveError } from './errors';
+import type { FeedOutcome, FeedThread, InboxSource } from './inboxfeed';
 
 export interface InboxDeps {
   db: Firestore;
@@ -588,6 +600,90 @@ export class InboxOps {
       ),
     );
     return { threadId, state: 'investigating', note: 'Awake: investigate it again.' };
+  }
+
+  /**
+   * What the channel's inbox feed reads (./inboxfeed.ts): this agent's open threads (it brought
+   * them in) and the approved outcomes it carries out, live from the server.
+   */
+  feedSource(): InboxSource {
+    const w = this.d.workspaceId;
+    const me = this.d.uid;
+    const ms = (t: unknown) =>
+      t && typeof (t as Ts).toMillis === 'function' ? (t as Ts).toMillis() : 0;
+    const live = <T>(
+      q: Query,
+      map: (id: string, d: Record<string, unknown>) => T,
+      on: (rows: T[]) => void,
+      onError: (e: unknown) => void,
+    ) =>
+      onSnapshot(
+        q,
+        // Only what the server says: a cached snapshot may be stale.
+        { includeMetadataChanges: true },
+        (snap: QuerySnapshot) => {
+          if (snap.metadata.fromCache) return;
+          on(
+            snap.docs.map((s) =>
+              map(s.id, s.data({ serverTimestamps: 'estimate' }) as Record<string, unknown>),
+            ),
+          );
+        },
+        onError,
+      );
+    return {
+      watchThreads: (on, onError) =>
+        live<FeedThread>(
+          query(
+            collection(this.d.db, `workspaces/${w}/inboxThreads`),
+            where('fetchedBy', '==', me),
+            where('state', 'in', ['investigating', 'waiting']),
+          ),
+          (id, t) => {
+            const wt = t.waiting as { on?: string; until?: unknown } | null | undefined;
+            return {
+              id,
+              memberUid: String(t.memberUid ?? ''),
+              state: String(t.state ?? ''),
+              title: String(t.title ?? ''),
+              lastEventId: String(t.lastEventId ?? ''),
+              updatedAtMs: ms(t.updatedAt),
+              lastMessageAtMs: ms(t.lastMessageAt),
+              waiting: wt
+                ? { on: String(wt.on ?? ''), untilMs: wt.until ? ms(wt.until) : null }
+                : null,
+            };
+          },
+          on,
+          onError,
+        ),
+      watchOutcomes: (on, onError) =>
+        live<FeedOutcome>(
+          query(
+            collection(this.d.db, `workspaces/${w}/inboxOutcomes`),
+            where('executor', '==', me),
+            where('state', '==', 'approved'),
+          ),
+          (id, o) => ({
+            id,
+            threadId: String(o.threadId ?? ''),
+            memberUid: String(o.memberUid ?? ''),
+            type: String(o.type ?? ''),
+            createdAtMs: ms(o.createdAt),
+          }),
+          on,
+          onError,
+        ),
+      eventOf: async (eventId) => {
+        const e = await this.get<{ type: string; data?: Record<string, unknown> }>(
+          inboxPaths.event(w, eventId),
+        );
+        return e ? { type: e.type, data: e.data ?? {} } : null;
+      },
+      wake: async (threadId) => {
+        await this.wake(threadId);
+      },
+    };
   }
 
   /** thread_flag: marks a thread urgent (the person is pinged at once), or not. */

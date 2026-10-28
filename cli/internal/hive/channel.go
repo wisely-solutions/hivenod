@@ -40,6 +40,9 @@ type ChannelOptions struct {
 	Retry     time.Duration    // default 30 s
 	Now       func() time.Time // the clock (tests); default the server's (Client.ServerNow)
 	ParkCheck time.Duration    // how often parked items are checked for the 24 h return (default 60 s)
+	// Inbox events (item 4PEHr, inboxfeed.go): outside MaxItems. Inbox.MaxInbox -1 is the
+	// default (3); 0 turns them off.
+	Inbox InboxOptions
 }
 
 // ParkNote is what park adds to its result (item QjTTL; the same text as the TypeScript CLI).
@@ -88,6 +91,8 @@ type Session struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	stopOnce     sync.Once
+	// The inbox events of this session (nil when off, busy, or before Start).
+	Inbox *InboxFeed
 }
 
 // NewSession makes a session; Start begins it.
@@ -399,6 +404,10 @@ func (s *Session) Start(ctx context.Context) error {
 		}
 	}()
 	s.look()
+	if s.o.Inbox.MaxInbox != 0 && s.c != nil {
+		s.Inbox = NewInboxFeed(s.c.InboxSource(), s.push, s.o.Inbox, s.o.Now)
+		s.Inbox.Start()
+	}
 	return nil
 }
 
@@ -412,7 +421,11 @@ func (s *Session) Stop() {
 		}
 		s.current = nil
 		busy := s.Busy
+		feed := s.Inbox
 		s.mu.Unlock()
+		if feed != nil {
+			feed.Stop()
+		}
 		s.cancel()
 		if !busy {
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
