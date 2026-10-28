@@ -83,8 +83,10 @@ const HELP = `hivenod: work in Hivenod as an agent, through the Claude Code chan
                     [--handle H] [--message-id M] [--permalink URL] [--reply-ref R] [--member UID]
                     [--thread ID] [--from-member] [--title T]
   hivenod inbox list | note <threadId> --text T | ask <threadId> --text Q
-  hivenod thread read <id> | wake <id>
+  hivenod thread read <id> | wake <id> | flag <id> [--off] [--reason R]
   hivenod subject list [--member UID] | assign <threadId> (--subject-id S | --name "Topic")
+  hivenod subject search ["words"] [--member UID] [--waiting] [--active-days N] [--has-open] [--limit N]
+  hivenod subject relate <subjectId> <subjectId> [--note "how"]   a link the person OKs
   hivenod outcome propose <threadId> --type T [--field name=value]... [--note N]
   hivenod outcome done <outcomeId> --status done|failed [--text T] [--permalink URL] [--item-id I] [--error E]
                        a person's Inbox (item 4PEHr): nothing is carried out before they approve
@@ -231,6 +233,11 @@ const OPTIONS = {
   from: { type: 'string' },
   to: { type: 'string' },
   min: { type: 'string' },
+  waiting: { type: 'boolean' },
+  'active-days': { type: 'string' },
+  'has-open': { type: 'boolean' },
+  limit: { type: 'string' },
+  off: { type: 'boolean' },
 } as const;
 
 type Opts = ReturnType<typeof parse>['values'];
@@ -264,7 +271,7 @@ export interface Command {
 }
 
 const INBOX_USAGE =
-  'Usage: hivenod inbox add|list|note|ask …, hivenod thread read|wake <id>, hivenod subject list|assign …, hivenod outcome propose|done … (see hivenod --help)';
+  'Usage: hivenod inbox add|list|note|ask …, hivenod thread read|wake <id>, hivenod subject list|assign|search|relate …, hivenod outcome propose|done … (see hivenod --help)';
 
 /** --field k=v (repeatable) as outcome fields; "true"/"false" for the type's boolean fields. */
 function outcomeFields(type: string, pairs: readonly string[]): Record<string, unknown> {
@@ -323,6 +330,30 @@ async function inboxCommand(c: HiveClient, pos: string[], o: Opts): Promise<Comm
       return json(await inbox.wake(id));
     case 'subject list':
       return json(await inbox.subjects(o.member));
+    case 'thread flag':
+      if (!id) throw usage();
+      return json(await inbox.flag(id, !o.off, o.reason));
+    case 'subject search': {
+      const whole = (v: string | undefined, flag: string) => {
+        if (v === undefined) return undefined;
+        const n = Number(v);
+        if (!Number.isInteger(n) || n < 1)
+          throw new HiveError(`${flag} must be a whole number >= 1`);
+        return n;
+      };
+      return json(
+        await inbox.search(pos.slice(2).join(' '), {
+          member: o.member,
+          ...(o.waiting ? { waitingForMe: true } : {}),
+          ...(o['has-open'] ? { hasOpen: true } : {}),
+          activeDays: whole(o['active-days'], '--active-days'),
+          limit: whole(o.limit, '--limit'),
+        }),
+      );
+    }
+    case 'subject relate':
+      if (!id || !pos[3]) throw usage();
+      return json(await inbox.relate(id, pos[3], o.note));
     case 'subject assign':
       if (!id || (o['subject-id'] === undefined) === (o.name === undefined)) throw usage();
       return json(await inbox.assign(id, o['subject-id'], o.name));

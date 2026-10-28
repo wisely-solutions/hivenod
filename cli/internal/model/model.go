@@ -413,6 +413,7 @@ type InboxThread struct {
 	Refs          []string       `firestore:"refs" json:"refs"`
 	LastMessageAt time.Time      `firestore:"lastMessageAt" json:"lastMessageAt"`
 	FetchedBy     string         `firestore:"fetchedBy" json:"fetchedBy"`
+	Urgent        bool           `firestore:"urgent" json:"urgent"`
 }
 
 // InboxDecision is the member's approval or rejection of an outcome.
@@ -444,6 +445,15 @@ type InboxOutcome struct {
 	Decision   *InboxDecision `firestore:"decision" json:"decision"`
 	Result     *InboxResult   `firestore:"result" json:"result"`
 	CreatedAt  time.Time      `firestore:"createdAt" json:"createdAt"`
+}
+
+// InboxRelation is workspaces/{w}/inboxRelations/{rid}: two related subjects (a < b).
+type InboxRelation struct {
+	MemberUID string `firestore:"memberUid" json:"memberUid"`
+	A         string `firestore:"a" json:"a"`
+	B         string `firestore:"b" json:"b"`
+	Note      string `firestore:"note" json:"note"`
+	State     string `firestore:"state" json:"state"`
 }
 
 // InboxSubject is workspaces/{w}/inboxSubjects/{sid}.

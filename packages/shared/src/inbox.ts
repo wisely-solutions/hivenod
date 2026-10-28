@@ -79,6 +79,7 @@ export const INBOX_EVENT_TYPES = [
   'outcome.failed',
   // agents and the member
   'thread.titled',
+  'thread.flagged',
   // the member
   'thread.answered',
   'thread.ignored',
@@ -91,6 +92,12 @@ export const INBOX_EVENT_TYPES = [
   'subject.renamed',
   'subject.merged',
   'subject.split',
+  // related subjects: an agent proposes, the member decides
+  'relation.proposed',
+  'relation.created',
+  'relation.accepted',
+  'relation.rejected',
+  'relation.removed',
 ] as const;
 export type InboxEventType = (typeof INBOX_EVENT_TYPES)[number];
 
@@ -117,6 +124,7 @@ export const INBOX_LIMITS = {
   reason: 1000,
   resultText: 20_000,
   refs: 50,
+  relationNote: 500,
 } as const;
 
 const by = z.object({ type: z.enum(['human', 'agent']), id: z.string() });
@@ -153,6 +161,8 @@ export const inboxThreadSchema = z.object({
   lastMessageAt: timestamp,
   /** The agent that brought it in: it posts replies (it has the channel access). */
   fetchedBy: z.string(),
+  /** Urgent (thread_flag): the member is pinged at once. Absent means false. */
+  urgent: z.boolean().optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
@@ -231,6 +241,7 @@ export const inboxPaths = {
   message: (w: string, m: string) => `workspaces/${w}/inboxMessages/${m}`,
   outcome: (w: string, o: string) => `workspaces/${w}/inboxOutcomes/${o}`,
   event: (w: string, e: string) => `workspaces/${w}/inboxEvents/${e}`,
+  relation: (w: string, r: string) => `workspaces/${w}/inboxRelations/${r}`,
   /** Tombstone event id of a subject deleted by a merge. */
   deleteEventId: (subjectId: string) => `del-subject-${subjectId}`,
 } as const;
@@ -754,6 +765,36 @@ export function wakeThread(
   );
 }
 
+/**
+ * Marks a thread urgent, or not (thread_flag; its agent or its member). An urgent thread pings
+ * the member at once, whatever their quiet hours (the notifier). Stored as `urgent: boolean`
+ * on the thread; absent means false.
+ */
+export function flagThread(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf; urgent: boolean; reason?: string | null },
+): ActionPlan {
+  if (ctx.actor.type === 'human') owner(ctx, input.thread.memberUid);
+  const reason = input.reason?.trim() || null;
+  need(
+    reason === null || reason.length <= INBOX_LIMITS.reason,
+    tooLong('The reason', INBOX_LIMITS.reason),
+  );
+  return inboxPlan(
+    ctx,
+    'thread.flagged',
+    {
+      memberUid: input.thread.memberUid,
+      threadId: input.threadId,
+      subjectId: input.thread.subjectId,
+    },
+    { urgent: input.urgent, reason },
+    (eventId) => [
+      upd(inboxPaths.thread(ctx.workspaceId, input.threadId), { urgent: input.urgent }, eventId),
+    ],
+  );
+}
+
 /** Retitles a thread (its agent or its member). */
 export function retitleThread(
   ctx: ActionContext,
@@ -1124,4 +1165,408 @@ export function splitSubject(
     ],
   );
   return { ...p, subjectId };
+}
+
+// ---------- related subjects (docs/INBOX.md, "Related subjects") ----------
+
+export const RELATION_STATES = ['proposed', 'related', 'rejected'] as const;
+export type RelationState = (typeof RELATION_STATES)[number];
+
+/**
+ * workspaces/{wid}/inboxRelations/{rid}: two subjects of one member linked as related. It is
+ * symmetric: `a` < `b` and the id is `rel-<a>-<b>` (relationId), so a pair has one document. An
+ * agent proposes it (state proposed); the member accepts it (related) or turns it down
+ * (rejected). The member can also relate two subjects directly, and remove a link (it goes back
+ * to rejected, so agents do not propose it again). Never deleted. A link to a subject that a
+ * merge removed is ignored.
+ */
+export const inboxRelationSchema = z.object({
+  memberUid: z.string(),
+  a: z.string(),
+  b: z.string(),
+  note: z.string().max(INBOX_LIMITS.relationNote),
+  state: z.enum(RELATION_STATES),
+  proposedBy: by,
+  decision: z.object({ byUid: z.string(), at: timestamp }).nullable(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+  lastEventId: z.string(),
+});
+export type InboxRelation = z.infer<typeof inboxRelationSchema>;
+export type RelationStateOf = Pick<InboxRelation, 'memberUid' | 'a' | 'b' | 'note' | 'state'>;
+type SubjectOf = Pick<InboxSubject, 'memberUid'>;
+
+/** The one document id of a pair of subjects, either way round. */
+export function relationId(a: string, b: string): string {
+  const [x, y] = a < b ? [a, b] : [b, a];
+  return `rel-${x}-${y}`;
+}
+
+function relationPair(input: { a: string; b: string; subjectA: SubjectOf; subjectB: SubjectOf }) {
+  need(input.a !== input.b, 'Pick two different subjects.');
+  need(
+    input.subjectA.memberUid === input.subjectB.memberUid,
+    'Both subjects must be for the same person.',
+  );
+  const [a, b] = input.a < input.b ? [input.a, input.b] : [input.b, input.a];
+  return { a, b, relationId: `rel-${a}-${b}`, memberUid: input.subjectA.memberUid };
+}
+
+function relationNote(note: string | null | undefined): string {
+  const n = (note ?? '').trim().replace(/\s+/g, ' ');
+  need(n.length <= INBOX_LIMITS.relationNote, tooLong('The note', INBOX_LIMITS.relationNote));
+  return n;
+}
+
+/**
+ * An agent proposes that two subjects are related (subject_relate). It waits for the member's
+ * OK; a pair already related, already proposed, or turned down is refused.
+ */
+export function proposeRelation(
+  ctx: ActionContext,
+  input: {
+    a: string;
+    b: string;
+    subjectA: SubjectOf;
+    subjectB: SubjectOf;
+    existing: RelationStateOf | null;
+    note?: string | null;
+  },
+): ActionPlan & { relationId: string; a: string; b: string } {
+  requireAgent(ctx);
+  const p = relationPair(input);
+  const ex = input.existing;
+  if (ex) {
+    need(ex.state !== 'related', 'These subjects are related already.');
+    need(ex.state !== 'proposed', 'This link is proposed already: it waits for the person.');
+    need(false, 'The person turned this link down (or removed it): do not propose it again.');
+  }
+  const note = relationNote(input.note);
+  const plan = inboxPlan(
+    ctx,
+    'relation.proposed',
+    { memberUid: p.memberUid, subjectId: p.a },
+    { relationId: p.relationId, a: p.a, b: p.b, note },
+    (eventId) => [
+      {
+        kind: 'set',
+        path: inboxPaths.relation(ctx.workspaceId, p.relationId),
+        data: {
+          memberUid: p.memberUid,
+          a: p.a,
+          b: p.b,
+          note,
+          state: 'proposed',
+          proposedBy: { type: 'agent', id: ctx.actor.id },
+          decision: null,
+          createdAt: SERVER_TIME,
+          updatedAt: SERVER_TIME,
+          lastEventId: eventId,
+        },
+      },
+    ],
+  );
+  return { ...plan, relationId: p.relationId, a: p.a, b: p.b };
+}
+
+/**
+ * The member relates two of their subjects: accepts an agent's proposal (relation.accepted,
+ * maybe with a new note), relinks a pair turned down before, or links a new pair
+ * (relation.created).
+ */
+export function relateSubjects(
+  ctx: ActionContext,
+  input: {
+    a: string;
+    b: string;
+    subjectA: SubjectOf;
+    subjectB: SubjectOf;
+    existing: RelationStateOf | null;
+    note?: string | null;
+  },
+): ActionPlan & { relationId: string } {
+  owner(ctx, input.subjectA.memberUid);
+  const p = relationPair(input);
+  const ex = input.existing;
+  need(ex?.state !== 'related', 'These subjects are related already.');
+  const note =
+    input.note === undefined || input.note === null ? (ex?.note ?? '') : relationNote(input.note);
+  const type = ex?.state === 'proposed' ? 'relation.accepted' : 'relation.created';
+  const path = inboxPaths.relation(ctx.workspaceId, p.relationId);
+  const decision = { byUid: ctx.actor.id, at: SERVER_TIME };
+  const plan = inboxPlan(
+    ctx,
+    type,
+    { memberUid: p.memberUid, subjectId: p.a },
+    { relationId: p.relationId, a: p.a, b: p.b, note },
+    (eventId) => [
+      ex
+        ? upd(path, { state: 'related', note, decision }, eventId)
+        : {
+            kind: 'set',
+            path,
+            data: {
+              memberUid: p.memberUid,
+              a: p.a,
+              b: p.b,
+              note,
+              state: 'related',
+              proposedBy: { type: 'human', id: ctx.actor.id },
+              decision,
+              createdAt: SERVER_TIME,
+              updatedAt: SERVER_TIME,
+              lastEventId: eventId,
+            },
+          },
+    ],
+  );
+  return { ...plan, relationId: p.relationId };
+}
+
+function decideRelation(
+  ctx: ActionContext,
+  input: { relationId: string; relation: RelationStateOf },
+  from: RelationState,
+  type: 'relation.rejected' | 'relation.removed',
+  msg: string,
+): ActionPlan {
+  const r = input.relation;
+  owner(ctx, r.memberUid);
+  need(r.state === from, msg);
+  return inboxPlan(
+    ctx,
+    type,
+    { memberUid: r.memberUid, subjectId: r.a },
+    { relationId: input.relationId, a: r.a, b: r.b },
+    (eventId) => [
+      upd(
+        inboxPaths.relation(ctx.workspaceId, input.relationId),
+        { state: 'rejected', decision: { byUid: ctx.actor.id, at: SERVER_TIME } },
+        eventId,
+      ),
+    ],
+  );
+}
+/** The member turns an agent's proposed link down. */
+export function rejectRelation(
+  ctx: ActionContext,
+  input: { relationId: string; relation: RelationStateOf },
+) {
+  return decideRelation(
+    ctx,
+    input,
+    'proposed',
+    'relation.rejected',
+    'Only a proposed link can be turned down.',
+  );
+}
+/** The member removes a link (it stays turned down, so agents do not propose it again). */
+export function unrelateSubjects(
+  ctx: ActionContext,
+  input: { relationId: string; relation: RelationStateOf },
+) {
+  return decideRelation(
+    ctx,
+    input,
+    'related',
+    'relation.removed',
+    'These subjects are not related.',
+  );
+}
+
+// ---------- subject search (docs/INBOX.md, "Finding subjects") ----------
+
+export interface SubjectSearchFilters {
+  /** Only subjects with threads waiting for the member (Needs you, Your call). */
+  waitingForMe?: boolean;
+  /** Only subjects with a message in the last N days. */
+  activeDays?: number;
+  /** Only subjects with open threads. */
+  hasOpen?: boolean;
+  /** At most this many (default 20, 1..100). */
+  limit?: number;
+}
+
+export interface SubjectSearchInput {
+  query: string;
+  filters: SubjectSearchFilters;
+  nowMs: number;
+  subjects: { id: string; name: string }[];
+  threads: {
+    id: string;
+    subjectId: string | null;
+    state: string;
+    title: string;
+    lastMessageAtMs: number;
+  }[];
+  messages: {
+    threadId: string;
+    direction: string;
+    source: string;
+    senderName: string;
+    senderHandle: string | null;
+    text: string;
+  }[];
+  relations: { a: string; b: string; state: string; note: string }[];
+}
+
+export type SubjectMatch = 'name' | 'people' | 'channel' | 'thread' | 'text';
+const MATCH_WEIGHT: [SubjectMatch, number][] = [
+  ['name', 5],
+  ['people', 3],
+  ['channel', 3],
+  ['thread', 2],
+  ['text', 1],
+];
+
+export interface SubjectLink {
+  subjectId: string;
+  name: string;
+  note: string;
+}
+export interface SubjectHit {
+  subjectId: string;
+  name: string;
+  score: number;
+  matched: SubjectMatch[];
+  forYou: number;
+  open: number;
+  threads: number;
+  lastActivityAt: string | null;
+  people: string[];
+  channels: string[];
+  related: SubjectLink[];
+  proposed: SubjectLink[];
+}
+
+export const SEARCH_LIMIT = { default: 20, max: 100, tokens: 10, people: 10 } as const;
+const cmpStr = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Finds a member's subjects (subject_search; the web app's Find): every word of the query
+ * (lowercased) must appear in the subject's name, its people (sender names and handles), its
+ * channels (sources), its thread titles or its message texts. Best first: name hits weigh 5,
+ * people and channel 3, thread titles 2, texts 1; then waiting for the member, then the latest
+ * activity. An empty query lists every subject that passes the filters. Pure, so the Go CLI and
+ * the web app give the same answer.
+ */
+export function searchSubjects(input: SubjectSearchInput): {
+  subjects: SubjectHit[];
+  total: number;
+} {
+  const f = input.filters;
+  const limit = Math.max(
+    1,
+    Math.min(SEARCH_LIMIT.max, Math.floor(f.limit ?? SEARCH_LIMIT.default) || SEARCH_LIMIT.default),
+  );
+  const tokens = input.query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t !== '')
+    .slice(0, SEARCH_LIMIT.tokens);
+  const names = new Map(input.subjects.map((s) => [s.id, s.name]));
+  const bySubject = new Map<string, SubjectSearchInput['threads']>();
+  const subjectOf = new Map<string, string>();
+  for (const t of input.threads) {
+    if (t.subjectId === null || !names.has(t.subjectId)) continue;
+    subjectOf.set(t.id, t.subjectId);
+    const l = bySubject.get(t.subjectId) ?? [];
+    l.push(t);
+    bySubject.set(t.subjectId, l);
+  }
+  const msgs = new Map<string, SubjectSearchInput['messages']>();
+  for (const m of input.messages) {
+    const sid = subjectOf.get(m.threadId);
+    if (!sid) continue;
+    const l = msgs.get(sid) ?? [];
+    l.push(m);
+    msgs.set(sid, l);
+  }
+  const links = (sid: string, state: string): SubjectLink[] =>
+    input.relations
+      .filter((r) => r.state === state && (r.a === sid || r.b === sid))
+      .map((r) => (r.a === sid ? r.b : r.a))
+      .filter((o) => names.has(o))
+      .map((o) => {
+        const r = input.relations.find(
+          (x) => x.state === state && ((x.a === sid && x.b === o) || (x.b === sid && x.a === o)),
+        )!;
+        return { subjectId: o, name: names.get(o)!, note: r.note };
+      })
+      .sort((x, y) => cmpStr(x.name, y.name) || cmpStr(x.subjectId, y.subjectId));
+  const hits: (SubjectHit & { lastMs: number | null })[] = [];
+  for (const s of input.subjects) {
+    const threads = bySubject.get(s.id) ?? [];
+    const ms = msgs.get(s.id) ?? [];
+    const forYou = threads.filter((t) => THREAD_FOR_MEMBER.includes(t.state as ThreadState)).length;
+    const open = threads.filter((t) => THREAD_OPEN.includes(t.state as ThreadState)).length;
+    const lastMs = threads.length ? Math.max(...threads.map((t) => t.lastMessageAtMs)) : null;
+    if (f.waitingForMe && forYou === 0) continue;
+    if (f.hasOpen && open === 0) continue;
+    if (f.activeDays !== undefined && f.activeDays !== null) {
+      if (lastMs === null || lastMs < input.nowMs - f.activeDays * 86_400_000) continue;
+    }
+    const people = [
+      ...new Set(ms.filter((m) => m.direction === 'in').map((m) => m.senderName)),
+    ].sort(cmpStr);
+    const channels = [...new Set(ms.map((m) => m.source))].sort(cmpStr);
+    const fields: Record<SubjectMatch, string[]> = {
+      name: [s.name.toLowerCase()],
+      people: ms.flatMap((m) =>
+        [m.senderName, m.senderHandle ?? ''].filter((x) => x !== '').map((x) => x.toLowerCase()),
+      ),
+      channel: channels,
+      thread: threads.map((t) => t.title.toLowerCase()),
+      text: ms.map((m) => m.text.toLowerCase()),
+    };
+    let score = 0;
+    const matched = new Set<SubjectMatch>();
+    let all = true;
+    for (const tok of tokens) {
+      let best = 0;
+      for (const [k, w] of MATCH_WEIGHT)
+        if (fields[k].some((v) => v.includes(tok))) {
+          matched.add(k);
+          best = Math.max(best, w);
+        }
+      if (best === 0) {
+        all = false;
+        break;
+      }
+      score += best;
+    }
+    if (!all) continue;
+    hits.push({
+      subjectId: s.id,
+      name: s.name,
+      score,
+      matched: MATCH_WEIGHT.map(([k]) => k).filter((k) => matched.has(k)),
+      forYou,
+      open,
+      threads: threads.length,
+      lastActivityAt: lastMs === null ? null : new Date(lastMs).toISOString(),
+      people: people.slice(0, SEARCH_LIMIT.people),
+      channels,
+      related: links(s.id, 'related'),
+      proposed: links(s.id, 'proposed'),
+      lastMs,
+    });
+  }
+  hits.sort(
+    (x, y) =>
+      y.score - x.score ||
+      y.forYou - x.forYou ||
+      (x.lastMs === null ? 1 : 0) - (y.lastMs === null ? 1 : 0) ||
+      (y.lastMs ?? 0) - (x.lastMs ?? 0) ||
+      cmpStr(x.name, y.name) ||
+      cmpStr(x.subjectId, y.subjectId),
+  );
+  return {
+    subjects: hits.slice(0, limit).map((h) => {
+      const { lastMs, ...rest } = h;
+      void lastMs;
+      return rest;
+    }),
+    total: hits.length,
+  };
 }
