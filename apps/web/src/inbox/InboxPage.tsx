@@ -19,6 +19,10 @@ import { Button } from '../ui/button';
 import { EmptyState, Skeleton, WorkingDots } from '../ui/feedback';
 import { AnimatePresence } from '../ui/motion';
 import { Sheet } from '../ui/overlay';
+import { BAR_BUTTON, BAR_PRIMARY, SelectionBar } from '../board/SelectionBar';
+import { rangeKeys } from '../board/bulk';
+import { isTypingTarget } from '../shell/shortcuts';
+import { Check, X } from 'lucide-react';
 import { DecisionDialog, type DialogMode } from './DecisionDialog';
 import { InboxRow, type RowAgent } from './InboxRow';
 import {
@@ -128,7 +132,7 @@ export function InboxPage() {
       session.isAdmin,
     ],
   );
-  const { hidden, decide, held, release } = useDecide();
+  const { hidden, decide, decideMany, held, release } = useDecide();
   const visible = useMemo(() => inbox.todo.filter((e) => !hidden.has(e.key)), [inbox.todo, hidden]);
   const counts = countByFilter(visible);
   // A finally-approved item stays in the list through the Undo window and the Done moment
@@ -211,6 +215,45 @@ export function InboxPage() {
   const dialogEntry = dialog ? ([...inbox.todo].find((e) => e.key === dialog.key) ?? null) : null;
   const quickEntry = quick ? ([...inbox.todo].find((e) => e.key === quick) ?? null) : null;
 
+  // Selecting several Approve/Accept rows to decide them together. Questions, findings and path
+  // decisions need a real answer each, so they cannot be selected.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  const [barHeight, setBarHeight] = useState(56);
+  const [bulkReject, setBulkReject] = useState(false);
+  const anchor = useRef<string | null>(null);
+  const selectable = (e: InboxEntry) => e.kind === 'approval';
+  const selectOrder = list.filter(selectable).map((e) => e.key);
+  const clearPicked = () => {
+    setPicked(new Set());
+    anchor.current = null;
+  };
+  const pick = (key: string, shift: boolean) => {
+    if (shift && anchor.current) {
+      const keys = rangeKeys(selectOrder, anchor.current, key);
+      setPicked((cur) => new Set([...cur, ...keys]));
+    } else {
+      setPicked((cur) => {
+        const next = new Set(cur);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    }
+    anchor.current = key;
+  };
+  /** The selected entries still in Needs you, and how many left meanwhile (decided elsewhere). */
+  const pickedNow = () => {
+    const live = inbox.todo.filter((e) => picked.has(e.key) && selectable(e));
+    return { live, gone: picked.size - live.length };
+  };
+  const decidePicked = (d: Parameters<typeof decideMany>[1]) => {
+    const { live, gone } = pickedNow();
+    const keys = new Set(picked);
+    const problem = decideMany(live, d, gone, () => setPicked(keys));
+    if (!problem) clearPicked();
+    return problem;
+  };
+
   const go = (key: string | null, replace = true) =>
     void navigate({
       to: '/',
@@ -253,6 +296,30 @@ export function InboxPage() {
     if (!problem && !isFinal && sel === e.key) go(desktop ? following : null);
     return problem;
   };
+
+  // x selects the highlighted row (Shift+x a range); Escape clears the selection.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      if (
+        isTypingTarget(e.target) &&
+        !(e.target instanceof HTMLInputElement && e.target.type === 'checkbox')
+      )
+        return;
+      if (document.querySelector('[role="dialog"]:not([data-state="closed"])')) return;
+      if (e.key === 'Escape' && picked.size > 0) {
+        clearPicked();
+        return;
+      }
+      if (e.key.toLowerCase() !== 'x') return;
+      const key = selected && selectable(selected) ? selected.key : selectOrder[0];
+      if (!key) return;
+      e.preventDefault();
+      pick(key, e.shiftKey);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const step = (dir: 1 | -1) => {
     if (!list.length) return;
@@ -359,12 +426,23 @@ export function InboxPage() {
             names={names}
             agent={agentOf(e)}
             summary={e.kind === 'finding' ? '' : (runOf(e)?.data.summary ?? '')}
-            swipeable={!desktop && e.kind === 'approval'}
-            onOpen={() => go(e.key, false)}
+            swipeable={!desktop && e.kind === 'approval' && picked.size === 0}
+            select={
+              selectable(e)
+                ? {
+                    show: desktop || picked.size > 0,
+                    checked: picked.has(e.key),
+                    onToggle: (shift) => pick(e.key, shift),
+                  }
+                : undefined
+            }
+            onOpen={() =>
+              !desktop && picked.size > 0 && selectable(e) ? pick(e.key, false) : go(e.key, false)
+            }
             onSwipe={(a) =>
               setDialog({ mode: a === 'approve' ? 'approve' : 'iterate', key: e.key })
             }
-            onLongPress={() => setQuick(e.key)}
+            onLongPress={() => (selectable(e) ? pick(e.key, false) : setQuick(e.key))}
           />
         ))}
       </AnimatePresence>
@@ -619,6 +697,36 @@ export function InboxPage() {
       )}
       {detail}
       {dialogs}
+      {picked.size > 0 ? (
+        <>
+          {/* Keeps the last row scrollable above the fixed bar. */}
+          <div
+            aria-hidden
+            style={{ height: `calc(${barHeight}px + 80px + env(safe-area-inset-bottom))` }}
+          />
+          <SelectionBar count={picked.size} onHeight={setBarHeight} onClear={clearPicked}>
+            <button
+              type="button"
+              className={BAR_PRIMARY}
+              onClick={() => decidePicked({ kind: 'approve', rationale: '' })}
+            >
+              <Check size={16} aria-hidden />
+              Approve {picked.size}
+            </button>
+            <button type="button" className={BAR_BUTTON} onClick={() => setBulkReject(true)}>
+              <X size={16} aria-hidden />
+              Reject…
+            </button>
+          </SelectionBar>
+        </>
+      ) : null}
+      <DecisionDialog
+        mode={bulkReject ? 'reject' : null}
+        entry={bulkReject ? (pickedNow().live[0] ?? null) : null}
+        description={`${picked.size} selected items, one reason for all`}
+        onSubmit={(_e, d) => (d.kind === 'reject' ? decidePicked(d) : null)}
+        onClose={() => setBulkReject(false)}
+      />
     </>
   );
 }

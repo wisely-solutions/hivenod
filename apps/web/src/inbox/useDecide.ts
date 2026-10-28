@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useReady } from '../auth/context';
 import { haptic } from '../lib/mobile';
 import { useToast } from '../ui/overlay';
-import { prepareDecision, type Decision } from './decision';
+import { decisionProblem, prepareDecision, type Decision } from './decision';
 import type { InboxEntry } from './logic';
 import { stash } from '../lib/pendingDecisions';
 import { setPending } from './pending';
@@ -38,6 +38,12 @@ function savedMessage(entry: InboxEntry, d: Decision): string {
           ? 'answer'
           : 'decision';
   return `Saved your ${what} of \u201c${entry.item.title}\u201d`;
+}
+
+/** "3 approved, 1 had already moved". */
+export function batchMessage(done: number, verb: 'approved' | 'rejected', moved: number): string {
+  if (done === 0) return moved ? `Nothing ${verb}: ${moved} had already moved` : `Nothing ${verb}`;
+  return `${done} ${verb}${moved ? `, ${moved} had already moved` : ''}`;
 }
 
 export function useDecide() {
@@ -159,6 +165,81 @@ export function useDecide() {
     [actionContext, run, session.me.uid, session.workspaceId, show, toast],
   );
 
+  /**
+   * Approve or reject several entries with ONE Undo toast (Needs you selection). Entries whose
+   * decision can no longer be prepared (someone else decided meanwhile) are skipped and counted.
+   * `gone` is the number of selected entries that already left the inbox. Returns a problem in
+   * plain words (so the dialog can show it), or null when queued.
+   */
+  const decideMany = useCallback(
+    (
+      entries: readonly InboxEntry[],
+      d: Extract<Decision, { kind: 'approve' | 'reject' }>,
+      gone: number,
+      onRestored?: () => void,
+    ): string | null => {
+      const ctx = actionContext(session.workspaceId);
+      if (!ctx) return 'You are signed out.';
+      const problem = decisionProblem(d);
+      if (problem) return problem;
+      const ready: { entry: InboxEntry; prepared: ReturnType<typeof prepareDecision> }[] = [];
+      let moved = gone;
+      for (const entry of entries) {
+        try {
+          ready.push({ entry, prepared: prepareDecision(ctx, entry, d) });
+        } catch (e) {
+          if (!(e instanceof ActionError)) throw e;
+          moved += 1;
+        }
+      }
+      const verb = d.kind === 'approve' ? 'approved' : 'rejected';
+      const message = batchMessage(ready.length, verb, moved);
+      if (ready.length === 0) {
+        toast.push({ message });
+        return null;
+      }
+      const keys = ready.map((r) => r.entry.key);
+      for (const k of keys) show(k, true);
+      const forget = stash(
+        session.me.uid,
+        session.workspaceId,
+        ready.map((r) => r.prepared.plan.ops),
+        `Saved your ${verb === 'approved' ? 'approvals' : 'rejections'} of ${ready.length} items`,
+      );
+      haptic('decide');
+      const batchKey = `batch:${keys.join('+')}`;
+      const done = () => {
+        toasts.current.delete(batchKey);
+        for (const k of keys) show(k, false);
+      };
+      const id = toast.push({
+        message,
+        undoLabel: 'Undo',
+        duration: 5000,
+        onUndo: () => {
+          forget();
+          done();
+          onRestored?.();
+        },
+        onCommit: () => {
+          toasts.current.delete(batchKey);
+          void Promise.allSettled(ready.map((r) => run(r.prepared.plan))).then((res) => {
+            forget();
+            done();
+            const failed = res.filter((r) => r.status === 'rejected').length;
+            if (failed > 0)
+              toast.push({
+                message: `Could not save ${failed} of ${ready.length} decisions. They are back in your inbox.`,
+              });
+          });
+        },
+      });
+      toasts.current.set(batchKey, id);
+      return null;
+    },
+    [actionContext, run, session.me.uid, session.workspaceId, show, toast],
+  );
+
   // Leaving the screen commits what is still counting down.
   useEffect(() => {
     const pending = toasts.current;
@@ -167,5 +248,5 @@ export function useDecide() {
     };
   }, []);
 
-  return { hidden, decide, held, release };
+  return { hidden, decide, decideMany, held, release };
 }
