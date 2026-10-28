@@ -42,6 +42,9 @@ for (const theme of ['light', 'dark'] as const) {
       );
       expect(live).toBe(true);
 
+      // The toast fades in: axe composites a half-faded toast over the dimmed page and reports a
+      // contrast that is not the resting one. Wait for it to rest, as every other axe spec does.
+      await settle(page, { loading: false });
       const { violations } = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'])
         .analyze();
