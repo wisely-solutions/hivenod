@@ -159,6 +159,7 @@ var runners = map[string]runner{
 	"searchSubjects": pure(func(in SearchInput) (any, error) { return SearchSubjects(in), nil }),
 	"calendarUpsert": act(CalendarUpsert),
 	"calendarDelete": act(CalendarDelete),
+	"calendarMirror": act(CalendarMirror),
 	"freeSlots": pure(func(in FreeSlotsInput) (any, error) {
 		slots, err := FreeSlots(in)
 		if err != nil {

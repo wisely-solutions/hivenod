@@ -696,7 +696,7 @@
       },
       {
         "name": "outcome_propose",
-        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then send the reply and the invite, mirror the event to the source calendar and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
+        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1475,6 +1475,52 @@
         }
       },
       {
+        "name": "calendar_mirror",
+        "description": "After the member approved a booking (a reply_book outcome), Hivenod put the meeting in their calendar. Once you have created it in their own calendar (for example their Google Calendar, with your own access, inviting the people in 'with'), call this with that calendar's event id: the booking becomes that event, so your next calendar sync updates it and never counts the meeting twice. Then send the reply and report outcome_done. Safe to call again.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcomeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The approved reply_book outcome"
+            },
+            "sourceEventId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600,
+              "description": "The event's id in the member's calendar (e.g. the Google event id)"
+            },
+            "source": {
+              "description": "Which calendar; default google",
+              "type": "string",
+              "maxLength": 40
+            },
+            "start": {
+              "description": "Only if the calendar moved it: RFC 3339",
+              "type": "string"
+            },
+            "end": {
+              "description": "Only if the calendar moved it: RFC 3339",
+              "type": "string"
+            },
+            "title": {
+              "description": "Only if it differs from the booking",
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          "required": [
+            "outcomeId",
+            "sourceEventId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "report_usage",
         "description": "Report the run's token usage so far (running totals for the whole run; they only grow) and the model. Usage is tracked and shown in Hivenod; it never stops a run.",
         "inputSchema": {
@@ -2187,7 +2233,7 @@
       },
       {
         "name": "outcome_propose",
-        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then send the reply and the invite, mirror the event to the source calendar and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
+        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2947,6 +2993,52 @@
           },
           "required": [
             "events"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "calendar_mirror",
+        "description": "After the member approved a booking (a reply_book outcome), Hivenod put the meeting in their calendar. Once you have created it in their own calendar (for example their Google Calendar, with your own access, inviting the people in 'with'), call this with that calendar's event id: the booking becomes that event, so your next calendar sync updates it and never counts the meeting twice. Then send the reply and report outcome_done. Safe to call again.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcomeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The approved reply_book outcome"
+            },
+            "sourceEventId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600,
+              "description": "The event's id in the member's calendar (e.g. the Google event id)"
+            },
+            "source": {
+              "description": "Which calendar; default google",
+              "type": "string",
+              "maxLength": 40
+            },
+            "start": {
+              "description": "Only if the calendar moved it: RFC 3339",
+              "type": "string"
+            },
+            "end": {
+              "description": "Only if the calendar moved it: RFC 3339",
+              "type": "string"
+            },
+            "title": {
+              "description": "Only if it differs from the booking",
+              "type": "string",
+              "maxLength": 300
+            }
+          },
+          "required": [
+            "outcomeId",
+            "sourceEventId"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },

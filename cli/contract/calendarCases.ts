@@ -6,6 +6,7 @@
 import {
   calendarDelete,
   calendarEventId,
+  calendarMirror,
   calendarUpsert,
   freeSlots,
   planCalendarSync,
@@ -93,6 +94,22 @@ export function calendarCases(act: Act, pure: Pure, who: { agent: Actor; human: 
   });
   del('person for someone else', who.human, { events: [{ id: 'maria_b', memberUid: 'maria' }] });
   del('no id', who.agent, { events: [{ id: '', memberUid: 'joao' }] });
+
+  const mir = (name: string, actor: Actor, input: Parameters<typeof calendarMirror>[1]) =>
+    act(`calendarMirror/${name}`, 'calendarMirror', actor, input, calendarMirror);
+  const booking = { memberUid: 'joao', replacedId: 'joao_aGl2ZW5vZApvMQ' };
+  mir('booking to google', who.agent, {
+    ...booking,
+    event: ev({ sourceEventId: 'gcal-123', attendees: ['sam@x.io'] }),
+  });
+  mir('same event', who.agent, {
+    memberUid: 'joao',
+    replacedId: calendarEventId('joao', 'google', 'g1'),
+    event: ev(),
+  });
+  mir('no replaced', who.agent, { ...booking, replacedId: '', event: ev() });
+  mir('person for someone else', who.human, { ...booking, event: ev() });
+  mir('bad event', who.agent, { ...booking, event: ev({ end: at(10) }) });
 
   pure(
     'calendarEventId/ascii',
