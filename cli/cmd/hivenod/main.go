@@ -33,6 +33,12 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
                            creates an item (work at the first step) where the project lets
                            agents create items; at most 30 an hour
+  hivenod calendar upsert <events.json|-> [--member M]
+                           adds or updates a member's events in this organization (a JSON
+                           array like calendar_upsert's events; same source id = same event)
+  hivenod calendar delete <id>... | --source S [--member M] <sourceEventId>...
+  hivenod calendar free --from T --to T [--member M] [--min N]
+                           free time across all the member's organizations (busy time only)
   hivenod logout           forgets the token saved by pairing
   hivenod mcp              MCP stdio server for Claude Code
   hivenod mcp --channel [--project P] [--step S] [--max-items N]
@@ -53,6 +59,7 @@ type opts struct {
 	json, channel, help, version, force, noStart bool
 	project, step, maxItems, server              string
 	title, description                           string
+	member, source, from, to, min                string
 	attach                                       multi
 }
 
@@ -81,6 +88,11 @@ func parse(args []string) (opts, []string, error) {
 	fs.StringVar(&o.title, "title", "", "")
 	fs.StringVar(&o.description, "description", "", "")
 	fs.Var(&o.attach, "attach", "")
+	fs.StringVar(&o.member, "member", "", "")
+	fs.StringVar(&o.source, "source", "", "")
+	fs.StringVar(&o.from, "from", "", "")
+	fs.StringVar(&o.to, "to", "", "")
+	fs.StringVar(&o.min, "min", "", "")
 	// Flags may come before or after the command words.
 	var pos []string
 	for len(args) > 0 {
@@ -230,6 +242,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			say("  not attached: " + e)
 		}
 		return 0
+	case "calendar":
+		return calendarCmd(ctx, o, pos, resolve, stdin, say, fail, stderr)
 	case "mcp":
 		cfg, err := resolve()
 		if err != nil {

@@ -49,6 +49,7 @@ const tree = [
   `${W}/invites/c`,
   `${W}/notified/n`,
   `${W}/members/u`,
+  `${W}/calendar/c`,
   'workspaces/w2',
   'workspaces/w2/events/keep',
 ];

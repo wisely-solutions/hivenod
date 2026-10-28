@@ -198,6 +198,15 @@ const PHRASES: Record<EventType, (d: Data, title: string | null) => string> = {
   'group.created': () => 'created a group',
   'group.updated': () => 'updated a group',
   'group.deleted': () => 'deleted a group',
+  'calendar.changed': (d) => {
+    const n = typeof d.upserted === 'number' ? d.upserted : 0;
+    const m = typeof d.deleted === 'number' ? d.deleted : 0;
+    const parts = [
+      ...(n ? [`${n} event${n === 1 ? '' : 's'} saved`] : []),
+      ...(m ? [`${m} removed`] : []),
+    ];
+    return `updated a calendar${parts.length ? ` (${parts.join(', ')})` : ''}`;
+  },
 };
 
 /** "Research agent attached report.html to “Market analysis”". */
@@ -263,6 +272,7 @@ export const TYPE_GROUPS = [
     ],
   },
   { id: 'files', label: 'Files and messages', types: ['attachment.added', 'message.posted'] },
+  { id: 'calendar', label: 'Calendar', types: ['calendar.changed'] },
   {
     id: 'setup',
     label: 'Setup and people',

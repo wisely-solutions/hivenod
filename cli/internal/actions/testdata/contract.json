@@ -14613,6 +14613,1509 @@
       "action": "liveTerminal",
       "input": { "agent": { "lastSeenAt": null }, "now": 1800000000000 },
       "output": null
+    },
+    {
+      "name": "calendarUpsert/one event",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 },
+            "attendees": [" a@x.io ", "", "b@x.io"]
+          }
+        ]
+      },
+      "output": {
+        "ids": ["joao_Z29vZ2xlCmcx"],
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/calendar/joao_Z29vZ2xlCmcx",
+            "data": {
+              "memberUid": "joao",
+              "title": "Standup",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "allDay": false,
+              "attendees": ["a@x.io", "b@x.io"],
+              "source": "google",
+              "sourceEventId": "g1",
+              "busyOnly": false,
+              "deleted": false,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "users/joao/busy/w1_joao_Z29vZ2xlCmcx",
+            "data": {
+              "workspaceId": "w1",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "deleted": false,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": null,
+              "itemId": null,
+              "runId": null,
+              "type": "calendar.changed",
+              "data": { "memberUids": ["joao"], "upserted": 1, "deleted": 0 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "calendarUpsert/two events, all fields",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 },
+            "allDay": true,
+            "attendees": [
+              "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            ]
+          },
+          {
+            "source": " outlook ",
+            "sourceEventId": "ünï/cødé?=1",
+            "title": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          }
+        ]
+      },
+      "output": {
+        "ids": ["joao_Z29vZ2xlCmcx", "joao_b3V0bG9vawrDvG7Dry9jw7hkw6k_PTE"],
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/calendar/joao_Z29vZ2xlCmcx",
+            "data": {
+              "memberUid": "joao",
+              "title": "Standup",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "allDay": true,
+              "attendees": [
+                "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              ],
+              "source": "google",
+              "sourceEventId": "g1",
+              "busyOnly": false,
+              "deleted": false,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "users/joao/busy/w1_joao_Z29vZ2xlCmcx",
+            "data": {
+              "workspaceId": "w1",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "deleted": false,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/calendar/joao_b3V0bG9vawrDvG7Dry9jw7hkw6k_PTE",
+            "data": {
+              "memberUid": "joao",
+              "title": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "allDay": false,
+              "attendees": [],
+              "source": "outlook",
+              "sourceEventId": "ünï/cødé?=1",
+              "busyOnly": false,
+              "deleted": false,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "users/joao/busy/w1_joao_b3V0bG9vawrDvG7Dry9jw7hkw6k_PTE",
+            "data": {
+              "workspaceId": "w1",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "deleted": false,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": null,
+              "itemId": null,
+              "runId": null,
+              "type": "calendar.changed",
+              "data": { "memberUids": ["joao"], "upserted": 2, "deleted": 0 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "calendarUpsert/busy only drops details",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 },
+            "busyOnly": true,
+            "attendees": ["a@x.io"]
+          }
+        ]
+      },
+      "output": {
+        "ids": ["joao_Z29vZ2xlCmcx"],
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/calendar/joao_Z29vZ2xlCmcx",
+            "data": {
+              "memberUid": "joao",
+              "title": "",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "allDay": false,
+              "attendees": [],
+              "source": "google",
+              "sourceEventId": "g1",
+              "busyOnly": true,
+              "deleted": false,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "users/joao/busy/w1_joao_Z29vZ2xlCmcx",
+            "data": {
+              "workspaceId": "w1",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "deleted": false,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": null,
+              "itemId": null,
+              "runId": null,
+              "type": "calendar.changed",
+              "data": { "memberUids": ["joao"], "upserted": 1, "deleted": 0 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "calendarUpsert/person books own",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "hivenod",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          }
+        ]
+      },
+      "output": {
+        "ids": ["joao_aGl2ZW5vZApnMQ"],
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/calendar/joao_aGl2ZW5vZApnMQ",
+            "data": {
+              "memberUid": "joao",
+              "title": "Standup",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "allDay": false,
+              "attendees": [],
+              "source": "hivenod",
+              "sourceEventId": "g1",
+              "busyOnly": false,
+              "deleted": false,
+              "updatedBy": { "type": "human", "id": "joao" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "users/joao/busy/w1_joao_aGl2ZW5vZApnMQ",
+            "data": {
+              "workspaceId": "w1",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "deleted": false,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "human", "id": "joao", "name": "João" },
+              "projectId": null,
+              "itemId": null,
+              "runId": null,
+              "type": "calendar.changed",
+              "data": { "memberUids": ["joao"], "upserted": 1, "deleted": 0 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "calendarUpsert/person for someone else",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "memberUid": "maria",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          }
+        ]
+      },
+      "output": { "error": "People change only their own calendar" }
+    },
+    {
+      "name": "calendarUpsert/no member",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          }
+        ]
+      },
+      "output": { "error": "Name the member whose calendar this is" }
+    },
+    {
+      "name": "calendarUpsert/no events",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": { "memberUid": "joao", "events": [] },
+      "output": { "error": "No events given" }
+    },
+    {
+      "name": "calendarUpsert/too many",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": "g0",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g2",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g3",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g4",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g5",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g6",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g7",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g8",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g9",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g10",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g11",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g12",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g13",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g14",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g15",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g16",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g17",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g18",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g19",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g20",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g21",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g22",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g23",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g24",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g25",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g26",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g27",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g28",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g29",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g30",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g31",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g32",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g33",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g34",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g35",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g36",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g37",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g38",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g39",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g40",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g41",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g42",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g43",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g44",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g45",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g46",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g47",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g48",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g49",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g50",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g51",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g52",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g53",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g54",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g55",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g56",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g57",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g58",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g59",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g60",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g61",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g62",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g63",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g64",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g65",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g66",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g67",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g68",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g69",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g70",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g71",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g72",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g73",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g74",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g75",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g76",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g77",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g78",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g79",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g80",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g81",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g82",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g83",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g84",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g85",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g86",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g87",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g88",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g89",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g90",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g91",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g92",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g93",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g94",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g95",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g96",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g97",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g98",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g99",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g100",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          }
+        ]
+      },
+      "output": { "error": "At most 100 events per call; send the rest in another call" }
+    },
+    {
+      "name": "calendarUpsert/end before start",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g2",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800003600000 }
+          }
+        ]
+      },
+      "output": { "error": "Event 2: end must be after start" }
+    },
+    {
+      "name": "calendarUpsert/too long",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1802768400000 }
+          }
+        ]
+      },
+      "output": { "error": "Event 1: an event lasts at most 31 days" }
+    },
+    {
+      "name": "calendarUpsert/no source",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "  ",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          }
+        ]
+      },
+      "output": { "error": "Event 1: source is required (for example google or outlook)" }
+    },
+    {
+      "name": "calendarUpsert/long source",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "sssssssssssssssssssssssssssssssssssssssss",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          }
+        ]
+      },
+      "output": { "error": "Event 1: source is at most 40 characters" }
+    },
+    {
+      "name": "calendarUpsert/no source id",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": " ",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          }
+        ]
+      },
+      "output": { "error": "Event 1: sourceEventId is required" }
+    },
+    {
+      "name": "calendarUpsert/long source id",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          }
+        ]
+      },
+      "output": { "error": "Event 1: sourceEventId is at most 600 bytes" }
+    },
+    {
+      "name": "calendarUpsert/twice",
+      "action": "calendarUpsert",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "events": [
+          {
+            "source": "google",
+            "sourceEventId": "g1",
+            "title": "  Standup  ",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          },
+          {
+            "source": "google",
+            "sourceEventId": "g1",
+            "title": "again",
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400000 }
+          }
+        ]
+      },
+      "output": { "error": "Event 2: the same source event is given twice" }
+    },
+    {
+      "name": "calendarDelete/two members",
+      "action": "calendarDelete",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "events": [
+          { "id": "joao_a", "memberUid": "joao" },
+          { "id": "maria_b", "memberUid": "maria" },
+          { "id": "joao_c", "memberUid": "joao" }
+        ]
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/calendar/joao_a",
+            "data": {
+              "title": "",
+              "attendees": [],
+              "deleted": true,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "users/joao/busy/w1_joao_a",
+            "data": {
+              "deleted": true,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/calendar/maria_b",
+            "data": {
+              "title": "",
+              "attendees": [],
+              "deleted": true,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "users/maria/busy/w1_maria_b",
+            "data": {
+              "deleted": true,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/calendar/joao_c",
+            "data": {
+              "title": "",
+              "attendees": [],
+              "deleted": true,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "users/joao/busy/w1_joao_c",
+            "data": {
+              "deleted": true,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": null,
+              "itemId": null,
+              "runId": null,
+              "type": "calendar.changed",
+              "data": { "memberUids": ["joao", "maria"], "upserted": 0, "deleted": 3 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "calendarDelete/none",
+      "action": "calendarDelete",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": { "events": [] },
+      "output": { "error": "No events given" }
+    },
+    {
+      "name": "calendarDelete/twice",
+      "action": "calendarDelete",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "events": [
+          { "id": "joao_a", "memberUid": "joao" },
+          { "id": "joao_a", "memberUid": "joao" }
+        ]
+      },
+      "output": { "error": "The event joao_a is given twice" }
+    },
+    {
+      "name": "calendarDelete/person for someone else",
+      "action": "calendarDelete",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": { "events": [{ "id": "maria_b", "memberUid": "maria" }] },
+      "output": { "error": "People change only their own calendar" }
+    },
+    {
+      "name": "calendarDelete/no id",
+      "action": "calendarDelete",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": { "events": [{ "id": "", "memberUid": "joao" }] },
+      "output": { "error": "An event id is missing" }
+    },
+    {
+      "name": "calendarEventId/ascii",
+      "action": "calendarEventId",
+      "input": { "memberUid": "joao", "source": "google", "sourceEventId": "abc_123" },
+      "output": "joao_Z29vZ2xlCmFiY18xMjM"
+    },
+    {
+      "name": "calendarEventId/unicode",
+      "action": "calendarEventId",
+      "input": { "memberUid": "u1", "source": "outlook", "sourceEventId": "AAMk/ü+=?" },
+      "output": "u1_b3V0bG9vawpBQU1rL8O8Kz0_"
+    },
+    {
+      "name": "freeSlots/three organizations",
+      "action": "freeSlots",
+      "input": {
+        "from": { "__hive": "timestamp", "ms": 1800000000000 },
+        "to": { "__hive": "timestamp", "ms": 1800032400000 },
+        "busy": [
+          {
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800007200000 }
+          },
+          {
+            "start": { "__hive": "timestamp", "ms": 1800005400000 },
+            "end": { "__hive": "timestamp", "ms": 1800010800000 }
+          },
+          {
+            "start": { "__hive": "timestamp", "ms": 1800010800000 },
+            "end": { "__hive": "timestamp", "ms": 1800011700000 }
+          },
+          {
+            "start": { "__hive": "timestamp", "ms": 1800018000000 },
+            "end": { "__hive": "timestamp", "ms": 1800021600000 }
+          },
+          {
+            "start": { "__hive": "timestamp", "ms": 1799992800000 },
+            "end": { "__hive": "timestamp", "ms": 1799996400000 }
+          },
+          {
+            "start": { "__hive": "timestamp", "ms": 1800030000000 },
+            "end": { "__hive": "timestamp", "ms": 1800042000000 }
+          }
+        ]
+      },
+      "output": [
+        {
+          "start": { "__hive": "timestamp", "ms": 1800000000000 },
+          "end": { "__hive": "timestamp", "ms": 1800003600000 }
+        },
+        {
+          "start": { "__hive": "timestamp", "ms": 1800011700000 },
+          "end": { "__hive": "timestamp", "ms": 1800018000000 }
+        },
+        {
+          "start": { "__hive": "timestamp", "ms": 1800021600000 },
+          "end": { "__hive": "timestamp", "ms": 1800030000000 }
+        }
+      ]
+    },
+    {
+      "name": "freeSlots/nothing busy",
+      "action": "freeSlots",
+      "input": {
+        "from": { "__hive": "timestamp", "ms": 1800000000000 },
+        "to": { "__hive": "timestamp", "ms": 1800003600000 },
+        "busy": []
+      },
+      "output": [
+        {
+          "start": { "__hive": "timestamp", "ms": 1800000000000 },
+          "end": { "__hive": "timestamp", "ms": 1800003600000 }
+        }
+      ]
+    },
+    {
+      "name": "freeSlots/short gaps dropped",
+      "action": "freeSlots",
+      "input": {
+        "from": { "__hive": "timestamp", "ms": 1800000000000 },
+        "to": { "__hive": "timestamp", "ms": 1800007200000 },
+        "busy": [
+          {
+            "start": { "__hive": "timestamp", "ms": 1800000600000 },
+            "end": { "__hive": "timestamp", "ms": 1800003000000 }
+          },
+          {
+            "start": { "__hive": "timestamp", "ms": 1800003600000 },
+            "end": { "__hive": "timestamp", "ms": 1800007140000 }
+          }
+        ],
+        "minMinutes": 10
+      },
+      "output": [
+        {
+          "start": { "__hive": "timestamp", "ms": 1800000000000 },
+          "end": { "__hive": "timestamp", "ms": 1800000600000 }
+        },
+        {
+          "start": { "__hive": "timestamp", "ms": 1800003000000 },
+          "end": { "__hive": "timestamp", "ms": 1800003600000 }
+        }
+      ]
+    },
+    {
+      "name": "freeSlots/all busy",
+      "action": "freeSlots",
+      "input": {
+        "from": { "__hive": "timestamp", "ms": 1800000000000 },
+        "to": { "__hive": "timestamp", "ms": 1800003600000 },
+        "busy": [
+          {
+            "start": { "__hive": "timestamp", "ms": 1799999400000 },
+            "end": { "__hive": "timestamp", "ms": 1800004200000 }
+          }
+        ]
+      },
+      "output": []
+    },
+    {
+      "name": "freeSlots/empty range",
+      "action": "freeSlots",
+      "input": {
+        "from": { "__hive": "timestamp", "ms": 1800000000000 },
+        "to": { "__hive": "timestamp", "ms": 1800000000000 },
+        "busy": []
+      },
+      "output": { "error": "to must be after from" }
+    },
+    {
+      "name": "freeSlots/too wide",
+      "action": "freeSlots",
+      "input": {
+        "from": { "__hive": "timestamp", "ms": 1800000000000 },
+        "to": { "__hive": "timestamp", "ms": 1805443200000 },
+        "busy": []
+      },
+      "output": { "error": "Look at most 62 days ahead at once" }
+    },
+    {
+      "name": "freeSlots/bad minMinutes",
+      "action": "freeSlots",
+      "input": {
+        "from": { "__hive": "timestamp", "ms": 1800000000000 },
+        "to": { "__hive": "timestamp", "ms": 1800003600000 },
+        "busy": [],
+        "minMinutes": 1.5
+      },
+      "output": { "error": "minMinutes is a whole number from 1 to 1440" }
+    },
+    {
+      "name": "freeSlots/minMinutes too big",
+      "action": "freeSlots",
+      "input": {
+        "from": { "__hive": "timestamp", "ms": 1800000000000 },
+        "to": { "__hive": "timestamp", "ms": 1800003600000 },
+        "busy": [],
+        "minMinutes": 1441
+      },
+      "output": { "error": "minMinutes is a whole number from 1 to 1440" }
     }
   ]
 }

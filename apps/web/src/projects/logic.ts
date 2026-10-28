@@ -90,6 +90,7 @@ export const VERBS: Record<EventType, string> = {
   'group.created': 'created a group',
   'group.updated': 'updated a group',
   'group.deleted': 'deleted a group',
+  'calendar.changed': 'updated a calendar',
   'item.shaped': 'set an item’s path',
   'item.pathChanged': 'changed an item’s path',
   'item.pathChangeDecided': 'decided a path change',

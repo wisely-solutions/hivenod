@@ -2,9 +2,10 @@
 /** The `hivenod` command (SPEC section 10). `--json` prints machine-readable output. */
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { setLogLevel } from 'firebase/firestore';
+import { deleteEvents, freeTime, upsertEvents, type CalendarEventArg } from './calendar';
 import { HiveClient } from './client';
 import { HiveError, isRateLimited, messageOf } from './errors';
 import { bridgeClient, bridgedTools } from './bridge';
@@ -69,6 +70,11 @@ const HELP = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod item progress <itemId> <done> <total>
   hivenod item complete <itemId> --run <runId> [--cost ...]   moves on; stops at the next human gate
   hivenod finding raise <itemId> "title" "details"   suggests it to people (not work; no claim needed)
+  hivenod calendar upsert <events.json|-> [--member M]   adds or updates a member's events here
+                       (a JSON array like calendar_upsert's events; same source id = same event)
+  hivenod calendar delete <id>... | --source S [--member M] <sourceEventId>...
+  hivenod calendar free --from T --to T [--member M] [--min N]
+                       free time across all the member's organizations (busy time only)
   hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
                        creates an item (work at the first step) where the project lets agents
                        create items; at most 30 an hour
@@ -193,6 +199,11 @@ const OPTIONS = {
   'max-minutes': { type: 'string' },
   'max-items': { type: 'string' },
   server: { type: 'string' },
+  member: { type: 'string' },
+  source: { type: 'string' },
+  from: { type: 'string' },
+  to: { type: 'string' },
+  min: { type: 'string' },
 } as const;
 
 type Opts = ReturnType<typeof parse>['values'];
@@ -442,6 +453,48 @@ async function dispatch(c: HiveClient, pos: string[], o: Opts): Promise<Command>
         o.project,
       );
       return { result: r, text: () => `Proposed ${r.proposalId}. ${r.note}` };
+    }
+    case 'calendar upsert': {
+      const file = need(pos, 2, 'events file (a JSON array, or - for stdin)');
+      let events: CalendarEventArg[];
+      try {
+        events = JSON.parse(readFileSync(file === '-' ? 0 : file, 'utf8')) as CalendarEventArg[];
+      } catch {
+        throw new HiveError(`${file}: not a JSON array of events.`);
+      }
+      if (!Array.isArray(events)) throw new HiveError(`${file}: not a JSON array of events.`);
+      const r = await upsertEvents(c.calendarDeps(), o.member, events);
+      return { result: r, text: () => r.note };
+    }
+    case 'calendar delete': {
+      const ids = pos.slice(2);
+      const r = await deleteEvents(
+        c.calendarDeps(),
+        o.source
+          ? { member: o.member, source: o.source, sourceEventIds: ids }
+          : { ids, member: o.member },
+      );
+      return {
+        result: r,
+        text: () => [r.note, ...r.notFound.map((id) => `  not found: ${id}`)].join('\n'),
+      };
+    }
+    case 'calendar free': {
+      if (!o.from || !o.to)
+        throw new HiveError('Usage: hivenod calendar free --from T --to T [--member M] [--min N]');
+      const r = await freeTime(c.calendarDeps(), {
+        member: o.member,
+        from: o.from,
+        to: o.to,
+        minMinutes: num(o.min, '--min'),
+      });
+      return {
+        result: r,
+        text: () =>
+          r.free.length === 0
+            ? 'No free time in that range.'
+            : r.free.map((f) => `${f.start}  to  ${f.end}`).join('\n'),
+      };
     }
     case 'finding raise': {
       const r = await c.raiseFinding(

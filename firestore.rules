@@ -404,6 +404,41 @@ service cloud.firestore {
           && request.resource.data.createdAt is number;
       }
 
+      // ---------- busy store (Inbox item w9SAf) ----------
+      // A member's busy time across organizations: start, end and the organization, never a
+      // title. Block ids start with the organization id. An agent writes blocks of its own
+      // organization for its members (mirroring calendar events, same batch and event); the
+      // member writes their own (a booking). The member reads all their blocks; an agent reads
+      // them when the member is in the agent's organization (agentHomes/{agentUid} says which).
+      match /busy/{bid} {
+        allow read: if signedIn() && (uid == me() || busyReader(uid));
+        allow create, update: if signedIn() && validBusy(request.resource.data)
+          && bid.size() > request.resource.data.workspaceId.size() + 1
+          && bid[0:request.resource.data.workspaceId.size() + 1] == request.resource.data.workspaceId + '_'
+          && (resource == null || resource.data.workspaceId == request.resource.data.workspaceId)
+          && busyWriter(request.resource.data.workspaceId, uid)
+          && request.resource.data.updatedAt == request.time
+          && tracked(request.resource.data.workspaceId, request.resource.data.lastEventId, ['calendar.changed']);
+        allow delete: if false;
+      }
+      function validBusy(d) {
+        return exactKeys(d, ['workspaceId', 'start', 'end', 'deleted', 'updatedAt', 'lastEventId'])
+          && str(d.workspaceId, 1, 128)
+          && d.start is timestamp && d.end is timestamp && d.end > d.start
+          && d.deleted is bool;
+      }
+      function busyWriter(w, u) {
+        let ws = get(wsPath(w));
+        return ws != null && u in ws.data.memberRoles
+          && (activeAgentDoc(get(agentPath(w, me()))) || u == me());
+      }
+      function busyReader(u) {
+        let h = get(/databases/$(database)/documents/agentHomes/$(me()));
+        return h != null
+          && activeAgentDoc(get(agentPath(h.data.workspaceId, me())))
+          && u in get(wsPath(h.data.workspaceId)).data.memberRoles;
+      }
+
       // The list of organizations only ever grows by one organization per write (appended), one the
       // person belongs to. (A stale entry for an org they left is harmless: it simply fails to load.)
       function validWorkspaceIds(after, before) {
@@ -425,6 +460,16 @@ service cloud.firestore {
         && request.resource.data.uid == me()
         && request.resource.data.createdAt is number;
       allow read, update, delete: if false;
+    }
+    // Which organization an agent belongs to (item w9SAf), for rules outside that organization
+    // (the busy store). Written once by the agent itself, while it is active there.
+    match /agentHomes/{aid} {
+      allow get: if signedIn() && aid == me();
+      allow create: if signedIn() && aid == me()
+        && exactKeys(request.resource.data, ['workspaceId'])
+        && str(request.resource.data.workspaceId, 1, 128)
+        && activeAgentDoc(get(agentPath(request.resource.data.workspaceId, me())));
+      allow list, update, delete: if false;
     }
     // Public settings the notifier publishes (VAPID public key, bot name). Never secrets.
     match /config/{doc} {
@@ -530,7 +575,8 @@ service cloud.firestore {
       // ---------- member cards (the name and picture others see inside this organization) ----------
 
       match /members/{uid} {
-        allow read: if isMember(wid);
+        // Agents read the cards too: calendar tools name a member by id or email (item w9SAf).
+        allow read: if isMember(wid) || isActiveAgent(wid);
         allow create, update: if signedIn() && uid == me() && !isAgentEmail() && isMemberAfter(wid)
           && exactKeys(request.resource.data, ['name', 'email', 'photoURL', 'color'])
           && str(request.resource.data.name, 0, 200)
@@ -763,8 +809,60 @@ service cloud.firestore {
                   'item.claimed', 'item.released', 'item.completed', 'item.updated',
                   'item.created', 'attachment.added', 'message.posted', 'finding.raised',
                   'run.started', 'run.heartbeat', 'run.ended',
-                  'item.shaped', 'item.pathChanged', 'step.proposed', 'item.sentBack']));
+                  'item.shaped', 'item.pathChanged', 'step.proposed', 'item.sentBack'])
+            || calendarEventOk(wid));
         allow update, delete: if false;
+
+        // Calendar writes (item w9SAf): outside any project, by an agent of the organization or
+        // a member. The event names whose calendars changed, never a title.
+        function calendarEventOk(wid) {
+          let d = request.resource.data;
+          return d.type == 'calendar.changed' && d.projectId == null && d.itemId == null
+            && d.runId == null
+            && ((d.actor.type == 'agent' && isActiveAgent(wid))
+                || (d.actor.type == 'human' && isMemberAfter(wid)))
+            && exactKeys(d.data, ['memberUids', 'upserted', 'deleted'])
+            && d.data.memberUids is list && d.data.memberUids.size() <= 100
+            && d.data.upserted is int && d.data.deleted is int;
+        }
+      }
+
+      // ---------- calendar (Inbox item w9SAf) ----------
+      // A member's events from this organization, with details. Members and agents of the
+      // organization read them (nobody outside it). Agents write them for any member; a member
+      // writes only their own (a booking). Deleting is a soft delete that clears the details.
+      // The document id starts with the member's uid, so one member cannot take another's id.
+      match /calendar/{eid} {
+        allow read: if isMember(wid) || isActiveAgent(wid);
+        allow create, update: if signedIn() && validCalendarEvent(request.resource.data)
+          && eid.size() > request.resource.data.memberUid.size() + 1
+          && eid[0:request.resource.data.memberUid.size() + 1] == request.resource.data.memberUid + '_'
+          && (resource == null
+              || (resource.data.memberUid == request.resource.data.memberUid
+                  && resource.data.source == request.resource.data.source
+                  && resource.data.sourceEventId == request.resource.data.sourceEventId))
+          && calendarWriter(wid, request.resource.data.memberUid)
+          && request.resource.data.updatedBy == me_(isActiveAgent(wid) ? 'agent' : 'human')
+          && request.resource.data.updatedAt == request.time
+          && tracked(wid, request.resource.data.lastEventId, ['calendar.changed']);
+        allow delete: if false;
+      }
+      function validCalendarEvent(d) {
+        return exactKeys(d, ['memberUid', 'title', 'start', 'end', 'allDay', 'attendees', 'source',
+                             'sourceEventId', 'busyOnly', 'deleted', 'updatedBy', 'updatedAt', 'lastEventId'])
+          && str(d.memberUid, 1, 128)
+          && str(d.title, 0, 300)
+          && d.start is timestamp && d.end is timestamp && d.end > d.start
+          && d.allDay is bool && d.busyOnly is bool && d.deleted is bool
+          && d.attendees is list && d.attendees.size() <= 50
+          && str(d.source, 1, 40) && str(d.sourceEventId, 1, 600)
+          // Busy-only and deleted events carry no details.
+          && (!(d.busyOnly || d.deleted) || (d.title == '' && d.attendees.size() == 0));
+      }
+      // The member is in this organization; the writer is one of its agents, or the member.
+      function calendarWriter(wid, m) {
+        return m in get(wsPath(wid)).data.memberRoles
+          && (isActiveAgent(wid) || m == me());
       }
 
       // ---------- runs ----------
