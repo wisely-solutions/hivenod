@@ -22420,6 +22420,232 @@
       "output": { "error": "An event id is missing" }
     },
     {
+      "name": "calendarMirror/booking to google",
+      "action": "calendarMirror",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "replacedId": "joao_aGl2ZW5vZApvMQ",
+        "event": {
+          "source": "google",
+          "sourceEventId": "gcal-123",
+          "title": "  Standup  ",
+          "start": { "__hive": "timestamp", "ms": 1800003600000 },
+          "end": { "__hive": "timestamp", "ms": 1800005400000 },
+          "attendees": ["sam@x.io"]
+        }
+      },
+      "output": {
+        "id": "joao_Z29vZ2xlCmdjYWwtMTIz",
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/calendar/joao_Z29vZ2xlCmdjYWwtMTIz",
+            "data": {
+              "memberUid": "joao",
+              "title": "Standup",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "allDay": false,
+              "attendees": ["sam@x.io"],
+              "source": "google",
+              "sourceEventId": "gcal-123",
+              "busyOnly": false,
+              "deleted": false,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "users/joao/busy/w1_joao_Z29vZ2xlCmdjYWwtMTIz",
+            "data": {
+              "workspaceId": "w1",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "deleted": false,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/calendar/joao_aGl2ZW5vZApvMQ",
+            "data": {
+              "title": "",
+              "attendees": [],
+              "deleted": true,
+              "updatedBy": { "type": "agent", "id": "agentA" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "users/joao/busy/w1_joao_aGl2ZW5vZApvMQ",
+            "data": {
+              "deleted": true,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": null,
+              "itemId": null,
+              "runId": null,
+              "type": "calendar.changed",
+              "data": { "memberUids": ["joao"], "upserted": 1, "deleted": 1 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "calendarMirror/same event",
+      "action": "calendarMirror",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "replacedId": "joao_Z29vZ2xlCmcx",
+        "event": {
+          "source": "google",
+          "sourceEventId": "g1",
+          "title": "  Standup  ",
+          "start": { "__hive": "timestamp", "ms": 1800003600000 },
+          "end": { "__hive": "timestamp", "ms": 1800005400000 }
+        }
+      },
+      "output": { "error": "That is the same event: give the other calendar's event id" }
+    },
+    {
+      "name": "calendarMirror/no replaced",
+      "action": "calendarMirror",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "replacedId": "",
+        "event": {
+          "source": "google",
+          "sourceEventId": "g1",
+          "title": "  Standup  ",
+          "start": { "__hive": "timestamp", "ms": 1800003600000 },
+          "end": { "__hive": "timestamp", "ms": 1800005400000 }
+        }
+      },
+      "output": { "error": "Name the event it replaces" }
+    },
+    {
+      "name": "calendarMirror/person for someone else",
+      "action": "calendarMirror",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "memberUid": "joao",
+        "replacedId": "joao_aGl2ZW5vZApvMQ",
+        "event": {
+          "source": "google",
+          "sourceEventId": "g1",
+          "title": "  Standup  ",
+          "start": { "__hive": "timestamp", "ms": 1800003600000 },
+          "end": { "__hive": "timestamp", "ms": 1800005400000 }
+        }
+      },
+      "output": {
+        "id": "joao_Z29vZ2xlCmcx",
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/calendar/joao_Z29vZ2xlCmcx",
+            "data": {
+              "memberUid": "joao",
+              "title": "Standup",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "allDay": false,
+              "attendees": [],
+              "source": "google",
+              "sourceEventId": "g1",
+              "busyOnly": false,
+              "deleted": false,
+              "updatedBy": { "type": "human", "id": "joao" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "users/joao/busy/w1_joao_Z29vZ2xlCmcx",
+            "data": {
+              "workspaceId": "w1",
+              "start": { "__hive": "timestamp", "ms": 1800003600000 },
+              "end": { "__hive": "timestamp", "ms": 1800005400000 },
+              "deleted": false,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/calendar/joao_aGl2ZW5vZApvMQ",
+            "data": {
+              "title": "",
+              "attendees": [],
+              "deleted": true,
+              "updatedBy": { "type": "human", "id": "joao" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "users/joao/busy/w1_joao_aGl2ZW5vZApvMQ",
+            "data": {
+              "deleted": true,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "human", "id": "joao", "name": "João" },
+              "projectId": null,
+              "itemId": null,
+              "runId": null,
+              "type": "calendar.changed",
+              "data": { "memberUids": ["joao"], "upserted": 1, "deleted": 1 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "calendarMirror/bad event",
+      "action": "calendarMirror",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "memberUid": "joao",
+        "replacedId": "joao_aGl2ZW5vZApvMQ",
+        "event": {
+          "source": "google",
+          "sourceEventId": "g1",
+          "title": "  Standup  ",
+          "start": { "__hive": "timestamp", "ms": 1800003600000 },
+          "end": { "__hive": "timestamp", "ms": 1800000600000 }
+        }
+      },
+      "output": { "error": "Event 1: end must be after start" }
+    },
+    {
       "name": "calendarEventId/ascii",
       "action": "calendarEventId",
       "input": { "memberUid": "joao", "source": "google", "sourceEventId": "abc_123" },
@@ -22579,6 +22805,549 @@
         "minMinutes": 1441
       },
       "output": { "error": "minMinutes is a whole number from 1 to 1440" }
+    },
+    {
+      "name": "planCalendarSync/full: add, keep, update, remove",
+      "action": "planCalendarSync",
+      "input": {
+        "source": "google",
+        "mode": "full",
+        "from": { "__hive": "timestamp", "ms": 1799884800000 },
+        "to": { "__hive": "timestamp", "ms": 1802563200000 },
+        "items": [
+          {
+            "id": "new",
+            "status": "confirmed",
+            "summary": " Meeting new ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" },
+            "attendees": [{ "email": " a@x.io " }, { "email": "room@x.io", "resource": true }, {}]
+          },
+          {
+            "id": "same",
+            "status": "confirmed",
+            "summary": " Meeting same ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" }
+          },
+          {
+            "id": "moved",
+            "status": "confirmed",
+            "summary": " Meeting moved ",
+            "start": { "dateTime": "2027-01-16T09:00:00Z" },
+            "end": { "dateTime": "2027-01-16T10:00:00Z" }
+          },
+          {
+            "id": "renamed",
+            "status": "confirmed",
+            "summary": "Renamed",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" }
+          },
+          {
+            "id": "revived",
+            "status": "confirmed",
+            "summary": " Meeting revived ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" }
+          }
+        ],
+        "existing": [
+          {
+            "sourceEventId": "same",
+            "title": "Meeting same",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": false
+          },
+          {
+            "sourceEventId": "moved",
+            "title": "Meeting moved",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": false
+          },
+          {
+            "sourceEventId": "renamed",
+            "title": "Meeting renamed",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": false
+          },
+          {
+            "sourceEventId": "revived",
+            "title": "",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": true
+          },
+          {
+            "sourceEventId": "gone",
+            "title": "Meeting gone",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": false
+          },
+          {
+            "sourceEventId": "gone-before",
+            "title": "Meeting gone-before",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": true
+          },
+          {
+            "sourceEventId": "outside",
+            "title": "Meeting outside",
+            "start": { "__hive": "timestamp", "ms": 1796083200000 },
+            "end": { "__hive": "timestamp", "ms": 1796169600000 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": false
+          }
+        ]
+      },
+      "output": {
+        "upserts": [
+          {
+            "source": "google",
+            "sourceEventId": "new",
+            "title": "Meeting new",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": ["a@x.io"],
+            "busyOnly": false
+          },
+          {
+            "source": "google",
+            "sourceEventId": "moved",
+            "title": "Meeting moved",
+            "start": { "__hive": "timestamp", "ms": 1800090000000 },
+            "end": { "__hive": "timestamp", "ms": 1800093600000 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false
+          },
+          {
+            "source": "google",
+            "sourceEventId": "renamed",
+            "title": "Renamed",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false
+          },
+          {
+            "source": "google",
+            "sourceEventId": "revived",
+            "title": "Meeting revived",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false
+          }
+        ],
+        "deletes": ["gone"],
+        "unchanged": 1,
+        "skipped": []
+      }
+    },
+    {
+      "name": "planCalendarSync/incremental",
+      "action": "planCalendarSync",
+      "input": {
+        "source": "google",
+        "mode": "incremental",
+        "from": { "__hive": "timestamp", "ms": 1799884800000 },
+        "to": { "__hive": "timestamp", "ms": 1802563200000 },
+        "items": [
+          {
+            "id": "x",
+            "status": "cancelled",
+            "summary": " Meeting x ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" }
+          },
+          {
+            "id": "y",
+            "status": "cancelled",
+            "summary": " Meeting y ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" }
+          },
+          {
+            "id": "n",
+            "status": "confirmed",
+            "summary": " Meeting n ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" }
+          }
+        ],
+        "existing": [
+          {
+            "sourceEventId": "x",
+            "title": "Meeting x",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": false
+          },
+          {
+            "sourceEventId": "z",
+            "title": "Meeting z",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": false
+          }
+        ]
+      },
+      "output": {
+        "upserts": [
+          {
+            "source": "google",
+            "sourceEventId": "n",
+            "title": "Meeting n",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false
+          }
+        ],
+        "deletes": ["x"],
+        "unchanged": 0,
+        "skipped": []
+      }
+    },
+    {
+      "name": "planCalendarSync/not busy",
+      "action": "planCalendarSync",
+      "input": {
+        "source": "google",
+        "mode": "full",
+        "from": { "__hive": "timestamp", "ms": 1799884800000 },
+        "to": { "__hive": "timestamp", "ms": 1802563200000 },
+        "items": [
+          {
+            "id": "free",
+            "status": "confirmed",
+            "summary": " Meeting free ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" },
+            "transparency": "transparent"
+          },
+          {
+            "id": "declined",
+            "status": "confirmed",
+            "summary": " Meeting declined ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" },
+            "attendees": [{ "email": "me@x.io", "self": true, "responseStatus": "declined" }]
+          },
+          {
+            "id": "accepted",
+            "status": "confirmed",
+            "summary": " Meeting accepted ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" },
+            "attendees": [{ "email": "me@x.io", "self": true, "responseStatus": "accepted" }]
+          },
+          {
+            "id": "wl",
+            "status": "confirmed",
+            "summary": " Meeting wl ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" },
+            "eventType": "workingLocation"
+          }
+        ],
+        "existing": [
+          {
+            "sourceEventId": "free",
+            "title": "Meeting free",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": false
+          },
+          {
+            "sourceEventId": "wl",
+            "title": "Meeting wl",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false,
+            "deleted": false
+          }
+        ]
+      },
+      "output": {
+        "upserts": [
+          {
+            "source": "google",
+            "sourceEventId": "accepted",
+            "title": "Meeting accepted",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": ["me@x.io"],
+            "busyOnly": false
+          }
+        ],
+        "deletes": ["free", "wl"],
+        "unchanged": 0,
+        "skipped": []
+      }
+    },
+    {
+      "name": "planCalendarSync/all day, busy only, last wins",
+      "action": "planCalendarSync",
+      "input": {
+        "source": "google",
+        "mode": "full",
+        "from": { "__hive": "timestamp", "ms": 1799884800000 },
+        "to": { "__hive": "timestamp", "ms": 1802563200000 },
+        "busyOnly": true,
+        "items": [
+          {
+            "id": "day",
+            "status": "confirmed",
+            "summary": " Meeting day ",
+            "start": { "date": "2027-01-20" },
+            "end": { "date": "2027-01-22" }
+          },
+          {
+            "id": "a",
+            "status": "confirmed",
+            "summary": " Meeting a ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" },
+            "attendees": [{ "email": "a@x.io" }]
+          },
+          {
+            "id": "a",
+            "status": "confirmed",
+            "summary": "Again",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" },
+            "attendees": [{ "email": "b@x.io" }]
+          }
+        ],
+        "existing": []
+      },
+      "output": {
+        "upserts": [
+          {
+            "source": "google",
+            "sourceEventId": "day",
+            "title": "",
+            "start": { "__hive": "timestamp", "ms": 1800403200000 },
+            "end": { "__hive": "timestamp", "ms": 1800576000000 },
+            "allDay": true,
+            "attendees": [],
+            "busyOnly": true
+          },
+          {
+            "source": "google",
+            "sourceEventId": "a",
+            "title": "",
+            "start": { "__hive": "timestamp", "ms": 1800000000000 },
+            "end": { "__hive": "timestamp", "ms": 1800005400500 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": true
+          }
+        ],
+        "deletes": [],
+        "unchanged": 0,
+        "skipped": []
+      }
+    },
+    {
+      "name": "planCalendarSync/skipped and clipped",
+      "action": "planCalendarSync",
+      "input": {
+        "source": "google",
+        "mode": "full",
+        "from": { "__hive": "timestamp", "ms": 1799884800000 },
+        "to": { "__hive": "timestamp", "ms": 1802563200000 },
+        "items": [
+          { "summary": "no id" },
+          {
+            "id": "  ",
+            "status": "confirmed",
+            "summary": " Meeting    ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" }
+          },
+          {
+            "id": "bad",
+            "status": "confirmed",
+            "summary": " Meeting bad ",
+            "start": { "dateTime": "tomorrow" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" }
+          },
+          {
+            "id": "nozone",
+            "status": "confirmed",
+            "summary": " Meeting nozone ",
+            "start": { "dateTime": "2027-01-15T09:00:00" },
+            "end": { "dateTime": "2027-01-15T10:30:00.5+01:00" }
+          },
+          {
+            "id": "backwards",
+            "status": "confirmed",
+            "summary": " Meeting backwards ",
+            "start": { "dateTime": "2027-01-15T09:00:00+01:00" },
+            "end": { "dateTime": "2027-01-15T07:00:00Z" }
+          },
+          {
+            "id": "feb30",
+            "status": "confirmed",
+            "summary": " Meeting feb30 ",
+            "start": { "date": "2027-02-30" },
+            "end": { "date": "2027-03-01" }
+          },
+          {
+            "id": "long",
+            "status": "confirmed",
+            "summary": " Meeting long ",
+            "start": { "date": "2026-12-01" },
+            "end": { "date": "2027-03-01" }
+          },
+          {
+            "id": "longout",
+            "status": "confirmed",
+            "summary": " Meeting longout ",
+            "start": { "date": "2026-10-01" },
+            "end": { "date": "2026-12-01" }
+          },
+          {
+            "id": "mixed",
+            "status": "confirmed",
+            "summary": " Meeting mixed ",
+            "start": { "date": "2027-01-20" },
+            "end": { "dateTime": "2027-01-20T12:00:00Z" }
+          }
+        ],
+        "existing": []
+      },
+      "output": {
+        "upserts": [
+          {
+            "source": "google",
+            "sourceEventId": "long",
+            "title": "Meeting long",
+            "start": { "__hive": "timestamp", "ms": 1799884800000 },
+            "end": { "__hive": "timestamp", "ms": 1802563200000 },
+            "allDay": true,
+            "attendees": [],
+            "busyOnly": false
+          },
+          {
+            "source": "google",
+            "sourceEventId": "mixed",
+            "title": "Meeting mixed",
+            "start": { "__hive": "timestamp", "ms": 1800403200000 },
+            "end": { "__hive": "timestamp", "ms": 1800446400000 },
+            "allDay": false,
+            "attendees": [],
+            "busyOnly": false
+          }
+        ],
+        "deletes": [],
+        "unchanged": 0,
+        "skipped": [
+          { "sourceEventId": "", "reason": "no id" },
+          { "sourceEventId": "", "reason": "no id" },
+          { "sourceEventId": "bad", "reason": "no valid start and end" },
+          { "sourceEventId": "nozone", "reason": "no valid start and end" },
+          { "sourceEventId": "backwards", "reason": "ends before it starts" },
+          { "sourceEventId": "feb30", "reason": "no valid start and end" },
+          { "sourceEventId": "longout", "reason": "longer than 31 days and outside the window" }
+        ]
+      }
+    },
+    {
+      "name": "planCalendarSync/bad window",
+      "action": "planCalendarSync",
+      "input": {
+        "source": "google",
+        "mode": "full",
+        "from": { "__hive": "timestamp", "ms": 1799884800000 },
+        "to": { "__hive": "timestamp", "ms": 1799884800000 },
+        "items": [],
+        "existing": []
+      },
+      "output": { "error": "to must be after from" }
+    },
+    {
+      "name": "planCalendarSync/too wide",
+      "action": "planCalendarSync",
+      "input": {
+        "source": "google",
+        "mode": "full",
+        "from": { "__hive": "timestamp", "ms": 1799884800000 },
+        "to": { "__hive": "timestamp", "ms": 1806537600000 },
+        "items": [],
+        "existing": []
+      },
+      "output": { "error": "Sync at most 62 days at once" }
+    },
+    {
+      "name": "planCalendarSync/bad mode",
+      "action": "planCalendarSync",
+      "input": {
+        "source": "google",
+        "mode": "sometimes",
+        "from": { "__hive": "timestamp", "ms": 1799884800000 },
+        "to": { "__hive": "timestamp", "ms": 1802563200000 },
+        "items": [],
+        "existing": []
+      },
+      "output": { "error": "The mode is full or incremental" }
+    },
+    {
+      "name": "planCalendarSync/no source",
+      "action": "planCalendarSync",
+      "input": {
+        "source": " ",
+        "mode": "full",
+        "from": { "__hive": "timestamp", "ms": 1799884800000 },
+        "to": { "__hive": "timestamp", "ms": 1802563200000 },
+        "items": [],
+        "existing": []
+      },
+      "output": { "error": "Give the source (for example google)" }
     }
   ]
 }

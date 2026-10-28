@@ -5,13 +5,23 @@
  */
 import {
   ActionError,
+  bookingEventId,
   calendarDelete,
   calendarEventId,
+  calendarMirror,
+  inboxPaths,
   calendarPaths,
   calendarUpsert,
   DEFAULT_FREE_MIN_MINUTES,
   freeSlots,
+  MAX_CALENDAR_EVENTS_PER_WRITE,
   paths,
+  planCalendarSync,
+  SYNC_AHEAD_MS,
+  SYNC_PAST_MS,
+  type GoogleEvent,
+  type SyncedEvent,
+  type SyncMode,
   type ActionContext,
   type ActionPlan,
   type CalendarEventInput,
@@ -27,6 +37,7 @@ import {
   where,
   type Firestore,
 } from 'firebase/firestore';
+import { writeFileSync } from 'node:fs';
 import { HiveError } from './errors';
 
 /** RFC 3339 with a zone (Z or ±hh:mm), seconds optional: what both CLIs read the same way. */
@@ -198,5 +209,236 @@ export async function freeTime(
     free: free.map((f) => ({ start: iso(f.start), end: iso(f.end) })),
     busyBlocks: busy.length,
     note: 'Free time across all the organizations the member is in (busy time only, never details). Times are UTC; propose slots in the member’s own time zone and working hours.',
+  };
+}
+
+// ---------- sync (item fJnu6) ----------
+
+/**
+ * What the agent read from the source with its own access: a Google Calendar API events list
+ * (`{ items, nextSyncToken }`, single events expanded) or a plain array of events. Hivenod never
+ * connects to Google; the personal agent fills this, and tests use a stub.
+ */
+export interface SyncFeed {
+  items: GoogleEvent[];
+  nextSyncToken?: string;
+}
+
+/** Reads a feed from JSON text: `{ "items": [...], "nextSyncToken": "…" }` or `[...]`. */
+export function parseFeed(text: string, name: string): SyncFeed {
+  let v: unknown;
+  try {
+    v = JSON.parse(text);
+  } catch {
+    throw new HiveError(`${name}: not JSON.`);
+  }
+  if (Array.isArray(v)) return { items: v as GoogleEvent[] };
+  const o = v as { items?: unknown; nextSyncToken?: unknown } | null;
+  if (!o || typeof o !== 'object' || !Array.isArray(o.items))
+    throw new HiveError(
+      `${name}: give a Google Calendar events list ({"items": [...]}) or an array of events.`,
+    );
+  return {
+    items: o.items as GoogleEvent[],
+    ...(typeof o.nextSyncToken === 'string' ? { nextSyncToken: o.nextSyncToken } : {}),
+  };
+}
+
+export interface SyncArgs {
+  member?: string;
+  source?: string;
+  incremental?: boolean;
+  busyOnly?: boolean;
+  from?: string;
+  to?: string;
+  feed: SyncFeed;
+  /** For tests: the clock. */
+  now?: number;
+}
+
+/**
+ * Syncs a member's calendar from a source into this organization: adds and updates what
+ * changed, removes what is gone (cancelled, declined, free, or, in a full sync, no longer listed in
+ * the window), in batches of 100, each with its busy blocks.
+ */
+export async function syncEvents(d: Deps, a: SyncArgs) {
+  const memberUid = await resolveMember(d, a.member);
+  const source = (a.source ?? 'google').trim();
+  const now = a.now ?? Date.now();
+  const from = a.from ? parseTime(a.from, 'from') : new Date(now - SYNC_PAST_MS);
+  const to = a.to ? parseTime(a.to, 'to') : new Date(now + SYNC_AHEAD_MS);
+  const mode: SyncMode = a.incremental ? 'incremental' : 'full';
+  wrap(() => planCalendarSync({ source, mode, from, to, existing: [], items: [] }));
+  const snap = await getDocs(
+    query(
+      collection(d.db, `workspaces/${d.ctx.workspaceId}/calendar`),
+      where('memberUid', '==', memberUid),
+      where('end', '>', Timestamp.fromDate(from)),
+    ),
+  );
+  const existing: SyncedEvent[] = [];
+  for (const s of snap.docs) {
+    const e = s.data() as {
+      source: string;
+      sourceEventId: string;
+      title: string;
+      start: Timestamp;
+      end: Timestamp;
+      allDay: boolean;
+      attendees: string[];
+      busyOnly: boolean;
+      deleted: boolean;
+    };
+    if (e.source !== source) continue;
+    existing.push({
+      sourceEventId: e.sourceEventId,
+      title: e.title,
+      start: e.start.toDate(),
+      end: e.end.toDate(),
+      allDay: e.allDay,
+      attendees: e.attendees,
+      busyOnly: e.busyOnly,
+      deleted: e.deleted,
+    });
+  }
+  existing.sort((x, y) =>
+    x.sourceEventId < y.sourceEventId ? -1 : x.sourceEventId > y.sourceEventId ? 1 : 0,
+  );
+  const p = wrap(() =>
+    planCalendarSync({
+      source,
+      mode,
+      from,
+      to,
+      busyOnly: a.busyOnly,
+      existing,
+      items: a.feed.items,
+    }),
+  );
+  const n = MAX_CALENDAR_EVENTS_PER_WRITE;
+  for (let i = 0; i < p.upserts.length; i += n)
+    await d.write(
+      wrap(() => calendarUpsert(d.ctx, { memberUid, events: p.upserts.slice(i, i + n) })),
+    );
+  for (let i = 0; i < p.deletes.length; i += n)
+    await d.write(
+      wrap(() =>
+        calendarDelete(d.ctx, {
+          events: p.deletes
+            .slice(i, i + n)
+            .map((sid) => ({ id: calendarEventId(memberUid, source, sid), memberUid })),
+        }),
+      ),
+    );
+  return {
+    member: memberUid,
+    source,
+    mode,
+    from: iso(from),
+    to: iso(to),
+    upserted: p.upserts.length,
+    deleted: p.deletes.length,
+    unchanged: p.unchanged,
+    skipped: p.skipped,
+    nextSyncToken: a.feed.nextSyncToken ?? null,
+    note: `Synced ${source} (${mode}): ${p.upserts.length} added or updated, ${p.deletes.length} removed, ${p.unchanged} unchanged${p.skipped.length ? `, ${p.skipped.length} skipped` : ''}.`,
+  };
+}
+
+/**
+ * `--state FILE`: keeps the source's sync token for the next incremental run (mode 600). Only the
+ * token, the source, the member and when: never events. Nothing is written without a token.
+ */
+export function saveSyncState(
+  file: string,
+  r: { source: string; member: string; nextSyncToken: string | null },
+): void {
+  if (!r.nextSyncToken) return;
+  writeFileSync(
+    file,
+    `${JSON.stringify({ source: r.source, member: r.member, syncToken: r.nextSyncToken, syncedAt: new Date().toISOString() }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+}
+
+// ---------- mirroring a booking (item fJnu6) ----------
+
+export interface MirrorArgs {
+  outcomeId: string;
+  sourceEventId: string;
+  source?: string;
+  /** When the copy differs from the booking (the calendar moved it): RFC 3339. */
+  start?: string;
+  end?: string;
+  title?: string;
+}
+
+/**
+ * After the member approved a reply_book outcome, Hivenod booked the meeting (source hivenod).
+ * The agent puts it into the member's own calendar (for example Google, with its own access) and
+ * calls this with that calendar's event id: the booking becomes that event, so the next sync
+ * updates it instead of counting the meeting twice.
+ */
+export async function mirrorBooking(d: Deps, a: MirrorArgs) {
+  const source = (a.source ?? 'google').trim();
+  if (!a.outcomeId) throw new HiveError('Give the outcome id of the booking.');
+  if (!(a.sourceEventId ?? '').trim())
+    throw new HiveError(`Give the event's id in the ${source || 'source'} calendar.`);
+  const o = (await getDoc(doc(d.db, inboxPaths.outcome(d.ctx.workspaceId, a.outcomeId)))).data() as
+    { memberUid?: string; type?: string; state?: string } | undefined;
+  if (!o?.memberUid) throw new HiveError(`Outcome ${a.outcomeId} not found.`);
+  if (o.type !== 'reply_book')
+    throw new HiveError(`Outcome ${a.outcomeId} is not a booking (reply_book).`);
+  if (o.state !== 'approved' && o.state !== 'done')
+    throw new HiveError(`Outcome ${a.outcomeId} is not approved (it is ${o.state}).`);
+  const memberUid = o.memberUid;
+  const replacedId = bookingEventId(memberUid, a.outcomeId);
+  const mirrorId = calendarEventId(memberUid, source, a.sourceEventId);
+  const b = (await getDoc(doc(d.db, calendarPaths.event(d.ctx.workspaceId, replacedId)))).data() as
+    | {
+        title: string;
+        start: Timestamp;
+        end: Timestamp;
+        allDay: boolean;
+        attendees: string[];
+        deleted: boolean;
+      }
+    | undefined;
+  if (!b) throw new HiveError(`No booking in the calendar for outcome ${a.outcomeId}.`);
+  if (b.deleted) {
+    const m = (await getDoc(doc(d.db, calendarPaths.event(d.ctx.workspaceId, mirrorId)))).data() as
+      { deleted?: boolean } | undefined;
+    if (m && !m.deleted)
+      return {
+        member: memberUid,
+        id: mirrorId,
+        replaced: replacedId,
+        mirrored: false,
+        note: 'Already mirrored: the booking is that event.',
+      };
+    throw new HiveError(`The booking of outcome ${a.outcomeId} was removed from the calendar.`);
+  }
+  const p = wrap(() =>
+    calendarMirror(d.ctx, {
+      memberUid,
+      replacedId,
+      event: {
+        source,
+        sourceEventId: a.sourceEventId,
+        title: a.title ?? b.title,
+        start: a.start ? parseTime(a.start, 'start') : b.start.toDate(),
+        end: a.end ? parseTime(a.end, 'end') : b.end.toDate(),
+        allDay: b.allDay,
+        attendees: b.attendees,
+      },
+    }),
+  );
+  await d.write(p);
+  return {
+    member: memberUid,
+    id: p.id,
+    replaced: replacedId,
+    mirrored: true,
+    note: `The booking is now the ${source} event ${a.sourceEventId}: the next sync updates it, never adds it twice. Report the outcome with outcome_done.`,
   };
 }

@@ -6,7 +6,16 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { setLogLevel } from 'firebase/firestore';
 import { outcomeType } from '@hive/shared';
-import { deleteEvents, freeTime, upsertEvents, type CalendarEventArg } from './calendar';
+import {
+  deleteEvents,
+  freeTime,
+  parseFeed,
+  saveSyncState,
+  syncEvents,
+  mirrorBooking,
+  upsertEvents,
+  type CalendarEventArg,
+} from './calendar';
 import { HiveClient } from './client';
 import { HiveError, isRateLimited, messageOf } from './errors';
 import { bridgeClient, bridgedTools } from './bridge';
@@ -77,6 +86,14 @@ const HELP = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod calendar delete <id>... | --source S [--member M] <sourceEventId>...
   hivenod calendar free --from T --to T [--member M] [--min N]
                        free time across all the member's organizations (busy time only)
+  hivenod calendar sync <events.json|-> [--source google] [--member M] [--from T --to T]
+                       [--incremental] [--busy-only] [--state FILE]
+                       syncs a calendar you read yourself (a Google Calendar events list,
+                       single events): adds, updates, removes; default window -1 day to +30 days;
+                       --state saves its nextSyncToken for the next --incremental run
+  hivenod calendar mirror <outcomeId> <sourceEventId> [--source google] [--from T --to T] [--title T]
+                       an approved booking, once you created it in the member's own calendar,
+                       becomes that event (the next sync updates it, never twice)
   hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
                        creates an item (work at the first step) where the project lets agents
                        create items; at most 30 an hour
@@ -242,6 +259,10 @@ const OPTIONS = {
   'has-open': { type: 'boolean' },
   limit: { type: 'string' },
   off: { type: 'boolean' },
+  // calendar sync (item fJnu6)
+  incremental: { type: 'boolean' },
+  'busy-only': { type: 'boolean' },
+  state: { type: 'string' },
 } as const;
 
 type Opts = ReturnType<typeof parse>['values'];
@@ -623,6 +644,45 @@ async function dispatch(c: HiveClient, pos: string[], o: Opts): Promise<Command>
         result: r,
         text: () => [r.note, ...r.notFound.map((id) => `  not found: ${id}`)].join('\n'),
       };
+    }
+    case 'calendar sync': {
+      const file = need(pos, 2, 'events file (a Google Calendar events list, or - for stdin)');
+      let text: string;
+      try {
+        text = readFileSync(file === '-' ? 0 : file, 'utf8');
+      } catch {
+        throw new HiveError(`${file}: cannot read it.`);
+      }
+      const feed = parseFeed(text, file);
+      const r = await syncEvents(c.calendarDeps(), {
+        member: o.member,
+        source: o.source,
+        incremental: o.incremental,
+        busyOnly: o['busy-only'],
+        from: o.from,
+        to: o.to,
+        feed,
+      });
+      if (o.state) saveSyncState(o.state, r);
+      return {
+        result: r,
+        text: () =>
+          [
+            r.note,
+            ...r.skipped.map((k) => `  skipped ${k.sourceEventId || '(no id)'}: ${k.reason}`),
+          ].join('\n'),
+      };
+    }
+    case 'calendar mirror': {
+      const r = await mirrorBooking(c.calendarDeps(), {
+        outcomeId: need(pos, 2, 'outcome id (the approved reply_book)'),
+        sourceEventId: need(pos, 3, "the event's id in the member's calendar"),
+        source: o.source,
+        start: o.from,
+        end: o.to,
+        title: o.title,
+      });
+      return { result: r, text: () => r.note };
     }
     case 'calendar free': {
       if (!o.from || !o.to)

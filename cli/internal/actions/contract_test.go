@@ -161,6 +161,7 @@ var runners = map[string]runner{
 	"searchSubjects": pure(func(in SearchInput) (any, error) { return SearchSubjects(in), nil }),
 	"calendarUpsert": act(CalendarUpsert),
 	"calendarDelete": act(CalendarDelete),
+	"calendarMirror": act(CalendarMirror),
 	"freeSlots": pure(func(in FreeSlotsInput) (any, error) {
 		slots, err := FreeSlots(in)
 		if err != nil {
@@ -171,6 +172,17 @@ var runners = map[string]runner{
 			out = append(out, map[string]any{"start": Timestamp(s.Start), "end": Timestamp(s.End)})
 		}
 		return out, nil
+	}),
+	"planCalendarSync": pure(func(in SyncPlanInput) (any, error) {
+		p, err := PlanCalendarSync(in)
+		if err != nil {
+			return nil, err
+		}
+		ups := []any{}
+		for _, u := range p.Upserts {
+			ups = append(ups, map[string]any{"source": u.Source, "sourceEventId": u.SourceEventID, "title": u.Title, "start": Timestamp(u.Start), "end": Timestamp(u.End), "allDay": u.AllDay, "attendees": u.Attendees, "busyOnly": u.BusyOnly})
+		}
+		return map[string]any{"upserts": ups, "deletes": p.Deletes, "unchanged": p.Unchanged, "skipped": p.Skipped}, nil
 	}),
 	"calendarEventId": pure(func(in struct {
 		MemberUID     string `json:"memberUid"`

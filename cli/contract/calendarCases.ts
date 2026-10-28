@@ -6,8 +6,10 @@
 import {
   calendarDelete,
   calendarEventId,
+  calendarMirror,
   calendarUpsert,
   freeSlots,
+  planCalendarSync,
 } from '../../packages/shared/src/index';
 import type { ActionContext, Actor } from '../../packages/shared/src/index';
 
@@ -93,6 +95,22 @@ export function calendarCases(act: Act, pure: Pure, who: { agent: Actor; human: 
   del('person for someone else', who.human, { events: [{ id: 'maria_b', memberUid: 'maria' }] });
   del('no id', who.agent, { events: [{ id: '', memberUid: 'joao' }] });
 
+  const mir = (name: string, actor: Actor, input: Parameters<typeof calendarMirror>[1]) =>
+    act(`calendarMirror/${name}`, 'calendarMirror', actor, input, calendarMirror);
+  const booking = { memberUid: 'joao', replacedId: 'joao_aGl2ZW5vZApvMQ' };
+  mir('booking to google', who.agent, {
+    ...booking,
+    event: ev({ sourceEventId: 'gcal-123', attendees: ['sam@x.io'] }),
+  });
+  mir('same event', who.agent, {
+    memberUid: 'joao',
+    replacedId: calendarEventId('joao', 'google', 'g1'),
+    event: ev(),
+  });
+  mir('no replaced', who.agent, { ...booking, replacedId: '', event: ev() });
+  mir('person for someone else', who.human, { ...booking, event: ev() });
+  mir('bad event', who.agent, { ...booking, event: ev({ end: at(10) }) });
+
   pure(
     'calendarEventId/ascii',
     'calendarEventId',
@@ -136,4 +154,100 @@ export function calendarCases(act: Act, pure: Pure, who: { agent: Actor; human: 
   free('too wide', { from: at(0), to: at(63 * 24 * 60), busy: [] });
   free('bad minMinutes', { from: at(0), to: at(60), busy: [], minMinutes: 1.5 });
   free('minMinutes too big', { from: at(0), to: at(60), busy: [], minMinutes: 1441 });
+
+  // ----- sync (item fJnu6) -----
+  const sync = (name: string, input: Parameters<typeof planCalendarSync>[0]) =>
+    pure(`planCalendarSync/${name}`, 'planCalendarSync', input, planCalendarSync);
+  const g = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    status: 'confirmed',
+    summary: ` Meeting ${id} `,
+    start: { dateTime: '2027-01-15T09:00:00+01:00' },
+    end: { dateTime: '2027-01-15T10:30:00.5+01:00' },
+    ...over,
+  });
+  const from = new Date(Date.UTC(2027, 0, 14));
+  const to = new Date(Date.UTC(2027, 1, 14));
+  const have = (id: string, over: Record<string, unknown> = {}) => ({
+    sourceEventId: id,
+    title: `Meeting ${id}`,
+    start: new Date(Date.UTC(2027, 0, 15, 8)),
+    end: new Date(Date.UTC(2027, 0, 15, 9, 30, 0, 500)),
+    allDay: false,
+    attendees: [] as string[],
+    busyOnly: false,
+    deleted: false,
+    ...over,
+  });
+  const base = { source: 'google', mode: 'full' as const, from, to };
+  sync('full: add, keep, update, remove', {
+    ...base,
+    items: [
+      g('new', { attendees: [{ email: ' a@x.io ' }, { email: 'room@x.io', resource: true }, {}] }),
+      g('same'),
+      g('moved', {
+        start: { dateTime: '2027-01-16T09:00:00Z' },
+        end: { dateTime: '2027-01-16T10:00:00Z' },
+      }),
+      g('renamed', { summary: 'Renamed' }),
+      g('revived'),
+    ],
+    existing: [
+      have('same'),
+      have('moved'),
+      have('renamed'),
+      have('revived', { deleted: true, title: '' }),
+      have('gone'),
+      have('gone-before', { deleted: true }),
+      have('outside', {
+        start: new Date(Date.UTC(2026, 11, 1)),
+        end: new Date(Date.UTC(2026, 11, 2)),
+      }),
+    ],
+  });
+  sync('incremental', {
+    ...base,
+    mode: 'incremental',
+    items: [g('x', { status: 'cancelled' }), g('y', { status: 'cancelled' }), g('n')],
+    existing: [have('x'), have('z')],
+  });
+  sync('not busy', {
+    ...base,
+    items: [
+      g('free', { transparency: 'transparent' }),
+      g('declined', { attendees: [{ email: 'me@x.io', self: true, responseStatus: 'declined' }] }),
+      g('accepted', { attendees: [{ email: 'me@x.io', self: true, responseStatus: 'accepted' }] }),
+      g('wl', { eventType: 'workingLocation' }),
+    ],
+    existing: [have('free'), have('wl')],
+  });
+  sync('all day, busy only, last wins', {
+    ...base,
+    busyOnly: true,
+    items: [
+      g('day', { start: { date: '2027-01-20' }, end: { date: '2027-01-22' } }),
+      g('a', { attendees: [{ email: 'a@x.io' }] }),
+      g('a', { summary: 'Again', attendees: [{ email: 'b@x.io' }] }),
+    ],
+    existing: [],
+  });
+  sync('skipped and clipped', {
+    ...base,
+    items: [
+      { summary: 'no id' },
+      g('  '),
+      g('bad', { start: { dateTime: 'tomorrow' } }),
+      g('nozone', { start: { dateTime: '2027-01-15T09:00:00' } }),
+      g('backwards', { end: { dateTime: '2027-01-15T07:00:00Z' } }),
+      g('feb30', { start: { date: '2027-02-30' }, end: { date: '2027-03-01' } }),
+      g('long', { start: { date: '2026-12-01' }, end: { date: '2027-03-01' } }),
+      g('longout', { start: { date: '2026-10-01' }, end: { date: '2026-12-01' } }),
+      g('mixed', { start: { date: '2027-01-20' }, end: { dateTime: '2027-01-20T12:00:00Z' } }),
+    ],
+    existing: [],
+  });
+  sync('bad window', { ...base, to: from, items: [], existing: [] });
+  sync('too wide', { ...base, to: new Date(Date.UTC(2027, 3, 1)), items: [], existing: [] });
+  sync('bad mode', { ...base, mode: 'sometimes' as never, items: [], existing: [] });
+  sync('no source', { ...base, source: ' ', items: [], existing: [] });
 }
