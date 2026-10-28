@@ -15,6 +15,10 @@
  *    Telegram. An urgent thread skips quiet hours and the summary.
  *  - After the gate's remindAfterHours a reminder goes out once, and only then is `remindedAt` set,
  *    which the app shows as "reminder sent".
+ *  - Silence (item AzveC): an actively worked item with no status within its project's interval
+ *    plus 10 minutes (or 10 minutes after a person asked) is flagged on the item, and its deciders
+ *    are told once per silence (bell, push, Telegram). A status ends the silence; the next one is
+ *    a new silence.
  */
 import {
   approvalNotice,
@@ -27,6 +31,10 @@ import {
   gateKey,
   questionNotice,
   reminderDue,
+  silenceDeciders,
+  silenceDue,
+  silenceNotice,
+  type Silence,
   summaryNotice,
   notifyPath,
   DEFAULT_NOTIFY_PREFS,
@@ -63,6 +71,8 @@ export interface Ports {
   /** 'gone' = the endpoint is dead and should be forgotten. */
   sendPush(sub: PushSub, notice: Notice): Promise<PushOutcome>;
   sendTelegram(chatId: number, notice: Notice, action?: ApprovalAction): Promise<boolean>;
+  /** Sets or clears the silence flag on an item (item AzveC). */
+  setSilence(wid: string, pid: string, iid: string, silence: Silence | null): Promise<void>;
   /** Writes a bell entry unless one with this id exists (users/{uid}/notifications/{id}). */
   addBell(uid: string, id: string, entry: BellEntry): Promise<void>;
   log(line: string): void;
@@ -79,6 +89,18 @@ export interface WaitingItem {
   iid: string;
   project: Project;
   item: Item;
+}
+/** An item an agent holds (item AzveC), with its run's start. */
+export interface WorkingItem {
+  wid: string;
+  pid: string;
+  iid: string;
+  project: Project;
+  item: Item;
+  /** When the run started (ms): the claim time. */
+  startedMs: number;
+  /** The agent's name, for the message. */
+  agentName: string;
 }
 export interface QuestionMsg {
   wid: string;
@@ -134,6 +156,7 @@ export class Engine {
   private waiting = new Map<string, WaitingItem>();
   private inbox = new Map<string, InboxWaiting>();
   private questions = new Map<string, QuestionMsg>();
+  private working = new Map<string, WorkingItem>();
   /** Channels that already got a message, by `key|uid|channel` (kept for the process's life). */
   private chanDone = new Set<string>();
   private tries = new Map<string, number>();
@@ -186,6 +209,10 @@ export class Engine {
   setInbox(t: InboxWaiting | null, key: string) {
     if (t) this.inbox.set(key, t);
     else this.inbox.delete(key);
+  }
+  setWorking(w: WorkingItem | null, key: string) {
+    if (w) this.working.set(key, w);
+    else this.working.delete(key);
   }
   setQuestion(q: QuestionMsg | null, key: string) {
     if (q) this.questions.set(key, q);
@@ -465,6 +492,85 @@ export class Engine {
         });
       } catch (e) {
         this.p.log(`inbox ${t.tid}: ${String(e)}`);
+      }
+    }
+    for (const w of [...this.working.values()]) {
+      try {
+        const due = silenceDue({
+          item: w.item,
+          project: w.project,
+          startedMs: w.startedMs,
+          nowMs: now,
+        });
+        const flag = w.item.silence ?? null;
+        if (!due) {
+          if (flag) {
+            await this.p.setSilence(w.wid, w.pid, w.iid, null);
+            w.item = { ...w.item, silence: null };
+          }
+          continue;
+        }
+        if (!flag || flag.runId !== due.runId || flag.since !== due.since) {
+          const next = { runId: due.runId, since: due.since, at: now };
+          await this.p.setSilence(w.wid, w.pid, w.iid, next);
+          w.item = { ...w.item, silence: next };
+        }
+        const key = `${due.runId}:${due.since}`;
+        const deciders = silenceDeciders(w.project, w.item);
+        const r = await record(w.wid, notifyPath.notifiedSilence(w.iid), () => ({
+          itemId: w.iid,
+          projectId: w.pid,
+          gateKey: key,
+          sent: [],
+          remindedAt: null,
+          at: now,
+        }));
+        if (!r) continue;
+        let fresh = r.dirty;
+        if (r.rec.gateKey !== key) {
+          // A status ended the last silence: this is a new one.
+          r.rec = { ...r.rec, gateKey: key, sent: [], at: now };
+          r.dirty = true;
+          fresh = true;
+        }
+        const minutes = Math.max(1, Math.floor((now - due.since) / 60_000));
+        if (fresh)
+          await this.bell(deciders, bellId.silence(w.iid, key), {
+            kind: 'silence',
+            workspaceId: w.wid,
+            projectId: w.pid,
+            itemId: w.iid,
+            projectName: w.project.name,
+            itemTitle: clipText(w.item.title, 300),
+            stepName: '',
+            actorName: clipText(w.agentName, 200),
+            text: `no status for ${minutes} min`,
+            at: now,
+            readAt: null,
+          });
+        const notice = silenceNotice({
+          projectName: w.project.name,
+          itemTitle: w.item.title,
+          agentName: w.agentName,
+          minutes,
+          projectId: w.pid,
+          itemId: w.iid,
+        });
+        const rec = r.rec;
+        for (const uid of deciders) {
+          if (rec.sent.includes(uid)) continue;
+          cands.push({
+            uid,
+            notice,
+            key: `sil|${w.iid}|${key}`,
+            done: () => {
+              rec.sent = [...rec.sent, uid];
+              r.dirty = true;
+            },
+          });
+        }
+      } catch (e) {
+        this.p.log(`working ${w.iid}: ${String(e)}`);
       }
     }
 

@@ -12,6 +12,7 @@
  *
  * "Actively worked": claimed, working, not parked, not waiting for an answer, not stopped.
  */
+import { nextOnPath } from './itempath';
 import {
   ActionError,
   ownClaim,
@@ -235,4 +236,18 @@ export function silenceText(sinceMs: number, nowMs: number): string {
   const min = Math.max(1, Math.floor((nowMs - sinceMs) / 60_000));
   if (min < 120) return `No update for ${min} min`;
   return `No update for ${Math.floor(min / 60)} h`;
+}
+
+/**
+ * Who is told when an item goes silent: the deciders of the next people step on its path, or the
+ * project's creator when no people step follows.
+ */
+export function silenceDeciders(
+  project: Pick<Project, 'steps' | 'createdBy'>,
+  item: Parameters<typeof nextOnPath>[1],
+): string[] {
+  let s = nextOnPath(project, item);
+  while (s && s.kind !== 'human') s = nextOnPath(project, item, s.id);
+  const uids = s?.gate?.deciderUids ?? [];
+  return uids.length ? [...uids] : [project.createdBy];
 }

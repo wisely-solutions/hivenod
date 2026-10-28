@@ -57,6 +57,14 @@ export function firestorePorts(
     async setNotified(wid, key, value: Notified) {
       await db.doc(notifyPath.notified(wid, key)).set(value);
     },
+    async setSilence(wid, pid, iid, silence) {
+      try {
+        await db.doc(`workspaces/${wid}/projects/${pid}/items/${iid}`).update({ silence });
+      } catch (e) {
+        // NOT_FOUND: the item is gone meanwhile. Nothing to flag.
+        if ((e as { code?: number }).code !== 5) throw e;
+      }
+    },
     async addBell(uid, id, entry) {
       try {
         await db.doc(bellPath.entry(uid, id)).create(entry);
@@ -279,9 +287,22 @@ export function watchAll(
       keys.forEach((k) => engine.setInbox(null, k));
     };
   };
+  /** When a run started (ms), cached: a run's start never changes. */
+  const runStarts = new Map<string, number>();
+  const runStart = async (wid: string, runId: string): Promise<number | null> => {
+    const key = `${wid}/${runId}`;
+    const hit = runStarts.get(key);
+    if (hit !== undefined) return hit;
+    const r = await db.doc(`workspaces/${wid}/runs/${runId}`).get();
+    const at = (r.data()?.startedAt as { toMillis(): number } | undefined)?.toMillis();
+    if (at === undefined) return null;
+    runStarts.set(key, at);
+    return at;
+  };
 
   const watchProject = (wid: string, pid: string, project: Project) => {
     const keys = new Set<string>();
+    const wkeys = new Set<string>();
     const qkeys = new Set<string>();
     const titles = new Map<string, string>();
     const stopItems = db
@@ -400,11 +421,51 @@ export function watchAll(
         },
         (e) => log(`decisions ${wid}/${pid}: ${String(e)}`),
       );
+    // Items agents are working (item AzveC): the silence check.
+    const stopWorking = db
+      .collection(`workspaces/${wid}/projects/${pid}/items`)
+      .where('status', '==', 'working')
+      .onSnapshot(
+        async (snap) => {
+          const now = new Set<string>();
+          for (const d of snap.docs) {
+            const item = itemSchema.safeParse(d.data());
+            if (!item.success || !item.data.claim) continue;
+            const key = `${wid}/${pid}/${d.id}`;
+            try {
+              const startedMs = await runStart(wid, item.data.claim.runId);
+              if (startedMs === null) continue;
+              now.add(key);
+              engine.setWorking(
+                {
+                  wid,
+                  pid,
+                  iid: d.id,
+                  project,
+                  item: item.data,
+                  startedMs,
+                  agentName: await nameOf(wid, item.data.claim.agentUid),
+                },
+                key,
+              );
+            } catch (e) {
+              log(`working ${key}: ${String(e)}`);
+            }
+          }
+          for (const k of wkeys) if (!now.has(k)) engine.setWorking(null, k);
+          wkeys.clear();
+          now.forEach((k) => wkeys.add(k));
+          kick();
+        },
+        (e) => log(`working ${wid}/${pid}: ${String(e)}`),
+      );
     return () => {
       stopItems();
+      stopWorking();
       stopQs();
       stopDecisions();
       keys.forEach((k) => engine.setWaiting(null, k));
+      wkeys.forEach((k) => engine.setWorking(null, k));
       qkeys.forEach((k) => engine.setQuestion(null, k));
     };
   };

@@ -8,7 +8,7 @@ import {
   type Project,
 } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
-import { Engine, type InboxWaiting, type Ports, type WaitingItem } from './engine';
+import { Engine, type InboxWaiting, type Ports, type WaitingItem, type WorkingItem } from './engine';
 
 const H = 3_600_000;
 const ts = (ms: number) => ({ seconds: ms / 1000, nanoseconds: 0, toMillis: () => ms });
@@ -20,6 +20,7 @@ function world(over: { prefs?: Record<string, NotifyPrefs>; remindAfterHours?: n
   const store = new Map<string, Notified>();
   const deleted: string[] = [];
   const bells = new Map<string, BellEntry>();
+  const silences: { iid: string; silence: unknown }[] = [];
   const ports: Ports = {
     addBell: async (uid, id, entry) => {
       if (!bells.has(`${uid}/${id}`)) bells.set(`${uid}/${id}`, entry);
@@ -53,6 +54,7 @@ function world(over: { prefs?: Record<string, NotifyPrefs>; remindAfterHours?: n
       sentTg.push({ chatId, notice, hasAction: !!action });
       return true;
     },
+    setSilence: async (_w, _p, iid, silence) => void silences.push({ iid, silence }),
     log: () => undefined,
   };
   const project = {
@@ -102,6 +104,7 @@ function world(over: { prefs?: Record<string, NotifyPrefs>; remindAfterHours?: n
     store,
     deleted,
     bells,
+    silences,
     engine: new Engine(ports),
   };
 }
@@ -511,5 +514,127 @@ describe('inbox threads (item 4PEHr)', () => {
     expect(w.sentPush.map((p) => p.notice.title)).toEqual([
       'Urgent · Needs you: Move the review to Thursday?',
     ]);
+  });
+});
+describe('silence (item AzveC)', () => {
+  const M = 60_000;
+  const working = (
+    w: ReturnType<typeof world>,
+    startedAgo: number,
+    extra: Partial<Item> = {},
+    every?: number,
+  ): WorkingItem => ({
+    wid: 'w',
+    pid: 'p',
+    iid: 'i1',
+    project: { ...w.project, statusEvery: every } as Project,
+    startedMs: w.t.now - startedAgo,
+    agentName: 'Hive',
+    item: {
+      title: 'Post',
+      stepId: 'draft',
+      status: 'working',
+      sendBackCount: 0,
+      claim: { runId: 'r1', agentUid: 'hive', heartbeatAt: ts(w.t.now) },
+      updatedAt: ts(w.t.now),
+      gate: null,
+      ...extra,
+    } as unknown as Item,
+  });
+
+  it('flags an item silent past the interval plus 10 min, and tells the deciders once', async () => {
+    const w = world();
+    w.engine.setWorking(working(w, 39 * M), 'k');
+    await w.engine.sweep();
+    expect(w.silences).toHaveLength(0);
+    expect(w.sentPush).toHaveLength(0);
+    // 41 minutes after the claim, no status: silent (30 + 10).
+    w.engine.setWorking(working(w, 41 * M), 'k');
+    await w.engine.sweep();
+    expect(w.silences).toEqual([
+      { iid: 'i1', silence: { runId: 'r1', since: w.t.now - 41 * M, at: w.t.now } },
+    ]);
+    expect(w.sentPush.map((p) => p.endpoint).sort()).toEqual(['https://p/ana', 'https://p/bo']);
+    expect(w.sentPush[0]!.notice).toMatchObject({
+      title: 'No update: Post',
+      body: 'Blog · Hive · no status for 41 min',
+      url: '/p/p?item=i1',
+    });
+    expect(w.sentTg).toHaveLength(1);
+    expect([...w.bells.keys()].sort()).toEqual([
+      `ana/n-i1-r1_${w.t.now - 41 * M}`,
+      `bo/n-i1-r1_${w.t.now - 41 * M}`,
+    ]);
+    // Later sweeps, still silent: no second notice and no second flag.
+    const flagged = working(w, 41 * M, {
+      silence: { runId: 'r1', since: w.t.now - 41 * M, at: w.t.now },
+    });
+    w.t.now += 20 * M;
+    w.engine.setWorking(flagged, 'k');
+    await w.engine.sweep();
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(2);
+    expect(w.sentTg).toHaveLength(1);
+    expect(w.silences).toHaveLength(1);
+  });
+
+  it('a status ends the silence (flag cleared); the next silence is told again', async () => {
+    const w = world();
+    const since = w.t.now - 50 * M;
+    const silence = { runId: 'r1', since, at: w.t.now - 5 * M };
+    w.engine.setWorking(working(w, 50 * M), 'k');
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(2);
+    const status = { runId: 'r1', text: 'Tests', pct: null, at: ts(w.t.now), by: 'hive' };
+    w.engine.setWorking(working(w, 50 * M, { silence, statusUpdate: status }), 'k');
+    await w.engine.sweep();
+    expect(w.silences.at(-1)).toEqual({ iid: 'i1', silence: null });
+    expect(w.sentPush).toHaveLength(2);
+    // 41 minutes after that status, silent again: a new notice.
+    w.t.now += 41 * M;
+    w.engine.setWorking(working(w, 91 * M, { statusUpdate: status }), 'k');
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(4);
+    expect(w.silences.at(-1)!.silence).toMatchObject({ since: status.at.toMillis() });
+  });
+
+  it('a person asking: silent 10 minutes later even with the interval off', async () => {
+    const w = world();
+    const ask = { runId: 'r1', byUid: 'ana', at: ts(w.t.now - 9 * M) };
+    w.engine.setWorking(working(w, 5 * 60 * M, { statusAsk: ask }, 0), 'k');
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(0);
+    w.t.now += 2 * M;
+    w.engine.setWorking(working(w, 5 * 60 * M + 2 * M, { statusAsk: ask }, 0), 'k');
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(2);
+    expect(w.silences).toHaveLength(1);
+  });
+
+  it('never for a parked item, one waiting for an answer, or off without an ask', async () => {
+    const w = world();
+    const park = { runId: 'r1', reason: 'release', at: ts(w.t.now - 3 * H) };
+    w.engine.setWorking(working(w, 3 * H, { parked: park }), 'a');
+    await w.engine.sweep();
+    w.engine.setWorking(null, 'a');
+    w.engine.setWorking(
+      working(w, 3 * H, { awaitingAnswer: { questionId: 'q', agentUid: 'hive', at: ts(0) } }),
+      'b',
+    );
+    await w.engine.sweep();
+    w.engine.setWorking(null, 'b');
+    w.engine.setWorking(working(w, 3 * H, {}, 0), 'c');
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(0);
+    expect(w.silences).toHaveLength(0);
+  });
+
+  it('with no people step ahead, the project creator is told', async () => {
+    const w = world();
+    const item = working(w, 2 * H);
+    item.project = { ...item.project, createdBy: 'ana', steps: [w.project.steps[0]!] } as Project;
+    w.engine.setWorking(item, 'k');
+    await w.engine.sweep();
+    expect(w.sentPush.map((p) => p.endpoint)).toEqual(['https://p/ana']);
   });
 });
