@@ -191,6 +191,24 @@ const calendarRoute = createRoute({
   path: '/calendar',
   component: lazyRouteComponent(() => import('./calendar/CalendarPage'), 'CalendarPage'),
 });
+// Inbox (item 4PEHrOW5IfXBQWgOK9wo): the member's subjects and threads, all organizations or one.
+const inboxRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/inbox',
+  validateSearch: (s: Record<string, unknown>): { org?: string } =>
+    typeof s.org === 'string' && s.org ? { org: s.org } : {},
+  component: lazyRouteComponent(() => import('./threads/InboxListPage'), 'InboxListPage'),
+});
+const inboxSubjectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/inbox/$wid/s/$sid',
+  component: lazyRouteComponent(() => import('./threads/SubjectPage'), 'SubjectPage'),
+});
+const inboxThreadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/inbox/$wid/t/$tid',
+  component: lazyRouteComponent(() => import('./threads/ThreadPage'), 'ThreadPage'),
+});
 const activityRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/activity',
@@ -296,6 +314,9 @@ export const router = createRouter({
     insightsRoute,
     projectInsightsRoute,
     calendarRoute,
+    inboxRoute,
+    inboxSubjectRoute,
+    inboxThreadRoute,
     activityRoute,
     agentsRoute,
     connectRoute,

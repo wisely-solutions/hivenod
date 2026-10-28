@@ -339,7 +339,7 @@ export function InboxPage() {
    */
   const openRow = (e: NeedsEntry) => {
     if (e.thread) {
-      void navigate({ href: `/inbox/${e.wid}/t/${e.thread.id}` });
+      void navigate({ to: '/inbox/$wid/t/$tid', params: { wid: e.wid, tid: e.thread.id } });
       return;
     }
     if (e.wid !== wid) {

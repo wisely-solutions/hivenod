@@ -202,10 +202,92 @@ The contract tests cover the agent actions: `cli/contract/cases.ts` against the 
 `packages/agent/test/go.integration.test.ts`, which runs the inbox scenario through both CLIs on
 the emulators and requires equal results and documents.
 
+## Channel events (part 2)
+
+A channel session (`hivenod mcp --channel`, TypeScript `packages/agent/src/inboxfeed.ts`, Go
+`cli/internal/hive/inboxfeed.go`) pushes `<channel source="hivenod" kind="inbox">` events for
+the threads that need agent work. They don't count toward `max_items` and are never claimed:
+the session runs each in a background sub-agent of its own, with the brief in the event, and
+keeps development items first (the channel instructions say so).
+
+**Who gets what.** Each event goes to exactly one agent's session:
+
+- **Investigating a thread** goes to the thread's home agent (`fetchedBy`), the agent that
+  brought it in. It is the organization's main agent for that inbox. Reasons: `new` (a new
+  thread), `message` (a new message), `answered` (the member answered `inbox_ask`), `woke` (a
+  snooze is over), `rejected` (the member turned the proposal down), `failed` (carrying out
+  failed), `restored` (the member brought it back), `resume` (still investigating when a new
+  session starts).
+- **A nudge due** (`nudge_due`) also goes to the home agent: the thread has waited on them for
+  `nudgeAfter` (3 days) since its last change. Noting why not (`inbox_note`) restarts the wait.
+- **Carrying out an approved outcome** (`carry_out`, with `outcome_id` and `outcome_type`) goes
+  to its executor, which the rules fix to the home agent.
+- A due snooze is woken by the home agent's session itself (`thread_wake`), and the wake then
+  sends `woke`.
+
+Meta: `kind: inbox, thread_id, reason, member, inbox_cap, inbox_active`, plus `outcome_id` and
+`outcome_type` for `carry_out`. `update: true` means a sub-agent already works on that thread,
+so the session passes the event on instead of starting another one.
+
+**Dedupe.** It's one event per thread state change. The session remembers, per thread, the
+last event id it handled (`lastEventId`):
+
+- Notes, filing and titles aren't triggers.
+- A listener that reconnects delivers the same documents, and nothing is pushed twice.
+- An approved outcome is sent once per session.
+- A new session (a restart) sends each thread that still needs work once more, since the old
+  session's sub-agents are gone. This stays within the same cap and rate.
+
+**Flow control.**
+
+- At most `maxInbox` threads are in flight at once (`--max-inbox N` or `HIVENOD_MAX_INBOX`,
+  0-10, default 3; 0 turns inbox events off).
+- A thread is in flight from its event until it leaves the state it was sent for (or the
+  outcome leaves `approved`), or for at most 30 minutes.
+- At most 10 events go out a minute.
+- Waiting ones go out in this order: approved outcomes, answers, new messages, the rest, then
+  nudges. Oldest first within each.
+- Tuning and tests: `HIVENOD_INBOX_PER_MIN`, and in milliseconds `HIVENOD_INBOX_NUDGE_MS`,
+  `HIVENOD_INBOX_LEASE_MS` and `HIVENOD_INBOX_TICK_MS`.
+
+## The Inbox view (web app)
+
+- **`/inbox`**: the member's subjects, across all their organizations or one (`?org=<id>`).
+  Subjects with threads waiting for the member (Needs you, Your call) come first, then the
+  rest by activity. Threads not filed yet gather under "Not filed yet". **Find** searches the
+  subject names, thread titles, the people who wrote, the channels and the text of the
+  messages; the filters are: organization, waiting for me, has open threads, active in the
+  last 7, 30 or 90 days. Find runs `searchSubjects` (see "Finding subjects") in the browser over
+  the member's own records, one call per organization, so it answers like `subject_search`.
+- **`/inbox/<org>/s/<subject>`**: the subject's threads (open and closed) and its timeline, with
+  Rename, Merge (pick the target) and Split (pick the threads, name the new subject), and its
+  related subjects: links an agent proposed (OK or No), related ones (Unlink), and Link a
+  subject with an optional note.
+- **`/inbox/<org>/t/<thread>`**: the agent's question with an answer box, the proposed outcomes,
+  the decided ones, and the timeline: each message with its sender, source, the original text,
+  attachments and a link to the original, and the agents' notes and the decisions. Each outcome
+  is drawn from the registry; its fields become editable with **Edit**, and **Approve** (the
+  registry's word, e.g. Send for a reply) or **Reject** counts down on the pressed button with
+  Undo before it is written. The member can also move the thread to another subject, mark it
+  done, ignore it, bring it back, mark it urgent or not (`flagThread`), and **Make it work**.
+  An approved `reply_book` shows the slot it booked.
+- **Make it work** (the member's own): `makeItemFromThread` creates a Hivenod item with
+  `createItem`, the member as its creator, in one of their projects of the thread's
+  organization, and links it on the thread's timeline with a `thread.itemMade` event in the
+  same batch. The rules accept that event only for the member's own thread and an item they
+  created in that batch. The thread itself does not change.
+- Every query filters on `memberUid == me`; the rules allow nothing wider.
+
+## Notices (notifier)
+
+A thread arriving at **Needs you** (an agent's question) or **Your call** (outcomes proposed)
+tells its member alone: a bell entry (`inboxAsk`, `inboxCall`; `projectId` is `inbox`, `itemId`
+the thread) and push and Telegram, linking to the thread page. One arrival is one notice: a new
+question, or a new round of proposals after the earlier ones were decided, is a new arrival.
+A thread with `urgent: true` (`thread_flag`, or the member's Mark urgent) skips quiet hours and
+the summary.
+
 ## Still to come
 
-- **Part 2:** `inbox` channel events to the organization's main agent, outside `max_items`.
-- **Part 3:** the Inbox view (per workspace and across workspaces), decisions on outcomes,
-  rename, merge, split and move, and notifier notices, including urgent pings.
 - **Later slices:** personal Google sync, and
   per-workspace auto-OK per outcome type.

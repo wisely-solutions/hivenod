@@ -32,13 +32,13 @@ export function watched() {
   }
   return m;
 }
-/** `--only connect|basic|max-items|park` (cards cGSENsRF, QjTTL, item EJ2Cxq4k): which part of the smoke to run; '' = all. */
+/** `--only connect|basic|max-items|park|inbox` (cards cGSENsRF, QjTTL, items EJ2Cxq4k, 4PEHr): which part of the smoke to run; '' = all. */
 export function onlyFrom(argv) {
   const i = argv.indexOf('--only');
   if (i < 0) return '';
   const v = argv[i + 1];
-  if (v !== 'connect' && v !== 'basic' && v !== 'max-items' && v !== 'park')
-    throw new Error('--only must be connect, basic, max-items or park');
+  if (!['connect', 'basic', 'max-items', 'park', 'inbox'].includes(v))
+    throw new Error('--only must be connect, basic, max-items, park or inbox');
   return v;
 }
 

@@ -12,6 +12,7 @@ import { HiveError, isRateLimited, messageOf } from './errors';
 import { bridgeClient, bridgedTools } from './bridge';
 import { runBridgedMcp, runMcp } from './mcp';
 import { parseMaxItems } from './channel';
+import { inboxOptionsFromEnv, parseMaxInbox } from './inboxfeed';
 import {
   clearCredentials,
   credentialsPath,
@@ -105,6 +106,8 @@ const HELP = `hivenod: work in Hivenod as an agent, through the Claude Code chan
                                                     one item at a time (the hivenod plugin)
       [--max-items N]                                  holds up to N items at once (1-10, default 1;
                                                     or HIVENOD_MAX_ITEMS), each for a sub-agent
+      [--max-inbox N]                                  Inbox threads sent at once, outside max_items
+                                                    (0-10, default 3, 0 is off; or HIVENOD_MAX_INBOX)
 
 Add --json for JSON output. Use --project P if an item id is ambiguous.`;
 
@@ -210,6 +213,7 @@ const OPTIONS = {
   channel: { type: 'boolean' },
   'max-minutes': { type: 'string' },
   'max-items': { type: 'string' },
+  'max-inbox': { type: 'string' },
   server: { type: 'string' },
   // Inbox (item 4PEHrOW5IfXBQWgOK9wo)
   source: { type: 'string' },
@@ -1080,8 +1084,18 @@ export async function main(rawArgv: string[]): Promise<number> {
         ? (flag ?? parseMaxItems(process.env.HIVENOD_MAX_ITEMS, 'HIVENOD_MAX_ITEMS'))
         : undefined;
       await resolveServer();
+      // Item 4PEHr: inbox threads in flight at once, outside max_items (default 3; 0 is off).
+      const maxInbox =
+        parseMaxInbox(o['max-inbox'], '--max-inbox') ??
+        parseMaxInbox(process.env.HIVENOD_MAX_INBOX, 'HIVENOD_MAX_INBOX');
+      if (o['max-inbox'] !== undefined && !o.channel)
+        throw new HiveError('--max-inbox needs hivenod mcp --channel.');
+      const inbox = {
+        ...inboxOptionsFromEnv(),
+        ...(maxInbox !== undefined ? { maxInbox } : {}),
+      };
       await runMcp(
-        o.channel ? { channel: { projectId: o.project, stepId: o.step, maxItems } } : {},
+        o.channel ? { channel: { projectId: o.project, stepId: o.step, maxItems, inbox } } : {},
       );
       return -1; // keep running
     } catch (e) {

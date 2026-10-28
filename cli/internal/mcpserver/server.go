@@ -39,6 +39,14 @@ type Surface struct {
 	} `json:"channel"`
 	ChannelInstructions map[string]string `json:"channelInstructions"`
 	WorkText            []WorkTextSample  `json:"workText"`
+	InboxText           []InboxTextSample `json:"inboxText"`
+}
+
+// InboxTextSample is one TypeScript inboxText output (for the Go port's test); Info decodes
+// into hive.InboxEventInfo.
+type InboxTextSample struct {
+	Info json.RawMessage `json:"info"`
+	Text string          `json:"text"`
 }
 
 // WorkTextSample is one TypeScript workText output (for the Go port's test).

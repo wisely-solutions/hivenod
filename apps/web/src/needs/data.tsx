@@ -20,7 +20,7 @@ import {
   type Message,
   type StepProposal,
 } from '@hive/shared';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query } from 'firebase/firestore';
 import {
   createContext,
   useCallback,
@@ -45,11 +45,8 @@ import {
   useShellData,
 } from '../shell/data';
 import { myProjectsQuery } from '../shell/queries';
+import { myThreadsQuery } from '../threads/data';
 import { buildNeeds, countNeeds, type Needs, type OrgInput } from './logic';
-
-/** The member's Inbox threads in one organization (the same query as the Inbox screen). */
-export const myThreadsQuery = (wid: string, uid: string) =>
-  query(collection(db, `workspaces/${wid}/inboxThreads`), where('memberUid', '==', uid));
 
 export interface NeedsAll {
   needs: Needs;

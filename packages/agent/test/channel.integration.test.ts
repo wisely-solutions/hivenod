@@ -13,7 +13,12 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { createAgentIdentity } from '@hive/shared/agent-auth';
 import {
   answer,
+  answerQuestion,
+  approveOutcome,
   buildStepIndex,
+  inboxPaths,
+  type OutcomeStateOf,
+  type ThreadStateOf,
   paths,
   postMessage,
   stopWork,
@@ -91,7 +96,7 @@ async function newAgent() {
 }
 
 /** A Claude Code stand-in: an MCP client on the channel server, collecting what is pushed. */
-async function session(token: string, maxItems?: number) {
+async function session(token: string, maxItems?: number, maxInbox?: number) {
   const events: Pushed[] = [];
   const client = new Client({ name: 'claude-code', version: '0' });
   client.fallbackNotificationHandler = async (n) => {
@@ -108,6 +113,7 @@ async function session(token: string, maxItems?: number) {
           retryMs: 500,
           presenceMs: 1000,
           parkCheckMs: 500,
+          inbox: { tickMs: 500, ...(maxInbox !== undefined ? { maxInbox } : {}) },
           ...(maxItems ? { maxItems } : {}),
         },
       },
@@ -126,6 +132,8 @@ async function session(token: string, maxItems?: number) {
         HIVENOD_PRESENCE_MS: '1000',
         HIVENOD_CHANNEL_RETRY_MS: '500',
         HIVENOD_PARK_CHECK_MS: '500',
+        HIVENOD_INBOX_TICK_MS: '500',
+        ...(maxInbox !== undefined ? { HIVENOD_MAX_INBOX: String(maxInbox) } : {}),
       }),
       stderr: 'inherit',
     });
@@ -668,5 +676,149 @@ for (const impl of IMPLS)
       // Given back: not handed straight back to this session.
       await pause(1500);
       expect(works(s)).toHaveLength(1);
+    });
+  });
+
+// ---------- Inbox events (item 4PEHrOW5IfXBQWgOK9wo, part 2) ----------
+
+for (const impl of IMPLS)
+  describe(`hivenod mcp --channel inbox events (item 4PEHr) [${impl}]`, () => {
+    beforeAll(() => {
+      IMPL = impl;
+    });
+    const msg = (over: Record<string, unknown> = {}) => ({
+      source: 'teams',
+      sender: { name: 'Sam Example', handle: 'sam@example.com' },
+      text: 'Can we move the review to Thursday?',
+      threadRef: 'thread-1',
+      receivedAt: '2026-10-28T09:00:00Z',
+      ...over,
+    });
+    const inbox = (s: Awaited<ReturnType<typeof session>>) =>
+      s.events.filter((e) => e.meta.kind === 'inbox');
+    const thread = async (tid: string) =>
+      (await read(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+    const owner = () => as('owner');
+
+    it('arrive while max_items is full, are never claimed, and items still flow', async () => {
+      const { token } = await newAgent();
+      const s = await session(token);
+      await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'First', order: 1 }) });
+      const w1 = await s.next('work');
+      // The one item slot is taken; a message comes in all the same.
+      const added = await s.call('inbox_add', msg());
+      const tid = added.threadId as string;
+      const e1 = await s.next('inbox');
+      expect(e1.meta).toMatchObject({
+        kind: 'inbox',
+        thread_id: tid,
+        reason: 'new',
+        member: 'owner',
+        inbox_cap: '3',
+        inbox_active: '1',
+      });
+      expect(e1.content).toMatch(/background sub-agent/);
+      expect(e1.content).toContain(`thread_read (threadId ${tid})`);
+      // Items are handed out as before.
+      await put({ [I('b')]: itemDoc({ stepId: 'build', title: 'Second', order: 2 }) });
+      await s.call('complete', { itemId: w1.meta.item_id, runId: w1.meta.run_id });
+      await s.next('work', 2);
+      // A second message on the thread, while it is in flight: passed on, not a new sub-agent.
+      await s.call('inbox_add', msg({ messageId: 'm-2', text: 'Or Friday?' }));
+      const e2 = await s.next('inbox', 2);
+      expect(e2.meta).toMatchObject({ thread_id: tid, reason: 'message', update: 'true' });
+      // Notes and filing are nothing new.
+      await s.call('inbox_note', { threadId: tid, text: 'Checked the calendar.' });
+      await s.call('subject_assign', { threadId: tid, name: 'Review date' });
+      // The question waits for the person; the answer comes back as an event.
+      await s.call('inbox_ask', { threadId: tid, question: 'Thursday or Friday?' });
+      const o = owner();
+      await o.run(
+        answerQuestion(o.ctx, { threadId: tid, thread: await thread(tid), answer: 'Thursday' }),
+      );
+      const e3 = await s.next('inbox', 3);
+      expect(e3.meta).toMatchObject({ thread_id: tid, reason: 'answered' });
+      expect(e3.content).toContain('Their answer: Thursday');
+      await pause(1200);
+      expect(inbox(s)).toHaveLength(3);
+    });
+
+    it('an approved outcome is sent to the agent that brought the thread in, once', async () => {
+      const { token } = await newAgent();
+      const s = await session(token, 2);
+      const tid = (await s.call('inbox_add', msg())).threadId as string;
+      await s.next('inbox');
+      const oid = (
+        await s.call('outcome_propose', {
+          threadId: tid,
+          type: 'reply',
+          fields: { text: 'Thursday works.' },
+        })
+      ).outcomeId as string;
+      await pause(800);
+      expect(inbox(s)).toHaveLength(1); // proposing is not agent work
+      const o = owner();
+      await o.run(
+        approveOutcome(o.ctx, {
+          outcomeId: oid,
+          outcome: (await read(inboxPaths.outcome(W, oid))) as unknown as OutcomeStateOf,
+          thread: await thread(tid),
+        }),
+      );
+      const e = await s.next('inbox', 2);
+      expect(e.meta).toMatchObject({
+        thread_id: tid,
+        reason: 'carry_out',
+        outcome_id: oid,
+        outcome_type: 'reply',
+      });
+      expect(e.content).toMatch(/outcome_done/);
+      await s.call('outcome_done', {
+        outcomeId: oid,
+        status: 'done',
+        result: { permalink: 'https://teams.example.com/m/9' },
+      });
+      await pause(1200);
+      expect(inbox(s)).toHaveLength(2);
+    });
+
+    it('at most maxInbox threads at a time; a reconnect or restart sends no duplicates', async () => {
+      const { token } = await newAgent();
+      const s = await session(token, 1, 2);
+      for (const ref of ['r1', 'r2', 'r3'])
+        await s.call('inbox_add', msg({ threadRef: ref, text: `Ask ${ref}` }));
+      await s.next('inbox', 2);
+      await pause(1200);
+      expect(inbox(s)).toHaveLength(2);
+      expect(inbox(s)[1]!.meta).toMatchObject({ inbox_cap: '2', inbox_active: '2' });
+      // One moves on (proposed): the third goes out.
+      const first = inbox(s)[0]!.meta.thread_id!;
+      await s.call('outcome_propose', { threadId: first, type: 'no_reply', fields: {} });
+      await s.next('inbox', 3);
+      const sent = inbox(s).map((e) => e.meta.thread_id);
+      expect(new Set(sent).size).toBe(3);
+      // The listeners reconnect (TypeScript: a test hook; the Go listeners restart the same way).
+      s.srv?.channel()?.inbox?.subscribe();
+      await pause(1500);
+      expect(inbox(s)).toHaveLength(3);
+      // A new session resends the two still being investigated, once each.
+      await s.close();
+      const s2 = await session(token, 1, 2);
+      await s2.next('inbox', 2);
+      await pause(1500);
+      const again = inbox(s2);
+      expect(again).toHaveLength(2);
+      expect(again.map((e) => e.meta.reason)).toEqual(['new', 'new']);
+      expect(new Set(again.map((e) => e.meta.thread_id))).toEqual(
+        new Set(sent.filter((t) => t !== first)),
+      );
+    });
+
+    it('max_inbox 0 turns inbox events off', async () => {
+      const { token } = await newAgent();
+      const s = await session(token, 1, 0);
+      await s.call('inbox_add', msg());
+      await pause(1500);
+      expect(inbox(s)).toHaveLength(0);
     });
   });

@@ -48,7 +48,8 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod mcp --channel [--project P] [--step S] [--max-items N]
                            the same, as a Claude Code channel: a live session gets its work
                            pushed in, claimed, up to N items at a time (default 1, or
-                           HIVENOD_MAX_ITEMS)
+                           HIVENOD_MAX_ITEMS); [--max-inbox N]: Inbox threads sent at once,
+                           outside max_items (0-10, default 3, 0 is off; or HIVENOD_MAX_INBOX)
   hivenod update           installs the latest release (checks its SHA-256 checksum)
   hivenod version          the installed version (matches the Hivenod release)
 
@@ -61,7 +62,7 @@ func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 
 type opts struct {
 	json, channel, help, version, force, noStart bool
-	project, step, maxItems, server              string
+	project, step, maxItems, maxInbox, server    string
 	title, description                           string
 	member, source, from, to, min                string
 	attach                                       multi
@@ -88,6 +89,7 @@ func parse(args []string) (opts, []string, error) {
 	fs.StringVar(&o.project, "project", "", "")
 	fs.StringVar(&o.step, "step", "", "")
 	fs.StringVar(&o.maxItems, "max-items", "", "")
+	fs.StringVar(&o.maxInbox, "max-inbox", "", "")
 	fs.StringVar(&o.server, "server", "", "")
 	fs.StringVar(&o.title, "title", "", "")
 	fs.StringVar(&o.description, "description", "", "")

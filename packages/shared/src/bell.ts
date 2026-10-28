@@ -11,6 +11,10 @@
  *  - question: an agent asked the people of your project
  *  - answer:   someone answered a question that was put to you
  *  - sentBack: an item you created was sent back
+ *  - inboxAsk:  an agent asked you about one of your Inbox threads (Needs you)
+ *  - inboxCall: outcomes were proposed on one of your Inbox threads (Your call)
+ *    For the inbox kinds, projectId is INBOX_BELL_PROJECT and itemId is the thread id;
+ *    projectName is the subject's name.
  */
 import { z } from 'zod';
 import { id } from './schema';
@@ -20,7 +24,10 @@ export const BELL_KEEP_MS = BELL_KEEP_DAYS * 86_400_000;
 /** The bell and the full page show at most this many entries. */
 export const BELL_LIMIT = 100;
 
-export const bellKind = z.enum(['gate', 'question', 'answer', 'sentBack']);
+export const bellKind = z.enum(['gate', 'question', 'answer', 'sentBack', 'inboxAsk', 'inboxCall']);
+/** The projectId of the inbox bell entries (their itemId is the thread id). */
+export const INBOX_BELL_PROJECT = 'inbox';
+export const isInboxBell = (kind: BellKind) => kind === 'inboxAsk' || kind === 'inboxCall';
 export type BellKind = z.infer<typeof bellKind>;
 
 export const bellEntrySchema = z.object({
@@ -55,11 +62,13 @@ export const bellId = {
   question: (messageId: string) => `q-${safe(messageId)}`,
   answer: (decisionId: string) => `a-${safe(decisionId)}`,
   sentBack: (decisionId: string) => `s-${safe(decisionId)}`,
+  /** One arrival of a thread at Needs you or Your call (`arrival`: see inboxArrival). */
+  inbox: (threadId: string, arrival: string) => `i-${safe(threadId)}-${safe(arrival)}`,
 } as const;
 
 /** The kinds that ask you to act (the "Needs you" filter). */
 export function bellNeedsYou(kind: BellKind): boolean {
-  return kind === 'gate' || kind === 'question';
+  return kind === 'gate' || kind === 'question' || isInboxBell(kind);
 }
 
 export const clipText = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -87,6 +96,10 @@ export function bellText(
         title: e.itemTitle,
         after: ` back to ${e.stepName}${e.text ? `: ${e.text}` : ''}`,
       };
+    case 'inboxAsk':
+      return { before: `${who} asks you about `, title: e.itemTitle, after: quote };
+    case 'inboxCall':
+      return { before: 'Your call on ', title: e.itemTitle, after: e.text ? `: ${e.text}` : '' };
   }
 }
 

@@ -204,6 +204,30 @@ export function questionNotice(q: {
   };
 }
 
+/** The deep link to an Inbox thread, relative to the app origin. */
+export function threadLink(workspaceId: string, threadId: string): string {
+  return `/inbox/${workspaceId}/t/${threadId}`;
+}
+
+/** An Inbox thread waits for its member: a question (Needs you) or proposals (Your call). */
+export function inboxNotice(t: {
+  kind: 'needsYou' | 'yourCall';
+  subjectName: string;
+  threadTitle: string;
+  /** The question, or what is proposed. */
+  text: string;
+  workspaceId: string;
+  threadId: string;
+  urgent?: boolean;
+}): Notice {
+  const head = t.kind === 'needsYou' ? 'Needs you' : 'Your call';
+  return {
+    title: `${t.urgent ? 'Urgent · ' : ''}${head}: ${clip(t.threadTitle || 'An Inbox thread', 80)}`,
+    body: `${t.subjectName ? `${clip(t.subjectName, 60)} · ` : ''}${clip(t.text, 160)}`,
+    url: threadLink(t.workspaceId, t.threadId),
+  };
+}
+
 /** One message instead of many when several things piled up during quiet hours. */
 export function summaryNotice(count: number): Notice {
   return {
