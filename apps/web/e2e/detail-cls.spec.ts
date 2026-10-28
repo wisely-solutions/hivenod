@@ -137,12 +137,6 @@ test('deep link to a done item with an attachment does not shift', async ({ page
 });
 
 test('tapping a done item with an attachment does not shift', async ({ page }, info) => {
-  // Quarantined on the hosted CI runner only (finding zBUaHZ4zt0ezjXHyTet1): an intermittent 0.077 shift on
-  // iphone-se under CPU load. It still runs locally and in the release checks.
-  test.skip(
-    !!process.env.CI && info.project.name === 'iphone-se',
-    'flaky CLS on CI, see finding zBUaHZ4zt0ezjXHyTet1',
-  );
   const { pid } = await seed(page);
   await page.goto(`/p/${pid}`);
   await expect(page.getByText('Other i2').first()).toBeAttached();
