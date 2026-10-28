@@ -71,6 +71,17 @@ describe('event labels', () => {
       'Scout took back “Bees”',
     );
   });
+  it('says an agent created an item, and a person added one (item DhsO9)', () => {
+    expect(eventSentence(event('item.created', { title: 'Checkout timeout' }), null)).toBe(
+      'Scout created “Checkout timeout”',
+    );
+    const person = {
+      actor: { type: 'human', id: 'u1', name: 'Ana' },
+      type: 'item.created',
+      data: { title: 'Bees' },
+    } as Pick<HiveEvent, 'actor' | 'type' | 'data'>;
+    expect(eventSentence(person, null)).toBe('Ana added “Bees”');
+  });
   it('says when a decision came from Telegram, and nothing extra from the app', () => {
     const ana = (data: Record<string, unknown>) =>
       eventSentence(

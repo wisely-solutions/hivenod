@@ -200,7 +200,11 @@ export function eventSentence(
   e: Pick<HiveEvent, 'actor' | 'type' | 'data'>,
   itemTitle: string | null = null,
 ): string {
-  const phrase = PHRASES[e.type]?.(e.data ?? {}, itemTitle) ?? 'did something';
+  // Item DhsO9: an agent's create_item reads "<agent> created …" (the row also says "agent").
+  const phrase =
+    e.type === 'item.created' && e.actor.type === 'agent'
+      ? `created ${quote(text(e.data?.title) || itemTitle)}`
+      : (PHRASES[e.type]?.(e.data ?? {}, itemTitle) ?? 'did something');
   const via = e.type.startsWith('decision.') && e.data?.via === 'telegram' ? ' via Telegram' : '';
   return `${e.actor.name || 'Someone'} ${phrase}${via}`;
 }
@@ -556,7 +560,7 @@ export function foldProgress(rows: Row<HiveEvent>[]): {
 export function eventDetail(event: Row<HiveEvent>, ctx: DetailContext): EventDetail {
   const e = event.data;
   const out: EventDetail = { note: null, facts: null, files: [] };
-  if (e.type === 'item.created' && ctx.source?.label) {
+  if (e.type === 'item.created' && ctx.source?.label && ctx.source.kind !== 'agent') {
     out.facts = `from ${ctx.source.label}`;
   } else if (e.type.startsWith('decision.')) {
     out.note = ctx.decisions.find((d) => d.id === event.id)?.data.rationale || null;

@@ -312,6 +312,16 @@ export function ItemDetail({
                 ]
               : []),
             { label: 'Agent', value: agent?.data.name ?? '\u2014' },
+            // Item DhsO9: who made it; an agent's create_item says so.
+            {
+              label: 'Created by',
+              value: (
+                <span data-testid="created-by">
+                  {who(item.createdBy)}
+                  {item.createdBy.type === 'agent' ? ' \u00b7 agent' : ''}
+                </span>
+              ),
+            },
             {
               label: 'Type',
               value:
