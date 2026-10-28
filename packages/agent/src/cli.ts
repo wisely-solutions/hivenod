@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { readFileSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { setLogLevel } from 'firebase/firestore';
+import { outcomeType } from '@hive/shared';
 import { deleteEvents, freeTime, upsertEvents, type CalendarEventArg } from './calendar';
 import { HiveClient } from './client';
 import { HiveError, isRateLimited, messageOf } from './errors';
@@ -78,6 +79,15 @@ const HELP = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
                        creates an item (work at the first step) where the project lets agents
                        create items; at most 30 an hour
+  hivenod inbox add --source S --sender NAME --thread-ref REF --received-at ISO (--text T | --text-file F)
+                    [--handle H] [--message-id M] [--permalink URL] [--reply-ref R] [--member UID]
+                    [--thread ID] [--from-member] [--title T]
+  hivenod inbox list | note <threadId> --text T | ask <threadId> --text Q
+  hivenod thread read <id> | wake <id>
+  hivenod subject list [--member UID] | assign <threadId> (--subject-id S | --name "Topic")
+  hivenod outcome propose <threadId> --type T [--field name=value]... [--note N]
+  hivenod outcome done <outcomeId> --status done|failed [--text T] [--permalink URL] [--item-id I] [--error E]
+                       a person's Inbox (item 4PEHr): nothing is carried out before they approve
   hivenod item path <itemId>                           the item's path: every library step, skipped or not
   hivenod item shape <itemId> --run R [--skip a,b] [--reason "why"] --note "one line"
                        ends a shaping run (work list shows job shape): the steps it skips; people
@@ -199,8 +209,25 @@ const OPTIONS = {
   'max-minutes': { type: 'string' },
   'max-items': { type: 'string' },
   server: { type: 'string' },
-  member: { type: 'string' },
+  // Inbox (item 4PEHrOW5IfXBQWgOK9wo)
   source: { type: 'string' },
+  sender: { type: 'string' },
+  handle: { type: 'string' },
+  'thread-ref': { type: 'string' },
+  'received-at': { type: 'string' },
+  text: { type: 'string' },
+  'text-file': { type: 'string' },
+  'message-id': { type: 'string' },
+  permalink: { type: 'string' },
+  'reply-ref': { type: 'string' },
+  member: { type: 'string' },
+  thread: { type: 'string' },
+  'from-member': { type: 'boolean' },
+  'subject-id': { type: 'string' },
+  type: { type: 'string' },
+  field: { type: 'string', multiple: true },
+  'item-id': { type: 'string' },
+  error: { type: 'string' },
   from: { type: 'string' },
   to: { type: 'string' },
   min: { type: 'string' },
@@ -236,6 +263,86 @@ export interface Command {
   text: (r: never) => string;
 }
 
+const INBOX_USAGE =
+  'Usage: hivenod inbox add|list|note|ask …, hivenod thread read|wake <id>, hivenod subject list|assign …, hivenod outcome propose|done … (see hivenod --help)';
+
+/** --field k=v (repeatable) as outcome fields; "true"/"false" for the type's boolean fields. */
+function outcomeFields(type: string, pairs: readonly string[]): Record<string, unknown> {
+  const t = outcomeType(type);
+  const out: Record<string, unknown> = {};
+  for (const p of pairs) {
+    const i = p.indexOf('=');
+    if (i < 1) throw new HiveError(`--field wants name=value, got ${p}`);
+    const k = p.slice(0, i);
+    const v = p.slice(i + 1);
+    out[k] = t?.fields[k]?.kind === 'boolean' && (v === 'true' || v === 'false') ? v === 'true' : v;
+  }
+  return out;
+}
+
+/** `hivenod inbox|thread|subject|outcome …` (item 4PEHrOW5IfXBQWgOK9wo): the inbox tools. */
+async function inboxCommand(c: HiveClient, pos: string[], o: Opts): Promise<Command> {
+  const [a, b, id] = pos;
+  const inbox = c.inbox();
+  const usage = () => new HiveError(INBOX_USAGE);
+  const json = (r: unknown) => ({ result: r, text: () => JSON.stringify(r, null, 2) });
+  switch (`${a} ${b ?? ''}`) {
+    case 'inbox add': {
+      const text = o['text-file'] ? readFileSync(o['text-file'], 'utf8') : o.text;
+      if (!o.source || !o.sender || !o['thread-ref'] || !o['received-at'] || !text) throw usage();
+      return json(
+        await inbox.add({
+          source: o.source,
+          sender: { name: o.sender, ...(o.handle !== undefined ? { handle: o.handle } : {}) },
+          text,
+          threadRef: o['thread-ref'],
+          receivedAt: o['received-at'],
+          messageId: o['message-id'],
+          permalink: o.permalink,
+          replyRef: o['reply-ref'],
+          member: o.member,
+          thread: o.thread,
+          fromMember: o['from-member'],
+          title: o.title,
+        }),
+      );
+    }
+    case 'inbox list':
+      return json(await inbox.listWork());
+    case 'inbox note':
+      if (!id || !o.text) throw usage();
+      return json(await inbox.note(id, o.text));
+    case 'inbox ask':
+      if (!id || !o.text) throw usage();
+      return json(await inbox.ask(id, o.text));
+    case 'thread read':
+      if (!id) throw usage();
+      return json(await inbox.readThread(id));
+    case 'thread wake':
+      if (!id) throw usage();
+      return json(await inbox.wake(id));
+    case 'subject list':
+      return json(await inbox.subjects(o.member));
+    case 'subject assign':
+      if (!id || (o['subject-id'] === undefined) === (o.name === undefined)) throw usage();
+      return json(await inbox.assign(id, o['subject-id'], o.name));
+    case 'outcome propose':
+      if (!id || !o.type) throw usage();
+      return json(await inbox.propose(id, o.type, outcomeFields(o.type, o.field ?? []), o.note));
+    case 'outcome done':
+      if (!id || (o.status !== 'done' && o.status !== 'failed')) throw usage();
+      return json(
+        await inbox.done(id, o.status, {
+          ...(o.text !== undefined ? { text: o.text } : {}),
+          ...(o.permalink !== undefined ? { permalink: o.permalink } : {}),
+          ...(o['item-id'] !== undefined ? { itemId: o['item-id'] } : {}),
+          ...(o.error !== undefined ? { error: o.error } : {}),
+        }),
+      );
+  }
+  throw usage();
+}
+
 async function dispatch(c: HiveClient, pos: string[], o: Opts): Promise<Command> {
   const [a, b] = pos;
   if (a === 'create-item') {
@@ -255,6 +362,7 @@ async function dispatch(c: HiveClient, pos: string[], o: Opts): Promise<Command>
         ].join('\n'),
     };
   }
+  if (['inbox', 'thread', 'subject', 'outcome'].includes(a ?? '')) return inboxCommand(c, pos, o);
   const key = `${a} ${b ?? ''}`.trim();
   switch (key) {
     case 'whoami':

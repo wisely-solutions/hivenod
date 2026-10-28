@@ -18,4 +18,6 @@ export * from './pathActions';
 export * from './protocol';
 export * from './sendback';
 export * from './discovery';
+export * from './inbox';
+export * from './outcomes';
 export * from './calendar';

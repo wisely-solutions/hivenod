@@ -319,3 +319,9 @@ func strs(ss []string) []any {
 	}
 	return out
 }
+
+// JSSlice is s.slice(0, n) in UTF-16 code units (exported for the hive package).
+func JSSlice(s string, n int) string { return jsSlice(s, n) }
+
+// JSSpace is the whitespace set of String.prototype.trim and /\s/ (exported for the hive package).
+func JSSpace(r rune) bool { return jsSpace(r) }

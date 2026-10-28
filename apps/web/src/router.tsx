@@ -177,6 +177,11 @@ const projectInsightsRoute = createRoute({
   validateSearch: rangeSearch,
   component: lazyRouteComponent(() => import('./insights/InsightsPage'), 'ProjectInsightsPage'),
 });
+const calendarRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/calendar',
+  component: lazyRouteComponent(() => import('./calendar/CalendarPage'), 'CalendarPage'),
+});
 const activityRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/activity',
@@ -281,6 +286,7 @@ export const router = createRouter({
     processRoute,
     insightsRoute,
     projectInsightsRoute,
+    calendarRoute,
     activityRoute,
     agentsRoute,
     connectRoute,

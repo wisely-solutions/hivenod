@@ -320,6 +320,93 @@ const MUTATIONS = [
       ['request.resource.data.bytes <= 921600', 'request.resource.data.bytes <= 2000000'],
     ],
   ],
+  // Inbox (item 4PEHrOW5IfXBQWgOK9wo)
+  [
+    'inbox: other members read',
+    [
+      [
+        'function inboxOwner(wid, d) { return isMember(wid) && d.memberUid == me(); }',
+        'function inboxOwner(wid, d) { return isMember(wid); }',
+      ],
+    ],
+  ],
+  [
+    'inbox: for anyone',
+    [
+      [
+        'function inboxMember(wid, uid) { return uid is string && uid in get(wsPath(wid)).data.memberRoles; }',
+        'function inboxMember(wid, uid) { return uid is string; }',
+      ],
+    ],
+  ],
+  [
+    'inbox: agents decide outcomes',
+    [
+      [
+        '((inboxOwner(wid, resource.data) && inboxDecide(',
+        '(((inboxOwner(wid, resource.data) || isActiveAgent(wid)) && inboxDecide(',
+      ],
+      [
+        "'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed',",
+        "'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.approved',",
+      ],
+    ],
+  ],
+  [
+    'inbox: any agent carries out',
+    [
+      ["return r.state == 'approved' && r.executor == me()", "return r.state == 'approved'"],
+      ['&& inboxOutcomeOf(wid, d.lastEventId).executor == me()', ''],
+    ],
+  ],
+  [
+    'inbox: carried out before approval',
+    [
+      [
+        "return r.state == 'approved' && r.executor == me()",
+        "return r.state in ['approved', 'proposed'] && r.executor == me()",
+      ],
+    ],
+  ],
+  [
+    'inbox: forged executor',
+    [['&& d.executor == (d.type in outcomeImmediate() ? null : t.fetchedBy);', ';']],
+  ],
+  [
+    'inbox: unknown outcome fields',
+    [['return f is map && f.keys().hasOnly(outcomeFieldKeys()[type])', 'return f is map']],
+  ],
+  [
+    "inbox: another member's subject",
+    [["&& getAfter(inboxDoc(wid, 'inboxSubjects', sid)).data.memberUid == member;", ';']],
+  ],
+  [
+    'inbox: people write agent events',
+    [
+      [
+        "'subject.created', 'subject.renamed', 'subject.merged', 'subject.split'])",
+        "'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'outcome.done'])",
+      ],
+    ],
+  ],
+  [
+    'inbox: messages as anyone',
+    [['&& d.fetchedBy == me() && d.createdAt == request.time;', '&& d.createdAt == request.time;']],
+  ],
+  [
+    'inbox: no reopen',
+    [
+      [
+        "? d.state == 'investigating' && d.waiting == null\n              : d.state == r.state",
+        '? true\n              : d.state == r.state',
+      ],
+    ],
+  ],
+  [
+    'inbox: any after-state',
+    [['return d.state == outcomeAfter()[type]', 'return d.state is string']],
+  ],
+  ['inbox: early wake', [['&& r.waiting.until <= request.time', '']]],
 ];
 
 // Fail loudly, before any run: a search text that no longer matches (the rules were refactored)
@@ -339,10 +426,16 @@ if (stale.length) {
 
 const runSuite = (verbose = false) => {
   try {
-    execFileSync('npx', ['vitest', 'run', '-c', 'vitest.rules.config.ts', '--reporter=dot'], {
-      cwd: new URL('..', import.meta.url),
-      stdio: 'pipe',
-    });
+    // MUTATE_FILES="rules/inbox.test.ts" runs only those test files (a quick check of new mutations).
+    const files = process.env.MUTATE_FILES?.split(',').map((f) => f.trim()) ?? [];
+    execFileSync(
+      'npx',
+      ['vitest', 'run', '-c', 'vitest.rules.config.ts', '--reporter=dot', ...files],
+      {
+        cwd: new URL('..', import.meta.url),
+        stdio: 'pipe',
+      },
+    );
     return true;
   } catch (e) {
     if (verbose)

@@ -52,8 +52,23 @@ import {
   streakAfter,
   STUCK_QUESTION_PREFIX,
   stuckQuestion,
+  addInboxMessage,
+  addThreadNote,
+  askMember,
+  assignSubject,
+  cleanOutcomeFields,
+  finishOutcome,
+  inboxMessageKey,
+  inboxThreadKey,
+  proposeOutcome,
+  retitleThread,
+  threadAfter,
+  titleFrom,
+  wakeThread,
   type ActionContext,
   type Actor,
+  type OutcomeStateOf,
+  type ThreadStateOf,
   type AgentGuardState,
   type ItemState,
   type Step,
@@ -1288,6 +1303,277 @@ function build(): ContractCase[] {
   live('window passed', { lastSeenAt: ts(NOW_MS - AGENT_ONLINE_MS) });
   live('never seen', { lastSeenAt: null });
 
+  // ---------- inbox (item 4PEHrOW5IfXBQWgOK9wo): the agent actions ----------
+  const TH = (over: Partial<ThreadStateOf> = {}): ThreadStateOf => ({
+    memberUid: 'joao',
+    subjectId: null,
+    state: 'investigating',
+    fetchedBy: 'agentA',
+    refs: ['r1'],
+    waiting: null,
+    ...over,
+  });
+  const inAdd = (
+    name: string,
+    actor: Actor,
+    over: Partial<Parameters<typeof addInboxMessage>[1]>,
+  ) =>
+    act(
+      `addInboxMessage/${name}`,
+      'addInboxMessage',
+      actor,
+      {
+        messageDocId: 'im1',
+        ref: 'r1',
+        memberUid: 'joao',
+        source: 'teams',
+        sender: { name: ' Sam Example ', handle: 'sam@example.com' },
+        text: '\n  Can we move   the review to Thursday?\nThanks',
+        threadRef: 'thread-1',
+        messageId: 'm-1',
+        permalink: 'https://teams.example.com/m/1',
+        replyRef: 'conv:1',
+        receivedAt: new Date(NOW_MS - 3_600_000),
+        attachments: [{ name: ' agenda.pdf ', url: 'https://files.example.com/a.pdf' }],
+        ...over,
+      },
+      addInboxMessage,
+    );
+  inAdd('new thread', AGENT, {});
+  inAdd('new thread, own id and title', AGENT, { newThreadId: 'itX', title: '  Review   date ' });
+  inAdd('minimal', AGENT, {
+    sender: { name: 'Sam' },
+    permalink: null,
+    replyRef: '  ',
+    attachments: undefined,
+  });
+  inAdd('joins its thread', AGENT, {
+    thread: { threadId: 'it1', state: TH({ subjectId: 's1', state: 'yourCall' }) },
+  });
+  inAdd('another channel joins', AGENT, { ref: 'r2', thread: { threadId: 'it1', state: TH() } });
+  inAdd('reopens a waiting thread', AGENT, {
+    thread: { threadId: 'it1', state: TH({ state: 'waiting' }) },
+  });
+  inAdd('reopens a done thread', AGENT, {
+    thread: { threadId: 'it1', state: TH({ state: 'done' }) },
+  });
+  inAdd('reopens an ignored thread', AGENT, {
+    thread: { threadId: 'it1', state: TH({ state: 'ignored' }) },
+  });
+  inAdd('own reply does not reopen', AGENT, {
+    direction: 'out',
+    thread: { threadId: 'it1', state: TH({ state: 'done' }) },
+  });
+  inAdd('someone else’s thread', AGENT, {
+    thread: { threadId: 'it1', state: TH({ memberUid: 'maria' }) },
+  });
+  inAdd('too many refs', AGENT, {
+    ref: 'rNew',
+    thread: { threadId: 'it1', state: TH({ refs: Array.from({ length: 50 }, (_, i) => `r${i}`) }) },
+  });
+  inAdd('person refused', HUMAN, {});
+  inAdd('bad source', AGENT, { source: 'Teams' });
+  inAdd('no sender', AGENT, { sender: { name: '  ' } });
+  inAdd('no text', AGENT, { text: ' \n ' });
+  inAdd('text too long', AGENT, { text: 'x'.repeat(50_001) });
+  inAdd('no thread ref', AGENT, { threadRef: '' });
+  inAdd('no message id', AGENT, { messageId: '' });
+  inAdd('bad permalink', AGENT, { permalink: 'teams://m/1' });
+  inAdd('bad attachment', AGENT, { attachments: [{ name: 'a', url: 'file:///etc/passwd' }] });
+  inAdd('too many attachments', AGENT, {
+    attachments: Array.from({ length: 21 }, (_, i) => ({
+      name: `f${i}`,
+      url: 'https://x.example/f',
+    })),
+  });
+  const file = (name: string, actor: Actor, input: Parameters<typeof assignSubject>[1]) =>
+    act(`assignSubject/${name}`, 'assignSubject', actor, input, assignSubject);
+  file('new subject', AGENT, {
+    threadId: 'it1',
+    thread: TH(),
+    newName: '  Klarna   refunds (Payments) ',
+  });
+  file('existing subject', AGENT, {
+    threadId: 'it1',
+    thread: TH({ subjectId: 's0' }),
+    subjectId: 's1',
+  });
+  file('both given', AGENT, { threadId: 'it1', thread: TH(), subjectId: 's1', newName: 'x' });
+  file('neither given', AGENT, { threadId: 'it1', thread: TH() });
+  file('blank name', AGENT, { threadId: 'it1', thread: TH(), newName: '   ' });
+  file('name too long', AGENT, { threadId: 'it1', thread: TH(), newName: 'n'.repeat(121) });
+  file('person refused', HUMAN, { threadId: 'it1', thread: TH(), subjectId: 's1' });
+  const text =
+    (action: string, fn: (ctx: ActionContext, input: never) => unknown) =>
+    (name: string, actor: Actor, input: Record<string, unknown>) =>
+      act(
+        `${action}/${name}`,
+        action,
+        actor,
+        { threadId: 'it1', thread: TH({ subjectId: 's1' }), ...input },
+        fn as never,
+      );
+  const note = text('addThreadNote', addThreadNote);
+  note('plain', AGENT, { text: '  Checked the calendar. ' });
+  note('empty', AGENT, { text: ' ' });
+  note('too long', AGENT, { text: 'n'.repeat(8001) });
+  note('person refused', HUMAN, { text: 'x' });
+  const askM = text('askMember', askMember);
+  askM('plain', AGENT, { question: ' Thursday or Friday? ' });
+  askM('while waiting', AGENT, { question: 'Still on?', thread: TH({ state: 'waiting' }) });
+  askM('ignored', AGENT, { question: 'x', thread: TH({ state: 'ignored' }) });
+  askM('empty', AGENT, { question: '' });
+  askM('person refused', HUMAN, { question: 'x' });
+  const title = text('retitleThread', retitleThread);
+  title('plain', AGENT, { title: '  Review   on Thursday ' });
+  title('empty', AGENT, { title: '   ' });
+  title('too long', AGENT, { title: 't'.repeat(201) });
+  const propose = (
+    name: string,
+    actor: Actor,
+    input: Partial<Parameters<typeof proposeOutcome>[1]>,
+  ) =>
+    act(
+      `proposeOutcome/${name}`,
+      'proposeOutcome',
+      actor,
+      {
+        threadId: 'it1',
+        thread: TH({ subjectId: 's1', fetchedBy: 'agentB' }),
+        type: 'reply',
+        fields: { text: '  Thursday works. ' },
+        ...input,
+      },
+      proposeOutcome,
+    );
+  propose('reply', AGENT, {});
+  propose('holding reply with a note', AGENT, {
+    fields: { text: 'On it.', holding: true },
+    note: ' Buying time ',
+  });
+  propose('reply_book', AGENT, {
+    type: 'reply_book',
+    fields: { text: 'Booked.', slot: 'Thu 10:00-10:30', with: 'Sam' },
+  });
+  propose('no_reply', AGENT, { type: 'no_reply', fields: {} });
+  propose('make_it_work', AGENT, {
+    type: 'make_it_work',
+    fields: { title: 'Fix the export', brief: '', project: 'Blog' },
+  });
+  propose('handover', AGENT, { type: 'handover', fields: { to: 'Maria' } });
+  propose('snooze', AGENT, { type: 'snooze', fields: { until: '2026-11-03T09:00:00+01:00' } });
+  propose('nudge', AGENT, { type: 'nudge', fields: { text: 'Any news?' } });
+  propose('ignore', AGENT, { type: 'ignore', fields: { reason: null } });
+  propose('own id, from waiting', AGENT, { outcomeId: 'o9', thread: TH({ state: 'waiting' }) });
+  propose('unknown type', AGENT, { type: 'launch' });
+  propose('unknown field', AGENT, { fields: { text: 'x', bcc: 'all' } });
+  propose('missing field', AGENT, { type: 'reply_book', fields: { text: 'x', slot: 'y' } });
+  propose('field not text', AGENT, { fields: { text: 3 } });
+  propose('field not boolean', AGENT, { fields: { text: 'x', holding: 'yes' } });
+  propose('field too long', AGENT, { type: 'handover', fields: { to: 't'.repeat(301) } });
+  propose('bad datetime', AGENT, { type: 'snooze', fields: { until: 'next week' } });
+  propose('datetime without offset', AGENT, {
+    type: 'snooze',
+    fields: { until: '2026-11-03T09:00:00' },
+  });
+  propose('note too long', AGENT, { note: 'n'.repeat(2001) });
+  propose('ignored thread', AGENT, { thread: TH({ state: 'ignored' }) });
+  propose('person refused', HUMAN, {});
+  const OC = (over: Partial<OutcomeStateOf> = {}): OutcomeStateOf => ({
+    memberUid: 'joao',
+    threadId: 'it1',
+    type: 'reply',
+    fields: { text: 'Thursday works.' },
+    state: 'approved',
+    executor: 'agentA',
+    ...over,
+  });
+  const fin = (name: string, actor: Actor, input: Partial<Parameters<typeof finishOutcome>[1]>) =>
+    act(
+      `finishOutcome/${name}`,
+      'finishOutcome',
+      actor,
+      {
+        outcomeId: 'o1',
+        outcome: OC(),
+        thread: TH({ subjectId: 's1', state: 'yourCall' }),
+        status: 'done',
+        ...input,
+      },
+      finishOutcome,
+    );
+  fin('reply done', AGENT, {
+    result: { permalink: ' https://teams.example.com/m/2 ', text: ' Sent ' },
+  });
+  fin('make_it_work done', AGENT, {
+    outcome: OC({ type: 'make_it_work', fields: { title: 'x' } }),
+    result: { itemId: 'i9' },
+  });
+  fin('handover done', AGENT, { outcome: OC({ type: 'handover', fields: { to: 'Maria' } }) });
+  fin('failed', AGENT, { status: 'failed', result: { error: ' Teams said 403 ' } });
+  fin('failed without why', AGENT, { status: 'failed' });
+  fin('not approved', AGENT, { outcome: OC({ state: 'proposed' }) });
+  fin('already done', AGENT, { outcome: OC({ state: 'done' }) });
+  fin('rejected', AGENT, { outcome: OC({ state: 'rejected' }) });
+  fin('another agent', OTHER, {});
+  fin('no executor', AGENT, { outcome: OC({ executor: null }) });
+  fin('bad link', AGENT, { result: { permalink: 'nope' } });
+  fin('person refused', HUMAN, {});
+  const wake = (name: string, input: Partial<Parameters<typeof wakeThread>[1]>) =>
+    act(
+      `wakeThread/${name}`,
+      'wakeThread',
+      AGENT,
+      {
+        threadId: 'it1',
+        thread: TH({ state: 'waiting', waiting: { on: 'date', until: ts(NOW_MS - 1000) } }),
+        nowMs: NOW_MS,
+        ...input,
+      },
+      wakeThread,
+    );
+  wake('due', {});
+  wake('not yet', { nowMs: NOW_MS - 5000 });
+  wake('not a date', { thread: TH({ state: 'waiting', waiting: { on: 'them', until: null } }) });
+  wake('not waiting', { thread: TH() });
+  const clean = (name: string, input: { type: string; fields: Record<string, unknown> }) =>
+    pure(`cleanOutcomeFields/${name}`, 'cleanOutcomeFields', input, (i) =>
+      cleanOutcomeFields(i.type, i.fields),
+    );
+  clean('snooze', {
+    type: 'snooze',
+    fields: { until: '2026-11-03T09:00:00.1234Z', reason: ' freeze ' },
+  });
+  clean('empty optional dropped', {
+    type: 'make_it_work',
+    fields: { title: 'T', brief: '  ', project: null },
+  });
+  clean('unknown type', { type: 'x', fields: {} });
+  const after = (name: string, input: { type: string; fields: Record<string, string | boolean> }) =>
+    pure(`threadAfter/${name}`, 'threadAfter', input, (i) => threadAfter(i.type, i.fields));
+  for (const t of ['reply', 'no_reply', 'make_it_work', 'handover', 'nudge', 'ignore'])
+    after(t, { type: t, fields: {} });
+  after('snooze', { type: 'snooze', fields: { until: '2026-11-03T08:00:00.000Z' } });
+  const keys = (
+    name: string,
+    input: { member: string; source: string; threadRef: string; messageId: string },
+  ) =>
+    pure(`inboxKeys/${name}`, 'inboxKeys', input, (i) => ({
+      message: inboxMessageKey(i.member, i.source, i.threadRef, i.messageId),
+      thread: inboxThreadKey(i.member, i.source, i.threadRef),
+    }));
+  keys('plain', { member: 'joao', source: 'teams', threadRef: 'thread-1', messageId: 'm-1' });
+  keys('unicode', {
+    member: 'joao',
+    source: 'mail',
+    threadRef: '<a&b@example.com>',
+    messageId: 'ação',
+  });
+  const tf = (name: string, input: { text: string }) =>
+    pure(`titleFrom/${name}`, 'titleFrom', input, (i) => titleFrom(i.text));
+  tf('first line', { text: '\n\n  Hello   there \nsecond' });
+  tf('long', { text: 'é'.repeat(130) });
+  tf('blank', { text: ' \n ' });
   calendarCases(act, pure, { agent: AGENT, human: HUMAN });
 
   return cases;
