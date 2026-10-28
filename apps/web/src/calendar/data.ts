@@ -1,5 +1,13 @@
 import { busyBlockSchema, calendarEventSchema, type CalendarEvent } from '@hive/shared';
-import { collection, onSnapshot, query, Timestamp, where } from 'firebase/firestore';
+import {
+  collection,
+  getDocs,
+  onSnapshot,
+  query,
+  Timestamp,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { db } from '../lib/db';
 import type { CalBlock } from './logic';
@@ -22,6 +30,21 @@ export const orgEventsQuery = (wid: string, from: Date) =>
 /** My busy time, from every organization (no details). */
 export const myBusyQuery = (uid: string, from: Date) =>
   query(collection(db, `users/${uid}/busy`), where('end', '>', Timestamp.fromDate(from)));
+
+/**
+ * Removes my busy blocks of an organization I just left (the rules allow it once I am no longer a
+ * member). Best effort: whatever is left is hidden by the calendar view.
+ */
+export async function clearBusyOf(uid: string, wid: string): Promise<void> {
+  const snap = await getDocs(
+    query(collection(db, `users/${uid}/busy`), where('workspaceId', '==', wid)),
+  );
+  for (let i = 0; i < snap.docs.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const d of snap.docs.slice(i, i + 400)) batch.delete(d.ref);
+    await batch.commit();
+  }
+}
 
 type Snap = { state: 'loading' } | { state: 'ready'; blocks: CalBlock[] } | { state: 'error' };
 
@@ -111,6 +134,8 @@ export function useCalendarBlocks(opts: {
         listen('busy', myBusyQuery(uid, since), (id, d) => {
           const r = busyBlockSchema.safeParse(d);
           if (!r.success || r.data.deleted || r.data.workspaceId === scope) return null;
+          // Time of an organization I am no longer in (or that is gone) is not mine to show.
+          if (!orgs.some((o) => o.id === r.data.workspaceId)) return null;
           return {
             id: `busy/${id}`,
             start: new Date(r.data.start.toMillis()),

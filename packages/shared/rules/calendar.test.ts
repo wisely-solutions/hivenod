@@ -16,7 +16,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 import { describe, expect, it } from 'vitest';
-import { SERVER_TIME } from '../src/actions';
+import { beginOrgDelete, leaveOrganization, SERVER_TIME } from '../src/actions';
 import {
   busyBlockId,
   calendarDelete,
@@ -300,5 +300,65 @@ describe('busy store', () => {
         },
       ]),
     );
+  });
+});
+
+describe('busy blocks after leaving or deleting an organization', () => {
+  const block = (u: string, wid: string, e: string) =>
+    calendarPaths.busyBlock(u, busyBlockId(wid, e));
+  async function setup() {
+    await seedOrgs();
+    const w = as(AGENTS.star);
+    const ca = agentIn(AC, CLIENT);
+    await ok(w.run(calendarUpsert(w.ctx, { memberUid: 'alice', events: [ev('w', 9)] })));
+    await ok(w.run(calendarUpsert(w.ctx, { memberUid: 'bob', events: [ev('w', 9)] })));
+    await ok(ca.run(calendarUpsert(ca.ctx, { memberUid: 'alice', events: [ev('c', 13)] })));
+    return {
+      aliceW: block('alice', W, calendarEventId('alice', 'google', 'w')),
+      bobW: block('bob', W, calendarEventId('bob', 'google', 'w')),
+      aliceC: block('alice', CLIENT, calendarEventId('alice', 'google', 'c')),
+    };
+  }
+  const exists = async (path: string) => {
+    try {
+      await snap(path);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it('a member cannot delete their blocks of an organization they are in', async () => {
+    const p = await setup();
+    await denied(deleteDoc(doc(as('alice').db, p.aliceW)));
+    await denied(deleteDoc(doc(as('alice').db, p.aliceC)));
+  });
+
+  it('after leaving, the member deletes their own blocks of it, and only those', async () => {
+    const p = await setup();
+    const a = as('alice');
+    await ok(a.run(leaveOrganization(a.ctx, { adminUids: ['owner'] })));
+    await denied(deleteDoc(doc(as('bob').db, p.aliceW))); // not bob's
+    await denied(deleteDoc(doc(a.db, p.aliceC))); // still in the client's organization
+    await ok(deleteDoc(doc(a.db, p.aliceW)));
+    expect(await exists(p.aliceW)).toBe(false);
+    expect(await exists(p.bobW)).toBe(true);
+  });
+
+  it('while an organization is being deleted its admin clears its blocks in the members stores', async () => {
+    const p = await setup();
+    const o = as('owner');
+    await denied(deleteDoc(doc(o.db, p.aliceW))); // not flagged yet
+    await ok(o.run(beginOrgDelete(o.ctx)));
+    await denied(deleteDoc(doc(as('bob').db, p.aliceW))); // a plain member
+    await denied(deleteDoc(doc(o.db, p.aliceC))); // another organization's block
+    await ok(deleteDoc(doc(o.db, p.aliceW)));
+    await ok(deleteDoc(doc(o.db, p.bobW)));
+    await ok(deleteDoc(doc(o.db, block('alice', W, 'gone')))); // already deleted: harmless
+    expect(await exists(p.aliceW)).toBe(false);
+    expect(await exists(p.aliceC)).toBe(true);
+    // what an agent of the client's organization now sees as alice's busy time
+    const seen = await getDocs(collection(agentIn(AC, CLIENT).db, calendarPaths.busy('alice')));
+    expect(seen.docs.map((d) => d.data().workspaceId)).toEqual([CLIENT]);
   });
 });

@@ -424,7 +424,15 @@ service cloud.firestore {
           && busyWriter(request.resource.data.workspaceId, uid)
           && request.resource.data.updatedAt == request.time
           && tracked(request.resource.data.workspaceId, request.resource.data.lastEventId, ['calendar.changed']);
-        allow delete: if false;
+        // A member clears their own blocks of an organization they have left (or that is gone); an
+        // admin of an organization being deleted clears its blocks in the members' stores (the
+        // organization id is the part of the block id before the first underscore).
+        allow delete: if signedIn() && (
+          (uid == me() && resource != null && !busyMember(resource.data.workspaceId, uid))
+          || (isAdmin(bid.split('_')[0]) && isDeleting(bid.split('_')[0])));
+      }
+      function busyMember(w, u) {
+        return exists(wsPath(w)) && u in get(wsPath(w)).data.memberRoles;
       }
       function validBusy(d) {
         return exactKeys(d, ['workspaceId', 'start', 'end', 'deleted', 'updatedAt', 'lastEventId'])
