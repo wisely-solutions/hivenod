@@ -39,6 +39,7 @@ export function DecisionDialog({
   entry,
   initialText = '',
   nextName,
+  description,
   onSubmit,
   onClose,
 }: {
@@ -46,6 +47,8 @@ export function DecisionDialog({
   entry: InboxEntry | null;
   initialText?: string;
   nextName?: string;
+  /** Replaces the item title under the heading (a decision about several items). */
+  description?: string;
   onSubmit: (entry: InboxEntry, d: Decision) => string | null;
   onClose: () => void;
 }) {
@@ -59,7 +62,7 @@ export function DecisionDialog({
       title={
         mode ? (mode === 'approve' && nextName ? `Approve → ${nextName}` : COPY[mode].title) : ''
       }
-      description={entry?.item.title}
+      description={description ?? entry?.item.title}
     >
       {open && mode && entry ? (
         <Form

@@ -45,6 +45,7 @@ export function InboxRow({
   agent,
   summary,
   swipeable,
+  select,
   onOpen,
   onSwipe,
   onLongPress,
@@ -57,12 +58,15 @@ export function InboxRow({
   agent: RowAgent | null;
   summary: string;
   swipeable: boolean;
+  /** Approve and Accept rows can be selected; `show` draws the checkbox (always on desktop, while selecting on phones). */
+  select?: { show: boolean; checked: boolean; onToggle: (shift: boolean) => void };
   onOpen: () => void;
   onSwipe: (action: 'approve' | 'iterate') => void;
   onLongPress: () => void;
 }) {
   const reduced = useReducedMotion();
   const dragged = useRef(false);
+  const longPressed = useRef(false);
   const crossed = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [hint, setHint] = useState<'approve' | 'iterate' | null>(null);
@@ -127,9 +131,11 @@ export function InboxRow({
         dragConstraints={{ left: 0, right: 0 }}
         onPointerDown={() => {
           dragged.current = false;
+          longPressed.current = false;
           clearPress();
           timer.current = setTimeout(() => {
             if (!dragged.current) {
+              longPressed.current = true;
               buzz();
               onLongPress();
             }
@@ -157,7 +163,8 @@ export function InboxRow({
         <button
           type="button"
           onClick={() => {
-            if (dragged.current) return;
+            // The click that ends a long press must not also open the row.
+            if (dragged.current || longPressed.current) return;
             onOpen();
           }}
           aria-current={selected ? 'true' : undefined}
@@ -167,6 +174,8 @@ export function InboxRow({
             selected ? 'border-ink' : 'border-line',
             'border-l-4',
             entry.kind === 'finding' ? '' : 'border-l-gate',
+            select?.show && 'pl-12',
+            select?.checked && 'bg-canvas',
           )}
         >
           <span className="flex items-center gap-2 text-12 text-text-2">
@@ -204,6 +213,19 @@ export function InboxRow({
             {waitNote ? <span className="text-gate-text">{waitNote}</span> : null}
           </span>
         </button>
+        {select?.show ? (
+          // A 44 px target in the card's left edge, over the row's button (not inside it).
+          <label className="absolute left-1 top-1 flex size-11 cursor-pointer items-center justify-center">
+            <input
+              type="checkbox"
+              aria-label={`Select ${title}`}
+              checked={select.checked}
+              onChange={() => undefined}
+              onClick={(e) => select.onToggle(e.shiftKey)}
+              className="size-5 accent-[var(--color-ink)]"
+            />
+          </label>
+        ) : null}
       </motion.div>
     </motion.li>
   );

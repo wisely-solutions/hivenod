@@ -8,6 +8,7 @@ import { db } from '../lib/db';
 import { stash } from '../lib/pendingDecisions';
 import { useLiveQuery, type Row } from '../lib/live';
 import { timeAgo } from '../projects/logic';
+import { BAR_BUTTON, BAR_PRIMARY, SelectionBar } from './SelectionBar';
 import { isTypingTarget } from '../shell/shortcuts';
 import { formatEur } from '../shell/logic';
 import { Badge } from '../ui/badge';
@@ -571,27 +572,9 @@ function BulkBar({
   const approvable = eligible(rows, { kind: 'approve' }, who).length;
   const steps = movableSteps(rows, who);
   const restorable = eligible(rows, { kind: 'restore' }, who).length;
-  const bar =
-    'inline-flex min-h-11 items-center gap-1.5 rounded-btn border border-surface/30 px-3 text-14 font-medium text-surface hover:bg-surface/10 disabled:opacity-40';
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => onHeight(el.offsetHeight);
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [onHeight]);
+  const bar = BAR_BUTTON;
   return (
-    <div
-      ref={ref}
-      role="toolbar"
-      aria-label="Actions for the selected items"
-      className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+72px)] z-30 mx-auto flex max-w-3xl flex-wrap items-center gap-2 rounded-panel bg-ink p-2 shadow-e3 lg:bottom-6"
-    >
-      <span className="px-2 text-14 font-semibold text-surface">{rows.length} selected</span>
+    <SelectionBar count={rows.length} onHeight={onHeight} onClear={onClear}>
       {scope === 'archived' ? (
         <button
           type="button"
@@ -620,10 +603,7 @@ function BulkBar({
           />
           <button
             type="button"
-            className={cn(
-              bar,
-              'border-transparent bg-approve-solid text-on-solid hover:bg-approve-solid',
-            )}
+            className={BAR_PRIMARY}
             disabled={approvable === 0}
             onClick={() => onAct({ kind: 'approve' })}
           >
@@ -650,9 +630,6 @@ function BulkBar({
           </button>
         </>
       )}
-      <button type="button" aria-label="Clear selection" className={bar} onClick={onClear}>
-        <X size={16} aria-hidden />
-      </button>
-    </div>
+    </SelectionBar>
   );
 }

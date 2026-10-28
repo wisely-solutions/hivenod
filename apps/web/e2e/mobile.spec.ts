@@ -176,7 +176,9 @@ test('swipe or tap between items in the detail, with a counter', async ({ page }
   await expectNoHorizontalScroll(page);
 });
 
-test('long press opens quick actions, a pull down closes the sheet', async ({ page }) => {
+test('long press starts selecting an approval; a finding row opens quick actions', async ({
+  page,
+}) => {
   const { wid, uid, pid } = await seed(page);
   await adminSet(path(wid, pid, 'i1'), waiting(uid, 'Launch post', 3));
   const row = page.getByRole('button', { name: /Launch post/ }).first();
@@ -186,17 +188,10 @@ test('long press opens quick actions, a pull down closes the sheet', async ({ pa
   await page.mouse.down();
   await page.waitForTimeout(800);
   await page.mouse.up();
-  const sheet = page.getByRole('dialog', { name: 'Launch post' });
-  await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
-
-  // Grab the sheet only after its slide-in has finished: no running animation and a box that holds still.
-  await expect
-    .poll(() => sheet.evaluate((el) => el.getAnimations({ subtree: true }).length))
-    .toBe(0);
-  const sb = await settledBox(page, sheet);
-  await drag(page, { x: sb.x + sb.width / 2, y: sb.y + 10 }, 0, 400);
-  await expect(sheet).toBeHidden();
+  await expect(page.getByRole('toolbar')).toContainText('1 selected');
+  await expect(page.getByLabel('Select Launch post')).toBeChecked();
+  await page.getByRole('button', { name: 'Clear selection' }).click();
+  await expect(page.getByRole('toolbar')).toBeHidden();
 });
 
 test('the keyboard never covers the field, and the textarea grows', async ({ page }) => {
