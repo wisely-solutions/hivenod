@@ -1,5 +1,5 @@
 import { applyPlan } from '@hive/shared/firestore';
-import { beginOrgDelete, paths, type ActionContext } from '@hive/shared';
+import { beginOrgDelete, calendarPaths, paths, type ActionContext } from '@hive/shared';
 import { collection, getCountFromServer, getDocs, limit, query, where } from 'firebase/firestore';
 import { db } from '../lib/db';
 
@@ -43,6 +43,23 @@ async function empty(
   }
 }
 
+/**
+ * Empties the organization's calendar and, with each event, its busy block in the member's own
+ * store (users/{uid}/busy/{wid}_{eventId}): the rules let the deleting admin remove those while the
+ * organization is flagged. An event id starts with its member's uid (no underscore in a uid). A
+ * block that is already gone is deleted again harmlessly, so a resumed walk is safe.
+ */
+async function purgeCalendar(store: TreeStore, wid: string, count: { n: number }) {
+  const col = calendarPaths.events(wid);
+  for (;;) {
+    const ids = await store.list(col, BATCH / 2);
+    if (ids.length === 0) return;
+    const blocks = ids.map((id) => `users/${id.split('_')[0]}/busy/${wid}_${id}`);
+    await store.remove([...blocks, ...ids.map((id) => `${col}/${id}`)]);
+    count.n += ids.length;
+  }
+}
+
 /** Deletes everything in the organization, then its document. Returns how many documents went. */
 export async function purgeOrg(store: TreeStore, wid: string): Promise<number> {
   const base = paths.workspace(wid);
@@ -69,8 +86,8 @@ export async function purgeOrg(store: TreeStore, wid: string): Promise<number> {
     },
     count,
   );
-  for (const name of ['events', 'groups', 'invites', 'notified', 'members', 'calendar'])
-    await flat(name);
+  await purgeCalendar(store, wid, count);
+  for (const name of ['events', 'groups', 'invites', 'notified', 'members']) await flat(name);
   await store.remove([base]);
   return count.n + 1;
 }
