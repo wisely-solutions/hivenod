@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -177,6 +178,7 @@ func (c *Client) workRows(pid string, project model.Project, docs []itemDoc, f F
 		}
 		c.mu.Lock()
 		c.itemProject[d.id] = pid
+		c.arrivalKeys[d.id] = arrivalKeyOf(item, d.id)
 		c.mu.Unlock()
 		row := WorkRow{ItemID: d.id, ProjectID: pid, Project: project.Name, Title: item.Title, Type: item.Type, StepID: item.StepID, Step: step.Name, Status: item.Status, Progress: item.Progress, SendBackCount: item.SendBackCount}
 		if shaping {
@@ -187,6 +189,59 @@ func (c *Client) workRows(pid string, project model.Project, docs []itemDoc, f F
 			row.Claim = &ClaimRef{RunID: claim.RunID, Mine: mine, Stale: stale}
 		}
 		out = append(out, row)
+	}
+	return out
+}
+
+// arrivalKey is the hand-out order of work (item QjTTL, like arrivalKey in client.ts): oldest
+// first by when the item reached its step (stepAt). Items without stepAt count as older than any
+// that has one, among themselves by their last change; the item id breaks ties.
+type arrivalKey struct {
+	stepAt, updatedAt int64
+	id                string
+}
+
+func arrivalKeyOf(item model.Item, id string) arrivalKey {
+	k := arrivalKey{id: id}
+	if item.StepAt != nil {
+		k.stepAt = item.StepAt.UnixMilli()
+	}
+	if !item.UpdatedAt.IsZero() {
+		k.updatedAt = item.UpdatedAt.UnixMilli()
+	}
+	return k
+}
+
+func (a arrivalKey) before(b arrivalKey) bool {
+	if a.stepAt != b.stepAt {
+		return a.stepAt < b.stepAt
+	}
+	if a.updatedAt != b.updatedAt {
+		return a.updatedAt < b.updatedAt
+	}
+	return a.id < b.id
+}
+
+// oldestFirst sorts rows in hand-out order (item QjTTL).
+func (c *Client) oldestFirst(rows []WorkRow) []WorkRow {
+	c.mu.Lock()
+	keys := make([]arrivalKey, len(rows))
+	for i, r := range rows {
+		k, ok := c.arrivalKeys[r.ItemID]
+		if !ok {
+			k = arrivalKey{id: r.ItemID}
+		}
+		keys[i] = k
+	}
+	c.mu.Unlock()
+	idx := make([]int, len(rows))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.SliceStable(idx, func(i, j int) bool { return keys[idx[i]].before(keys[idx[j]]) })
+	out := make([]WorkRow, len(rows))
+	for i, k := range idx {
+		out[i] = rows[k]
 	}
 	return out
 }
@@ -231,7 +286,7 @@ func (c *Client) ListWork(ctx context.Context, f Filter) ([]WorkRow, error) {
 		}
 		out = append(out, c.workRows(pid, p, decodeItems(snaps), f)...)
 	}
-	return out, nil
+	return c.oldestFirst(out), nil
 }
 
 // WaitResult of WaitForWork.
@@ -300,7 +355,7 @@ func (c *Client) WaitForWork(ctx context.Context, f Filter, timeout time.Duratio
 				}
 			}
 		}
-		return rows
+		return c.oldestFirst(rows)
 	}
 	for {
 		select {

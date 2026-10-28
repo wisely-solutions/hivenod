@@ -101,6 +101,8 @@ export function createMcpServer(
 
 /** Item tools that act on any item of the agent's projects: holding it is not needed. */
 const ANY_ITEM = new Set(['read_item', 'raise_finding']);
+/** Tools that give a held item back without finishing it (item QjTTL). */
+const GIVES_BACK = new Set(['release', 'end_run']);
 /** Not about one item. */
 const NO_ITEM = new Set(['list_work', 'wait_for_work', 'claim']);
 
@@ -128,11 +130,12 @@ function perItem(t: ToolDef, session: () => ChannelSession | null): ToolDef {
   return {
     ...t,
     input,
-    run: (c, a, ctx) => {
+    run: async (c, a, ctx) => {
       const s = session();
       const args = { ...(a as Record<string, unknown>) };
       const itemId = args.itemId as string | undefined;
       const runId = args.runId as string | undefined;
+      let held: string | undefined;
       if (!s || s.busy) {
         if (hasItem && !itemId) throw new HiveError(`${t.name} needs itemId.`);
         if (hasRun && !runId) throw new HiveError(`${t.name} needs runId.`);
@@ -140,6 +143,7 @@ function perItem(t: ToolDef, session: () => ChannelSession | null): ToolDef {
         // reading any item of the agent's projects is fine
       } else {
         const h = s.resolve(t.name, { itemId, runId });
+        held = h.itemId;
         if (hasItem) {
           args.itemId = h.itemId;
           args.project ??= h.projectId;
@@ -147,7 +151,16 @@ function perItem(t: ToolDef, session: () => ChannelSession | null): ToolDef {
         if (hasRun) args.runId = h.runId;
       }
       if (!hasItem) delete args.itemId;
-      return t.run(c, args as never, ctx);
+      if (!s || s.busy || !held || !GIVES_BACK.has(t.name)) return t.run(c, args as never, ctx);
+      // Given back: not handed to this session again for a while (item QjTTL). Marked before the
+      // write, since the handover ends (and the next look starts) as soon as the claim goes.
+      s.gaveBack(held);
+      try {
+        return await t.run(c, args as never, ctx);
+      } catch (e) {
+        s.forgetGiveBack(held);
+        throw e;
+      }
     },
   };
 }

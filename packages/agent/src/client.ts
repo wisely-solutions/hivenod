@@ -158,6 +158,21 @@ export function firebaseApp(
 
 const toMs = (t: { toMillis(): number } | null | undefined) => (t ? t.toMillis() : null);
 
+/**
+ * The hand-out order of work (item QjTTL): oldest first, by when the item reached its step
+ * (`stepAt`). Items that have not moved since stepAt exists have none and count as older than any
+ * that has, among themselves by their last change; the item id breaks ties.
+ */
+export function arrivalKey(item: Pick<Item, 'stepAt' | 'updatedAt'>, itemId: string) {
+  // Whole milliseconds, like the Go CLI (toMillis keeps a fraction of the nanoseconds).
+  const ms = (t: { toMillis(): number } | undefined) => Math.floor(toMs(t) ?? 0);
+  return [ms(item.stepAt), ms(item.updatedAt), itemId] as const;
+}
+type ArrivalKey = ReturnType<typeof arrivalKey>;
+export function compareArrival(a: ArrivalKey, b: ArrivalKey): number {
+  return a[0] - b[0] || a[1] - b[1] || (a[2] < b[2] ? -1 : a[2] > b[2] ? 1 : 0);
+}
+
 export const STEP_LIMITED_MESSAGE =
   'This step is limited to other agents in the project’s process. Pick another item (hivenod work list shows only what you may take).';
 
@@ -222,6 +237,8 @@ export class HiveClient {
   private readonly lastBeatEventMs = new Map<string, number>();
   private readonly nextLog = new Map<string, number>();
   private readonly itemProject = new Map<string, string>();
+  /** The hand-out order key of each work row seen (see arrivalKey). */
+  private readonly arrivalKeys = new Map<string, ArrivalKey>();
   /** Last problem an automatic heartbeat hit; surfaced by `whoami` style callers and tests. */
   autoHeartbeatError: string | null = null;
 
@@ -493,6 +510,7 @@ export class HiveClient {
       // A step limited to other agents is not work for this one (the rules deny the claim too).
       if (!mine && !shaping && !agentMayTakeStep(project, item.stepId, this.uid)) continue;
       this.itemProject.set(d.id, pid);
+      this.arrivalKeys.set(d.id, arrivalKey(item, d.id));
       out.push({
         itemId: d.id,
         projectId: pid,
@@ -529,7 +547,13 @@ export class HiveClient {
       const snap = await this.read(() => getDocs(this.workQuery(pid)));
       out.push(...this.workRows(pid, project, snap.docs, filter));
     }
-    return out;
+    return this.oldestFirst(out);
+  }
+
+  /** Rows in hand-out order: oldest first by when they reached their step (item QjTTL). */
+  private oldestFirst(rows: WorkRow[]): WorkRow[] {
+    const key = (r: WorkRow) => this.arrivalKeys.get(r.itemId) ?? ([0, 0, r.itemId] as const);
+    return rows.sort((a, b) => compareArrival(key(a), key(b)));
   }
 
   /**
@@ -613,7 +637,7 @@ export class HiveClient {
       const project = projects.get(pid);
       if (project) out.push(...this.workRows(pid, project, docs, filter));
     }
-    return out;
+    return this.oldestFirst(out);
   }
 
   /** Claims an item and starts a run. Idempotent for an item this agent already holds. */

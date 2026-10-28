@@ -226,8 +226,10 @@ type Item struct {
 	PathRequests map[string]PathRequest `firestore:"pathRequests" json:"pathRequests"`
 	PathRefused  []string               `firestore:"pathRefused" json:"pathRefused"`
 	PathRev      int64                  `firestore:"pathRev" json:"pathRev"`
-	UpdatedAt    time.Time              `firestore:"updatedAt" json:"updatedAt"`
-	LastEventID  string                 `firestore:"lastEventId" json:"lastEventId"`
+	// StepAt is when the item reached its step (item QjTTL); nil on items that have not moved since.
+	StepAt      *time.Time `firestore:"stepAt" json:"stepAt"`
+	UpdatedAt   time.Time  `firestore:"updatedAt" json:"updatedAt"`
+	LastEventID string     `firestore:"lastEventId" json:"lastEventId"`
 }
 
 // Unshaped returns a copy with shape: null (a new item waiting to be shaped).

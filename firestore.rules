@@ -1122,8 +1122,9 @@ service cloud.firestore {
             && request.resource.data.keys().hasOnly(['title', 'type', 'stepId', 'status',
                  'summary', 'source', 'createdBy', 'parentItemId', 'sourceRunId', 'claim', 'progress',
                  'gate', 'triage', 'sendBackCount', 'attachmentCount', 'costEur', 'order', 'updatedAt',
-                 'shape', 'lastEventId'])
+                 'shape', 'stepAt', 'lastEventId'])
             && request.resource.data.get('attachmentCount', 0) == 0
+            && request.resource.data.get('stepAt', request.time) == request.time
             && validItemText(request.resource.data)
             && request.resource.data.updatedAt == request.time
             && request.resource.data.sendBackCount == 0
@@ -1140,6 +1141,10 @@ service cloud.firestore {
 
           allow update: if validItemText(request.resource.data)
             && request.resource.data.createdBy == resource.data.createdBy
+            // stepAt (item QjTTL): when the item reached its step, only ever set to now. The
+            // writes that may change it (moves) list it; clients from before it leave it alone.
+            && (request.resource.data.get('stepAt', null) == resource.data.get('stepAt', null)
+              || request.resource.data.stepAt == request.time)
             // People and agents never overlap (see isActiveAgent), and every human path needs a
             // role: the role routes the write, so neither side pays for the other's checks.
             && itemUpdateBy(wid, pid, iid, roleOf(wid));
@@ -1303,7 +1308,7 @@ service cloud.firestore {
           function completeIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
             return ownsClaim(r)
-              && changed(['stepId', 'status', 'claim', 'gate', 'progress', 'costEur', 'updatedAt', 'lastEventId'])
+              && changed(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'updatedAt', 'lastEventId'])
               && d.updatedAt == request.time
               && d.costEur is number && d.costEur >= r.costEur
               && nextOk(d, r, p)
@@ -1322,7 +1327,7 @@ service cloud.firestore {
             let between = p.steps[i + 1:j];
             let n = j - i - 1;
             return ownsClaim(r) && n <= 12
-              && changed(['stepId', 'status', 'claim', 'gate', 'progress', 'costEur', 'agentSendBacks',
+              && changed(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'agentSendBacks',
                           'updatedAt', 'lastEventId'])
               && d.agentSendBacks == r.get('agentSendBacks', 0) + 1 && d.agentSendBacks <= 3
               && i < j && p.steps[i].id == d.stepId && p.steps[i].kind == 'agent'
@@ -1389,7 +1394,7 @@ service cloud.firestore {
           // admin may move it forward (that skips the gates in between).
           function moveIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
-            return changed(['stepId', 'status', 'claim', 'gate', 'agentSendBacks', 'updatedAt', 'lastEventId'])
+            return changed(['stepId', 'stepAt', 'status', 'claim', 'gate', 'agentSendBacks', 'updatedAt', 'lastEventId'])
               && roundsReset(r)
               && d.updatedAt == request.time
               && r.status in ['queued', 'waiting'] && r.claim == null
@@ -1415,7 +1420,7 @@ service cloud.firestore {
           }
           function restoreIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
-            return changed(['status', 'claim', 'gate', 'archivedAt', 'updatedAt', 'lastEventId'])
+            return changed(['status', 'claim', 'gate', 'archivedAt', 'stepAt', 'updatedAt', 'lastEventId'])
               && d.updatedAt == request.time
               // Any stopped item: archived in bulk, or rejected at a gate (card lvPPSnV2).
               && r.status == 'stopped' && r.get('workStopped', null) == null
@@ -1506,7 +1511,7 @@ service cloud.firestore {
           function relocateIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
             let pa = getAfter(projPath(wid, pid)).data;
-            return changed(['stepId', 'status', 'claim', 'gate', 'updatedAt', 'lastEventId'])
+            return changed(['stepId', 'stepAt', 'status', 'claim', 'gate', 'updatedAt', 'lastEventId'])
               && d.updatedAt == request.time
               && r.status in ['queued', 'working', 'waiting']
               && hasStep(p, r.stepId) && !hasStep(pa, r.stepId)
@@ -1550,7 +1555,7 @@ service cloud.firestore {
             let d = request.resource.data;
             return r.type == 'finding' && r.triage == null && r.status == 'suggested'
               && canTriage(wid, p)
-              && changed(['triage', 'type', 'stepId', 'status', 'gate', 'claim', 'shape', 'updatedAt', 'lastEventId'])
+              && changed(['triage', 'type', 'stepId', 'stepAt', 'status', 'gate', 'claim', 'shape', 'updatedAt', 'lastEventId'])
               && d.updatedAt == request.time
               && exactKeys(d.triage, ['outcome', 'reason', 'byUid', 'at'])
               && d.triage.byUid == me() && d.triage.at == request.time
@@ -1588,7 +1593,7 @@ service cloud.firestore {
             let d = request.resource.data;
             let s = d.get('shape', null);
             let k = d.get('pathSkips', null);
-            return changed(['stepId', 'status', 'claim', 'gate', 'progress', 'costEur', 'shape',
+            return changed(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'shape',
                             'pathSkips', 'pathRev', 'updatedAt', 'lastEventId'])
               && d.updatedAt == request.time && openItem(r) && r.get('archivedAt', null) == null
               && s is map && exactKeys(s, ['by', 'at', 'note']) && s.by == me_(type)
@@ -1672,7 +1677,7 @@ service cloud.firestore {
                   && (p.stepIndex[st] > p.stepIndex[r.stepId]
                     ? changed(['pathSkips', 'gateSkips', 'pathRequests', 'pathRev', 'updatedAt', 'lastEventId'])
                     : q.op == 'drop' && st == r.stepId && r.status == 'waiting'
-                      && changed(['stepId', 'status', 'gate', 'claim', 'pathSkips', 'gateSkips',
+                      && changed(['stepId', 'stepAt', 'status', 'gate', 'claim', 'pathSkips', 'gateSkips',
                                   'pathRequests', 'pathRev', 'updatedAt', 'lastEventId'])
                       && movesOver(d, r, p, p.stepIndex[r.stepId], d.pathSkips, after)));
           }
@@ -1723,7 +1728,7 @@ service cloud.firestore {
           // Pass the gate: approvals so far plus mine must satisfy the step's rule.
           function approveAdvance(wid, pid, iid, r, p) {
             let d = request.resource.data;
-            return changed(['stepId', 'status', 'gate', 'claim', 'agentSendBacks', 'updatedAt', 'lastEventId'])
+            return changed(['stepId', 'stepAt', 'status', 'gate', 'claim', 'agentSendBacks', 'updatedAt', 'lastEventId'])
               && roundsReset(r)
               && gateSatisfied(stepOf(p, r.stepId).gate,
                    r.gate.approvals.keys().toSet().union([me()].toSet()))
@@ -1747,7 +1752,7 @@ service cloud.firestore {
           // Send back to an earlier step; the claim is cleared and sendBackCount increments.
           function sendBackMove(wid, pid, iid, r, p) {
             let d = request.resource.data;
-            return changed(['stepId', 'status', 'gate', 'claim', 'sendBackCount', 'agentSendBacks', 'updatedAt', 'lastEventId'])
+            return changed(['stepId', 'stepAt', 'status', 'gate', 'claim', 'sendBackCount', 'agentSendBacks', 'updatedAt', 'lastEventId'])
               && roundsReset(r)
               && rejectionsOk(r, p)
               && hasStep(p, d.stepId) && p.stepIndex[d.stepId] < p.stepIndex[r.stepId]

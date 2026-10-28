@@ -194,7 +194,8 @@ func stepOf(project model.Project, stepID string) (model.Step, error) {
 	return project.Steps[i], nil
 }
 
-// Arrival is the fields that put an item at step (a fresh gate for people steps).
+// Arrival is the fields that put an item at step (a fresh gate for people steps). stepAt is when it
+// got there (item QjTTL): claimable work is handed out oldest first by it.
 func Arrival(step model.Step) map[string]any {
 	if step.Kind == "human" {
 		return map[string]any{
@@ -202,9 +203,10 @@ func Arrival(step model.Step) map[string]any {
 			"status": "waiting",
 			"claim":  nil,
 			"gate":   map[string]any{"stepId": step.ID, "approvals": map[string]any{}, "rejections": map[string]any{}},
+			"stepAt": ServerTime(),
 		}
 	}
-	return map[string]any{"stepId": step.ID, "status": "queued", "claim": nil, "gate": nil}
+	return map[string]any{"stepId": step.ID, "status": "queued", "claim": nil, "gate": nil, "stepAt": ServerTime()}
 }
 
 // Forward is one step on along the path, or done after the last one.

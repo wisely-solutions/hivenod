@@ -158,7 +158,10 @@ export function stepIndexOf(project: ProjectState, stepId: string): number {
   return i;
 }
 
-/** The fields that put an item at step `step` (fresh gate for human steps). */
+/**
+ * The fields that put an item at step `step` (fresh gate for human steps). `stepAt` is when it got
+ * there (item QjTTL): claimable work is handed out oldest first by it.
+ */
 export function arrival(step: Step): Record<string, unknown> {
   return step.kind === 'human'
     ? {
@@ -166,8 +169,9 @@ export function arrival(step: Step): Record<string, unknown> {
         status: 'waiting',
         claim: null,
         gate: { stepId: step.id, approvals: {}, rejections: {} },
+        stepAt: SERVER_TIME,
       }
-    : { stepId: step.id, status: 'queued', claim: null, gate: null };
+    : { stepId: step.id, status: 'queued', claim: null, gate: null, stepAt: SERVER_TIME };
 }
 /**
  * Forward one step: to the next library step the item does not skip (card st5INNZj; items from
@@ -196,7 +200,14 @@ export function landAt(
 export function unshapedArrival(project: ProjectState): Record<string, unknown> {
   const first = project.steps[0];
   if (!first) throw new ActionError('This project has no steps');
-  return { stepId: first.id, status: 'queued', claim: null, gate: null, shape: null };
+  return {
+    stepId: first.id,
+    status: 'queued',
+    claim: null,
+    gate: null,
+    shape: null,
+    stepAt: SERVER_TIME,
+  };
 }
 
 /**
