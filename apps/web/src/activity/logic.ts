@@ -165,6 +165,7 @@ const PHRASES: Record<EventType, (d: Data, title: string | null) => string> = {
   },
   'agent.created': () => 'created an agent',
   'agent.revoked': () => 'revoked an agent',
+  'agent.removed': () => 'removed an agent',
   'agent.rotated': (d) => `rotated the token of ${text(d.name) || 'an agent'}`,
   'agent.updated': (d) =>
     d.resumed
@@ -260,6 +261,7 @@ export const TYPE_GROUPS = [
     types: [
       'agent.created',
       'agent.revoked',
+      'agent.removed',
       'agent.rotated',
       'agent.updated',
       'project.created',

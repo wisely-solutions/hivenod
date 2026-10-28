@@ -39,7 +39,7 @@ function asker(entry: InboxEntry, agents: Row<Agent>[], names: Record<string, st
     : entry.proposal?.data.by;
   if (!by) return 'Someone';
   return by.type === 'agent'
-    ? (agents.find((a) => a.id === by.id)?.data.name ?? 'An agent')
+    ? (agents.find((a) => a.id === by.id)?.data.name ?? 'Removed agent')
     : (names[by.id] ?? 'Someone');
 }
 

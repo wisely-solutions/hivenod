@@ -359,7 +359,7 @@ export function PathPanel({
     const req = ownGet(item.pathRequests, s.id);
     const asker =
       req?.by.type === 'agent'
-        ? (agents.find((a) => a.id === req.by.id)?.data.name ?? 'An agent')
+        ? (agents.find((a) => a.id === req.by.id)?.data.name ?? 'Removed agent')
         : displayName(profiles[req?.by.id ?? ''], req?.by.id ?? '');
     return (
       <div className="ml-7 flex flex-col gap-2 rounded-card border border-dashed border-gate bg-gate-bg p-2.5 text-13">
