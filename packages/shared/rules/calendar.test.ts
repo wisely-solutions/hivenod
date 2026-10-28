@@ -320,12 +320,7 @@ describe('busy blocks after leaving or deleting an organization', () => {
     };
   }
   const exists = async (path: string) => {
-    try {
-      await snap(path);
-      return true;
-    } catch {
-      return false;
-    }
+    return Object.keys(await snap(path)).length > 0;
   };
 
   it('a member cannot delete their blocks of an organization they are in', async () => {
