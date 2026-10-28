@@ -12,6 +12,7 @@ import { ConnectGuide, type ConnectStep } from './CliSetup';
 import { connectTerminalFlow, findPairing, suggestedName, type Lookup } from './connect';
 import {
   AgentFields,
+  agentScopeInput,
   validateAgentFields,
   type AgentFieldErrors,
   type AgentFieldsValue,
@@ -119,7 +120,7 @@ export function ConnectPage() {
         {
           name,
           color: colorValue(fields.color),
-          projectIds: fields.scope === 'all' ? ('*' as const) : fields.chosen,
+          ...agentScopeInput(fields),
         },
         found,
       );

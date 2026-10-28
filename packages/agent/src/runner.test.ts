@@ -548,6 +548,7 @@ describe('hivenod run: the loop', () => {
         name: 'Writer (laptop)',
         workspaceId: 'w',
         projectIds: ['p1'],
+        scope: null,
         paused: false,
         pausedReason: null,
         guardrails: { maxFailedRuns: 3 },

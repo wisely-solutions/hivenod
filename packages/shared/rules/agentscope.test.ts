@@ -231,7 +231,9 @@ describe('allowed on the Calendar of its organization', () => {
     const a = as(INBOX);
     const p = calendarUpsert(a.ctx, {
       memberUid: 'owner',
-      events: [{ source: 'google', sourceEventId: 'g1', title: 'Dentist', start: T(9), end: T(10) }],
+      events: [
+        { source: 'google', sourceEventId: 'g1', title: 'Dentist', start: T(9), end: T(10) },
+      ],
     });
     await ok(a.run(p));
     expect(await snap(calendarPaths.event(W, p.ids[0]!))).toMatchObject({ title: 'Dentist' });

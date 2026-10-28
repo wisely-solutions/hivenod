@@ -224,7 +224,7 @@ func PlainTools(lazy *Lazy) []mcpserver.Tool {
 			if err != nil {
 				return nil, err
 			}
-			res, err := run(ctx, c, Args(args))
+			res, err := scoped(spec.Name, run)(ctx, c, Args(args))
 			if err != nil {
 				return nil, errors.New(Message(err))
 			}

@@ -3,7 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
-import { MAX_PARK_REASON_CHARS } from '@hive/shared';
+import { INBOX_SCOPE_REFUSAL, MAX_PARK_REASON_CHARS } from '@hive/shared';
 import {
   CHANNEL_CLAIM_MESSAGE,
   channelInstructions,
@@ -49,7 +49,12 @@ export function createMcpServer(
       async (args: Record<string, unknown>) => {
         try {
           client ??= connect();
-          const result = await def.run(await client, args as never);
+          const c = await client;
+          // Item fJnu6: an Inbox and Calendar agent is refused item tools up front (the rules
+          // refuse its writes anyway). The bridged server of `hivenod run` has no client.
+          if (c && typeof c.mayUseTool === 'function' && !c.mayUseTool(def.name))
+            throw new HiveError(INBOX_SCOPE_REFUSAL);
+          const result = await def.run(c, args as never);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
         } catch (e) {
           if (client) client.catch(() => (client = null)); // retry the sign-in next time

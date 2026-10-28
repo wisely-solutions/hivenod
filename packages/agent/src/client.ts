@@ -15,6 +15,7 @@ import {
   guardrailsOf,
   isOnHold,
   isPaused,
+  toolInScope,
   liveTerminal,
   newTokens,
   releaseClaim,
@@ -512,6 +513,11 @@ export class HiveClient {
   // ---------- calendar (Inbox item w9SAf; the tools live in ./calendar) ----------
 
   /** What the calendar tools need: the database, this agent as actor, and the write path. */
+  /** Whether this agent may call the tool `name` (item fJnu6: an Inbox-only agent may not use item tools). */
+  mayUseTool(name: string): boolean {
+    return toolInScope(this.agent, name);
+  }
+
   calendarDeps() {
     return { db: this.db, ctx: this.ctx, write: (p: Pick<ActionPlan, 'ops'>) => this.write(p) };
   }
@@ -524,6 +530,8 @@ export class HiveClient {
       name: this.agent.name,
       workspaceId: this.workspaceId,
       projectIds: this.agent.projectIds,
+      /** 'inbox': Inbox and Calendar only (item fJnu6); null: projects too. */
+      scope: this.agent.scope ?? null,
       paused: isPaused(this.agent),
       pausedReason: this.agent.pausedReason ?? null,
       guardrails: guardrailsOf(this.agent),
@@ -1446,6 +1454,7 @@ export class HiveClient {
 
   /** Names of the projects this agent may use (for the terminal header). */
   async projectNames(): Promise<string[]> {
+    if (this.agent.scope === 'inbox') return ['none (Inbox and Calendar only)'];
     if (this.agent.projectIds === '*') return ['all projects'];
     const out: string[] = [];
     for (const pid of this.agent.projectIds) {

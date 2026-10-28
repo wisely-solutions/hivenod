@@ -147,7 +147,9 @@ export function AgentSettings({
         updateAgentSettings(ctx, {
           agentUid: agentId,
           name: agent.name,
-          projectIds: d.allProjects ? '*' : d.projectIds,
+          ...(d.inboxOnly
+            ? { scope: 'inbox' as const }
+            : { projectIds: d.allProjects ? ('*' as const) : d.projectIds }),
           guardrails: {
             maxFailedRuns: parseCount(d.maxFailedRuns) ?? g.maxFailedRuns,
           },
@@ -175,7 +177,17 @@ export function AgentSettings({
       </h2>
 
       <div className="flex flex-col gap-5">
-        <div>
+        {d.inboxOnly ? (
+          <p
+            data-testid="inbox-only"
+            className="rounded-btn border border-line bg-canvas px-3 py-2.5 text-14 text-ink"
+          >
+            Inbox and Calendar only. This agent syncs calendars and brings in requests for this
+            organization; it never works on development items. This was set when it was connected
+            and cannot be changed.
+          </p>
+        ) : null}
+        <div hidden={d.inboxOnly}>
           <p className="mb-2 text-13 font-medium text-ink">Projects</p>
           <div role="group" aria-label="Projects" className="flex flex-wrap gap-2">
             <ToggleChip
@@ -211,7 +223,7 @@ export function AgentSettings({
           ) : null}
         </div>
 
-        <div>
+        <div hidden={d.inboxOnly}>
           <p className="mb-1 text-13 font-medium text-ink">Steps (agent steps only)</p>
           <p className="mb-2 text-13 text-text-2">
             A step can be limited to some agents in its project’s process. Gates are never decided

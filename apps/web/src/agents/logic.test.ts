@@ -134,6 +134,9 @@ describe('helpers', () => {
     }));
     expect(scopeText(agent(), projects)).toBe('All projects');
     expect(scopeText(agent({ projectIds: ['a'] }), projects)).toBe('A');
+    expect(scopeText(agent({ projectIds: [], scope: 'inbox' }), projects)).toBe(
+      'Inbox and Calendar only',
+    );
     expect(scopeText(agent({ projectIds: ['a', 'b', 'c'] }), projects)).toBe('A, B +1');
     expect(scopeText(agent({ projectIds: ['gone'] }), projects)).toBe('No projects');
   });

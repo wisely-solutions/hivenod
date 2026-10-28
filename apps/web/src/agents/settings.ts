@@ -5,6 +5,8 @@ export interface SettingsDraft {
   allProjects: boolean;
   projectIds: string[];
   maxFailedRuns: string;
+  /** An Inbox and Calendar agent (item fJnu6): no projects to pick, ever. */
+  inboxOnly?: boolean;
 }
 
 export function settingsDraft(agent: Agent): SettingsDraft {
@@ -13,6 +15,7 @@ export function settingsDraft(agent: Agent): SettingsDraft {
     allProjects: agent.projectIds === '*',
     projectIds: agent.projectIds === '*' ? [] : [...agent.projectIds],
     maxFailedRuns: String(g.maxFailedRuns),
+    ...(agent.scope === 'inbox' ? { inboxOnly: true } : {}),
   };
 }
 
@@ -28,7 +31,8 @@ export function settingsErrors(d: SettingsDraft): {
   maxFailedRuns?: string;
 } {
   const out: ReturnType<typeof settingsErrors> = {};
-  if (!d.allProjects && d.projectIds.length === 0) out.projects = 'Pick at least one project.';
+  if (!d.inboxOnly && !d.allProjects && d.projectIds.length === 0)
+    out.projects = 'Pick at least one project.';
   const n = parseCount(d.maxFailedRuns);
   if (n === null || n < 1 || n > MAX_FAILED_RUNS_LIMIT)
     out.maxFailedRuns = `A whole number from 1 to ${MAX_FAILED_RUNS_LIMIT}.`;

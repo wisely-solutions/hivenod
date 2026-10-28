@@ -53,3 +53,19 @@ describe('agent settings form', () => {
     expect(projectsToRelink(projects, 'old').map((p) => p.id)).toEqual(['a']);
   });
 });
+
+describe('an Inbox and Calendar agent (item fJnu6)', () => {
+  it('needs no projects, and the fields create it with none', async () => {
+    const inbox = { projectIds: [], scope: 'inbox' } as unknown as Agent;
+    const d = settingsDraft(inbox);
+    expect(d.inboxOnly).toBe(true);
+    expect(settingsErrors(d)).toEqual({});
+    const { agentScopeInput } = await import('./NewAgentModal');
+    expect(agentScopeInput({ scope: 'inbox', chosen: ['p1'] })).toEqual({
+      projectIds: [],
+      scope: 'inbox',
+    });
+    expect(agentScopeInput({ scope: 'all', chosen: [] })).toEqual({ projectIds: '*' });
+    expect(agentScopeInput({ scope: 'some', chosen: ['p1'] })).toEqual({ projectIds: ['p1'] });
+  });
+});

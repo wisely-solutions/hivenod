@@ -13,8 +13,18 @@ import { createAgentFlow } from './flow';
 export interface AgentFieldsValue {
   name: string;
   color: number;
-  scope: 'all' | 'some';
+  /** 'inbox': Inbox and Calendar only, no projects (item fJnu6). */
+  scope: 'all' | 'some' | 'inbox';
   chosen: string[];
+}
+
+/** What the fields create: the projects and, for an Inbox and Calendar agent, its scope. */
+export function agentScopeInput(v: Pick<AgentFieldsValue, 'scope' | 'chosen'>): {
+  projectIds: string[] | '*';
+  scope?: 'inbox';
+} {
+  if (v.scope === 'inbox') return { projectIds: [], scope: 'inbox' };
+  return { projectIds: v.scope === 'all' ? '*' : v.chosen };
 }
 export interface AgentFieldErrors {
   name?: string;
@@ -45,7 +55,7 @@ export function AgentFields({
   const { name, color, scope, chosen } = value;
   const setName = (name: string) => onChange({ ...value, name });
   const setColor = (color: number) => onChange({ ...value, color });
-  const setScope = (scope: 'all' | 'some') => onChange({ ...value, scope });
+  const setScope = (scope: AgentFieldsValue['scope']) => onChange({ ...value, scope });
   const setChosen = (fn: (c: string[]) => string[]) => onChange({ ...value, chosen: fn(chosen) });
   return (
     <>
@@ -95,13 +105,19 @@ export function AgentFields({
         <RadioCards
           label="Allowed projects"
           value={scope}
-          onValueChange={(v) => setScope(v as 'all' | 'some')}
+          onValueChange={(v) => setScope(v as AgentFieldsValue['scope'])}
           options={[
             { value: 'all', title: 'All projects', description: 'Including ones you add later.' },
             {
               value: 'some',
               title: 'Chosen projects',
               description: 'Only the ones you tick below.',
+            },
+            {
+              value: 'inbox',
+              title: 'Inbox and Calendar only',
+              description:
+                'A personal assistant: it syncs calendars and brings in requests, never development work. This cannot be changed later.',
             },
           ]}
         />
@@ -181,7 +197,7 @@ export function NewAgentModal({
       const token = await createAgentFlow(ctx, run, {
         name: value.name.trim(),
         color: colorValue(value.color),
-        projectIds: value.scope === 'all' ? ('*' as const) : value.chosen,
+        ...agentScopeInput(value),
       });
       onCreated?.(value.name.trim(), token);
       onClose();
