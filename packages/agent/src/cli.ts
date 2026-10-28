@@ -403,7 +403,9 @@ async function dispatch(c: HiveClient, pos: string[], o: Opts): Promise<Command>
         text: (r: ReturnType<HiveClient['whoami']>) =>
           [
             `${r.name} (${r.agentUid}) in organization ${r.workspaceId}`,
-            `projects: ${r.projectIds === '*' ? 'all' : r.projectIds.join(', ') || 'none'}`,
+            r.scope === 'inbox'
+              ? 'scope: Inbox and Calendar only (no development projects)'
+              : `projects: ${r.projectIds === '*' ? 'all' : r.projectIds.join(', ') || 'none'}`,
             `guardrails: pause after ${r.guardrails.maxFailedRuns} failed runs in a row`,
             `Permissions: your Claude Code settings (~/.claude/settings.json), see ${PERMISSIONS_DOCS}`,
             ...(r.paused

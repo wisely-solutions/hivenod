@@ -98,9 +98,11 @@ service cloud.firestore {
       return signedIn() && activeAgentDoc(get(agentPath(wid, me())));
     }
     function activeAgentDoc(a) { return a != null && a.data.revokedAt == null; }
+    // An Inbox and Calendar agent (scope 'inbox', item fJnu6) never works on development items,
+    // whatever its projectIds say. Mirrored by inboxOnly() in packages/shared/src/agents.ts.
     function agentCanProject(wid, pid) {
-      let ids = get(agentPath(wid, me())).data.projectIds;
-      return ids == '*' || pid in ids;
+      let a = get(agentPath(wid, me())).data;
+      return a.get('scope', '') != 'inbox' && (a.projectIds == '*' || pid in a.projectIds);
     }
     function projectAgent(wid, pid) { return isActiveAgent(wid) && agentCanProject(wid, pid); }
     function projectReader(wid, pid) { return canProject(wid, pid) || projectAgent(wid, pid); }
@@ -653,7 +655,9 @@ service cloud.firestore {
           // guardrails and permissions are optional (absent = defaults); a new agent is never paused.
           && request.resource.data.keys().hasOnly(['name', 'color', 'projectIds', 'createdBy', 'createdAt',
                'revokedAt', 'lastSeenAt', 'tokenHint', 'previousAgentUid', 'guardrails', 'permissions',
-               'lastEventId'])
+               'scope', 'lastEventId'])
+          // An Inbox and Calendar agent (item fJnu6) is created by an admin only.
+          && (!('scope' in request.resource.data) || isAdmin(wid))
           && validAgentFields(request.resource.data)
           && request.resource.data.createdBy == me()
           && request.resource.data.createdAt == request.time
@@ -718,9 +722,12 @@ service cloud.firestore {
           return ids.size() <= i
             || (ids[i] is string && me() in get(projPath(wid, ids[i])).data.memberUids);
         }
+        // scope (item fJnu6): absent, or 'inbox' with no projects. It is set at creation and never
+        // changes (agent updates list the fields they may change; scope is not one of them).
         function validAgentFields(d) {
           return str(d.name, 1, 80) && str(d.color, 0, 32) && str(d.tokenHint, 0, 8)
             && (d.projectIds == '*' || (d.projectIds is list && d.projectIds.size() <= 100))
+            && (!('scope' in d) || (d.scope == 'inbox' && d.projectIds == []))
             && validGuardrails(d.get('guardrails', {'maxFailedRuns': 3}))
             && d.get('permissions', []) is list && d.get('permissions', []).size() <= 7
             && d.get('permissions', []).hasOnly(['editFiles', 'runTests', 'gitCommit', 'gitPush',

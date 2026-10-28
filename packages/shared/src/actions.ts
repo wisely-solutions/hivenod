@@ -22,6 +22,7 @@ import {
   type ActorType,
   type Agent,
   type AttachmentKind,
+  type AgentScope,
   type Guardrails,
   type EventType,
   type Item,
@@ -465,6 +466,8 @@ interface AgentInput {
   tokenHint: string;
   /** Optional settings (card zSzW3LXy); left out, the defaults apply. */
   guardrails?: Guardrails;
+  /** 'inbox': Inbox and Calendar only (item fJnu6); then `projectIds` must be `[]`. */
+  scope?: AgentScope;
 }
 
 function agentDocOp(
@@ -473,6 +476,8 @@ function agentDocOp(
   previous: string | null,
   eventId: string,
 ) {
+  if (input.scope === 'inbox' && (input.projectIds === '*' || input.projectIds.length > 0))
+    throw new ActionError('An Inbox and Calendar agent has no projects');
   return {
     kind: 'set' as const,
     path: paths.agent(ctx.workspaceId, input.agentUid),
@@ -480,6 +485,7 @@ function agentDocOp(
       name: input.name,
       color: input.color,
       projectIds: input.projectIds,
+      ...(input.scope ? { scope: input.scope } : {}),
       createdBy: ctx.actor.id,
       createdAt: SERVER_TIME,
       revokedAt: null,
@@ -535,9 +541,17 @@ export function updateAgentSettings(
     name: string;
     projectIds?: string[] | '*';
     guardrails?: Guardrails;
+    /** The agent's scope (item fJnu6): an Inbox and Calendar agent never gets projects. */
+    scope?: AgentScope;
   },
 ): ActionPlan {
   requireHuman(ctx);
+  if (
+    input.scope === 'inbox' &&
+    input.projectIds !== undefined &&
+    (input.projectIds === '*' || input.projectIds.length > 0)
+  )
+    throw new ActionError('An Inbox and Calendar agent has no projects');
   const data: Record<string, unknown> = {};
   if (input.projectIds !== undefined) data.projectIds = input.projectIds;
   if (input.guardrails !== undefined) data.guardrails = input.guardrails;

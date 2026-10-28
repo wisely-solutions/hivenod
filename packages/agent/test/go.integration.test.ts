@@ -869,6 +869,47 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     expect(r.go.docs).toEqual(r.ts.docs);
   }, 120_000);
 
+  it('an Inbox and Calendar agent is refused item tools and uses the calendar (item fJnu6)', async () => {
+    const r = await both(
+      async (call) => {
+        await call('list_work', {});
+        await call('claim', { itemId: 'i1' });
+        await call('read_item', { itemId: 'i1' });
+        await call('calendar_upsert', {
+          member: 'alice',
+          events: [
+            {
+              source: 'google',
+              sourceEventId: 'g1',
+              title: 'Dentist',
+              start: '2030-01-07T09:00:00Z',
+              end: '2030-01-07T10:00:00Z',
+            },
+          ],
+        });
+        await call('inbox_add', {
+          source: 'mail',
+          sender: { name: 'Sam Example', handle: 'sam@example.com' },
+          text: 'Lunch on Friday?',
+          threadRef: 'mail-thread-1',
+          receivedAt: '2026-10-28T09:00:00Z',
+          member: 'owner',
+        });
+      },
+      { projectIds: [], scope: 'inbox' },
+    );
+    expect(r.ts.calls.map((c) => (c as { ok: boolean }).ok)).toEqual([
+      false,
+      false,
+      false,
+      true,
+      true,
+    ]);
+    expect(JSON.stringify(r.ts.calls[0])).toContain('limited to Inbox and Calendar');
+    expect(r.go.calls).toEqual(r.ts.calls);
+    expect(r.go.docs).toEqual(r.ts.docs);
+  }, 60_000);
+
   it('wait_for_work returns at once when work waits, and times out when none does', async () => {
     const r = await both(async (call) => {
       await call('wait_for_work', { timeoutSeconds: 5 });
@@ -895,31 +936,38 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     expect(r.go.docs).toEqual(r.ts.docs);
   }, 60_000);
 
-  it('hivenod whoami --json says the same as the TypeScript CLI', async () => {
-    await reset();
-    const { token } = await newAgent({ guardrails: { maxFailedRuns: 5 } });
-    const c = await HiveClient.connect({ token, projectId: PROJECT, authEmulator: AUTH_HOST });
-    await c.refreshAgent();
-    const want = c.whoami();
-    await c.close();
-    const home = mkdtempSync(join(tmpdir(), 'hivenod-home-'));
-    const res = spawnSync(BIN, ['whoami', '--json'], {
-      encoding: 'utf8',
-      env: {
-        PATH: process.env.PATH ?? '',
-        HOME: home,
-        HIVENOD_HOME: home,
-        HIVENOD_TOKEN: token,
-        HIVENOD_PROJECT_ID: PROJECT,
-        HIVENOD_FIREBASE_API_KEY: 'fake-api-key',
-        FIREBASE_AUTH_EMULATOR_HOST: AUTH_HOST,
-        FIRESTORE_EMULATOR_HOST: FS_HOST,
-      },
-    });
-    expect(res.status, res.stderr).toBe(0);
-    expect(JSON.parse(res.stdout)).toEqual(JSON.parse(JSON.stringify(want)));
-    expect(res.stdout).not.toContain(token);
-  }, 60_000);
+  it.each([
+    ['a project agent', { guardrails: { maxFailedRuns: 5 } }],
+    ['an Inbox and Calendar agent (item fJnu6)', { projectIds: [], scope: 'inbox' }],
+  ])(
+    'hivenod whoami --json says the same as the TypeScript CLI: %s',
+    async (_, extra) => {
+      await reset();
+      const { token } = await newAgent(extra);
+      const c = await HiveClient.connect({ token, projectId: PROJECT, authEmulator: AUTH_HOST });
+      await c.refreshAgent();
+      const want = c.whoami();
+      await c.close();
+      const home = mkdtempSync(join(tmpdir(), 'hivenod-home-'));
+      const res = spawnSync(BIN, ['whoami', '--json'], {
+        encoding: 'utf8',
+        env: {
+          PATH: process.env.PATH ?? '',
+          HOME: home,
+          HIVENOD_HOME: home,
+          HIVENOD_TOKEN: token,
+          HIVENOD_PROJECT_ID: PROJECT,
+          HIVENOD_FIREBASE_API_KEY: 'fake-api-key',
+          FIREBASE_AUTH_EMULATOR_HOST: AUTH_HOST,
+          FIRESTORE_EMULATOR_HOST: FS_HOST,
+        },
+      });
+      expect(res.status, res.stderr).toBe(0);
+      expect(JSON.parse(res.stdout)).toEqual(JSON.parse(JSON.stringify(want)));
+      expect(res.stdout).not.toContain(token);
+    },
+    60_000,
+  );
 
   it('hivenod pair: the code shown, confirmed by an admin, saves a working token (same agent.json)', async () => {
     await reset();

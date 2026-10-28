@@ -160,7 +160,7 @@ func ChannelTools(lazy *Lazy, cs *ChannelServer) []mcpserver.Tool {
 				return res, err
 			}
 		}
-		final := run
+		final := scoped(name, run)
 		out = append(out, mcpserver.Tool{Spec: spec, Run: func(ctx context.Context, args map[string]any) (any, error) {
 			c, err := lazy.Get(ctx)
 			if err != nil {

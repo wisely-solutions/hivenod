@@ -444,6 +444,57 @@ test('connect a terminal: the code from hivenod pair creates the agent and hands
   for (const c of seen.consoleText) expect(c).not.toContain('hive_agt_');
 });
 
+test('connect an Inbox and Calendar agent (item fJnu6): no projects, refused on development items', async ({
+  page,
+}, info) => {
+  const { wid } = await enter(page, 'Petra Personal');
+  const term = await asTerminal();
+  await page.goto(`/agents/connect?code=${formatPairingCode(term.code)}`);
+  const main = page.getByRole('main');
+  await expect(main.getByLabel('Terminal waiting')).toBeVisible();
+  await main.getByLabel('Name').fill('Personal');
+  await main.getByRole('radio', { name: /Inbox and Calendar only/ }).check();
+  // No projects to pick: none are needed.
+  await expect(main.getByRole('checkbox', { name: 'Blog' })).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+  if (process.env.SHOTS_DIR)
+    await page.screenshot({
+      path: `${process.env.SHOTS_DIR}/${info.project.name}-inbox-agent-pair.png`,
+      fullPage: true,
+    });
+  await main.getByRole('button', { name: 'Pair this terminal' }).click();
+  await expect(main.getByRole('status').filter({ hasText: 'Paired as Personal' })).toBeVisible();
+
+  await expect
+    .poll(async () => (await term.read()).data()?.status, { timeout: 15_000 })
+    .toBe('paired');
+  const p = (await term.read()).data()!;
+  const token = await term.open(p.sealed as Sealed);
+  const bot = await asAgent(token);
+  // The rules refuse it every project, even one it would see as a project agent.
+  await expect(bot.read(`workspaces/${wid}/projects/blog`)).rejects.toThrow();
+  expect((await bot.read(`workspaces/${wid}/agents/${p.agentUid}`)).data()).toMatchObject({
+    scope: 'inbox',
+    projectIds: [],
+  });
+  await bot.done();
+  await term.done();
+
+  // Its page says what it may do; there are no project or step pickers.
+  await page.goto(`/agents/${p.agentUid}`);
+  await expect(page.getByRole('heading', { name: 'Personal' })).toBeVisible();
+  await expect(page.getByTestId('inbox-only')).toContainText('Inbox and Calendar only');
+  await expect(page.getByRole('group', { name: 'Projects' })).toBeHidden();
+  await expectNoHorizontalScroll(page);
+  if (process.env.SHOTS_DIR)
+    await page.screenshot({
+      path: `${process.env.SHOTS_DIR}/${info.project.name}-inbox-agent-page.png`,
+      fullPage: true,
+    });
+  await page.goto('/agents');
+  await expect(page.getByText('Inbox and Calendar only').first()).toBeVisible();
+});
+
 test('an org with no agents: the empty state opens the Connect page', async ({ page }) => {
   await enter(page, 'Olga Owner');
   await page.goto('/agents');

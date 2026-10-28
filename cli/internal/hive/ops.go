@@ -62,6 +62,7 @@ type Who struct {
 	Name         string             `json:"name"`
 	WorkspaceID  string             `json:"workspaceId"`
 	ProjectIDs   any                `json:"projectIds"`
+	Scope        *string            `json:"scope"`
 	Paused       bool               `json:"paused"`
 	PausedReason *string            `json:"pausedReason"`
 	Guardrails   actions.Guardrails `json:"guardrails"`
@@ -83,9 +84,13 @@ func (w Who) Text() string {
 			projects = "none"
 		}
 	}
+	scopeLine := "projects: " + projects
+	if w.Scope != nil && *w.Scope == "inbox" {
+		scopeLine = "scope: Inbox and Calendar only (no development projects)"
+	}
 	lines := []string{
 		fmt.Sprintf("%s (%s) in organization %s", w.Name, w.AgentUID, w.WorkspaceID),
-		"projects: " + projects,
+		scopeLine,
 		fmt.Sprintf("guardrails: pause after %d failed runs in a row", w.Guardrails.MaxFailedRuns),
 		"Permissions: your Claude Code settings (~/.claude/settings.json), see " + PermissionsDocs,
 	}
@@ -113,7 +118,12 @@ func (c *Client) Whoami(ctx context.Context) (Who, error) {
 		}
 		ids = l
 	}
-	return Who{AgentUID: c.UID, Name: a.Name, WorkspaceID: c.WorkspaceID, ProjectIDs: ids, Paused: actions.IsPaused(a), PausedReason: a.PausedReason, Guardrails: actions.GuardrailsOf(a)}, nil
+	var scope *string
+	if a.Scope != "" {
+		s := a.Scope
+		scope = &s
+	}
+	return Who{AgentUID: c.UID, Name: a.Name, WorkspaceID: c.WorkspaceID, ProjectIDs: ids, Scope: scope, Paused: actions.IsPaused(a), PausedReason: a.PausedReason, Guardrails: actions.GuardrailsOf(a)}, nil
 }
 
 // ---------- work ----------

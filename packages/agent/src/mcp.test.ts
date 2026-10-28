@@ -1,6 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, describe, expect, it } from 'vitest';
+import { toolInScope } from '@hive/shared';
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -402,5 +403,37 @@ describe('hivenod mcp --channel item tools (card cGSENsRF)', () => {
     const client = new Client({ name: 't', version: '0' });
     await Promise.all([server.connect(a), client.connect(b)]);
     expect(client.getInstructions()).toMatch(/Only one at a time/);
+  });
+});
+
+describe('an Inbox and Calendar agent (item fJnu6)', () => {
+  it('is refused item tools up front, and may use the calendar tools', async () => {
+    const calls: string[] = [];
+    const fake = {
+      mayUseTool: (n: string) => toolInScope({ scope: 'inbox' }, n),
+      listWork: () => {
+        calls.push('listWork');
+        return Promise.resolve([]);
+      },
+      calendarDeps: () => {
+        calls.push('calendarDeps');
+        throw new Error('calendar reached');
+      },
+    };
+    const { server } = createMcpServer(() => Promise.resolve(fake as never), [...TOOLS]);
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 't', version: '0' });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    for (const name of ['list_work', 'claim', 'read_item']) {
+      const res = await client.callTool({ name, arguments: { itemId: 'i1' } });
+      expect(res.isError).toBe(true);
+      expect(JSON.stringify(res.content)).toContain('limited to Inbox and Calendar');
+    }
+    const cal = await client.callTool({
+      name: 'calendar_free',
+      arguments: { from: '2030-01-07T08:00:00Z', to: '2030-01-07T18:00:00Z' },
+    });
+    expect(JSON.stringify(cal.content)).toContain('calendar reached');
+    expect(calls).toEqual(['calendarDeps']);
   });
 });

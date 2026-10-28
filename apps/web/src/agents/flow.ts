@@ -19,6 +19,8 @@ export interface NewAgentInput {
   name: string;
   color: string;
   projectIds: string[] | '*';
+  /** 'inbox': Inbox and Calendar only (item fJnu6). */
+  scope?: 'inbox';
 }
 
 /** The Auth user lives on a throw-away second app, so the owner stays signed in. */
@@ -55,7 +57,7 @@ export async function rotateAgentFlow(
   ctx: ActionContext,
   run: Run,
   previousAgentUid: string,
-  agent: Pick<Agent, 'name' | 'color' | 'projectIds' | 'guardrails'>,
+  agent: Pick<Agent, 'name' | 'color' | 'projectIds' | 'guardrails' | 'scope'>,
   projects: readonly { id: string; data: Pick<Project, 'steps' | 'stepAgents'> }[] = [],
   openRuns: readonly OpenRun[] = [],
 ): Promise<string> {
@@ -69,6 +71,7 @@ export async function rotateAgentFlow(
       projectIds: agent.projectIds,
       tokenHint: tokenHint(token),
       ...(agent.guardrails ? { guardrails: agent.guardrails } : {}),
+      ...(agent.scope ? { scope: agent.scope } : {}),
       openRuns,
     }),
   );

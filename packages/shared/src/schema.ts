@@ -275,11 +275,24 @@ export const DEFAULT_AGENT_PERMISSIONS: readonly AgentPermission[] = [
   'gitCommit',
 ];
 
+/**
+ * What an agent may work on (Inbox item fJnu6). Absent: projects (its `projectIds`), plus Inbox and
+ * Calendar. `'inbox'`: Inbox and Calendar only, never development items (a personal assistant,
+ * e.g. the personal agent in a "Personal" organization). Set when the agent is created, kept on
+ * rotation, never changed afterwards; its `projectIds` stays `[]`. Enforced by firestore.rules
+ * (`agentCanProject`), mirrored by `inboxOnly()` in packages/shared/src/agents.ts.
+ */
+export const AGENT_SCOPES = ['inbox'] as const;
+export const agentScope = z.enum(AGENT_SCOPES);
+export type AgentScope = z.infer<typeof agentScope>;
+
 export const agentSchema = z.object({
   name: z.string().min(1).max(80),
   color: z.string().max(32),
   /** Allowed project ids, or '*' for every project. */
   projectIds: z.union([z.array(id).max(100), z.literal('*')]),
+  /** Optional (item fJnu6): 'inbox' = Inbox and Calendar only. Absent = projects too. */
+  scope: agentScope.optional(),
   createdBy: uid,
   createdAt: timestamp,
   revokedAt: timestamp.nullable(),
