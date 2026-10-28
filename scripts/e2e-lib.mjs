@@ -7,13 +7,18 @@ import { join, relative } from 'node:path';
 /** The emulator ports one e2e run needs. */
 export const PORT_NAMES = ['auth', 'firestore', 'hub', 'logging', 'websocket'];
 
+/** Offset into the worktree block for the rules and integration runs (scripts/emu-exec.mjs): ports 5-9. */
+export const RULES_OFFSET = 5;
+
 /**
- * A fixed block of ports per worktree (20000–31990, below Linux's ephemeral range), so repeated runs in
+ * A fixed block of 10 ports per worktree (20000–31999, below Linux's ephemeral range), so repeated runs in
  * one worktree get the same ports and can reuse the emulator build of the web app, which bakes them in.
+ * The e2e takes ports 0-4 of the block, the rules runs ports 5-9 (`offset` RULES_OFFSET), so both can run
+ * at once in one worktree.
  */
-export function preferredPorts(root) {
+export function preferredPorts(root, offset = 0) {
   const h = createHash('sha1').update(root).digest().readUInt32BE(0);
-  const base = 20000 + (h % 1200) * 10;
+  const base = 20000 + (h % 1200) * 10 + offset;
   return Object.fromEntries(PORT_NAMES.map((n, i) => [n, base + i]));
 }
 
@@ -30,8 +35,8 @@ export function probe(port) {
 }
 
 /** The worktree's own ports when they are all free, otherwise any free ones the OS hands out. */
-export async function pickPorts(root, check = probe) {
-  const want = preferredPorts(root);
+export async function pickPorts(root, check = probe, offset = 0) {
+  const want = preferredPorts(root, offset);
   const free = await Promise.all(Object.values(want).map((p) => check(p)));
   if (free.every((p, i) => p === Object.values(want)[i])) return want;
   const out = {};

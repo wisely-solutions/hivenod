@@ -151,7 +151,7 @@ function main() {
     const cmd = `cd packages/agent && npx vitest run -c vitest.integration.config.ts test/claude.channel.smoke.test.ts`;
     child = spawn(
       'node',
-      ['scripts/with-lock.mjs', 'firebase', 'emulators:exec', '--only', 'firestore,auth', cmd],
+      ['scripts/emu-exec.mjs', cmd],
       {
         cwd: REPO,
         detached: true,

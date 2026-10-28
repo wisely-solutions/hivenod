@@ -16,7 +16,7 @@ pnpm smoke:claude
 ```
 
 Needs `claude`, `tmux`, `shred` and the emulator toolchain on PATH, and `~/.claude/.credentials.json`.
-It waits for the emulator lock (`scripts/with-lock.mjs`), so it never collides with a running e2e.
+Its emulators run on ports of their own (`scripts/emu-exec.mjs`), so it never collides with a running e2e.
 
 ## Why a wrapper (the danger)
 
