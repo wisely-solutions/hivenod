@@ -465,6 +465,8 @@ type InboxRelation struct {
 type InboxSubject struct {
 	MemberUID string `firestore:"memberUid" json:"memberUid"`
 	Name      string `firestore:"name" json:"name"`
+	// Area is the optional area or tag (nil: none).
+	Area *string `firestore:"area" json:"area"`
 }
 
 // InboxEvent is workspaces/{w}/inboxEvents/{eid}.

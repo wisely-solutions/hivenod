@@ -263,7 +263,7 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: 'subject_list',
     description:
-      'A person\'s Inbox subjects: lasting, well-named topics that collect every thread about them, from any source and sender (e.g. "Klarna refunds (M&S Payments)"), with how many threads wait for the person and how many are open. Read them before subject_assign and reuse the one a thread belongs to; make a new one only for a new topic.',
+      'A person\'s Inbox subjects: lasting, well-named topics that collect every thread about them, from any source and sender (e.g. "Klarna refunds (M&S Payments)"), with their area (if any), how many threads wait for the person and how many are open. Read them before subject_assign and reuse the one a thread belongs to; make a new one only for a new topic.',
     input: {
       member: z
         .string()
@@ -277,11 +277,16 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: 'subject_assign',
     description:
-      'File a thread under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. "Grafana access (Pairpoint)"). A name that matches an existing subject reuses it. Give exactly one of the two. Also moves a thread to a better subject.',
+      'File a thread under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. "Grafana access (Pairpoint)"). A name that matches an existing subject reuses it. Give exactly one of the two. Also moves a thread to a better subject. Optional area: the area or tag of the subject (a client, a product, "admin"), which the Inbox groups subjects by; set it when you file under a new subject, or to correct one (empty clears it). Reuse the areas subject_list shows rather than inventing near-twins.',
     input: {
       threadId: z.string().min(1).describe('Thread id'),
       subjectId: z.string().min(1).optional().describe('An existing subject'),
       name: z.string().min(1).max(120).optional().describe('Or the name of a new subject'),
+      area: z
+        .string()
+        .max(60)
+        .optional()
+        .describe('The subject\'s area or tag (a client, a product, "admin"); empty clears it'),
     },
     run: (c, a) =>
       c
@@ -290,6 +295,7 @@ export const TOOLS: ToolDef[] = [
           a.threadId as string,
           a.subjectId as string | undefined,
           a.name as string | undefined,
+          a.area as string | undefined,
         ),
   }),
   tool({

@@ -14,7 +14,13 @@ import { cn } from '../ui/cn';
 import { EmptyState, Skeleton } from '../ui/feedback';
 import { Input, Select } from '../ui/form';
 import { useInbox, useMyMessages, useMyRelations } from './data';
-import { findSubjectRows, subjectRows, type SubjectRow } from './logic';
+import {
+  DEFAULT_QUIET_DAYS,
+  findSubjectRows,
+  groupByArea,
+  subjectRows,
+  type SubjectRow,
+} from './logic';
 import { StateChip, UrgentMark, when } from './parts';
 
 const DAYS = [
@@ -23,6 +29,25 @@ const DAYS = [
   { value: '30', label: 'Last 30 days' },
   { value: '90', label: 'Last 90 days' },
 ];
+
+const QUIET = [
+  { value: '30', label: 'Quiet after 30 days' },
+  { value: '60', label: 'Quiet after 60 days' },
+  { value: '90', label: 'Quiet after 90 days' },
+  { value: '180', label: 'Quiet after 180 days' },
+  { value: '0', label: 'Never fold quiet subjects' },
+];
+const QUIET_KEY = 'hive.inbox.quietDays';
+
+function loadQuietDays(): number {
+  try {
+    const n = Number(localStorage.getItem(QUIET_KEY));
+    if (QUIET.some((o) => o.value === String(n))) return n;
+  } catch {
+    /* storage can be blocked: the default applies */
+  }
+  return DEFAULT_QUIET_DAYS;
+}
 
 export function InboxListPage() {
   const { session } = useReady();
@@ -40,6 +65,7 @@ export function InboxListPage() {
   const [waitingForMe, setWaitingForMe] = useState(false);
   const [hasOpen, setHasOpen] = useState(false);
   const [days, setDays] = useState(0);
+  const [quietDays, setQuietDays] = useState(loadQuietDays);
   const finding = q.trim().length > 0 || waitingForMe || hasOpen || days > 0;
   const messages = useMyMessages(uid, wids, finding);
   const relations = useMyRelations(uid, wids, finding);
@@ -76,6 +102,8 @@ export function InboxListPage() {
       now,
     ],
   );
+  const grouped = useMemo(() => groupByArea(shown, quietDays, now), [shown, quietDays, now]);
+  const hasAreas = grouped.groups.some((g) => g.label !== null);
   const orgName = (wid: string) => orgs.find((o) => o.id === wid)?.name ?? '';
   const waiting = rows.reduce((n, r) => n + r.waiting, 0);
 
@@ -131,6 +159,21 @@ export function InboxListPage() {
           onValueChange={(v) => setDays(Number(v))}
           options={DAYS}
         />
+        <Select
+          label="Quiet subjects"
+          hideLabel
+          inline
+          value={String(quietDays)}
+          onValueChange={(v) => {
+            setQuietDays(Number(v));
+            try {
+              localStorage.setItem(QUIET_KEY, v);
+            } catch {
+              /* a per-viewer convenience only */
+            }
+          }}
+          options={QUIET}
+        />
       </div>
 
       {inbox.state === 'error' ? (
@@ -157,11 +200,46 @@ export function InboxListPage() {
           No subject matches.
         </p>
       ) : (
-        <ul className="flex flex-col gap-3" aria-label="Subjects">
-          {shown.map((r) => (
-            <SubjectCard key={`${r.wid}/${r.id ?? ''}`} row={r} org={scope ? '' : orgName(r.wid)} />
+        <div className="flex flex-col gap-5">
+          {grouped.groups.map((g) => (
+            <section
+              key={g.key}
+              data-area={g.label ?? ''}
+              aria-label={g.label ?? (hasAreas ? 'No area' : 'Subjects')}
+            >
+              {hasAreas ? (
+                <h2 className="mb-2 text-13 font-semibold uppercase tracking-wide text-text-2">
+                  {g.label ?? 'No area'}
+                </h2>
+              ) : null}
+              <ul className="flex flex-col gap-3" aria-label="Subjects">
+                {g.rows.map((r) => (
+                  <SubjectCard
+                    key={`${r.wid}/${r.id ?? ''}`}
+                    row={r}
+                    org={scope ? '' : orgName(r.wid)}
+                  />
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+          {grouped.quiet.length > 0 ? (
+            <details data-quiet className="rounded-card border border-line bg-surface">
+              <summary className="min-h-11 cursor-pointer px-4 py-3 text-14 font-medium text-text-2 foc:outline-2 foc:outline-focus">
+                Quiet ({grouped.quiet.length})
+              </summary>
+              <ul className="flex flex-col gap-3 p-3" aria-label="Quiet subjects">
+                {grouped.quiet.map((r) => (
+                  <SubjectCard
+                    key={`${r.wid}/${r.id ?? ''}`}
+                    row={r}
+                    org={scope ? '' : orgName(r.wid)}
+                  />
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
       )}
     </div>
   );
@@ -220,6 +298,7 @@ function SubjectCard({ row, org }: { row: SubjectRow; org: string }) {
             row.name
           )}
         </h2>
+        {row.area ? <Badge tone="neutral">{row.area}</Badge> : null}
         {row.waiting > 0 ? <Badge tone="gate">{row.waiting} for you</Badge> : null}
         <span className="text-13 text-text-2">
           {org ? `${org} · ` : ''}

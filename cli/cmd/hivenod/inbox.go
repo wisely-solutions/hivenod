@@ -33,8 +33,9 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome: a person's Hivenod 
                            marks a thread urgent (the person is pinged at once), or not with --off
   hivenod subject list [--member UID]
                            the person's subjects, with threads waiting for them and open
-  hivenod subject assign THREAD (--subject-id S | --name "Topic (client)")
-                           files a thread under an existing or a new subject
+  hivenod subject assign THREAD (--subject-id S | --name "Topic (client)") [--area "Client A"]
+                           files a thread under an existing or a new subject; --area sets
+                           its area or tag ("" clears it)
   hivenod subject search ["words"] [--member UID] [--waiting] [--active-days N] [--has-open] [--limit N]
                            finds subjects by name, people, channel and thread text
   hivenod subject relate SUBJECT SUBJECT [--note "how"]
@@ -65,7 +66,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
@@ -189,6 +190,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 		a["threadId"] = id
 		opt(a, "subjectId", "subject-id")
 		opt(a, "name", "name")
+		opt(a, "area", "area")
 	case "outcome propose":
 		tool = "outcome_propose"
 		t := actions.OutcomeTypeOf(*str["type"])

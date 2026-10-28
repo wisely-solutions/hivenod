@@ -24,6 +24,7 @@ import {
   proposeOutcome,
   rejectOutcome,
   renameSubject,
+  setSubjectArea,
   restoreThread,
   retitleThread,
   splitSubject,
@@ -813,6 +814,63 @@ describe('subjects: rename, merge, split, move (the member)', () => {
     await denied(
       a.run(raw(a, S(s1), { name: 'Agent name' }, 'subject.renamed', {}, 'alice', null)),
     );
+  });
+
+  it('areas: an agent sets one while filing; the member sets and clears it; no one else', async () => {
+    const a = await started();
+    const f = assignSubject(a.ctx, {
+      threadId: 'itr1',
+      thread: await thread(),
+      newName: 'Refunds',
+      area: '  Payments  team ',
+    });
+    await ok(a.run(f));
+    expect(await snap(S(f.subjectId))).toMatchObject({ name: 'Refunds', area: 'Payments team' });
+    // An existing subject gets its area changed by an agent filing under it.
+    await ok(
+      a.run(
+        assignSubject(a.ctx, {
+          threadId: 'itr1',
+          thread: await thread(),
+          subjectId: f.subjectId,
+          area: 'Admin',
+        }),
+      ),
+    );
+    expect((await snap(S(f.subjectId)))!.area).toBe('Admin');
+    // ...but not outside a filing, and not other fields.
+    await denied(a.run(raw(a, S(f.subjectId), { area: 'X' }, 'thread.note', {}, 'alice')));
+    await denied(a.run(raw(a, S(f.subjectId), { name: 'Hijack' }, 'thread.filed', {}, 'alice')));
+    await denied(
+      a.run(raw(a, S(f.subjectId), { area: 'a'.repeat(61) }, 'thread.filed', {}, 'alice')),
+    );
+    const alice = as('alice');
+    const mine = { memberUid: 'alice', name: 'Refunds' };
+    await ok(
+      alice.run(
+        setSubjectArea(alice.ctx, { subjectId: f.subjectId, subject: mine, area: 'Client A' }),
+      ),
+    );
+    expect((await snap(S(f.subjectId)))!.area).toBe('Client A');
+    await denied(
+      alice.run(
+        raw(alice, S(f.subjectId), { area: 'a'.repeat(61) }, 'subject.area', {}, 'alice', null),
+      ),
+    );
+    await ok(
+      alice.run(setSubjectArea(alice.ctx, { subjectId: f.subjectId, subject: mine, area: '  ' })),
+    );
+    expect((await snap(S(f.subjectId)))!.area).toBeNull();
+    for (const uid of ['bob', 'owner'])
+      await denied(
+        as(uid).run(
+          setSubjectArea(as(uid).ctx, {
+            subjectId: f.subjectId,
+            subject: { memberUid: uid, name: 'x' },
+            area: 'Mine',
+          }),
+        ),
+      );
   });
 
   it('merge moves the threads and deletes the emptied subject; split and move', async () => {

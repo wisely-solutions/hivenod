@@ -64,6 +64,10 @@ export interface SubjectRow {
   /** null: the threads not filed under a subject yet. */
   id: string | null;
   name: string;
+  /** The subject's area or tag; null: none. */
+  area: string | null;
+  /** Latest message on any of its threads (ms); the subject's creation when it has none. */
+  activityAt: number;
   /** Threads waiting for the member (Needs you, Your call). */
   waiting: number;
   open: number;
@@ -99,6 +103,8 @@ export function subjectRows(
       wid: s.wid,
       id: s.id,
       name: s.data.name,
+      area: s.data.area?.trim() || null,
+      activityAt: ms(s.data.createdAt),
       waiting: 0,
       open: 0,
       lastAt: ms(s.data.updatedAt),
@@ -114,6 +120,8 @@ export function subjectRows(
         wid: t.wid,
         id: null,
         name: 'Not filed yet',
+        area: null,
+        activityAt: 0,
         waiting: 0,
         open: 0,
         lastAt: 0,
@@ -124,6 +132,7 @@ export function subjectRows(
     row.threads.push(t);
     if (forMember(t.data.state)) row.waiting++;
     if (isOpen(t.data.state)) row.open++;
+    row.activityAt = Math.max(row.activityAt, ms(t.data.lastMessageAt));
     row.lastAt = Math.max(row.lastAt, ms(t.data.lastMessageAt), ms(t.data.updatedAt));
   }
   const rows = [...by.values()];
@@ -246,6 +255,7 @@ const SHOWN = new Set<string>([
   'subject.renamed',
   'subject.merged',
   'subject.split',
+  'subject.area',
   'thread.flagged',
   'relation.proposed',
   'relation.accepted',
@@ -317,6 +327,8 @@ export function eventText(e: Pick<InboxEvent, 'type' | 'data' | 'actor'>): strin
       return `You merged “${String(d.fromName ?? '')}” into this subject`;
     case 'subject.split':
       return `You split this subject off “${String(d.fromName ?? '')}”`;
+    case 'subject.area':
+      return d.area ? `You set the area to “${String(d.area)}”` : 'You cleared the area';
     case 'thread.flagged':
       return d.urgent ? `${who} marked it urgent${q(d.reason)}` : `${who} marked it not urgent`;
     case 'relation.proposed':
@@ -386,4 +398,56 @@ export function bookedText(f: Readonly<Record<string, string | boolean>>): strin
     : `${new Date(start).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}, ${time(start)}${Number.isNaN(end) ? '' : ` to ${time(end)}`}`;
   const who = typeof f.with === 'string' && f.with ? `, with ${f.with}` : '';
   return `Booked in your calendar: ${slot}${who}`;
+}
+
+export const DEFAULT_QUIET_DAYS = 60;
+const DAY_MS = 86_400_000;
+
+/**
+ * A subject is quiet when none of its threads had a message for `quietDays` days and nothing
+ * waits for the member. It is never deleted: the next message makes it active again (activity
+ * is derived from the messages). 0 turns folding off. Threads not filed yet are never quiet.
+ */
+export function isQuiet(row: SubjectRow, quietDays: number, nowMs: number): boolean {
+  return (
+    quietDays > 0 &&
+    row.id !== null &&
+    row.waiting === 0 &&
+    nowMs - row.activityAt >= quietDays * DAY_MS
+  );
+}
+
+export interface AreaGroup {
+  /** Lowercased key; '' for subjects without an area. */
+  key: string;
+  /** null: no area. */
+  label: string | null;
+  rows: SubjectRow[];
+}
+
+/**
+ * The list as the Inbox shows it: active subjects grouped by area (areas A to Z, case-blind,
+ * subjects without an area last), and the quiet ones apart. Row order is kept within a group.
+ */
+export function groupByArea(
+  rows: readonly SubjectRow[],
+  quietDays: number,
+  nowMs: number,
+): { groups: AreaGroup[]; quiet: SubjectRow[] } {
+  const quiet: SubjectRow[] = [];
+  const by = new Map<string, AreaGroup>();
+  for (const r of rows) {
+    if (isQuiet(r, quietDays, nowMs)) {
+      quiet.push(r);
+      continue;
+    }
+    const key = r.area ? r.area.toLowerCase() : '';
+    let g = by.get(key);
+    if (!g) by.set(key, (g = { key, label: r.area, rows: [] }));
+    g.rows.push(r);
+  }
+  const groups = [...by.values()].sort(
+    (a, b) => (a.key === '' ? 1 : 0) - (b.key === '' ? 1 : 0) || a.key.localeCompare(b.key),
+  );
+  return { groups, quiet };
 }

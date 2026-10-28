@@ -1402,6 +1402,30 @@ function build(): ContractCase[] {
     thread: TH({ subjectId: 's0' }),
     subjectId: 's1',
   });
+  file('new subject with an area', AGENT, {
+    threadId: 'it1',
+    thread: TH(),
+    newName: 'Refunds',
+    area: '  Payments   team ',
+  });
+  file('existing subject, area set', AGENT, {
+    threadId: 'it1',
+    thread: TH({ subjectId: 's0' }),
+    subjectId: 's1',
+    area: 'Admin',
+  });
+  file('existing subject, area cleared', AGENT, {
+    threadId: 'it1',
+    thread: TH({ subjectId: 's0' }),
+    subjectId: 's1',
+    area: '   ',
+  });
+  file('area too long', AGENT, {
+    threadId: 'it1',
+    thread: TH(),
+    newName: 'x',
+    area: 'a'.repeat(61),
+  });
   file('both given', AGENT, { threadId: 'it1', thread: TH(), subjectId: 's1', newName: 'x' });
   file('neither given', AGENT, { threadId: 'it1', thread: TH() });
   file('blank name', AGENT, { threadId: 'it1', thread: TH(), newName: '   ' });
