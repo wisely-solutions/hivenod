@@ -443,7 +443,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     >
       {children}
       {/* aria-live keeps it out of a modal dialog's hiding; sr-only keeps it off the screen. */}
-      <div role="status" aria-live="polite" data-testid="undo-announcement" className="sr-only">
+      <div aria-live="polite" data-testid="undo-announcement" className="sr-only">
         {announcement}
       </div>
       <div

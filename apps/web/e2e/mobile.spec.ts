@@ -409,7 +409,7 @@ test('offline: the data stays, an approval is queued and syncs when back online'
   await expect(row).toBeVisible();
   await row.click();
   await page.getByRole('button', { name: 'Approve → Publish' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Approved' })).toBeVisible();
+  await expect(page.locator('button[data-undo]')).toBeVisible();
   await page.waitForTimeout(UNDO_WAIT);
   expect(await stepOf(wid, pid, 'i1')).toBe('review');
 

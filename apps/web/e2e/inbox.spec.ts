@@ -197,8 +197,9 @@ test('an item at the gate shows up live, is approved with a rationale and moves 
   await axe(page);
   await detail.getByRole('button', { name: 'Approve → Publish' }).click();
 
-  // The row leaves at once; an Undo toast counts down; then the write commits.
-  await expect(page.getByRole('status')).toContainText('Approved. Moved to Publish.');
+  // The pressed button counts down as Undo (no toast); when it ends the row leaves and the write commits.
+  await expect(detail.locator('button[data-undo]')).toContainText(/Undo · \d/);
+  await expect(page.locator('[data-toast-region] [role="status"]')).toHaveCount(0);
   await expect(page.getByText('Nothing needs you.')).toBeVisible();
   await expect.poll(() => stepOf(wid, pid, 'i1'), { timeout: 15_000 }).toBe('publish');
   const decisions = await fetch(
@@ -222,60 +223,85 @@ async function decisionCount(wid: string, pid: string) {
   return body.documents?.length ?? 0;
 }
 
-test('undo within 5 seconds restores everything', async ({ page }, info) => {
+test('undo within 5 seconds restores everything', async ({ page }) => {
   const { wid, uid, pid } = await seed(page);
   await adminSet(itemPath(wid, pid, 'i1'), waitingItem(uid));
   const detail = await openRow(page, 'Launch post');
   await detail.getByRole('button', { name: 'Approve → Publish' }).click();
-  await expect(page.getByText('Nothing needs you.')).toBeVisible();
-  await page.getByRole('button', { name: 'Undo' }).click();
-  if (info.project.name === 'desktop-1440') {
-    await expect(page.getByRole('button', { name: /Launch post/ }).first()).toHaveAttribute(
-      'aria-current',
-      'true',
-    );
-  } else {
-    // Decided from its detail on a phone: Undo reopens that detail, then Back shows the row.
-    await expect(page.getByRole('article', { name: 'Decision: Launch post' })).toBeVisible();
-    await page.getByRole('button', { name: 'Back to inbox' }).click();
-    await expect(page.getByRole('button', { name: /Launch post/ }).first()).toBeVisible();
-  }
+  // The item stays; the pressed button is the Undo, the others are dimmed, and there is no toast.
+  const undo = detail.locator('button[data-undo]');
+  await expect(undo).toContainText(/Undo · \d/);
+  await expect(detail.getByRole('button', { name: /^Send back/ })).toBeDisabled();
+  await expect(detail.getByRole('button', { name: 'Reject', exact: true })).toBeDisabled();
+  await expect(page.locator('[data-toast-region] [role="status"]')).toHaveCount(0);
+  await undo.click();
+  await expect(detail.getByRole('button', { name: 'Approve → Publish' })).toBeEnabled();
+  await expect(detail.locator('button[data-undo]')).toHaveCount(0);
+  await expect(page.getByText('1 thing needs you.')).toBeVisible();
   // Well past the 5 s window: nothing was written, not even late.
   await page.waitForTimeout(UNDO_WAIT);
   expect(await stepOf(wid, pid, 'i1')).toBe('review');
   expect(await decisionCount(wid, pid)).toBe(0);
 });
 
-test('phone: undo does not pull you away from the item you opened next', async ({ page }, info) => {
+test('Undo state: axe-clean in light and dark, and reduced motion drops the bar', async ({
+  page,
+}) => {
+  const { uid, pid, wid } = await seed(page);
+  await adminSet(itemPath(wid, pid, 'i1'), waitingItem(uid));
+  const detail = await openRow(page, 'Launch post');
+  await page.evaluate(() => localStorage.setItem('hive.e2e.undoMs', '12000')); // room for axe
+  await detail.getByRole('button', { name: 'Approve → Publish' }).click();
+  const undo = detail.locator('button[data-undo]');
+  await expect(undo).toBeVisible();
+  await expect(page.getByTestId('undo-bar')).toHaveCount(1);
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.waitForTimeout(400);
+    await axe(page);
+  }
+  await undo.click();
+  // Reduced motion: only the countdown text, no animated bar.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await detail.getByRole('button', { name: 'Approve → Publish' }).click();
+  await expect(detail.locator('button[data-undo]')).toContainText(/Undo · \d/);
+  await expect(page.getByTestId('undo-bar')).toHaveCount(0);
+  await detail.locator('button[data-undo]').click();
+});
+
+test('Reject counts down on its button too, and Undo restores it', async ({ page }) => {
+  const { wid, uid, pid } = await seed(page);
+  await adminSet(itemPath(wid, pid, 'i1'), waitingItem(uid));
+  const detail = await openRow(page, 'Launch post');
+  await page.evaluate(() => localStorage.setItem('hive.e2e.undoMs', '12000')); // room for axe
+  await detail.getByRole('button', { name: 'Reject', exact: true }).click();
+  const d = page.getByRole('dialog');
+  await d.getByLabel('Why are you dropping it?').fill('Not worth doing this quarter');
+  await d.getByRole('button', { name: 'Reject', exact: true }).click();
+  const undo = detail.locator('button[data-undo]');
+  await expect(undo).toContainText(/Undo · \d/);
+  await expect(detail.getByRole('button', { name: /^Approve/ })).toBeDisabled();
+  await expect(page.locator('[data-toast-region] [role="status"]')).toHaveCount(0);
+  await undo.click();
+  await expect(detail.getByRole('button', { name: 'Reject', exact: true })).toBeEnabled();
+  await page.waitForTimeout(UNDO_WAIT);
+  expect(await statusOf(wid, pid, 'i1')).not.toBe('stopped');
+  expect(await decisionCount(wid, pid)).toBe(0);
+});
+
+test('phone: leaving the item during its countdown keeps the decision', async ({ page }, info) => {
   test.skip(info.project.name === 'desktop-1440', 'the phone flow');
   const { wid, uid, pid } = await seed(page);
   await adminSet(itemPath(wid, pid, 'i1'), waitingItem(uid, { title: 'Spec one' }));
   await adminSet(itemPath(wid, pid, 'i2'), waitingItem(uid, { title: 'Spec two', order: 2 }));
   const one = await openRow(page, 'Spec one');
   await one.getByRole('button', { name: 'Approve → Publish' }).click();
-  const two = await openRow(page, 'Spec two');
-  await page.getByRole('button', { name: 'Undo' }).click();
-  await page.waitForTimeout(500);
-  await expect(two).toBeVisible();
-  await expect(page.getByRole('article', { name: 'Decision: Spec one' })).toHaveCount(0);
+  await expect(one.locator('button[data-undo]')).toBeVisible();
   await page.getByRole('button', { name: 'Back to inbox' }).click();
-  await expect(page.getByRole('button', { name: /Spec one/ }).first()).toBeVisible();
-  await page.waitForTimeout(UNDO_WAIT);
-  expect(await stepOf(wid, pid, 'i1')).toBe('review');
-});
-
-test('phone: tapping the toast text does not pause the countdown', async ({ page }, info) => {
-  test.skip(info.project.name === 'desktop-1440', 'the touch flow');
-  const { wid, uid, pid } = await seed(page);
-  await adminSet(itemPath(wid, pid, 'i1'), waitingItem(uid));
-  const detail = await openRow(page, 'Launch post');
-  await detail.getByRole('button', { name: 'Approve → Publish' }).click();
-  const toast = page.getByRole('status');
-  await expect(toast).toContainText('Approved');
-  await toast.getByText('Approved').tap();
-  // Not frozen: the decision is written about 5 s after the tap, with no further tap anywhere.
+  const two = await openRow(page, 'Spec two');
+  await expect(two).toBeVisible();
   await expect.poll(() => stepOf(wid, pid, 'i1'), { timeout: 15_000 }).toBe('publish');
-  expect(await decisionCount(wid, pid)).toBe(1);
+  expect(await stepOf(wid, pid, 'i2')).toBe('review');
 });
 
 test('four approvals inside the undo window all commit', async ({ page }, info) => {
@@ -288,33 +314,41 @@ test('four approvals inside the undo window all commit', async ({ page }, info) 
   // The first item opens in the focus view; each approval moves on to the next one.
   await page.keyboard.press('Enter');
   for (const n of [1, 2, 3, 4]) {
-    await expect(page.getByRole('article', { name: `Decision: Spec ${n}` })).toBeVisible();
+    const detail = page.getByRole('article', { name: `Decision: Spec ${n}` });
+    await expect(detail).toBeVisible();
     await page.keyboard.press('a');
+    await expect(detail.locator('button[data-undo]')).toBeVisible();
+    // The item stays through its countdown; J goes to the next one meanwhile.
+    if (n < 4) await page.keyboard.press('j');
   }
-  await expect(page.getByText('Nothing needs you.')).toBeVisible();
-  // Only three toasts fit; the first one pushed out must still be written, not stranded.
+  await expect(page.getByText('Nothing needs you.')).toBeVisible({ timeout: 15_000 });
+  // Four countdowns ran side by side; every one must be written, none stranded.
   await expect
     .poll(() => Promise.all(ids.map((id) => stepOf(wid, pid, id))), { timeout: 15_000 })
     .toEqual(['publish', 'publish', 'publish', 'publish']);
   expect(await decisionCount(wid, pid)).toBe(4);
 });
 
-test('undo puts the selection back on the restored item', async ({ page }, info) => {
-  test.skip(info.project.name !== 'desktop-1440', 'selection is a desktop idea');
+test('Z undoes the countdown and the item keeps the selection', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'keyboard is a desktop idea');
   const { wid, uid, pid } = await seed(page);
   await adminSet(itemPath(wid, pid, 'i1'), waitingItem(uid, { title: 'Spec one' }));
   await adminSet(itemPath(wid, pid, 'i2'), waitingItem(uid, { title: 'Spec two', order: 2 }));
   const detail = await openRow(page, 'Spec one');
   await detail.getByRole('button', { name: 'Approve → Publish' }).click();
-  await expect(page.getByRole('button', { name: /Spec two/ }).first()).toHaveAttribute(
-    'aria-current',
-    'true',
+  await expect(detail.locator('button[data-undo]')).toBeVisible();
+  await expect(page.getByTestId('undo-announcement')).toHaveText(
+    'Approved. Undo available for 5 seconds',
   );
-  await page.getByRole('button', { name: 'Undo' }).click();
+  await page.keyboard.press('z');
+  await expect(detail.locator('button[data-undo]')).toHaveCount(0);
+  await expect(detail.getByRole('button', { name: 'Approve → Publish' })).toBeEnabled();
   await expect(page.getByRole('button', { name: /Spec one/ }).first()).toHaveAttribute(
     'aria-current',
     'true',
   );
+  await page.waitForTimeout(UNDO_WAIT);
+  expect(await stepOf(wid, pid, 'i1')).toBe('review');
 });
 
 test('phone: from opening the app to an approved item in under 10 seconds', async ({
@@ -330,7 +364,7 @@ test('phone: from opening the app to an approved item in under 10 seconds', asyn
     .first()
     .click();
   await page.getByRole('button', { name: 'Approve → Publish' }).click();
-  await expect(page.getByRole('status')).toContainText('Approved');
+  await expect(page.locator('button[data-undo]')).toBeVisible();
   expect(Date.now() - started).toBeLessThan(10_000);
 });
 
@@ -355,7 +389,7 @@ test('Send back and Reject need a reason; both are recorded', async ({ page }) =
   await expect(d2.getByText('0 / 10 characters minimum')).toBeVisible();
   await d2.getByLabel('Why are you dropping it?').fill('Not worth doing this quarter');
   await d2.getByRole('button', { name: 'Reject', exact: true }).click();
-  await expect(page.getByRole('status').last()).toContainText('Rejected');
+  await expect(page.locator('button[data-undo]')).toContainText(/Undo · \d/);
   await expect.poll(() => statusOf(wid, pid, 'i2'), { timeout: 15_000 }).toBe('stopped');
 });
 
@@ -365,7 +399,7 @@ test('a second decider: the item waits on others after I approve', async ({ page
   const detail = await openRow(page, 'Launch post');
   await expect(detail.getByText('0 of 2 approved · you')).toBeVisible();
   await detail.getByRole('button', { name: 'Approve → Publish' }).click();
-  await expect(page.getByRole('status')).toContainText('Approved by you. Waiting for 1 more.');
+  await expect(detail.locator('button[data-undo]')).toContainText(/Undo · \d/);
   await expect
     .poll(async () => (await adminDoc(itemPath(wid, pid, 'i1')))?.fields.gate !== undefined)
     .toBe(true);
@@ -428,7 +462,8 @@ test('keyboard: J and K move, A approves', async ({ page }, info) => {
   await page.keyboard.press('k');
   await expect(page.getByRole('heading', { name: 'First one' })).toBeVisible();
   await page.keyboard.press('a');
-  await expect(page.getByRole('heading', { name: 'Second one' })).toBeVisible();
+  // The item moves on when its Undo countdown ends.
+  await expect(page.getByRole('heading', { name: 'Second one' })).toBeVisible({ timeout: 15_000 });
   await expect.poll(() => stepOf(wid, pid, 'i1'), { timeout: 15_000 }).toBe('publish');
 });
 

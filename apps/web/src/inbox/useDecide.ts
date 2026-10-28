@@ -239,6 +239,8 @@ export function useDecide() {
           toasts.current.delete(batchKey);
           for (const k of keys) show(k, true);
           onCommitted?.();
+          // News that is not your own click: some had already moved on, so fewer were decided.
+          if (moved > 0) toast.push({ message });
           void Promise.allSettled(ready.map((r) => run(r.prepared.plan))).then((res) => {
             forget();
             done();

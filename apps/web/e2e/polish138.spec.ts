@@ -238,10 +238,12 @@ test('board panel bar: pinned to the bottom of the view, fits at 360, Undo on ap
   await page.goto(`/p/${pid}?item=go1`);
   const panel = page.getByRole('region', { name: 'Item detail' });
   await panel.getByRole('button', { name: /^Approve/ }).click();
-  const toast = page.getByRole('status').filter({ hasText: 'Approved. Moved to Publish.' });
-  await expect(toast.getByRole('button', { name: 'Undo' })).toBeVisible();
+  // The pressed button becomes Undo, in the bar (no toast).
+  const undoBtn = panel.locator('[data-decision-bar] button[data-undo]');
+  await expect(undoBtn).toContainText(/Undo · \d/);
+  await expect(page.locator('[data-toast-region] [role="status"]')).toHaveCount(0);
   await shot(page, 'panel-approve-undo-390');
-  await toast.getByRole('button', { name: 'Undo' }).click();
+  await undoBtn.click();
   await expect(panel.getByRole('button', { name: /^Approve/ })).toBeEnabled();
   expect((await adminDoc(`${P}/items/go1`))!.fields.stepId?.stringValue).toBe('go');
   // Not undone: it is written when the toast ends.
@@ -354,23 +356,19 @@ test('phone panel: Decisions end above the bar, note stays above it, final appro
   expect(nb.y).toBeGreaterThanOrEqual(0);
   expect(nb.y + nb.height).toBeLessThanOrEqual(667);
 
-  // Undo toasts sit above the bar, not on its buttons.
+  // Undo is the pressed button itself, inside the bar.
   await panel.getByRole('button', { name: /^Approve/ }).click();
-  const toast = page.getByRole('status').filter({ hasText: 'Approved. Moved to Publish.' });
-  await expect(toast).toBeVisible();
-  await page.waitForTimeout(500);
-  const tb = (await toast.boundingBox())!;
-  const bb = (await panel.locator('[data-decision-bar]').boundingBox())!;
-  expect(tb.y + tb.height).toBeLessThanOrEqual(bb.y + 1);
-  await toast.getByRole('button', { name: 'Undo' }).click();
+  const undoOnBar = panel.locator('[data-decision-bar] button[data-undo]');
+  await expect(undoOnBar).toBeVisible();
+  await expect(page.locator('[data-toast-region] [role="status"]')).toHaveCount(0);
+  await undoOnBar.click();
 
   // Final approval: Releasing during the window; Released only with the Done state.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/p/${pid}?item=acc1`);
   const fin = page.getByRole('region', { name: 'Item detail' });
   await fin.getByRole('button', { name: /^Approve/ }).click();
-  const releasing = page.getByRole('status').filter({ hasText: 'Releasing' });
-  await expect(releasing).toBeVisible();
+  await expect(fin.locator('button[data-undo]')).toBeVisible();
   await expect(page.getByText(/Released\. .* is done\./)).toHaveCount(0);
   await shot(page, 'r2-final-releasing-390');
   await expect(page.getByText('Released. \u201cFinal check\u201d is done.')).toBeVisible({

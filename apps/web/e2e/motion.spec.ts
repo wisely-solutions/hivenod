@@ -52,8 +52,8 @@ test('final approval: Released toast, Done state with next waiting, hex burst', 
   const detail = page.getByRole('article', { name: /Launch post/ });
   await expect(detail).toBeVisible();
   await detail.getByRole('button', { name: 'Approve' }).click();
-  // During the Undo window it is not released yet.
-  await expect(page.getByText('Releasing “Launch post”…')).toBeVisible();
+  // During the Undo window the Approve button counts down as Undo; it is not released yet.
+  await expect(detail.locator('button[data-undo]')).toBeVisible();
   await expect(page.getByText('Released. “Launch post” is done.')).toHaveCount(0);
   // The approval is written when the 5 s Undo window ends; the Done state and Released follow.
   const done = detail.getByTestId('done-panel');
@@ -140,7 +140,8 @@ async function firstToastStyle(page: Page, reduced = false) {
     .getByRole('article', { name: /Launch post/ })
     .getByRole('button', { name: 'Approve' })
     .click();
-  await expect(page.getByText('Releasing “Launch post”…')).toBeVisible();
+  // The Undo is on the button now; the first toast is the Released one, when the window ends.
+  await expect(page.getByText('Released. “Launch post” is done.')).toBeVisible({ timeout: 15_000 });
   return page.evaluate(() => (window as unknown as { __toastStyle: string }).__toastStyle);
 }
 

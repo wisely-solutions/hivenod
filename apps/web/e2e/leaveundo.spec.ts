@@ -124,7 +124,7 @@ test('decision with Undo, close the page 1 s later: the item moved on', async ({
   await adminSet(itemPath(wid, pid, 'i1'), waitingItem(uid));
   const detail = await openRow(page, 'Launch post');
   await detail.getByRole('button', { name: 'Approve → Publish' }).click();
-  await expect(page.getByRole('status')).toContainText('Approved. Moved to Publish.');
+  await expect(detail.locator('button[data-undo]')).toBeVisible();
   await page.waitForTimeout(1000);
   await page.close();
   await expect.poll(() => stepOf(wid, pid, 'i1'), { timeout: 15_000 }).toBe('publish');
