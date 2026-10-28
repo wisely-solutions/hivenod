@@ -16,6 +16,7 @@
 import { PARK_RETURN_MS, parkOf, type Item, type Message, type Run } from '@hive/shared';
 import { HiveClient, type Arrival, type WorkRow } from './client';
 import { HiveError, messageOf } from './errors';
+import { InboxFeed, type InboxFeedOptions } from './inboxfeed';
 
 export interface ChannelEvent {
   content: string;
@@ -39,6 +40,11 @@ export interface ChannelOptions {
   now?: () => number;
   /** How often parked items are checked for the 24 h return (default 60 s). */
   parkCheckMs?: number;
+  /**
+   * Inbox events (item 4PEHrOW5IfXBQWgOK9wo, ./inboxfeed.ts): outside max_items, at most
+   * `maxInbox` threads in flight (default 3; 0 turns them off).
+   */
+  inbox?: InboxFeedOptions;
 }
 
 /**
@@ -148,6 +154,8 @@ export class ChannelSession {
   private lastInfo = '';
   /** Set when another live session holds this agent: this one takes no handovers. */
   busy = false;
+  /** The inbox events of this session (null when off, busy, or before start). */
+  inbox: InboxFeed | null = null;
   readonly maxItems: number;
 
   constructor(
@@ -371,6 +379,20 @@ export class ChannelSession {
     this.parkCheck = setInterval(() => void this.returnStale(), this.opts.parkCheckMs ?? 60_000);
     this.parkCheck.unref();
     this.look();
+    this.startInbox();
+  }
+
+  /** Inbox events, outside max_items (item 4PEHrOW5IfXBQWgOK9wo). */
+  private startInbox() {
+    const c = this.client as Partial<Pick<HiveClient, 'inbox'>>;
+    if (typeof c.inbox !== 'function' || (this.opts.inbox?.maxInbox ?? 1) === 0) return;
+    this.inbox = new InboxFeed(
+      c.inbox.call(this.client).feedSource(),
+      (e) => this.push(e),
+      this.opts.inbox,
+      () => this.now(),
+    );
+    this.inbox.start();
   }
 
   /** Stops listening and tells Hivenod the agent is offline. The held items keep their claims. */
@@ -385,6 +407,7 @@ export class ChannelSession {
     if (this.presence) clearInterval(this.presence);
     if (this.parkCheck) clearInterval(this.parkCheck);
     if (this.wake) clearTimeout(this.wake);
+    this.inbox?.stop();
     for (const h of this.current.values()) h.stops.forEach((f) => f());
     this.current.clear();
     if (!this.busy) await this.client.markOffline().catch(() => undefined);
