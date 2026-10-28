@@ -13,7 +13,7 @@ import {
   releaseClaim,
   type ItemState,
 } from '../src/actions';
-import type { WriteOp } from '../src/firestore';
+import type { WriteOp } from '../src/actions';
 import {
   AGENTS,
   as,
