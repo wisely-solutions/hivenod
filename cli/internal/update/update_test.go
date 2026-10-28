@@ -75,6 +75,9 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestVersionHelpers(t *testing.T) {
+	if !Newer("0.2.103", "0.2.9") || Newer("0.2.9", "0.2.103") || !Newer("0.2.10", "0.2.9") {
+		t.Fatal("Newer numeric: 0.2.9 -> 0.2.103")
+	}
 	if !Newer("0.1.10", "0.1.9") || Newer("0.1.9", "0.1.10") || Newer("0.1.9", "0.1.9") {
 		t.Fatal("Newer")
 	}

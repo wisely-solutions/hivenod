@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 import { arch, platform, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { compareVersions } from './release-lib.mjs';
 import {
   binVersionFor,
   ldflags,
@@ -18,6 +19,10 @@ import {
 const root = join(import.meta.dirname, '..');
 
 describe('cli-bin-lib', () => {
+  it('versions sit above the last published 0.2.9, so installed CLIs update', () => {
+    expect(binVersionFor(7)).toBe('0.2.107');
+    expect(compareVersions(binVersionFor(1), '0.2.9')).toBeGreaterThan(0);
+  });
   it('names five targets and builds the manifest with checksums', () => {
     expect(TARGETS.map((t) => t.target)).toEqual([
       'linux-x64',
@@ -30,7 +35,7 @@ describe('cli-bin-lib', () => {
       { target: 'linux-x64', name: 'hivenod-linux-x64', bytes: Buffer.from('bin') },
     ]);
     expect(m).toEqual({
-      version: '0.2.7',
+      version: '0.2.107',
       commit: 'abc',
       cliProtocol: 2,
       files: {

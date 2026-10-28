@@ -26,6 +26,7 @@ import {
   pendingIndexes,
   siteUrls,
   sortedReleaseTags,
+  versionRegressions,
 } from './release-lib.mjs';
 import { cliBinProblems } from './cli-bin-smoke.mjs';
 import { sweepPairings } from './pairing-sweep-lib.mjs';
@@ -70,7 +71,7 @@ function cliProtocolOf(cwd) {
 }
 
 /** Build, stamp dist/version.json with the commit, deploy hosting + firestore rules/indexes. */
-function deployProd(cwd = process.cwd()) {
+async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
   const commit = out('git', ['rev-parse', 'HEAD'], cwd);
   run('pnpm', ['build'], cwd);
   // The Hivenod CLI as an npm tarball under /cli (card rifzGl8M). Older commits (rollbacks) have no
@@ -102,6 +103,19 @@ function deployProd(cwd = process.cwd()) {
     );
     process.stdout.write(built);
     cliBin = built.trim().split('\n').at(-1);
+  }
+  if (guardVersions) {
+    // Installed CLIs only update to a higher version: never publish a lower one than the live one.
+    let live = null;
+    try {
+      const res = await fetch(`${prodUrl}/version.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) live = await res.json();
+    } catch {
+      /* offline or first deploy: nothing to compare with */
+    }
+    const bad = versionRegressions({ cli, cliBin }, live);
+    if (bad.length)
+      die(`Refusing to release: ${bad.join('; ')} (installed CLIs would not update).`);
   }
   writeFileSync(
     join(cwd, 'apps/web/dist/version.json'),
@@ -380,7 +394,7 @@ async function deployRef(ref) {
   try {
     run('git', ['worktree', 'add', '--detach', dir, ref]);
     run('pnpm', ['install', '--frozen-lockfile'], dir);
-    const commit = deployProd(dir);
+    const commit = await deployProd(dir);
     if (!(await smoke(commit, false, dir))) die(`Smoke test FAILED after deploying ${ref}`);
     return commit;
   } finally {
@@ -397,7 +411,7 @@ if (mode === 'preview') {
   fb(['hosting:channel:deploy', name, '--expires', '14d']);
   console.log('Preview channel on every hosting site; the app is on the site `hivenod`.');
 } else if (mode === 'prod') {
-  deployProd();
+  await deployProd(undefined, { guardVersions: true });
 } else if (mode === 'release') {
   run('git', ['fetch', '--tags', 'origin', 'main']);
   if (out('git', ['status', '--porcelain']))
@@ -410,7 +424,7 @@ if (mode === 'preview') {
   }
   const tags = releaseTags();
   const previous = tags.at(-1);
-  const commit = deployProd();
+  const commit = await deployProd(undefined, { guardVersions: true });
   if (!(await smoke(commit))) {
     if (previous) {
       console.error(`Smoke test FAILED; rolling back to ${previous}`);
