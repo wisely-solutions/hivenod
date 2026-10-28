@@ -8,7 +8,13 @@ import {
   type Project,
 } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
-import { Engine, type InboxWaiting, type Ports, type WaitingItem, type WorkingItem } from './engine';
+import {
+  Engine,
+  type InboxWaiting,
+  type Ports,
+  type WaitingItem,
+  type WorkingItem,
+} from './engine';
 
 const H = 3_600_000;
 const ts = (ms: number) => ({ seconds: ms / 1000, nanoseconds: 0, toMillis: () => ms });

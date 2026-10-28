@@ -97,7 +97,12 @@ async function newAgent() {
 }
 
 /** A Claude Code stand-in: an MCP client on the channel server, collecting what is pushed. */
-async function session(token: string, maxItems?: number, maxInbox?: number, statusMinuteMs?: number) {
+async function session(
+  token: string,
+  maxItems?: number,
+  maxInbox?: number,
+  statusMinuteMs?: number,
+) {
   const events: Pushed[] = [];
   const client = new Client({ name: 'claude-code', version: '0' });
   client.fallbackNotificationHandler = async (n) => {

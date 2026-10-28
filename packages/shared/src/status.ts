@@ -266,8 +266,7 @@ export function silenceDue(input: {
   const after = silenceAfterOf(input.project);
   const quiet = after > 0 && nowMs > since + after * 60_000;
   const ask = statusAskOf(item);
-  const asked =
-    !!ask && ask.at.toMillis() > since && nowMs > ask.at.toMillis() + SILENCE_GRACE_MS;
+  const asked = !!ask && ask.at.toMillis() > since && nowMs > ask.at.toMillis() + SILENCE_GRACE_MS;
   if (!quiet && !asked) return null;
   return { runId: item.claim.runId, since, asked: asked && !quiet };
 }

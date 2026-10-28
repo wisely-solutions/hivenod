@@ -407,7 +407,12 @@ describe('silence end to end (item AzveC)', () => {
     summary: null,
     lastEventId: 'seed',
   });
-  const event = (itemId: string, runId: string, type: string, at: ReturnType<typeof minutesAgo>) => ({
+  const event = (
+    itemId: string,
+    runId: string,
+    type: string,
+    at: ReturnType<typeof minutesAgo>,
+  ) => ({
     actor: { type: 'agent', id: 'agentA', name: 'Agent A' },
     projectId: 'p1',
     itemId,

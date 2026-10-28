@@ -2598,7 +2598,7 @@
       },
       "output": { "error": "Only agents can do this" }
     },
-    { "name": "statusEveryOf/undefined", "action": "statusEveryOf", "input": {}, "output": 30 },
+    { "name": "statusEveryOf/undefined", "action": "statusEveryOf", "input": {}, "output": 0 },
     {
       "name": "statusEveryOf/0",
       "action": "statusEveryOf",
@@ -2627,7 +2627,7 @@
       "name": "statusEveryOf/45",
       "action": "statusEveryOf",
       "input": { "statusEvery": 45 },
-      "output": 30
+      "output": 0
     },
     {
       "name": "parkItem/parks",

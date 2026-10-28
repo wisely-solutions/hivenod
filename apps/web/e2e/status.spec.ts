@@ -3,7 +3,7 @@
  * ("Running release checks · 70%") and the notifier's "No update for N min" flag. Anyone on the
  * project presses "Ask for status" (item view and card menu): the ask is stored, the button reads
  * "Asked · waiting…" and stays disabled; a stub agent answers and the status shows. Settings >
- * Projects sets the interval. At 1440 and 390, light and dark, axe-clean. The status events and
+ * Projects sets the interval (off by default) and the silence threshold (40 min). At 1440 and 390, light and dark, axe-clean. The status events and
  * the status tool are tested in packages/agent (channel integration, TS and Go); the silence check
  * in packages/notifier.
  */
@@ -229,7 +229,7 @@ test('Ask for status: stored, "Asked · waiting…" until a stub agent answers; 
   }
 });
 
-test('Settings > Projects: the status interval is 30 minutes by default and changes', async ({
+test('Settings > Projects: the status push is off by default, silence after 40 min; both change', async ({
   page,
 }, info) => {
   if (info.project.name !== 'desktop-1440') await page.setViewportSize({ width: 390, height: 844 });
@@ -237,7 +237,9 @@ test('Settings > Projects: the status interval is 30 minutes by default and chan
   await page.goto('/settings/projects');
   const row = page.getByRole('list', { name: 'Projects' }).getByRole('listitem', { name: 'Blog' });
   const select = row.getByLabel('Ask agents for a status');
-  await expect(select).toHaveValue('30', { timeout: 20_000 });
+  await expect(select).toHaveValue('0', { timeout: 20_000 });
+  const silence = row.getByLabel('Flag an item as silent after');
+  await expect(silence).toHaveValue('40');
   await select.selectOption('15');
   await expect(
     page.getByText('Agents in Blog are asked for a status every 15 minutes.'),
@@ -245,19 +247,33 @@ test('Settings > Projects: the status interval is 30 minutes by default and chan
   await expect
     .poll(async () => (await adminDoc(`${base}/projects/blog`))?.fields.statusEvery?.integerValue)
     .toBe('15');
+  await silence.selectOption('20');
+  await expect(
+    page.getByText('Items in Blog are flagged after 20 minutes without activity.'),
+  ).toBeVisible();
+  await expect
+    .poll(async () => (await adminDoc(`${base}/projects/blog`))?.fields.silenceAfter?.integerValue)
+    .toBe('20');
   await expectNoHorizontalScroll(page);
   await themed(page, 'status-setting', async () => {
     await expect(select).toBeVisible();
+    await expect(silence).toBeVisible();
   });
-  // The edit form saves it too.
+  // The edit form saves both too.
   await row.getByRole('button', { name: 'Edit Blog' }).click();
   const dialog = page.getByRole('dialog', { name: 'Edit Blog' });
   const inForm = dialog.getByLabel('Ask agents for a status');
   await expect(inForm).toHaveValue('15');
   await inForm.selectOption('0');
+  const silenceInForm = dialog.getByLabel('Flag an item as silent after');
+  await expect(silenceInForm).toHaveValue('20');
+  await silenceInForm.selectOption('120');
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(dialog).toHaveCount(0);
   await expect
     .poll(async () => (await adminDoc(`${base}/projects/blog`))?.fields.statusEvery?.integerValue)
     .toBe('0');
+  await expect
+    .poll(async () => (await adminDoc(`${base}/projects/blog`))?.fields.silenceAfter?.integerValue)
+    .toBe('120');
 });

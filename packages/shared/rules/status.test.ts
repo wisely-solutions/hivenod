@@ -6,7 +6,7 @@
 import { Timestamp } from 'firebase/firestore';
 import { describe, expect, it } from 'vitest';
 import { claimItem, updateProject, type ActionPlan, type ItemState } from '../src/actions';
-import { askForStatus, reportStatus, setStatusEvery } from '../src/status';
+import { askForStatus, reportStatus, setSilenceAfter, setStatusEvery } from '../src/status';
 import {
   AGENTS,
   as,
@@ -242,5 +242,48 @@ describe('the project setting statusEvery (item AzveC)', () => {
         }),
       ),
     );
+  });
+});
+
+describe('the project setting silenceAfter (item AzveC)', () => {
+  it("admins and the project's creator set it (20, 40, 60, 120 or 0); others cannot", async () => {
+    const d = as('dave');
+    await denied(d.run(setSilenceAfter(d.ctx, { projectId: 'p1', after: 20 })));
+    const o = as('owner');
+    await ok(o.run(setSilenceAfter(o.ctx, { projectId: 'p1', after: 20 })));
+    expect((await snap(P('p1'))).silenceAfter).toBe(20);
+    await ok(o.run(setSilenceAfter(o.ctx, { projectId: 'p1', after: 0 })));
+    expect((await snap(P('p1'))).silenceAfter).toBe(0);
+    const bad = setSilenceAfter(o.ctx, { projectId: 'p1', after: 60 });
+    await denied(
+      o.run({
+        ...bad,
+        ops: bad.ops.map((op) =>
+          op.path === P('p1') ? { ...op, data: { ...op.data, silenceAfter: 30 } } : op,
+        ),
+      }),
+    );
+    const a = as(AGENTS.a);
+    await denied(
+      a.run({
+        ops: [{ kind: 'update', path: P('p1'), data: { silenceAfter: 60, lastEventId: 'seed' } }],
+      }),
+    );
+  });
+
+  it('the project edit form saves it with the name', async () => {
+    const o = as('owner');
+    await ok(
+      o.run(
+        updateProject(o.ctx, {
+          projectId: 'p1',
+          name: 'Blog',
+          emoji: '📝',
+          description: '',
+          silenceAfter: 120,
+        }),
+      ),
+    );
+    expect((await snap(P('p1'))).silenceAfter).toBe(120);
   });
 });

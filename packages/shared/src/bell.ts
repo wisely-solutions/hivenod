@@ -25,7 +25,15 @@ export const BELL_KEEP_MS = BELL_KEEP_DAYS * 86_400_000;
 /** The bell and the full page show at most this many entries. */
 export const BELL_LIMIT = 100;
 
-export const bellKind = z.enum(['gate', 'question', 'answer', 'sentBack', 'inboxAsk', 'inboxCall', 'silence']);
+export const bellKind = z.enum([
+  'gate',
+  'question',
+  'answer',
+  'sentBack',
+  'inboxAsk',
+  'inboxCall',
+  'silence',
+]);
 /** The projectId of the inbox bell entries (their itemId is the thread id). */
 export const INBOX_BELL_PROJECT = 'inbox';
 export const isInboxBell = (kind: BellKind) => kind === 'inboxAsk' || kind === 'inboxCall';

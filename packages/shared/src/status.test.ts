@@ -44,7 +44,8 @@ describe('silenceDue counts from the last activity (item AzveC)', () => {
       item: (o.item ?? item()) as never,
       project: o.after === undefined ? {} : { silenceAfter: o.after },
       startedMs: NOW - (o.startedAgo ?? 3 * 60 * M),
-      activityMs: o.activityAgo === undefined || o.activityAgo === null ? null : NOW - o.activityAgo,
+      activityMs:
+        o.activityAgo === undefined || o.activityAgo === null ? null : NOW - o.activityAgo,
       nowMs: NOW,
     });
 
