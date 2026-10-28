@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"github.com/wisely-solutions/hivenod/cli/internal/actions"
 	"github.com/wisely-solutions/hivenod/cli/internal/model"
 )
 
@@ -37,8 +38,12 @@ type ChannelOptions struct {
 	MaxItems  int
 	Presence  time.Duration    // default 60 s
 	Retry     time.Duration    // default 30 s
-	Now       func() time.Time // the clock (tests); default time.Now
+	Now       func() time.Time // the clock (tests); default the server's (Client.ServerNow)
+	ParkCheck time.Duration    // how often parked items are checked for the 24 h return (default 60 s)
 }
+
+// ParkNote is what park adds to its result (item QjTTL; the same text as the TypeScript CLI).
+const ParkNote = `Parked: it stays yours but no longer counts toward max_items, so the next item may arrive. Any tool call on it, or a person's note, answer or Stop, makes it active again. After 24 h without activity it goes back to the queue.`
 
 // GiveBackSkip: an item this session just gave back (release, end_run) is not handed to it again
 // for this long (item QjTTL), so the next oldest item gets its turn.
@@ -52,6 +57,15 @@ type Handover struct {
 type heldItem struct {
 	Handover
 	cancel context.CancelFunc
+	// parked by the agent (item QjTTL): held, but not counted toward MaxItems. Guarded by s.mu.
+	parked *parkState
+	// wakeMu: one unpark write at a time.
+	wakeMu sync.Mutex
+}
+
+type parkState struct {
+	reason string
+	at     time.Time
 }
 
 // Session is a channel session.
@@ -91,10 +105,131 @@ func NewSession(c *Client, cfg Config, push func(Event), o ChannelOptions) *Sess
 		o.Retry = 30 * time.Second
 	}
 	if o.Now == nil {
+		// The server's clock (park times are server times).
 		o.Now = time.Now
+		if c != nil {
+			o.Now = c.ServerNow
+		}
+	}
+	if o.ParkCheck == 0 {
+		o.ParkCheck = 60 * time.Second
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Session{c: c, cfg: cfg, push: push, o: o, stoppedItems: map[string]string{}, stoppedRuns: map[string]bool{}, givenBack: map[string]time.Time{}, ctx: ctx, cancel: cancel}
+}
+
+// active is how many held items are being worked (not parked): what MaxItems counts. Call with
+// s.mu held.
+func (s *Session) active() int {
+	n := 0
+	for _, h := range s.current {
+		if h.parked == nil {
+			n++
+		}
+	}
+	return n
+}
+
+// IsParked: this session holds the item and it is parked.
+func (s *Session) IsParked(itemID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h := s.byItem(itemID)
+	return h != nil && h.parked != nil
+}
+
+// Park parks a held item (item QjTTL): it stays claimed but no longer counts toward MaxItems,
+// so the next item may be handed over.
+func (s *Session) Park(ctx context.Context, itemID, reason, projectID string) (ParkOut, error) {
+	s.mu.Lock()
+	h := s.byItem(itemID)
+	s.mu.Unlock()
+	if h == nil {
+		return ParkOut{}, Errf(fmt.Sprintf("This session does not hold item %s, so park refuses it.", itemID))
+	}
+	if projectID == "" {
+		projectID = h.ProjectID
+	}
+	out, err := s.c.Park(ctx, itemID, reason, projectID)
+	if err != nil {
+		return ParkOut{}, err
+	}
+	if s.isHeld(h) {
+		s.mu.Lock()
+		if h.parked == nil { // the item's snapshot may have brought the server's time already
+			h.parked = &parkState{reason: out.Parked["reason"], at: s.o.Now()}
+		}
+		s.mu.Unlock()
+		s.look()
+	}
+	out.Note = ParkNote
+	return out, nil
+}
+
+// WakeItem: a parked held item is active again (any tool call on it, a person's note or answer).
+func (s *Session) WakeItem(ctx context.Context, itemID string) error {
+	s.mu.Lock()
+	h := s.byItem(itemID)
+	s.mu.Unlock()
+	if h == nil {
+		return nil
+	}
+	h.wakeMu.Lock()
+	defer h.wakeMu.Unlock()
+	s.mu.Lock()
+	parked := h.parked != nil
+	s.mu.Unlock()
+	if !parked {
+		return nil
+	}
+	if err := s.c.Unpark(ctx, h.ItemID, h.ProjectID); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	h.parked = nil
+	s.mu.Unlock()
+	return nil
+}
+
+// ReturnStale is the 24 h return (item QjTTL): a parked item with no activity for ParkReturn goes
+// back to the queue with a note. Activity wakes an item, so a parked one has had none since it
+// parked. Runs every ParkCheck; tests call it with a fake clock.
+func (s *Session) ReturnStale(ctx context.Context) []string {
+	s.mu.Lock()
+	var due []*heldItem
+	for _, h := range s.current {
+		if h.parked != nil && s.o.Now().Sub(h.parked.at) >= model.ParkReturn {
+			due = append(due, h)
+		}
+	}
+	s.mu.Unlock()
+	out := []string{}
+	for _, h := range due {
+		s.mu.Lock()
+		reason := ""
+		if h.parked != nil {
+			reason = h.parked.reason
+		}
+		s.mu.Unlock()
+		if reason == "" {
+			continue
+		}
+		if _, err := s.c.AddNote(ctx, h.ItemID, fmt.Sprintf("Parked for 24 hours without activity (waiting: %s): back to the queue.", clip(reason, 200)), h.ProjectID); err != nil {
+			continue // tried again at the next check
+		}
+		s.GaveBack(h.ItemID)
+		if _, err := s.c.Release(ctx, h.ItemID, h.ProjectID); err != nil {
+			s.ForgetGiveBack(h.ItemID)
+			continue
+		}
+		out = append(out, h.ItemID)
+		s.end(h)
+		s.push(Event{
+			Content: fmt.Sprintf(`"%s" (item_id %s) was parked for 24 hours without activity (waiting: %s). It went back to the queue; stop any work on it.`, h.Title, h.ItemID, clip(reason, 200)),
+			Meta:    map[string]string{"kind": "info", "code": "returned", "item_id": h.ItemID, "project_id": h.ProjectID},
+		})
+	}
+	return out
 }
 
 // GaveBack: the agent gave this item back (release, end_run); it is not handed to this session
@@ -251,6 +386,18 @@ func (s *Session) Start(ctx context.Context) error {
 			}
 		}
 	}()
+	go func() {
+		t := time.NewTicker(s.o.ParkCheck)
+		defer t.Stop()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-t.C:
+				s.ReturnStale(s.ctx)
+			}
+		}
+	}()
 	s.look()
 	return nil
 }
@@ -310,7 +457,7 @@ func (s *Session) later(d time.Duration) {
 // look waits for the next item (while fewer than MaxItems are held) and hands it over.
 func (s *Session) look() {
 	s.mu.Lock()
-	if s.closed || s.Busy || len(s.current) >= s.o.MaxItems || s.looking {
+	if s.closed || s.Busy || s.active() >= s.o.MaxItems || s.looking {
 		s.mu.Unlock()
 		return
 	}
@@ -337,7 +484,7 @@ func (s *Session) look() {
 func (s *Session) full() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.closed || len(s.current) >= s.o.MaxItems
+	return s.closed || s.active() >= s.o.MaxItems // parked items do not count (item QjTTL)
 }
 
 func (s *Session) next() error {
@@ -454,7 +601,7 @@ func (s *Session) handOver(row WorkRow) (bool, error) {
 	s.lastInfo = ""
 	s.current = append(s.current, h)
 	delete(s.stoppedItems, h.ItemID) // a new handover of a stopped item (after Resume) works again
-	holding := len(s.current)
+	holding, parked := s.active(), len(s.current)-s.active()
 	s.mu.Unlock()
 	s.c.WatchItem(hctx, row.ProjectID, row.ItemID, func(it *model.Item) { s.onItem(h, it) })
 	s.c.WatchRun(hctx, claimed.RunID, func(r model.Run) {
@@ -476,6 +623,9 @@ func (s *Session) handOver(row WorkRow) (bool, error) {
 		meta["max_items"] = strconv.Itoa(s.o.MaxItems)
 		meta["holding"] = strconv.Itoa(holding)
 	}
+	if parked > 0 {
+		meta["parked"] = strconv.Itoa(parked)
+	}
 	s.push(Event{Content: WorkText(row, why, s.o.MaxItems), Meta: meta})
 	return true, nil
 }
@@ -492,6 +642,24 @@ func (s *Session) onItem(h *heldItem, it *model.Item) {
 		return
 	}
 	if it != nil && it.Claim != nil && it.Claim.RunID == h.RunID {
+		// Keep the park in step with the item (a resumed parked item, or another process of ours).
+		if h.wakeMu.TryLock() {
+			pk := actions.ParkOf(*it)
+			s.mu.Lock()
+			newly := false
+			if pk != nil {
+				// The server's time and reason (a resumed parked item, or a park just written).
+				newly = h.parked == nil
+				h.parked = &parkState{reason: pk.Reason, at: pk.At}
+			} else if h.parked != nil {
+				h.parked = nil
+			}
+			s.mu.Unlock()
+			h.wakeMu.Unlock()
+			if newly {
+				s.look()
+			}
+		}
 		return
 	}
 	if it != nil && it.WorkStopped != nil && it.WorkStopped.RunID == h.RunID {
@@ -557,6 +725,10 @@ func (s *Session) onMessage(h *heldItem, m NewMessage) {
 	}
 	if !s.isHeld(h) {
 		return
+	}
+	// A person's note or answer wakes a parked item (item QjTTL); the event still goes out.
+	if m.Message.Kind == "note" || m.Message.Kind == "answer" {
+		_ = s.WakeItem(s.ctx, h.ItemID)
 	}
 	tag := ""
 	if s.o.MaxItems > 1 {

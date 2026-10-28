@@ -32,6 +32,8 @@ func (cs *ChannelServer) Get() *Session {
 // Tools about one item that act on any item of the agent's projects (holding it is not needed).
 var anyItem = map[string]bool{"read_item": true, "raise_finding": true}
 
+const parkNoSession = "Parking is for a channel session (hivenod mcp --channel) that gets handovers."
+
 // Tools that give a held item back without finishing it (item QjTTL).
 var givesBack = map[string]bool{"release": true, "end_run": true}
 
@@ -64,6 +66,25 @@ func ChannelTools(lazy *Lazy, cs *ChannelServer) []mcpserver.Tool {
 				}
 				return base(ctx, c, a)
 			}
+		case "park":
+			run = func(ctx context.Context, c *Client, a Args) (any, error) {
+				s := cs.Get()
+				if s == nil || s.IsBusy() {
+					return nil, Errf(parkNoSession)
+				}
+				return s.Park(ctx, a.S("itemId"), a.S("reason"), a.S("project"))
+			}
+		case "unpark":
+			run = func(ctx context.Context, c *Client, a Args) (any, error) {
+				s := cs.Get()
+				if s == nil || s.IsBusy() {
+					return nil, Errf(parkNoSession)
+				}
+				if err := s.WakeItem(ctx, a.S("itemId")); err != nil {
+					return nil, err
+				}
+				return map[string]any{"itemId": a.S("itemId"), "parked": nil}, nil
+			}
 		case "ask":
 			base := run
 			run = func(ctx context.Context, c *Client, a Args) (any, error) {
@@ -94,7 +115,12 @@ func ChannelTools(lazy *Lazy, cs *ChannelServer) []mcpserver.Tool {
 						return nil, Errf(name + " needs runId.")
 					}
 				case anyItem[name] && itemID != "":
-					// reading any item of the agent's projects is fine
+					// reading any item of the agent's projects is fine; a call on a parked one wakes it
+					if s.IsParked(itemID) {
+						if err := s.WakeItem(ctx, itemID); err != nil {
+							return nil, err
+						}
+					}
 				default:
 					h, err := s.Resolve(name, itemID, runID)
 					if err != nil {
@@ -109,6 +135,12 @@ func ChannelTools(lazy *Lazy, cs *ChannelServer) []mcpserver.Tool {
 					}
 					if hasRun {
 						args["runId"] = h.RunID
+					}
+					// Any tool call on a parked item makes it active again (item QjTTL), before it.
+					if name != "park" {
+						if err := s.WakeItem(ctx, h.ItemID); err != nil {
+							return nil, err
+						}
 					}
 				}
 				if !hasItem {

@@ -1,5 +1,6 @@
 import {
   isOnHold,
+  parkOf,
   STALE_CLAIM_MINUTES,
   type Agent,
   type Item,
@@ -7,22 +8,31 @@ import {
   type Project,
   type Step,
 } from '@hive/shared';
-import { colorIndex } from '../agents/logic';
+import { colorIndex, heldCounts, presenceText } from '../agents/logic';
 import type { Row } from '../lib/live';
 import type { ItemCardData } from '../ui/card';
 import { needsMyDecision } from '../shell/logic';
 import { gateWaitNote, NO_REMINDERS } from '../notify/note';
-import { pathView } from './path';
+import { approvedAt, pathView } from './path';
 
 export type ItemRow = Row<Item>;
 
-/** An item is being worked when its claim has a recent heartbeat. */
+/** An item is being worked when its claim has a recent heartbeat and it is not parked (QjTTL). */
 export function isItemLive(item: Item, now: number): boolean {
   return (
     item.status === 'working' &&
     !!item.claim &&
-    now - item.claim.heartbeatAt.toMillis() < STALE_CLAIM_MINUTES * 60_000
+    now - item.claim.heartbeatAt.toMillis() < STALE_CLAIM_MINUTES * 60_000 &&
+    !parkOf(item)
   );
+}
+
+/** "14:05" today, else "27 Oct, 14:05", in the viewer's time zone (item QjTTL). */
+export function sinceText(ms: number, now: number): string {
+  const d = new Date(ms);
+  if (d.toDateString() !== new Date(now).toDateString()) return approvedAt(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /** Items per step, in board order (Intake order is the priority the people set). */
@@ -95,6 +105,10 @@ export function cardData(row: ItemRow, ctx: CardContext): ItemCardData {
   const foundAgent = raisedBy
     ? ctx.agents.find((a) => a.id === data.createdBy.id)?.data.name
     : undefined;
+  // Parked by its agent (item QjTTL): held, waiting, not being worked.
+  const parked = parkOf(data);
+  const live = isItemLive(data, ctx.now);
+  const held = agentRow ? heldCounts(agentRow.id, ctx.items, ctx.now) : null;
   return {
     id: row.id,
     title: data.title,
@@ -106,8 +120,12 @@ export function cardData(row: ItemRow, ctx: CardContext): ItemCardData {
       ? {
           name: agentRow.data.name,
           color: colorIndex(agentRow.data.color, agentRow.id),
-          live: isItemLive(data, ctx.now),
+          live,
+          ...(held && held.waiting > 0 ? { presence: presenceText(held) } : {}),
         }
+      : undefined,
+    parked: parked
+      ? { reason: parked.reason, since: sinceText(parked.at.toMillis(), ctx.now) }
       : undefined,
     approvals:
       need > 0 && data.gate && data.status === 'waiting'
@@ -136,7 +154,7 @@ export function cardData(row: ItemRow, ctx: CardContext): ItemCardData {
             project: ctx.project,
             item: data,
             uid: ctx.uid,
-            agent: agentRow ? { name: agentRow.data.name, live: isItemLive(data, ctx.now) } : null,
+            agent: agentRow ? { name: agentRow.data.name, live } : null,
           }),
   };
 }

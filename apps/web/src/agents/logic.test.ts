@@ -147,3 +147,23 @@ describe('helpers', () => {
     expect(todayStats('a1', rs, NOW)).toEqual({ runs: 2, cost: 1.5 });
   });
 });
+
+describe('presence with parked items (item QjTTL)', () => {
+  it('reads "working N · waiting M"', () => {
+    const claim = (runId: string) => ({ runId, agentUid: 'a1', heartbeatAt: ts(min(1)) });
+    const held = (id: string, runId: string, parked: boolean) => ({
+      id,
+      data: {
+        title: id,
+        status: 'working',
+        claim: claim(runId),
+        parked: parked ? { runId, reason: 'release batch', at: ts(min(30)) } : null,
+      } as unknown as Item,
+    });
+    const its = { p1: [held('i1', 'r1', false), held('i2', 'r2', false), held('i3', 'r3', true)] };
+    const rs = [run('r1'), run('r2', { itemId: 'i2' }), run('r3', { itemId: 'i3' })];
+    const s = agentStatus('a1', agent(), rs, its, NOW);
+    expect(s).toMatchObject({ kind: 'online', working: { items: 2, waiting: 1 } });
+    expect(statusText(s, NOW)).toBe('Online · working 2 · waiting 1');
+  });
+});

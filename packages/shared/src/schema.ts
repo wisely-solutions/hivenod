@@ -431,6 +431,21 @@ export const workStopSchema = z.object({
 });
 export type WorkStop = z.infer<typeof workStopSchema>;
 
+/**
+ * A held item its agent parked (item QjTTL): waiting on something outside the agent (a release
+ * batch, a review). It stays claimed by that agent but does not count toward the session's
+ * max_items. Only the claim of `runId` parks it: once the claim moves on, the park is void.
+ */
+export const MAX_PARK_REASON_CHARS = 200;
+export const parkSchema = z.object({
+  runId: id,
+  reason: z.string().min(1).max(MAX_PARK_REASON_CHARS),
+  at: timestamp,
+});
+export type Park = z.infer<typeof parkSchema>;
+/** A parked item goes back to the queue after this long without activity (item QjTTL). */
+export const PARK_RETURN_MS = 24 * 60 * 60_000;
+
 export const triageSchema = z.object({
   outcome: z.enum(['intake', 'addedToItem', 'dismissed']),
   reason: z.string().max(2000),
@@ -524,6 +539,8 @@ export const itemSchema = z.object({
    * it. Absent on items that have not moved since; they count as older than any that has.
    */
   stepAt: timestamp.optional(),
+  /** Parked by the agent holding it (item QjTTL); valid only while claim.runId is its runId. */
+  parked: parkSchema.nullable().optional(),
   updatedAt: timestamp,
   lastEventId: id,
 });

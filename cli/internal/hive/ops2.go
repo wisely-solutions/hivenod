@@ -405,3 +405,42 @@ func (c *Client) ProposeStep(ctx context.Context, itemID string, prop actions.Pr
 	return map[string]any{"proposalId": p.ProposalID,
 		"note": "Proposed: an approver (admins and the project creator) adds it to the library or rejects it. Carry on without it."}, nil
 }
+
+// ParkOut is what park returns (item QjTTL).
+type ParkOut struct {
+	ItemID string            `json:"itemId"`
+	Parked map[string]string `json:"parked"`
+	Note   string            `json:"note,omitempty"`
+}
+
+// Park parks the item this agent holds: it waits on something outside the agent (item QjTTL).
+func (c *Client) Park(ctx context.Context, itemID, reason, projectID string) (ParkOut, error) {
+	l, err := c.load(ctx, itemID, projectID)
+	if err != nil {
+		return ParkOut{}, err
+	}
+	p, err := actions.ParkItem(c.actx(), actions.ParkItemInput{ProjectID: l.ProjectID, ItemID: itemID, Item: l.Item, Reason: reason})
+	if err != nil {
+		return ParkOut{}, wrap(err)
+	}
+	if err := c.Write(ctx, p, l.loc()); err != nil {
+		return ParkOut{}, err
+	}
+	return ParkOut{ItemID: itemID, Parked: map[string]string{"reason": actions.JSTrim(reason)}}, nil
+}
+
+// Unpark: the parked item this agent holds is active again; no write when it is not parked.
+func (c *Client) Unpark(ctx context.Context, itemID, projectID string) error {
+	l, err := c.load(ctx, itemID, projectID)
+	if err != nil {
+		return err
+	}
+	if actions.ParkOf(l.Item) == nil {
+		return nil
+	}
+	p, err := actions.UnparkItem(c.actx(), actions.UnparkItemInput{ProjectID: l.ProjectID, ItemID: itemID, Item: l.Item})
+	if err != nil {
+		return wrap(err)
+	}
+	return c.Write(ctx, p, l.loc())
+}

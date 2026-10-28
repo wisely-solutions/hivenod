@@ -65,10 +65,14 @@ hold with a note until a person says to finish):
 | Stop stops only that  | Stop work on one held item: the session answers `ACKSTOP <id>`, that run is stopped, the other held item keeps its claim and open run                    |
 | Note to the sub-agent | a person's note on the other held item reaches a sub-agent for that item, which completes it                                                             |
 
+Then (item QjTTL) one session with max_items 1: the model parks its item with the reason "release
+batch"; it stays claimed and parked, the next item is handed over and finished meanwhile, and a
+person's note on the parked item reaches the session (`ACKNOTE`) and wakes it (`parked` cleared).
+
 `HIVENOD_SMOKE_GO=1 pnpm smoke:claude` runs the same smoke with the Go CLI binary (`cli/`, built
 with Go) as `hivenod` instead of the TypeScript one.
 
-`pnpm smoke:claude --only basic` or `--only max-items` runs one part. `HIVE_SMOKE_MODEL` picks the model
+`pnpm smoke:claude --only basic`, `--only max-items` or `--only park` runs one part. `HIVE_SMOKE_MODEL` picks the model
 (default haiku).
 
 Waits are bounded (60 s start-up, 90-180 s per model step, 15 min per part, 35 min overall).

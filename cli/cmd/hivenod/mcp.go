@@ -71,7 +71,8 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 		srv.Tools = hive.ChannelTools(lazy, cs)
 		push := func(e hive.Event) { _ = srv.Notify("notifications/claude/channel", e) }
 		opts := hive.ChannelOptions{ProjectID: o.project, StepID: o.step, MaxItems: maxItems,
-			Presence: msEnv("HIVENOD_PRESENCE_MS"), Retry: msEnv("HIVENOD_CHANNEL_RETRY_MS")}
+			Presence: msEnv("HIVENOD_PRESENCE_MS"), Retry: msEnv("HIVENOD_CHANNEL_RETRY_MS"),
+			ParkCheck: msEnv("HIVENOD_PARK_CHECK_MS")}
 		srv.OnInitialized = func() {
 			c, err := lazy.Get(ctx)
 			if err == nil {

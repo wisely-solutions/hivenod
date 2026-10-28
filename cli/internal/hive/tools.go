@@ -113,6 +113,9 @@ var ToolRuns = map[string]Run{
 	"raise_finding": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.RaiseFinding(ctx, a.S("itemId"), a.S("title"), a.S("details"), a.S("project"))
 	},
+	// park / unpark exist in channel sessions only (ChannelTools gives them the session).
+	"park":   func(context.Context, *Client, Args) (any, error) { return nil, Errf(parkNoSession) },
+	"unpark": func(context.Context, *Client, Args) (any, error) { return nil, Errf(parkNoSession) },
 	"release": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.Release(ctx, a.S("itemId"), a.S("project"))
 	},

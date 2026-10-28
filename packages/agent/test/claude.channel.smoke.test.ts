@@ -16,7 +16,10 @@
  *     transcript, a different sub-agent per item);
  *  8. Stop work on one held item stops only that one (the other held item keeps its run), and a
  *     note on the other one reaches its sub-agent, which then completes it.
- * `pnpm smoke:claude --only basic|max-items` runs one of the two parts.
+ * Then, item QjTTL, one session with max_items 1:
+ *  9. the model parks its item with a reason: it stays claimed and parked, and the next item is
+ *     handed over and finished; a person's note on the parked item reaches the session and wakes it.
+ * `pnpm smoke:claude --only basic|max-items|park` runs one of the parts.
  */
 import { goBinary } from './gobin';
 import { createAgentIdentity } from '@hive/shared/agent-auth';
@@ -318,7 +321,7 @@ async function messagesOf(itemId: string) {
 }
 
 describe.skipIf(!run)('hivenod plugin: real Claude Code sessions', () => {
-  it.skipIf(ONLY === 'max-items')(
+  it.skipIf(!!ONLY && ONLY !== 'basic')(
     'handover, note, stop, busy, quit and restart',
     async () => {
       await smokeAgent('Channel smoke');
@@ -445,7 +448,7 @@ describe.skipIf(!run)('hivenod plugin: real Claude Code sessions', () => {
     900_000,
   );
 
-  it.skipIf(ONLY === 'basic')(
+  it.skipIf(!!ONLY && ONLY !== 'max-items')(
     'max_items 3: three items through three sub-agents, a 4th waits, Stop stops only that one',
     async () => {
       const uid = await smokeAgent('Channel smoke (max_items 3)');
@@ -625,5 +628,73 @@ describe.skipIf(!run)('hivenod plugin: real Claude Code sessions', () => {
       await quit('m');
     },
     900_000,
+  );
+
+  it.skipIf(!!ONLY && ONLY !== 'park')(
+    'park: a parked item frees the slot for the next one; a note wakes it',
+    async () => {
+      const uid = await smokeAgent('Channel smoke (park)');
+      await start('k', STANDING);
+      out('park session up (max_items 1)');
+      await put({
+        [I('k1')]: itemDoc({
+          stepId: 'build',
+          title: 'Smoke park one',
+          summary:
+            'This item waits for a release batch. Call the hivenod park tool on it with the reason "release batch". Do not add a note, do not complete it. Then just say PARKED.',
+          order: 1,
+        }),
+      });
+      const parked = await until(
+        'k1 parked',
+        180_000,
+        async () => {
+          const it = await read(I('k1'));
+          return it.parked ? it : false;
+        },
+        'k',
+      );
+      expect(parked).toMatchObject({
+        claim: { agentUid: uid },
+        parked: { reason: 'release batch' },
+      });
+      out('CHECK park: the model parked k1 (claimed, parked with its reason): PASS');
+      await put({
+        [I('k2')]: itemDoc({
+          stepId: 'build',
+          title: 'Smoke park two',
+          summary: 'Write a one-line greeting with add_note, then finish the step with complete.',
+          order: 2,
+        }),
+      });
+      await until(
+        'k2 done while k1 is parked',
+        180_000,
+        async () => (await read(I('k2'))).stepId === 'review',
+        'k',
+      );
+      expect(await read(I('k1'))).toMatchObject({
+        stepId: 'build',
+        claim: { agentUid: uid },
+        parked: { reason: 'release batch' },
+      });
+      out(
+        'CHECK next: with max_items 1, k2 was handed over and finished while k1 stayed parked: PASS',
+      );
+      const alice = as('alice');
+      await alice.run(
+        postMessage(alice.ctx, {
+          projectId: 'p1',
+          itemId: 'k1',
+          kind: 'note',
+          text: 'Batch is out',
+        }),
+      );
+      await until('note on the parked item', 90_000, () => pane('k').includes('ACKNOTE'), 'k');
+      await until('k1 awake', 30_000, async () => (await read(I('k1'))).parked === null, 'k');
+      out("CHECK wake: a person's note on parked k1 reached the session and woke it: PASS");
+      await quit('k');
+    },
+    600_000,
   );
 });

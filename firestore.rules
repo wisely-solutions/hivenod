@@ -1199,7 +1199,7 @@ service cloud.firestore {
                   ? (request.resource.data.get('claim', null) == null
                     ? (releaseIt(wid, pid, iid, r) || attachCounted(wid, pid, iid, r))
                     : (claimIt(wid, pid, iid, r, p, true) || heartbeatIt(wid, r)
-                      || attachCounted(wid, pid, iid, r)))
+                      || attachCounted(wid, pid, iid, r) || parkIt(wid, pid, iid, r)))
                   : stepOf(p, r.stepId).kind == 'agent'
                   // Releasing and completing clear the claim; claiming, heartbeats and progress
                   // keep one (the expression budget, see humanUpdate). An attachment changes neither.
@@ -1210,7 +1210,8 @@ service cloud.firestore {
                       : (releaseIt(wid, pid, iid, r) || completeIt(wid, pid, iid, r, p)
                         || attachCounted(wid, pid, iid, r)))
                     : (claimIt(wid, pid, iid, r, p, false) || heartbeatIt(wid, r)
-                      || progressIt(wid, pid, iid, r) || attachCounted(wid, pid, iid, r))));
+                      || progressIt(wid, pid, iid, r) || attachCounted(wid, pid, iid, r)
+                      || parkIt(wid, pid, iid, r))));
           }
           // Path writes by an agent (card st5INNZj): shaping the unshaped item it holds, or, on
           // the item it holds at an agent step, changing agent steps ahead, asking for a people
@@ -1302,6 +1303,18 @@ service cloud.firestore {
                   && d.progress.done is int && d.progress.total is int
                   && d.progress.done >= 0 && d.progress.total >= d.progress.done))
               && d.costEur is number && d.costEur >= r.costEur
+              && trackedFor(wid, d.lastEventId, ['item.updated'], pid, iid);
+          }
+          // Park / unpark (item QjTTL): only the agent holding the item, under its current claim.
+          // A park names that claim's run, so it is void once the claim moves on.
+          function parkIt(wid, pid, iid, r) {
+            let d = request.resource.data;
+            return ownsClaim(r) && changed(['parked', 'updatedAt', 'lastEventId'])
+              && d.updatedAt == request.time
+              && (d.parked == null
+                || (exactKeys(d.parked, ['runId', 'reason', 'at'])
+                  && d.parked.runId == r.claim.runId && str(d.parked.reason, 1, 200)
+                  && d.parked.at == request.time))
               && trackedFor(wid, d.lastEventId, ['item.updated'], pid, iid);
           }
           // Exactly one step forward; arriving at a human step opens a fresh gate.

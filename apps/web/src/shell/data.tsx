@@ -30,6 +30,7 @@ import { db } from '../lib/db';
 import { useLiveCollection, useLiveQuery, type Live, type Row } from '../lib/live';
 import {
   agentActivity,
+  itemsWaiting,
   itemsInWork,
   MONTH_RUNS,
   monthSpend,
@@ -56,7 +57,7 @@ export interface ShellData {
   proposals: Record<string, Row<StepProposal>[]>;
   needs: NeedsYou;
   /** `items`: items in work right now (one agent may hold several, card cGSENsRF). */
-  activity: { working: number; idle: number; items: number };
+  activity: { working: number; idle: number; items: number; waiting: number };
   /** `known`: every project's runs are confirmed by the server (a cached subset under-reports). */
   spend: { spent: number; known: boolean };
   /** Projects whose month of runs the server has confirmed; spend for the others is not final. */
@@ -407,6 +408,10 @@ function ShellDataInner({
         ),
         items: itemsInWork(
           runs,
+          now,
+          projects.flatMap((p) => items[p.id] ?? []),
+        ),
+        waiting: itemsWaiting(
           now,
           projects.flatMap((p) => items[p.id] ?? []),
         ),

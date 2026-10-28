@@ -377,6 +377,67 @@ func ReportProgress(ctx Ctx, in ReportProgressInput) (plan.Plan, error) {
 	}, ""), nil
 }
 
+// ParkOf is the park in force on an item (item QjTTL): only while its claim holds.
+func ParkOf(item model.Item) *model.Park {
+	if item.Parked != nil && item.Claim != nil && item.Claim.RunID == item.Parked.RunID {
+		return item.Parked
+	}
+	return nil
+}
+
+// ParkItemInput is parkItem's input.
+type ParkItemInput struct {
+	ProjectID string     `json:"projectId"`
+	ItemID    string     `json:"itemId"`
+	Item      model.Item `json:"item"`
+	Reason    string     `json:"reason"`
+}
+
+// ParkItem parks the item the agent holds, waiting on something outside it (item QjTTL).
+func ParkItem(ctx Ctx, in ParkItemInput) (plan.Plan, error) {
+	if err := RequireAgent(ctx); err != nil {
+		return plan.Plan{}, err
+	}
+	claim, err := OwnClaim(ctx, in.Item)
+	if err != nil {
+		return plan.Plan{}, err
+	}
+	reason := jsTrim(in.Reason)
+	if reason == "" {
+		return plan.Plan{}, fail("Say what the item waits for")
+	}
+	if jsLen(reason) > model.MaxParkReasonChars {
+		return plan.Plan{}, fail("Keep the reason under " + strconv.Itoa(model.MaxParkReasonChars) + " characters")
+	}
+	parked := map[string]any{"runId": claim.RunID, "reason": reason, "at": ServerTime()}
+	return Plan(ctx, "item.updated", Scope{sp(in.ProjectID), sp(in.ItemID), sp(claim.RunID)}, map[string]any{"parked": map[string]any{"reason": reason}}, func(eventID string) []plan.Op {
+		return []plan.Op{{Kind: "update", Path: model.Paths.Item(ctx.WorkspaceID, in.ProjectID, in.ItemID),
+			Data: map[string]any{"parked": parked, "updatedAt": ServerTime(), "lastEventId": eventID}}}
+	}, ""), nil
+}
+
+// UnparkItemInput is unparkItem's input.
+type UnparkItemInput struct {
+	ProjectID string     `json:"projectId"`
+	ItemID    string     `json:"itemId"`
+	Item      model.Item `json:"item"`
+}
+
+// UnparkItem: the parked item the agent holds is active again (item QjTTL).
+func UnparkItem(ctx Ctx, in UnparkItemInput) (plan.Plan, error) {
+	if err := RequireAgent(ctx); err != nil {
+		return plan.Plan{}, err
+	}
+	claim, err := OwnClaim(ctx, in.Item)
+	if err != nil {
+		return plan.Plan{}, err
+	}
+	return Plan(ctx, "item.updated", Scope{sp(in.ProjectID), sp(in.ItemID), sp(claim.RunID)}, map[string]any{"parked": nil}, func(eventID string) []plan.Op {
+		return []plan.Op{{Kind: "update", Path: model.Paths.Item(ctx.WorkspaceID, in.ProjectID, in.ItemID),
+			Data: map[string]any{"parked": nil, "updatedAt": ServerTime(), "lastEventId": eventID}}}
+	}, ""), nil
+}
+
 // CompleteStepInput is completeStep's input.
 type CompleteStepInput struct {
 	Project   model.Project `json:"project"`

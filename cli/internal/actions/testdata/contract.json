@@ -1828,6 +1828,319 @@
       "output": { "error": "Only agents can do this" }
     },
     {
+      "name": "parkItem/parks",
+      "action": "parkItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "reason": "  release batch  "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "parked": {
+                "runId": "run1",
+                "reason": "release batch",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": { "parked": { "reason": "release batch" } },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "parkItem/empty reason",
+      "action": "parkItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "reason": "   "
+      },
+      "output": { "error": "Say what the item waits for" }
+    },
+    {
+      "name": "parkItem/long reason",
+      "action": "parkItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "reason": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      },
+      "output": { "error": "Keep the reason under 200 characters" }
+    },
+    {
+      "name": "parkItem/200 chars",
+      "action": "parkItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "reason": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "parked": {
+                "runId": "run1",
+                "reason": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": {
+                "parked": {
+                  "reason": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+                }
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "parkItem/not holding",
+      "action": "parkItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": null,
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "reason": "review"
+      },
+      "output": { "error": "You do not hold this item" }
+    },
+    {
+      "name": "parkItem/person refused",
+      "action": "parkItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "reason": "review"
+      },
+      "output": { "error": "Only agents can do this" }
+    },
+    {
+      "name": "unparkItem/wakes",
+      "action": "unparkItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "parked": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": { "parked": null },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "unparkItem/not holding",
+      "action": "unparkItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": null,
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        }
+      },
+      "output": { "error": "You do not hold this item" }
+    },
+    {
+      "name": "unparkItem/person refused",
+      "action": "unparkItem",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        }
+      },
+      "output": { "error": "Only agents can do this" }
+    },
+    {
       "name": "completeStep/to the next agent step",
       "action": "completeStep",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },

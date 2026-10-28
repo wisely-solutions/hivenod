@@ -1,4 +1,11 @@
-import { STALE_CLAIM_MINUTES, type Agent, type Item, type Project, type Run } from '@hive/shared';
+import {
+  parkOf,
+  STALE_CLAIM_MINUTES,
+  type Agent,
+  type Item,
+  type Project,
+  type Run,
+} from '@hive/shared';
 import { isOnline } from '../agents/logic';
 import type { Row } from '../lib/live';
 
@@ -88,6 +95,28 @@ export function itemsInWork(runs: Row<Run>[], now: number, claims: Row<Item>[] =
   const liveRuns = new Set(runs.filter((r) => isLive(r.data, now)).map((r) => r.id));
   for (const id of claimed) if (!liveRuns.has(id)) keys.add(`run/${id}`);
   return keys.size;
+}
+
+/** Items agents hold but parked, waiting on something outside them (item QjTTL). */
+export function itemsWaiting(now: number, claims: Row<Item>[] = []): number {
+  let n = 0;
+  for (const i of claims) {
+    const c = i.data.claim;
+    if (c && now - c.heartbeatAt.toMillis() < STALE_CLAIM_MINUTES * 60_000 && parkOf(i.data)) n++;
+  }
+  return n;
+}
+
+/**
+ * The footer's agent line. With parked items (item QjTTL): "1 agent · working 2 · waiting 1 · 0
+ * idle"; otherwise as before ("2 agents working on 3 items · 0 idle").
+ */
+export function activityText(a: { working: number; idle: number; items: number; waiting: number }) {
+  const agents = `${a.working} ${a.working === 1 ? 'agent' : 'agents'}`;
+  if (a.waiting > 0)
+    return `${agents} · working ${Math.max(0, a.items - a.waiting)} · waiting ${a.waiting} · ${a.idle} idle`;
+  const items = a.items > a.working ? ` on ${a.items} items` : '';
+  return `${agents} working${items} · ${a.idle} idle`;
 }
 
 /**

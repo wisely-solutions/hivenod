@@ -158,6 +158,19 @@ type WorkStop struct {
 	RunID  string    `firestore:"runId" json:"runId"`
 }
 
+// Park is a held item its agent parked (item QjTTL): valid only while claim.runId is RunID.
+type Park struct {
+	RunID  string    `firestore:"runId" json:"runId"`
+	Reason string    `firestore:"reason" json:"reason"`
+	At     time.Time `firestore:"at" json:"at"`
+}
+
+// MaxParkReasonChars is the longest park reason.
+const MaxParkReasonChars = 200
+
+// ParkReturn: a parked item goes back to the queue after this long without activity.
+const ParkReturn = 24 * time.Hour
+
 // Triage of a suggestion.
 type Triage struct {
 	Outcome string    `firestore:"outcome" json:"outcome"`
@@ -228,6 +241,7 @@ type Item struct {
 	PathRev      int64                  `firestore:"pathRev" json:"pathRev"`
 	// StepAt is when the item reached its step (item QjTTL); nil on items that have not moved since.
 	StepAt      *time.Time `firestore:"stepAt" json:"stepAt"`
+	Parked      *Park      `firestore:"parked" json:"parked"`
 	UpdatedAt   time.Time  `firestore:"updatedAt" json:"updatedAt"`
 	LastEventID string     `firestore:"lastEventId" json:"lastEventId"`
 }

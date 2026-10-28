@@ -7,6 +7,7 @@ import {
   isWorkStoppable,
   resumeWork,
   stopGateFor,
+  parkOf,
   formatTokens,
   logLineSchema,
   newTokens,
@@ -45,7 +46,7 @@ import { ItemTimeline } from '../activity/ItemTimeline';
 import { AttachmentPreview } from './AttachmentPreview';
 import { ItemActions } from './itemActions';
 import { AddFiles, EditableSummary, EditableTitle, TypePicker } from './ItemEdit';
-import { canEditItem, isItemLive, isNewAttachment } from './logic';
+import { canEditItem, isItemLive, isNewAttachment, sinceText } from './logic';
 import { LiveRun } from './LiveRun';
 import { PathPanel } from './PathPanel';
 import { decisionText } from './sendback';
@@ -207,6 +208,7 @@ export function ItemDetail({
       : [];
   const agent = item.claim ? agents.find((a) => a.id === item.claim?.agentUid) : undefined;
   const live = isItemLive(item, now);
+  const parked = parkOf(item);
   // The burst plays only when the item turns Done while this view is open, never on a plain open.
   const [seenStatus, setSeenStatus] = useState(item.status);
   const [burst, setBurst] = useState(false);
@@ -333,6 +335,16 @@ export function ItemDetail({
               {item.sendBackCount ? <Badge tone="sendback">↩ {item.sendBackCount}</Badge> : null}
               {item.status === 'stopped' ? <Pill tone="sendback">Stopped</Pill> : null}
               {item.status === 'suggested' ? <Pill tone="neutral">Suggestion</Pill> : null}
+              {parked ? (
+                <Pill tone="agent" className="max-w-full min-w-0">
+                  <span className="truncate" title={`Waiting: ${parked.reason}`}>
+                    Waiting: {parked.reason}
+                  </span>
+                  <span className="shrink-0 whitespace-nowrap">
+                    · since {sinceText(parked.at.toMillis(), now)}
+                  </span>
+                </Pill>
+              ) : null}
             </div>
             <EditableTitle pid={pid} itemId={itemId} item={item} canEdit={canEdit} />
             {agent && !showLive ? (

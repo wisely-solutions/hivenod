@@ -40,8 +40,10 @@ import {
   postMessage,
   proposeStep,
   raiseFinding,
+  parkItem,
   releaseClaim,
   reportProgress,
+  unparkItem,
   requireSendBackReason,
   shapeItem,
   skipStep,
@@ -369,6 +371,21 @@ function build(): ContractCase[] {
   prog('nothing', AGENT, { ...W, item: item() });
   prog('not holding', AGENT, { ...W, item: item({ claim: null }), costEur: 1 });
   prog('person refused', HUMAN, { ...W, item: item(), costEur: 1 });
+
+  // ---------- parkItem / unparkItem (item QjTTL) ----------
+  const park = (name: string, actor: Actor, input: Parameters<typeof parkItem>[1]) =>
+    act(`parkItem/${name}`, 'parkItem', actor, input, parkItem);
+  park('parks', AGENT, { ...W, item: item(), reason: '  release batch  ' });
+  park('empty reason', AGENT, { ...W, item: item(), reason: '   ' });
+  park('long reason', AGENT, { ...W, item: item(), reason: 'é'.repeat(201) });
+  park('200 chars', AGENT, { ...W, item: item(), reason: '😀'.repeat(100) });
+  park('not holding', AGENT, { ...W, item: item({ claim: null }), reason: 'review' });
+  park('person refused', HUMAN, { ...W, item: item(), reason: 'review' });
+  const unpark = (name: string, actor: Actor, input: Parameters<typeof unparkItem>[1]) =>
+    act(`unparkItem/${name}`, 'unparkItem', actor, input, unparkItem);
+  unpark('wakes', AGENT, { ...W, item: item() });
+  unpark('not holding', AGENT, { ...W, item: item({ claim: null }) });
+  unpark('person refused', HUMAN, { ...W, item: item() });
 
   // ---------- completeStep ----------
   const done = (name: string, actor: Actor, input: Parameters<typeof completeStep>[1]) =>

@@ -14,7 +14,7 @@ import { collection, collectionGroup, orderBy, query, Timestamp, where } from 'f
 import { Bot, ChevronDown, ChevronLeft, ChevronRight, Hand } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AgentSettings, PausedBanner } from '../agents/AgentSettings';
-import { agentStatus, colorIndex, scopeText } from '../agents/logic';
+import { agentStatus, colorIndex, presenceText, scopeText } from '../agents/logic';
 import { useReady } from '../auth/context';
 import { db } from '../lib/db';
 import { useLiveCollection, useLiveDoc, type Row } from '../lib/live';
@@ -226,6 +226,16 @@ function Profile({
               'Revoked'
             ) : pausedShown ? (
               'Paused'
+            ) : live && status.kind === 'online' && status.working?.waiting ? (
+              <>
+                <WorkingDots />
+                <span data-testid="working-items">
+                  {presenceText({
+                    working: status.working.items ?? 0,
+                    waiting: status.working.waiting,
+                  }).replace(/^w/, 'W')}
+                </span>
+              </>
             ) : live && liveItems > 1 ? (
               <>
                 <WorkingDots />

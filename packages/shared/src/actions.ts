@@ -16,6 +16,7 @@ import {
   buildStepIndex,
   MAX_ATTACHMENT_BYTES,
   MAX_LOG_LINES,
+  MAX_PARK_REASON_CHARS,
   MIN_REASON_CHARS,
   paths,
   type ActorType,
@@ -25,6 +26,7 @@ import {
   type EventType,
   type Item,
   type ItemType,
+  type Park,
   type LogLevel,
   type MemberProfile,
   type Project,
@@ -102,6 +104,7 @@ export type ItemState = Pick<
       | 'pathRequests'
       | 'pathRefused'
       | 'pathRev'
+      | 'parked'
     >
   >;
 export type ProjectState = Pick<Project, 'steps'>;
@@ -1563,6 +1566,65 @@ export function reportProgress(
         kind: 'update',
         path: paths.item(ctx.workspaceId, input.projectId, input.itemId),
         data: { ...data, updatedAt: SERVER_TIME, lastEventId: eventId },
+      },
+    ],
+  );
+}
+
+/** The park in force on an item (item QjTTL): only while the claim it was made under holds. */
+export function parkOf(item: Pick<ItemState, 'claim' | 'parked'>): Park | null {
+  const p = item.parked;
+  return p && item.claim && item.claim.runId === p.runId ? p : null;
+}
+
+/**
+ * Agent: park the item it holds (item QjTTL), waiting on something outside it, with a reason. It
+ * stays claimed but the session's max_items no longer counts it. Any tool call on it, or a
+ * person's note, answer or Stop, wakes it (unparkItem).
+ */
+export function parkItem(
+  ctx: ActionContext,
+  input: { projectId: string; itemId: string; item: ItemState; reason: string },
+): ActionPlan {
+  requireAgent(ctx);
+  const claim = ownClaim(ctx, input.item);
+  const reason = input.reason.trim();
+  if (!reason) throw new ActionError('Say what the item waits for');
+  if (reason.length > MAX_PARK_REASON_CHARS)
+    throw new ActionError(`Keep the reason under ${MAX_PARK_REASON_CHARS} characters`);
+  const parked = { runId: claim.runId, reason, at: SERVER_TIME };
+  return plan(
+    ctx,
+    'item.updated',
+    { projectId: input.projectId, itemId: input.itemId, runId: claim.runId },
+    { parked: { reason } },
+    (eventId) => [
+      {
+        kind: 'update',
+        path: paths.item(ctx.workspaceId, input.projectId, input.itemId),
+        data: { parked, updatedAt: SERVER_TIME, lastEventId: eventId },
+      },
+    ],
+  );
+}
+
+/** Agent: the parked item it holds is active again (item QjTTL). */
+export function unparkItem(
+  ctx: ActionContext,
+  input: { projectId: string; itemId: string; item: ItemState },
+): ActionPlan {
+  requireAgent(ctx);
+  const claim = ownClaim(ctx, input.item);
+  return plan(
+    ctx,
+    'item.updated',
+    { projectId: input.projectId, itemId: input.itemId, runId: claim.runId },
+    { parked: null },
+    (eventId) => [
+      {
+        kind: 'update',
+        path: paths.item(ctx.workspaceId, input.projectId, input.itemId),
+        data: { parked: null, updatedAt: SERVER_TIME, lastEventId: eventId },
       },
     ],
   );

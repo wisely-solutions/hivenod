@@ -270,6 +270,9 @@ func jsSpace(r rune) bool {
 	return unicode.Is(unicode.Zs, r)
 }
 
+// JSTrim is String.prototype.trim (exported for the hive package).
+func JSTrim(s string) string { return jsTrim(s) }
+
 // jsTrim is String.prototype.trim.
 func jsTrim(s string) string { return strings.TrimFunc(s, jsSpace) }
 
