@@ -68,13 +68,13 @@ jobs:
       - run: pnpm test:rules:headroom
 
   e2e:
-    name: e2e (shard ${{ matrix.shard }}/3)
+    name: e2e (shard ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -82,9 +82,12 @@ jobs:
           emulators: 'true'
           browser: 'true'
       - name: E2E (against the auth + firestore emulators)
-        run: pnpm e2e:emu --shard=${{ matrix.shard }}/3
+        run: pnpm e2e:emu --shard=${{ matrix.shard }}/6
         env:
           CI: 'true'
+          # Two workers per 4-CPU runner (the browsers, the emulator JVM and the preview server share it):
+          # the timing specs fail when 4 workers starve each other. More shards instead of more workers.
+          E2E_WORKERS: '2'
           # The 5-minute limit is for the 8-CPU VM; the hosted runner has 4 CPUs.
           E2E_BUDGET_MIN: '14'
 
