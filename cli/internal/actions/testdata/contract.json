@@ -16413,7 +16413,12 @@
           "waiting": null
         },
         "type": "reply_book",
-        "fields": { "text": "Booked.", "slot": "Thu 10:00-10:30", "with": "Sam" }
+        "fields": {
+          "text": "Booked.",
+          "start": "2026-11-05T10:00:00+01:00",
+          "end": "2026-11-05T10:30:00+01:00",
+          "with": "Sam"
+        }
       },
       "output": {
         "eventId": "id02",
@@ -16425,7 +16430,12 @@
               "memberUid": "joao",
               "threadId": "it1",
               "type": "reply_book",
-              "fields": { "text": "Booked.", "slot": "Thu 10:00-10:30", "with": "Sam" },
+              "fields": {
+                "text": "Booked.",
+                "start": "2026-11-05T09:00:00.000Z",
+                "end": "2026-11-05T09:30:00.000Z",
+                "with": "Sam"
+              },
               "state": "proposed",
               "note": "",
               "proposedBy": "agentA",
@@ -16459,7 +16469,12 @@
               "data": {
                 "outcomeId": "id01",
                 "type": "reply_book",
-                "fields": { "text": "Booked.", "slot": "Thu 10:00-10:30", "with": "Sam" }
+                "fields": {
+                  "text": "Booked.",
+                  "start": "2026-11-05T09:00:00.000Z",
+                  "end": "2026-11-05T09:30:00.000Z",
+                  "with": "Sam"
+                }
               },
               "at": { "__hive": "serverTime" }
             }
@@ -16998,9 +17013,9 @@
           "waiting": null
         },
         "type": "reply_book",
-        "fields": { "text": "x", "slot": "y" }
+        "fields": { "text": "x", "start": "2026-11-05T10:00:00Z", "with": "y" }
       },
-      "output": { "error": "reply_book needs with." }
+      "output": { "error": "reply_book needs end." }
     },
     {
       "name": "proposeOutcome/field not text",
@@ -17873,6 +17888,2393 @@
       "output": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
     },
     { "name": "titleFrom/blank", "action": "titleFrom", "input": { "text": " \n " }, "output": "" },
+    {
+      "name": "flagThread/urgent with a reason",
+      "action": "flagThread",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "urgent": true,
+        "reason": "  Production is down "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "urgent": true,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.flagged",
+              "data": { "urgent": true, "reason": "Production is down" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "flagThread/not urgent",
+      "action": "flagThread",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "urgent": false,
+        "reason": "  "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "urgent": false,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.flagged",
+              "data": { "urgent": false, "reason": null },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "flagThread/reason too long",
+      "action": "flagThread",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "urgent": true,
+        "reason": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+      },
+      "output": { "error": "The reason is at most 1000 characters." }
+    },
+    {
+      "name": "proposeRelation/proposed, sorted",
+      "action": "proposeRelation",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "a": "sB",
+        "b": "sA",
+        "subjectA": { "memberUid": "joao" },
+        "subjectB": { "memberUid": "joao" },
+        "existing": null,
+        "note": "  same   client "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxRelations/rel-sA-sB",
+            "data": {
+              "memberUid": "joao",
+              "a": "sA",
+              "b": "sB",
+              "note": "same client",
+              "state": "proposed",
+              "proposedBy": { "type": "agent", "id": "agentA" },
+              "decision": null,
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": null,
+              "subjectId": "sA",
+              "type": "relation.proposed",
+              "data": { "relationId": "rel-sA-sB", "a": "sA", "b": "sB", "note": "same client" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "relationId": "rel-sA-sB",
+        "a": "sA",
+        "b": "sB"
+      }
+    },
+    {
+      "name": "proposeRelation/no note",
+      "action": "proposeRelation",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "a": "sA",
+        "b": "sB",
+        "subjectA": { "memberUid": "joao" },
+        "subjectB": { "memberUid": "joao" },
+        "existing": null,
+        "note": null
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxRelations/rel-sA-sB",
+            "data": {
+              "memberUid": "joao",
+              "a": "sA",
+              "b": "sB",
+              "note": "",
+              "state": "proposed",
+              "proposedBy": { "type": "agent", "id": "agentA" },
+              "decision": null,
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": null,
+              "subjectId": "sA",
+              "type": "relation.proposed",
+              "data": { "relationId": "rel-sA-sB", "a": "sA", "b": "sB", "note": "" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "relationId": "rel-sA-sB",
+        "a": "sA",
+        "b": "sB"
+      }
+    },
+    {
+      "name": "proposeRelation/same subject",
+      "action": "proposeRelation",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "a": "sB",
+        "b": "sB",
+        "subjectA": { "memberUid": "joao" },
+        "subjectB": { "memberUid": "joao" },
+        "existing": null,
+        "note": "  same   client "
+      },
+      "output": { "error": "Pick two different subjects." }
+    },
+    {
+      "name": "proposeRelation/two people",
+      "action": "proposeRelation",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "a": "sB",
+        "b": "sA",
+        "subjectA": { "memberUid": "joao" },
+        "subjectB": { "memberUid": "maria" },
+        "existing": null,
+        "note": "  same   client "
+      },
+      "output": { "error": "Both subjects must be for the same person." }
+    },
+    {
+      "name": "proposeRelation/related already",
+      "action": "proposeRelation",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "a": "sB",
+        "b": "sA",
+        "subjectA": { "memberUid": "joao" },
+        "subjectB": { "memberUid": "joao" },
+        "existing": { "memberUid": "joao", "a": "sA", "b": "sB", "note": "", "state": "related" },
+        "note": "  same   client "
+      },
+      "output": { "error": "These subjects are related already." }
+    },
+    {
+      "name": "proposeRelation/proposed already",
+      "action": "proposeRelation",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "a": "sB",
+        "b": "sA",
+        "subjectA": { "memberUid": "joao" },
+        "subjectB": { "memberUid": "joao" },
+        "existing": { "memberUid": "joao", "a": "sA", "b": "sB", "note": "", "state": "proposed" },
+        "note": "  same   client "
+      },
+      "output": { "error": "This link is proposed already: it waits for the person." }
+    },
+    {
+      "name": "proposeRelation/turned down",
+      "action": "proposeRelation",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "a": "sB",
+        "b": "sA",
+        "subjectA": { "memberUid": "joao" },
+        "subjectB": { "memberUid": "joao" },
+        "existing": { "memberUid": "joao", "a": "sA", "b": "sB", "note": "", "state": "rejected" },
+        "note": "  same   client "
+      },
+      "output": {
+        "error": "The person turned this link down (or removed it): do not propose it again."
+      }
+    },
+    {
+      "name": "proposeRelation/note too long",
+      "action": "proposeRelation",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "a": "sB",
+        "b": "sA",
+        "subjectA": { "memberUid": "joao" },
+        "subjectB": { "memberUid": "joao" },
+        "existing": null,
+        "note": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+      },
+      "output": { "error": "The note is at most 500 characters." }
+    },
+    {
+      "name": "proposeRelation/person refused",
+      "action": "proposeRelation",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "a": "sB",
+        "b": "sA",
+        "subjectA": { "memberUid": "joao" },
+        "subjectB": { "memberUid": "joao" },
+        "existing": null,
+        "note": "  same   client "
+      },
+      "output": { "error": "Only agents can do this" }
+    },
+    {
+      "name": "relationId/either way",
+      "action": "relationId",
+      "input": { "a": "zeta", "b": "alpha" },
+      "output": "rel-alpha-zeta"
+    },
+    {
+      "name": "searchSubjects/everything",
+      "action": "searchSubjects",
+      "input": {
+        "query": "",
+        "filters": {},
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 0,
+            "matched": [],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          },
+          {
+            "subjectId": "s2",
+            "name": "Grafana access",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 1,
+            "threads": 1,
+            "lastActivityAt": "2027-01-13T08:00:00.000Z",
+            "people": ["Ana"],
+            "channels": ["jira"],
+            "related": [
+              { "subjectId": "s1", "name": "Klarna refunds (Payments)", "note": "same team" }
+            ],
+            "proposed": [{ "subjectId": "s3", "name": "Quiet one", "note": "" }]
+          },
+          {
+            "subjectId": "s3",
+            "name": "Quiet one",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 0,
+            "threads": 1,
+            "lastActivityAt": "2026-10-17T08:00:00.000Z",
+            "people": [],
+            "channels": [],
+            "related": [],
+            "proposed": [{ "subjectId": "s2", "name": "Grafana access", "note": "" }]
+          },
+          {
+            "subjectId": "s4",
+            "name": "Ação (Lisboa)",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 0,
+            "threads": 0,
+            "lastActivityAt": null,
+            "people": [],
+            "channels": [],
+            "related": [],
+            "proposed": []
+          }
+        ],
+        "total": 4
+      }
+    },
+    {
+      "name": "searchSubjects/a name",
+      "action": "searchSubjects",
+      "input": {
+        "query": "klarna",
+        "filters": {},
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 5,
+            "matched": ["name", "thread", "text"],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "name": "searchSubjects/a handle",
+      "action": "searchSubjects",
+      "input": {
+        "query": "SAM@",
+        "filters": {},
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 3,
+            "matched": ["people"],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "name": "searchSubjects/a channel",
+      "action": "searchSubjects",
+      "input": {
+        "query": "jira",
+        "filters": {},
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s2",
+            "name": "Grafana access",
+            "score": 3,
+            "matched": ["channel"],
+            "forYou": 0,
+            "open": 1,
+            "threads": 1,
+            "lastActivityAt": "2027-01-13T08:00:00.000Z",
+            "people": ["Ana"],
+            "channels": ["jira"],
+            "related": [
+              { "subjectId": "s1", "name": "Klarna refunds (Payments)", "note": "same team" }
+            ],
+            "proposed": [{ "subjectId": "s3", "name": "Quiet one", "note": "" }]
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "name": "searchSubjects/a person in two subjects",
+      "action": "searchSubjects",
+      "input": {
+        "query": "ana",
+        "filters": {},
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s2",
+            "name": "Grafana access",
+            "score": 5,
+            "matched": ["name", "people", "thread", "text"],
+            "forYou": 0,
+            "open": 1,
+            "threads": 1,
+            "lastActivityAt": "2027-01-13T08:00:00.000Z",
+            "people": ["Ana"],
+            "channels": ["jira"],
+            "related": [
+              { "subjectId": "s1", "name": "Klarna refunds (Payments)", "note": "same team" }
+            ],
+            "proposed": [{ "subjectId": "s3", "name": "Quiet one", "note": "" }]
+          },
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 3,
+            "matched": ["people"],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "name": "searchSubjects/two words",
+      "action": "searchSubjects",
+      "input": {
+        "query": "  grafana   ana ",
+        "filters": {},
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s2",
+            "name": "Grafana access",
+            "score": 10,
+            "matched": ["name", "people", "thread", "text"],
+            "forYou": 0,
+            "open": 1,
+            "threads": 1,
+            "lastActivityAt": "2027-01-13T08:00:00.000Z",
+            "people": ["Ana"],
+            "channels": ["jira"],
+            "related": [
+              { "subjectId": "s1", "name": "Klarna refunds (Payments)", "note": "same team" }
+            ],
+            "proposed": [{ "subjectId": "s3", "name": "Quiet one", "note": "" }]
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "name": "searchSubjects/no match",
+      "action": "searchSubjects",
+      "input": {
+        "query": "grafana klarna",
+        "filters": {},
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": { "subjects": [], "total": 0 }
+    },
+    {
+      "name": "searchSubjects/accents",
+      "action": "searchSubjects",
+      "input": {
+        "query": "AÇÃO",
+        "filters": {},
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s4",
+            "name": "Ação (Lisboa)",
+            "score": 5,
+            "matched": ["name"],
+            "forYou": 0,
+            "open": 0,
+            "threads": 0,
+            "lastActivityAt": null,
+            "people": [],
+            "channels": [],
+            "related": [],
+            "proposed": []
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "name": "searchSubjects/waiting for me",
+      "action": "searchSubjects",
+      "input": {
+        "query": "",
+        "filters": { "waitingForMe": true },
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 0,
+            "matched": [],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "name": "searchSubjects/has open",
+      "action": "searchSubjects",
+      "input": {
+        "query": "",
+        "filters": { "hasOpen": true },
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 0,
+            "matched": [],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          },
+          {
+            "subjectId": "s2",
+            "name": "Grafana access",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 1,
+            "threads": 1,
+            "lastActivityAt": "2027-01-13T08:00:00.000Z",
+            "people": ["Ana"],
+            "channels": ["jira"],
+            "related": [
+              { "subjectId": "s1", "name": "Klarna refunds (Payments)", "note": "same team" }
+            ],
+            "proposed": [{ "subjectId": "s3", "name": "Quiet one", "note": "" }]
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "name": "searchSubjects/active 30 days",
+      "action": "searchSubjects",
+      "input": {
+        "query": "",
+        "filters": { "activeDays": 30 },
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 0,
+            "matched": [],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          },
+          {
+            "subjectId": "s2",
+            "name": "Grafana access",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 1,
+            "threads": 1,
+            "lastActivityAt": "2027-01-13T08:00:00.000Z",
+            "people": ["Ana"],
+            "channels": ["jira"],
+            "related": [
+              { "subjectId": "s1", "name": "Klarna refunds (Payments)", "note": "same team" }
+            ],
+            "proposed": [{ "subjectId": "s3", "name": "Quiet one", "note": "" }]
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "name": "searchSubjects/active 1 day",
+      "action": "searchSubjects",
+      "input": {
+        "query": "",
+        "filters": { "activeDays": 1 },
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 0,
+            "matched": [],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "name": "searchSubjects/limit",
+      "action": "searchSubjects",
+      "input": {
+        "query": "",
+        "filters": { "limit": 2 },
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 0,
+            "matched": [],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          },
+          {
+            "subjectId": "s2",
+            "name": "Grafana access",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 1,
+            "threads": 1,
+            "lastActivityAt": "2027-01-13T08:00:00.000Z",
+            "people": ["Ana"],
+            "channels": ["jira"],
+            "related": [
+              { "subjectId": "s1", "name": "Klarna refunds (Payments)", "note": "same team" }
+            ],
+            "proposed": [{ "subjectId": "s3", "name": "Quiet one", "note": "" }]
+          }
+        ],
+        "total": 4
+      }
+    },
+    {
+      "name": "searchSubjects/limit 0 is the default",
+      "action": "searchSubjects",
+      "input": {
+        "query": "",
+        "filters": { "limit": 0 },
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 0,
+            "matched": [],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          },
+          {
+            "subjectId": "s2",
+            "name": "Grafana access",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 1,
+            "threads": 1,
+            "lastActivityAt": "2027-01-13T08:00:00.000Z",
+            "people": ["Ana"],
+            "channels": ["jira"],
+            "related": [
+              { "subjectId": "s1", "name": "Klarna refunds (Payments)", "note": "same team" }
+            ],
+            "proposed": [{ "subjectId": "s3", "name": "Quiet one", "note": "" }]
+          },
+          {
+            "subjectId": "s3",
+            "name": "Quiet one",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 0,
+            "threads": 1,
+            "lastActivityAt": "2026-10-17T08:00:00.000Z",
+            "people": [],
+            "channels": [],
+            "related": [],
+            "proposed": [{ "subjectId": "s2", "name": "Grafana access", "note": "" }]
+          },
+          {
+            "subjectId": "s4",
+            "name": "Ação (Lisboa)",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 0,
+            "threads": 0,
+            "lastActivityAt": null,
+            "people": [],
+            "channels": [],
+            "related": [],
+            "proposed": []
+          }
+        ],
+        "total": 4
+      }
+    },
+    {
+      "name": "searchSubjects/limit over the top",
+      "action": "searchSubjects",
+      "input": {
+        "query": "",
+        "filters": { "limit": 500 },
+        "nowMs": 1800000000000,
+        "subjects": [
+          { "id": "s1", "name": "Klarna refunds (Payments)" },
+          { "id": "s2", "name": "Grafana access" },
+          { "id": "s3", "name": "Quiet one" },
+          { "id": "s4", "name": "Ação (Lisboa)" }
+        ],
+        "threads": [
+          {
+            "id": "t1",
+            "subjectId": "s1",
+            "state": "yourCall",
+            "title": "Refund for order 12",
+            "lastMessageAtMs": 1799913600000
+          },
+          {
+            "id": "t2",
+            "subjectId": "s2",
+            "state": "waiting",
+            "title": "Need a Grafana login",
+            "lastMessageAtMs": 1799827200000
+          },
+          {
+            "id": "t3",
+            "subjectId": "s3",
+            "state": "done",
+            "title": "Old",
+            "lastMessageAtMs": 1792224000000
+          },
+          {
+            "id": "t5",
+            "subjectId": "s1",
+            "state": "needsYou",
+            "title": "Klarna payout",
+            "lastMessageAtMs": 1799740800000
+          },
+          {
+            "id": "t4",
+            "subjectId": null,
+            "state": "investigating",
+            "title": "Unfiled",
+            "lastMessageAtMs": 1800000000000
+          },
+          {
+            "id": "t6",
+            "subjectId": "gone",
+            "state": "investigating",
+            "title": "Lost",
+            "lastMessageAtMs": 1800000000000
+          }
+        ],
+        "messages": [
+          {
+            "threadId": "t1",
+            "direction": "in",
+            "source": "teams",
+            "senderName": "Sam Example",
+            "senderHandle": "sam@example.com",
+            "text": "Klarna refund stuck"
+          },
+          {
+            "threadId": "t1",
+            "direction": "out",
+            "source": "teams",
+            "senderName": "João",
+            "senderHandle": null,
+            "text": "Looking"
+          },
+          {
+            "threadId": "t5",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Ana",
+            "senderHandle": "ana@example.com",
+            "text": "Payout?"
+          },
+          {
+            "threadId": "t2",
+            "direction": "in",
+            "source": "jira",
+            "senderName": "Ana",
+            "senderHandle": null,
+            "text": "Please give me Grafana"
+          },
+          {
+            "threadId": "t4",
+            "direction": "in",
+            "source": "mail",
+            "senderName": "Zed",
+            "senderHandle": null,
+            "text": "klarna"
+          }
+        ],
+        "relations": [
+          { "a": "s1", "b": "s2", "state": "related", "note": "same team" },
+          { "a": "s1", "b": "gone", "state": "related", "note": "" },
+          { "a": "s2", "b": "s3", "state": "proposed", "note": "" },
+          { "a": "s3", "b": "s4", "state": "rejected", "note": "" }
+        ]
+      },
+      "output": {
+        "subjects": [
+          {
+            "subjectId": "s1",
+            "name": "Klarna refunds (Payments)",
+            "score": 0,
+            "matched": [],
+            "forYou": 2,
+            "open": 2,
+            "threads": 2,
+            "lastActivityAt": "2027-01-14T08:00:00.000Z",
+            "people": ["Ana", "Sam Example"],
+            "channels": ["mail", "teams"],
+            "related": [{ "subjectId": "s2", "name": "Grafana access", "note": "same team" }],
+            "proposed": []
+          },
+          {
+            "subjectId": "s2",
+            "name": "Grafana access",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 1,
+            "threads": 1,
+            "lastActivityAt": "2027-01-13T08:00:00.000Z",
+            "people": ["Ana"],
+            "channels": ["jira"],
+            "related": [
+              { "subjectId": "s1", "name": "Klarna refunds (Payments)", "note": "same team" }
+            ],
+            "proposed": [{ "subjectId": "s3", "name": "Quiet one", "note": "" }]
+          },
+          {
+            "subjectId": "s3",
+            "name": "Quiet one",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 0,
+            "threads": 1,
+            "lastActivityAt": "2026-10-17T08:00:00.000Z",
+            "people": [],
+            "channels": [],
+            "related": [],
+            "proposed": [{ "subjectId": "s2", "name": "Grafana access", "note": "" }]
+          },
+          {
+            "subjectId": "s4",
+            "name": "Ação (Lisboa)",
+            "score": 0,
+            "matched": [],
+            "forYou": 0,
+            "open": 0,
+            "threads": 0,
+            "lastActivityAt": null,
+            "people": [],
+            "channels": [],
+            "related": [],
+            "proposed": []
+          }
+        ],
+        "total": 4
+      }
+    },
     {
       "name": "calendarUpsert/one event",
       "action": "calendarUpsert",

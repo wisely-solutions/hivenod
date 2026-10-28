@@ -732,6 +732,28 @@ func RetitleThread(ctx Ctx, in ThreadTextInput) (plan.Plan, error) {
 	}, ""), nil
 }
 
+// FlagInput is flagThread's input.
+type FlagInput struct {
+	ThreadID string      `json:"threadId"`
+	Thread   ThreadState `json:"thread"`
+	Urgent   bool        `json:"urgent"`
+	Reason   *string     `json:"reason"`
+}
+
+// FlagThread is flagThread: an agent marks a thread urgent, or not.
+func FlagThread(ctx Ctx, in FlagInput) (plan.Plan, error) {
+	if err := RequireAgent(ctx); err != nil {
+		return plan.Plan{}, err
+	}
+	reason := trimOrNil(in.Reason)
+	if err := need(reason == nil || jsLen(*reason) <= InboxMaxReason, tooLong("The reason", InboxMaxReason)); err != nil {
+		return plan.Plan{}, err
+	}
+	return InboxPlan(ctx, "thread.flagged", in.Thread.MemberUID, sp(in.ThreadID), in.Thread.SubjectID, map[string]any{"urgent": in.Urgent, "reason": strOrNil(reason)}, func(eventID string) []plan.Op {
+		return []plan.Op{upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{"urgent": in.Urgent}, eventID)}
+	}, ""), nil
+}
+
 // ProposeInput is proposeOutcome's input.
 type ProposeInput struct {
 	ThreadID  string         `json:"threadId"`

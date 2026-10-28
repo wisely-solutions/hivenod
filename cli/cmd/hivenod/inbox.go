@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -28,10 +29,16 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome: a person's Hivenod 
   hivenod inbox list       what agents have to do: threads to work, approved outcomes, snoozes due
   hivenod thread read ID   one thread in full: messages, subject, outcomes, notes, what next
   hivenod thread wake ID   wakes a snoozed thread whose date has come
+  hivenod thread flag ID [--off] [--reason R]
+                           marks a thread urgent (the person is pinged at once), or not with --off
   hivenod subject list [--member UID]
                            the person's subjects, with threads waiting for them and open
   hivenod subject assign THREAD (--subject-id S | --name "Topic (client)")
                            files a thread under an existing or a new subject
+  hivenod subject search ["words"] [--member UID] [--waiting] [--active-days N] [--has-open] [--limit N]
+                           finds subjects by name, people, channel and thread text
+  hivenod subject relate SUBJECT SUBJECT [--note "how"]
+                           proposes two related subjects (the person OKs it)
   hivenod inbox note THREAD --text T      an investigation note on the timeline
   hivenod inbox ask THREAD --text Q       asks the person (the thread waits in Needs you)
   hivenod outcome propose THREAD --type T [--field name=value]... [--note N]
@@ -58,10 +65,13 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "type", "note", "status", "item-id", "error"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
+	waiting := fs.Bool("waiting", false, "")
+	hasOpen := fs.Bool("has-open", false, "")
+	off := fs.Bool("off", false, "")
 	var fields multi
 	fs.Var(&fields, "field", "")
 	fs.Bool("json", true, "")
@@ -138,6 +148,39 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	case "subject list":
 		tool = "subject_list"
 		opt(a, "member", "member")
+	case "thread flag":
+		if id == "" {
+			return usage()
+		}
+		tool, a["threadId"], a["urgent"] = "thread_flag", id, !*off
+		opt(a, "reason", "reason")
+	case "subject search":
+		tool = "subject_search"
+		a["query"] = strings.Join(pos, " ")
+		opt(a, "member", "member")
+		if *waiting {
+			a["waitingForMe"] = true
+		}
+		if *hasOpen {
+			a["hasOpen"] = true
+		}
+		for k, f := range map[string]string{"activeDays": "active-days", "limit": "limit"} {
+			if set[f] {
+				n, err := strconv.Atoi(*str[f])
+				if err != nil || n < 1 {
+					fmt.Fprintf(stderr, "hivenod: --%s must be a whole number >= 1\n", f)
+					return 2
+				}
+				a[k] = float64(n)
+			}
+		}
+	case "subject relate":
+		tool = "subject_relate"
+		if len(pos) < 2 {
+			return usage()
+		}
+		a["a"], a["b"] = pos[0], pos[1]
+		opt(a, "note", "note")
 	case "subject assign":
 		tool = "subject_assign"
 		if id == "" || set["subject-id"] == set["name"] {

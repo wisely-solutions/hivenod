@@ -60,6 +60,10 @@ import {
   finishOutcome,
   inboxMessageKey,
   inboxThreadKey,
+  flagThread,
+  proposeRelation,
+  relationId,
+  searchSubjects,
   proposeOutcome,
   retitleThread,
   threadAfter,
@@ -1453,7 +1457,12 @@ function build(): ContractCase[] {
   });
   propose('reply_book', AGENT, {
     type: 'reply_book',
-    fields: { text: 'Booked.', slot: 'Thu 10:00-10:30', with: 'Sam' },
+    fields: {
+      text: 'Booked.',
+      start: '2026-11-05T10:00:00+01:00',
+      end: '2026-11-05T10:30:00+01:00',
+      with: 'Sam',
+    },
   });
   propose('no_reply', AGENT, { type: 'no_reply', fields: {} });
   propose('make_it_work', AGENT, {
@@ -1467,7 +1476,10 @@ function build(): ContractCase[] {
   propose('own id, from waiting', AGENT, { outcomeId: 'o9', thread: TH({ state: 'waiting' }) });
   propose('unknown type', AGENT, { type: 'launch' });
   propose('unknown field', AGENT, { fields: { text: 'x', bcc: 'all' } });
-  propose('missing field', AGENT, { type: 'reply_book', fields: { text: 'x', slot: 'y' } });
+  propose('missing field', AGENT, {
+    type: 'reply_book',
+    fields: { text: 'x', start: '2026-11-05T10:00:00Z', with: 'y' },
+  });
   propose('field not text', AGENT, { fields: { text: 3 } });
   propose('field not boolean', AGENT, { fields: { text: 'x', holding: 'yes' } });
   propose('field too long', AGENT, { type: 'handover', fields: { to: 't'.repeat(301) } });
@@ -1574,6 +1586,178 @@ function build(): ContractCase[] {
   tf('first line', { text: '\n\n  Hello   there \nsecond' });
   tf('long', { text: 'é'.repeat(130) });
   tf('blank', { text: ' \n ' });
+  const flag = (name: string, actor: Actor, input: Partial<Parameters<typeof flagThread>[1]>) =>
+    act(
+      `flagThread/${name}`,
+      'flagThread',
+      actor,
+      { threadId: 'it1', thread: TH({ subjectId: 's1' }), urgent: true, ...input },
+      flagThread,
+    );
+  flag('urgent with a reason', AGENT, { reason: '  Production is down ' });
+  flag('not urgent', AGENT, { urgent: false, reason: '  ' });
+  flag('reason too long', AGENT, { reason: 'r'.repeat(1001) });
+  // Related subjects and search (item 4PEHr, scope addition 2026-10-28)
+  const J = { memberUid: 'joao' };
+  const relate = (
+    name: string,
+    actor: Actor,
+    input: Partial<Parameters<typeof proposeRelation>[1]>,
+  ) =>
+    act(
+      `proposeRelation/${name}`,
+      'proposeRelation',
+      actor,
+      {
+        a: 'sB',
+        b: 'sA',
+        subjectA: J,
+        subjectB: J,
+        existing: null,
+        note: '  same   client ',
+        ...input,
+      },
+      proposeRelation,
+    );
+  const REL = (state: string) => ({ memberUid: 'joao', a: 'sA', b: 'sB', note: '', state });
+  relate('proposed, sorted', AGENT, {});
+  relate('no note', AGENT, { a: 'sA', b: 'sB', note: null });
+  relate('same subject', AGENT, { b: 'sB' });
+  relate('two people', AGENT, { subjectB: { memberUid: 'maria' } });
+  relate('related already', AGENT, { existing: REL('related') as never });
+  relate('proposed already', AGENT, { existing: REL('proposed') as never });
+  relate('turned down', AGENT, { existing: REL('rejected') as never });
+  relate('note too long', AGENT, { note: 'n'.repeat(501) });
+  relate('person refused', HUMAN, {});
+  pure('relationId/either way', 'relationId', { a: 'zeta', b: 'alpha' }, (i) =>
+    relationId(i.a, i.b),
+  );
+  const DAY = 86_400_000;
+  const SEARCH = {
+    query: '',
+    filters: {},
+    nowMs: NOW_MS,
+    subjects: [
+      { id: 's1', name: 'Klarna refunds (Payments)' },
+      { id: 's2', name: 'Grafana access' },
+      { id: 's3', name: 'Quiet one' },
+      { id: 's4', name: 'Ação (Lisboa)' },
+    ],
+    threads: [
+      {
+        id: 't1',
+        subjectId: 's1',
+        state: 'yourCall',
+        title: 'Refund for order 12',
+        lastMessageAtMs: NOW_MS - DAY,
+      },
+      {
+        id: 't2',
+        subjectId: 's2',
+        state: 'waiting',
+        title: 'Need a Grafana login',
+        lastMessageAtMs: NOW_MS - 2 * DAY,
+      },
+      {
+        id: 't3',
+        subjectId: 's3',
+        state: 'done',
+        title: 'Old',
+        lastMessageAtMs: NOW_MS - 90 * DAY,
+      },
+      {
+        id: 't5',
+        subjectId: 's1',
+        state: 'needsYou',
+        title: 'Klarna payout',
+        lastMessageAtMs: NOW_MS - 3 * DAY,
+      },
+      {
+        id: 't4',
+        subjectId: null,
+        state: 'investigating',
+        title: 'Unfiled',
+        lastMessageAtMs: NOW_MS,
+      },
+      {
+        id: 't6',
+        subjectId: 'gone',
+        state: 'investigating',
+        title: 'Lost',
+        lastMessageAtMs: NOW_MS,
+      },
+    ],
+    messages: [
+      {
+        threadId: 't1',
+        direction: 'in',
+        source: 'teams',
+        senderName: 'Sam Example',
+        senderHandle: 'sam@example.com',
+        text: 'Klarna refund stuck',
+      },
+      {
+        threadId: 't1',
+        direction: 'out',
+        source: 'teams',
+        senderName: 'João',
+        senderHandle: null,
+        text: 'Looking',
+      },
+      {
+        threadId: 't5',
+        direction: 'in',
+        source: 'mail',
+        senderName: 'Ana',
+        senderHandle: 'ana@example.com',
+        text: 'Payout?',
+      },
+      {
+        threadId: 't2',
+        direction: 'in',
+        source: 'jira',
+        senderName: 'Ana',
+        senderHandle: null,
+        text: 'Please give me Grafana',
+      },
+      {
+        threadId: 't4',
+        direction: 'in',
+        source: 'mail',
+        senderName: 'Zed',
+        senderHandle: null,
+        text: 'klarna',
+      },
+    ],
+    relations: [
+      { a: 's1', b: 's2', state: 'related', note: 'same team' },
+      { a: 's1', b: 'gone', state: 'related', note: '' },
+      { a: 's2', b: 's3', state: 'proposed', note: '' },
+      { a: 's3', b: 's4', state: 'rejected', note: '' },
+    ],
+  };
+  const search = (
+    name: string,
+    over: Partial<typeof SEARCH> & { filters?: Record<string, unknown> },
+  ) =>
+    pure(`searchSubjects/${name}`, 'searchSubjects', { ...SEARCH, ...over }, (i) =>
+      searchSubjects(i as never),
+    );
+  search('everything', {});
+  search('a name', { query: 'klarna' });
+  search('a handle', { query: 'SAM@' });
+  search('a channel', { query: 'jira' });
+  search('a person in two subjects', { query: 'ana' });
+  search('two words', { query: '  grafana   ana ' });
+  search('no match', { query: 'grafana klarna' });
+  search('accents', { query: 'AÇÃO' });
+  search('waiting for me', { filters: { waitingForMe: true } });
+  search('has open', { filters: { hasOpen: true } });
+  search('active 30 days', { filters: { activeDays: 30 } });
+  search('active 1 day', { filters: { activeDays: 1 } });
+  search('limit', { filters: { limit: 2 } });
+  search('limit 0 is the default', { filters: { limit: 0 } });
+  search('limit over the top', { filters: { limit: 500 } });
   calendarCases(act, pure, { agent: AGENT, human: HUMAN });
 
   return cases;

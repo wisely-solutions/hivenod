@@ -78,7 +78,12 @@ connect saves the token and installs the plugin into the private config itself (
 repo, through `HIVENOD_PLUGIN_MARKETPLACE`); then `hivenod claude` starts the session, which gets an
 item and finishes it. The later parts reuse that plugin install.
 
-`pnpm smoke:claude --only connect`, `--only basic`, `--only max-items` or `--only park` runs one part. `HIVE_SMOKE_MODEL` picks the model
+Then (item 4PEHr) one session with max_items 1 holding an item: an Inbox thread the agent brought
+in arrives as an `inbox` event although max_items is full, a sub-agent investigates it and
+proposes an outcome (the item stays held), and once the person approves it the carry-out event
+reaches the session and a sub-agent reports it with `outcome_done`.
+
+`pnpm smoke:claude --only connect`, `--only basic`, `--only max-items`, `--only park` or `--only inbox` runs one part. `HIVE_SMOKE_MODEL` picks the model
 (default haiku).
 
 Waits are bounded (60 s start-up, 90-180 s per model step, 15 min per part, 35 min overall).

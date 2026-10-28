@@ -23,7 +23,8 @@ All of these live under `workspaces/{wid}`. They are separate from projects and 
 inboxSubjects/{sid}   memberUid, name, createdBy{type,id}, createdAt, updatedAt, lastEventId
 inboxThreads/{tid}    memberUid, subjectId|null, state, waiting{on, until|null}|null,
                       question{text, by, at, answer|null, answeredAt|null}|null, title, refs[],
-                      lastMessageAt, fetchedBy (the home agent), createdAt, updatedAt, lastEventId
+                      lastMessageAt, fetchedBy (the home agent), urgent? (bool, thread_flag),
+                      createdAt, updatedAt, lastEventId
 inboxMessages/{mid}   memberUid, threadId, direction in|out, source, sender{name, handle}, text,
                       threadRef, messageId, permalink, replyRef, receivedAt, attachments[{name,url}],
                       fetchedBy, createdAt, lastEventId
@@ -32,6 +33,8 @@ inboxOutcomes/{oid}   memberUid, threadId, type, fields{}, state, note, proposed
                       result{text, permalink, itemId, error, by, at}|null, createdAt, updatedAt, lastEventId
 inboxEvents/{eid}     actor{type,id,name}, memberUid, threadId|null, subjectId|null, type, data{}, at
                       (create-only; the timeline)
+inboxRelations/{rid}  memberUid, a, b (a < b), note, state, proposedBy{type,id},
+                      decision{byUid, at}|null, createdAt, updatedAt, lastEventId
 ```
 
 ### Thread states
@@ -76,16 +79,16 @@ To add a type, add one entry, then run `UPDATE_GO_CONTRACT=1 pnpm test:scripts`.
 
 The initial types:
 
-| Type           | Fields                  | Carried out by           | Thread state when done   |
-| -------------- | ----------------------- | ------------------------ | ------------------------ |
-| `reply`        | text, holding?          | the home agent           | waiting on them          |
-| `reply_book`   | text, slot, with        | the home agent           | waiting on them          |
-| `no_reply`     | reason?                 | takes effect on approval | done                     |
-| `make_it_work` | title, brief?, project? | the home agent           | waiting on the item      |
-| `handover`     | to, note?               | the home agent           | waiting on a third party |
-| `snooze`       | until                   | takes effect on approval | waiting until the date   |
-| `nudge`        | text                    | the home agent           | waiting on them          |
-| `ignore`       | reason?                 | takes effect on approval | ignored                  |
+| Type           | Fields                         | Carried out by                                   | Thread state when done   |
+| -------------- | ------------------------------ | ------------------------------------------------ | ------------------------ |
+| `reply`        | text, holding?                 | the home agent                                   | waiting on them          |
+| `reply_book`   | text, start, end, with, title? | the home agent (the booking is made on approval) | waiting on them          |
+| `no_reply`     | reason?                        | takes effect on approval                         | done                     |
+| `make_it_work` | title, brief?, project?        | the home agent                                   | waiting on the item      |
+| `handover`     | to, note?                      | the home agent                                   | waiting on a third party |
+| `snooze`       | until                          | takes effect on approval                         | waiting until the date   |
+| `nudge`        | text                           | the home agent                                   | waiting on them          |
+| `ignore`       | reason?                        | takes effect on approval                         | ignored                  |
 
 An outcome's life:
 
@@ -98,6 +101,57 @@ An outcome's life:
    the thread's home agent, `fetchedBy`, because it has the channel access. It reports
    `outcome_done`: `done` moves the thread to the type's state, and `failed` sends it back to
    `investigating`.
+
+### Bookings (`reply_book`, item w9SAf)
+
+Approving a `reply_book` outcome also books the meeting, in the same batch: `approveOutcome`
+adds a `calendarUpsert` as the member, for the member's own calendar in this organization
+(source `hivenod`, sourceEventId = the outcome id, so `bookingEventId(member, outcomeId)` finds
+it; title = `title` or "Meeting with <with>"; attendees from `with`). The member's busy time is
+updated with it, so `calendar_free` sees the slot taken at once. The home agent then sends the
+reply and the invite, mirrors the event to the source calendar and reports `outcome_done`.
+
+## Related subjects
+
+Two subjects of one member can be linked as related: the same client, project or problem seen
+from two sides. A link is symmetric, so a pair has one document, `rel-<a>-<b>` with `a < b`
+(`relationId(a, b)` either way round). It has an optional one-line `note` (at most 500
+characters) and a `state`:
+
+| State      | How it gets there                                                                   |
+| ---------- | ----------------------------------------------------------------------------------- |
+| `proposed` | An agent proposed it (`subject_relate`, `proposeRelation`).                         |
+| `related`  | The member accepted the proposal, or linked the pair themselves (`relateSubjects`). |
+| `rejected` | The member turned it down (`rejectRelation`) or removed it (`unrelateSubjects`).    |
+
+Agents can't propose a pair again once it's proposed, related or turned down; the member can
+relate a turned-down pair again. Relations are never deleted. A link to a subject that a merge
+removed is ignored (search and the subject page skip it). Events: `relation.proposed` (agent),
+`relation.accepted`, `relation.created`, `relation.rejected`, `relation.removed` (member), with
+`data: {relationId, a, b, note?}` and `subjectId: a`.
+
+For the web app: list a member's links with `where('memberUid', '==', uid)` on
+`inboxRelations`; show `related` ones on both subjects' pages and `proposed` ones as suggestions
+with OK (`relateSubjects` with the proposal as `existing`) and No (`rejectRelation`).
+
+## Finding subjects
+
+`searchSubjects(input)` in `packages/shared/src/inbox.ts` is pure, so the agent tools (TS and
+Go, checked by the contract cases) and the web app's Find give the same answer. Input: the
+member's subjects, threads, messages and relations (one workspace's; the web app may pass
+several workspaces' rows), the query, the filters and `nowMs`.
+
+- Every word of the query, lowercased, must appear in the subject's name, its people (sender
+  names and handles of its threads' messages), its channels (sources), its thread titles or its
+  message texts. Up to 10 words count.
+- Order: score (per word, its best field: name 5, people 3, channel 3, thread title 2, text 1),
+  then threads waiting for the member, then the latest activity, then the name.
+- Filters: `waitingForMe` (a thread in Needs you or Your call), `activeDays` (a message in the
+  last N days), `hasOpen` (an open thread), `limit` (default 20, at most 100). The organization
+  is the workspace the rows come from.
+- Each hit: `subjectId, name, score, matched[] (name|people|channel|thread|text), forYou, open,
+threads, lastActivityAt, people[] (who wrote in, at most 10), channels[], related[],
+proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
 
 ## Rules (firestore.rules, "inbox")
 
@@ -117,27 +171,32 @@ An outcome's life:
   - ignore, close and bring back threads;
   - move threads between subjects;
   - rename, merge and split subjects.
+- **Related subjects:** agents of the organization propose links between two subjects of the
+  same member; only that member relates, accepts, turns down and removes them.
 - **Approval:** agents never write `approved` or a decision, so nothing is carried out without
   the member's OK.
 - **Tracking:** every inbox write is tracked in `inboxEvents`, never in the organization-wide
   `events`, which every member can read.
-- **Tests:** `packages/shared/rules/inbox.test.ts`. The `inbox: …` mutations in
+- **Tests:** `packages/shared/rules/inbox.test.ts` and `inboxrelations.test.ts`. The `inbox: …` mutations in
   `packages/shared/rules/mutate.mjs` are all caught.
 
 ## Agent tools (MCP, Go CLI and TS agent)
 
-| Tool              | CLI                          | What it does                                                                                                               |
-| ----------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `inbox_add`       | `hivenod inbox add`          | Brings a message in. It's for `member`, by default the person who connected the agent. Repeats are reported as duplicates. |
-| `inbox_list`      | `hivenod inbox list`         | Lists what agents have to do: `toWork`, `toCarryOut` (approved outcomes this agent carries out) and `toWake`.              |
-| `thread_read`     | `hivenod thread read ID`     | Shows one thread: messages, subject, outcomes and decisions, notes and Q&A, and what to do next.                           |
-| `subject_list`    | `hivenod subject list`       | Lists a member's subjects, with how many threads wait for them and how many are open.                                      |
-| `subject_assign`  | `hivenod subject assign ID`  | Files or moves a thread under an existing subject or a new one. A matching name reuses the existing subject.               |
-| `inbox_note`      | `hivenod inbox note ID`      | Adds an investigation note to the timeline.                                                                                |
-| `inbox_ask`       | `hivenod inbox ask ID`       | Asks the member a question. The thread waits in Needs you.                                                                 |
-| `outcome_propose` | `hivenod outcome propose ID` | Proposes an outcome of a type from the registry, with its fields.                                                          |
-| `outcome_done`    | `hivenod outcome done OID`   | The executor reports an approved outcome as done or failed.                                                                |
-| `thread_wake`     | `hivenod thread wake ID`     | Wakes a snoozed thread whose date has come.                                                                                |
+| Tool              | CLI                          | What it does                                                                                                                |
+| ----------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `inbox_add`       | `hivenod inbox add`          | Brings a message in. It's for `member`, by default the person who connected the agent. Repeats are reported as duplicates.  |
+| `inbox_list`      | `hivenod inbox list`         | Lists what agents have to do: `toWork`, `toCarryOut` (approved outcomes this agent carries out) and `toWake`.               |
+| `thread_read`     | `hivenod thread read ID`     | Shows one thread: messages, subject, outcomes and decisions, notes and Q&A, and what to do next.                            |
+| `subject_list`    | `hivenod subject list`       | Lists a member's subjects, with how many threads wait for them and how many are open.                                       |
+| `subject_assign`  | `hivenod subject assign ID`  | Files or moves a thread under an existing subject or a new one. A matching name reuses the existing subject.                |
+| `subject_search`  | `hivenod subject search …`   | Finds a member's subjects by name, people, channel and thread text, with filters (see "Finding subjects").                  |
+| `subject_relate`  | `hivenod subject relate A B` | Proposes two subjects as related, with a note. The member OKs or turns it down.                                             |
+| `inbox_note`      | `hivenod inbox note ID`      | Adds an investigation note to the timeline.                                                                                 |
+| `inbox_ask`       | `hivenod inbox ask ID`       | Asks the member a question. The thread waits in Needs you.                                                                  |
+| `outcome_propose` | `hivenod outcome propose ID` | Proposes an outcome of a type from the registry, with its fields.                                                           |
+| `outcome_done`    | `hivenod outcome done OID`   | The executor reports an approved outcome as done or failed.                                                                 |
+| `thread_wake`     | `hivenod thread wake ID`     | Wakes a snoozed thread whose date has come.                                                                                 |
+| `thread_flag`     | `hivenod thread flag ID`     | Marks a thread urgent (or not, `urgent: false` / `--off`): the notifier pings the member at once, whatever the quiet hours. |
 
 The contract tests cover the agent actions: `cli/contract/cases.ts` against the Go actions, and
 `packages/agent/test/go.integration.test.ts`, which runs the inbox scenario through both CLIs on
@@ -195,5 +254,5 @@ last event id it handled (`lastEventId`):
 
 - **Part 3:** the Inbox view (per workspace and across workspaces), decisions on outcomes,
   rename, merge, split and move, and notifier notices, including urgent pings.
-- **Later slices:** the Calendar (which completes `reply_book`), personal Google sync, and
+- **Later slices:** personal Google sync, and
   per-workspace auto-OK per outcome type.

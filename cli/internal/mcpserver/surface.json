@@ -535,6 +535,112 @@
         }
       },
       {
+        "name": "subject_search",
+        "description": "Find a person's Inbox subjects by name, people (sender names and handles), channel (teams, mail, …) and words in their threads; every word must match. Best matches first, with what matched, the people, channels and related subjects. Filters: waitingForMe (threads wait for the person), activeDays (a message in the last N days), hasOpen (open threads). Search before subject_assign so a thread joins the subject it belongs to instead of a new twin.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "description": "Words to find; empty lists every subject",
+              "type": "string",
+              "maxLength": 500
+            },
+            "member": {
+              "description": "User id of the person; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "waitingForMe": {
+              "description": "Only subjects with threads waiting for the person",
+              "type": "boolean"
+            },
+            "activeDays": {
+              "description": "Only subjects with a message in the last N days",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            },
+            "hasOpen": {
+              "description": "Only subjects with open threads",
+              "type": "boolean"
+            },
+            "limit": {
+              "description": "At most this many (default 20)",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "thread_flag",
+        "description": "Mark a thread urgent when it can't wait (production down, a deadline today, the person's own rules say so): the person is pinged at once, whatever their quiet hours. urgent: false takes it back. Use it sparingly.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "urgent": {
+              "description": "true (the default) or false",
+              "type": "boolean"
+            },
+            "reason": {
+              "description": "Why it is urgent, in one line",
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          "required": [
+            "threadId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "subject_relate",
+        "description": "Propose that two subjects of the same person are related (the same client, project or problem seen from two sides), with an optional note saying how. It is a proposal: the person OKs or turns it down, and a link turned down is not proposed again. Related subjects show on each other's page and in subject_search.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A subject id"
+            },
+            "b": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The other subject id"
+            },
+            "note": {
+              "description": "How they relate, in one line",
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "a",
+            "b"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "inbox_note",
         "description": "Add an investigation note to a thread's timeline (what you checked and found: tickets, repos, the calendar, earlier answers). The person sees it with the thread.",
         "inputSchema": {
@@ -590,7 +696,7 @@
       },
       {
         "name": "outcome_propose",
-        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (the booking itself comes with the calendar). Fields: text (text: The answer, ready to send as written); slot (line: The slot, e.g. 2026-11-03 10:00-10:30 Europe/Lisbon); with (line: Who is invited).\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
+        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then send the reply and the invite, mirror the event to the source calendar and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1862,6 +1968,112 @@
         }
       },
       {
+        "name": "subject_search",
+        "description": "Find a person's Inbox subjects by name, people (sender names and handles), channel (teams, mail, …) and words in their threads; every word must match. Best matches first, with what matched, the people, channels and related subjects. Filters: waitingForMe (threads wait for the person), activeDays (a message in the last N days), hasOpen (open threads). Search before subject_assign so a thread joins the subject it belongs to instead of a new twin.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "description": "Words to find; empty lists every subject",
+              "type": "string",
+              "maxLength": 500
+            },
+            "member": {
+              "description": "User id of the person; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "waitingForMe": {
+              "description": "Only subjects with threads waiting for the person",
+              "type": "boolean"
+            },
+            "activeDays": {
+              "description": "Only subjects with a message in the last N days",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            },
+            "hasOpen": {
+              "description": "Only subjects with open threads",
+              "type": "boolean"
+            },
+            "limit": {
+              "description": "At most this many (default 20)",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "thread_flag",
+        "description": "Mark a thread urgent when it can't wait (production down, a deadline today, the person's own rules say so): the person is pinged at once, whatever their quiet hours. urgent: false takes it back. Use it sparingly.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "urgent": {
+              "description": "true (the default) or false",
+              "type": "boolean"
+            },
+            "reason": {
+              "description": "Why it is urgent, in one line",
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          "required": [
+            "threadId"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "subject_relate",
+        "description": "Propose that two subjects of the same person are related (the same client, project or problem seen from two sides), with an optional note saying how. It is a proposal: the person OKs or turns it down, and a link turned down is not proposed again. Related subjects show on each other's page and in subject_search.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A subject id"
+            },
+            "b": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The other subject id"
+            },
+            "note": {
+              "description": "How they relate, in one line",
+              "type": "string",
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "a",
+            "b"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "inbox_note",
         "description": "Add an investigation note to a thread's timeline (what you checked and found: tickets, repos, the calendar, earlier answers). The person sees it with the thread.",
         "inputSchema": {
@@ -1917,7 +2129,7 @@
       },
       {
         "name": "outcome_propose",
-        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (the booking itself comes with the calendar). Fields: text (text: The answer, ready to send as written); slot (line: The slot, e.g. 2026-11-03 10:00-10:30 Europe/Lisbon); with (line: Who is invited).\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
+        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then send the reply and the invite, mirror the event to the source calendar and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
         "inputSchema": {
           "type": "object",
           "properties": {

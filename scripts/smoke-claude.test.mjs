@@ -36,6 +36,7 @@ describe('smoke-claude guard helpers', () => {
     expect(onlyFrom(['--only', 'basic'])).toBe('basic');
     expect(onlyFrom(['--only', 'park'])).toBe('park');
     expect(onlyFrom(['--only', 'connect'])).toBe('connect');
-    expect(() => onlyFrom(['--only', 'x'])).toThrow(/connect, basic, max-items or park/);
+    expect(onlyFrom(['--only', 'inbox'])).toBe('inbox');
+    expect(() => onlyFrom(['--only', 'x'])).toThrow(/connect, basic, max-items, park or inbox/);
   });
 });

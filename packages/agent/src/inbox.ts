@@ -18,17 +18,22 @@ import {
   assignSubject,
   digest24,
   finishOutcome,
+  flagThread,
   inboxMessageKey,
   inboxPaths,
   inboxThreadKey,
   paths,
   proposeOutcome,
+  proposeRelation,
+  relationId,
+  searchSubjects,
   THREAD_OPEN,
   wakeThread,
   type ActionContext,
   type ActionPlan,
   type InboxMessage,
   type InboxOutcome,
+  type InboxRelation,
   type InboxSubject,
   type InboxThread,
   type OutcomeStateOf,
@@ -91,7 +96,13 @@ export const NEXT: Record<string, string> = {
 export const CARRY_OUT =
   'Carry out the approved outcome exactly as approved (its fields, as the person left them), then report it with outcome_done.';
 
-type Coll = 'inboxThreads' | 'inboxSubjects' | 'inboxMessages' | 'inboxOutcomes' | 'inboxEvents';
+type Coll =
+  | 'inboxThreads'
+  | 'inboxSubjects'
+  | 'inboxMessages'
+  | 'inboxOutcomes'
+  | 'inboxEvents'
+  | 'inboxRelations';
 
 export class InboxOps {
   constructor(private readonly d: InboxDeps) {}
@@ -147,6 +158,8 @@ export class InboxOps {
         query(collection(this.d.db, `workspaces/${w}/inboxOutcomes`), where(field, op, value)),
       inboxEvents: () =>
         query(collection(this.d.db, `workspaces/${w}/inboxEvents`), where(field, op, value)),
+      inboxRelations: () =>
+        query(collection(this.d.db, `workspaces/${w}/inboxRelations`), where(field, op, value)),
     }[name]();
     const snap = await this.read(() => getDocs(q));
     return snap.docs.map((s) => ({ id: s.id, data: s.data() as T }));
@@ -430,6 +443,7 @@ export class InboxOps {
       subject: t.subjectId ? { subjectId: t.subjectId, name: subject?.name ?? null } : null,
       fetchedBy: t.fetchedBy,
       fetchedByMe: t.fetchedBy === this.d.uid,
+      urgent: t.urgent === true,
       messages,
       outcomes,
       timeline,
@@ -669,6 +683,114 @@ export class InboxOps {
       wake: async (threadId) => {
         await this.wake(threadId);
       },
+    };
+  }
+
+  /** thread_flag: marks a thread urgent (the person is pinged at once), or not. */
+  async flag(threadId: string, urgent: boolean, reason?: string) {
+    const t = await this.thread(threadId);
+    await this.write(
+      this.wrap(() =>
+        flagThread(this.d.ctx, { threadId, thread: this.state(t), urgent, reason: reason ?? null }),
+      ),
+    );
+    return {
+      threadId,
+      urgent,
+      note: urgent
+        ? 'Marked urgent: the person is pinged at once, whatever their quiet hours.'
+        : 'No longer urgent.',
+    };
+  }
+
+  /** subject_search: a person's subjects by name, people, channel and thread text. */
+  async search(
+    q: string,
+    f: {
+      member?: string;
+      waitingForMe?: boolean;
+      activeDays?: number;
+      hasOpen?: boolean;
+      limit?: number;
+    } = {},
+  ) {
+    const member = await this.member(f.member);
+    const [subs, threads, messages, relations] = await Promise.all([
+      this.list<InboxSubject>('inboxSubjects', 'memberUid', '==', member),
+      this.list<Stored<InboxThread>>('inboxThreads', 'memberUid', '==', member),
+      this.list<Stored<InboxMessage>>('inboxMessages', 'memberUid', '==', member),
+      this.list<InboxRelation>('inboxRelations', 'memberUid', '==', member),
+    ]);
+    const r = searchSubjects({
+      query: q,
+      filters: {
+        ...(f.waitingForMe !== undefined ? { waitingForMe: f.waitingForMe } : {}),
+        ...(f.activeDays !== undefined ? { activeDays: f.activeDays } : {}),
+        ...(f.hasOpen !== undefined ? { hasOpen: f.hasOpen } : {}),
+        ...(f.limit !== undefined ? { limit: f.limit } : {}),
+      },
+      nowMs: Date.now(),
+      subjects: subs.map((s) => ({ id: s.id, name: s.data.name })),
+      threads: threads.map((t) => ({
+        id: t.id,
+        subjectId: t.data.subjectId,
+        state: t.data.state,
+        title: t.data.title,
+        lastMessageAtMs: t.data.lastMessageAt.toMillis(),
+      })),
+      messages: messages.map(({ data: m }) => ({
+        threadId: m.threadId,
+        direction: m.direction,
+        source: m.source,
+        senderName: m.sender.name,
+        senderHandle: m.sender.handle,
+        text: m.text,
+      })),
+      relations: relations.map(({ data: x }) => ({
+        a: x.a,
+        b: x.b,
+        state: x.state,
+        note: x.note,
+      })),
+    });
+    return {
+      member,
+      query: q,
+      total: r.total,
+      subjects: r.subjects,
+      note: r.total
+        ? 'Best matches first. File a thread under the subject it belongs to (subject_assign with subjectId); propose links between related subjects with subject_relate.'
+        : 'No subject matches. Try fewer or other words, or make a new subject with subject_assign (name).',
+    };
+  }
+
+  /** subject_relate: proposes a link between two subjects; the person OKs it. */
+  async relate(a: string, b: string, note?: string) {
+    const [sa, sb] = await Promise.all([
+      this.get<InboxSubject>(inboxPaths.subject(this.d.workspaceId, a)),
+      this.get<InboxSubject>(inboxPaths.subject(this.d.workspaceId, b)),
+    ]);
+    if (!sa) throw new HiveError(`Subject ${a} not found (see subject_search).`);
+    if (!sb) throw new HiveError(`Subject ${b} not found (see subject_search).`);
+    const rid = relationId(a, b);
+    const ex = await this.get<InboxRelation>(inboxPaths.relation(this.d.workspaceId, rid));
+    const plan = this.wrap(() =>
+      proposeRelation(this.d.ctx, {
+        a,
+        b,
+        subjectA: sa,
+        subjectB: sb,
+        existing: ex,
+        note: note ?? null,
+      }),
+    );
+    await this.write(plan);
+    return {
+      relationId: plan.relationId,
+      a: plan.a,
+      b: plan.b,
+      state: 'proposed',
+      note: 'Proposed. The person OKs or turns it down; until then it shows as a suggestion.',
     };
   }
 }

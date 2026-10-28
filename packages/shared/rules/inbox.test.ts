@@ -15,6 +15,7 @@ import {
   assignSubject,
   closeThread,
   finishOutcome,
+  flagThread,
   ignoreThread,
   inboxPaths,
   mergeSubjects,
@@ -400,6 +401,43 @@ describe('agents investigate: file, note, ask, retitle', () => {
           threadId: 'itr1',
           thread: { ...(await thread()), memberUid: 'bob' },
           title: 'x',
+        }),
+      ),
+    );
+  });
+});
+
+describe('urgent threads (thread_flag)', () => {
+  it('its agents and its member flag a thread; nobody else; only a boolean', async () => {
+    const a = await started();
+    await ok(
+      a.run(
+        flagThread(a.ctx, {
+          threadId: 'itr1',
+          thread: await thread(),
+          urgent: true,
+          reason: 'Prod down',
+        }),
+      ),
+    );
+    expect(await snap(T('itr1'))).toMatchObject({ urgent: true });
+    const alice = as('alice');
+    await ok(
+      alice.run(flagThread(alice.ctx, { threadId: 'itr1', thread: await thread(), urgent: false })),
+    );
+    expect(await snap(T('itr1'))).toMatchObject({ urgent: false });
+    const bob = as('bob');
+    await denied(
+      bob.run(raw(bob, T('itr1'), { urgent: true }, 'thread.flagged', { urgent: true }, 'bob')),
+    );
+    await denied(a.run(raw(a, T('itr1'), { urgent: 'yes' }, 'thread.flagged')));
+    await denied(a.run(raw(a, T('itr1'), { urgent: true, state: 'done' }, 'thread.flagged')));
+    await denied(
+      as(AGENTS.revoked).run(
+        flagThread(as(AGENTS.revoked).ctx, {
+          threadId: 'itr1',
+          thread: await thread(),
+          urgent: true,
         }),
       ),
     );

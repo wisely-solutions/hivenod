@@ -18,6 +18,9 @@ import {
   sealToken,
   sendBack,
   answerQuestion,
+  rejectRelation,
+  relateSubjects,
+  relationId,
   approveOutcome,
   inboxPaths,
   type OutcomeStateOf,
@@ -188,6 +191,7 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
       'inboxMessages',
       'inboxOutcomes',
       'inboxEvents',
+      'inboxRelations',
     ])
       await read(`workspaces/${W}/${c}`);
     await read(`workspaces/${W}/calendar`);
@@ -482,6 +486,103 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     expect(r.ts.calls[3]).toMatchObject({ out: { newThread: false } });
     expect(r.ts.calls[20]).toMatchObject({ out: { next: expect.stringMatching(/approved/) } });
     expect(r.ts.calls[21]).toMatchObject({ out: { threadState: 'waiting' } });
+    expect(r.go.calls).toEqual(r.ts.calls);
+    expect(r.go.docs).toEqual(r.ts.docs);
+  }, 120_000);
+
+  it('subject search and related subjects (item 4PEHr): found by name, people, channel and text; links the person OKs', async () => {
+    const r = await both(async (call) => {
+      const owner = as('owner');
+      const add = async (source: string, ref: string, name: string, text: string) =>
+        out(
+          await call('inbox_add', {
+            source,
+            sender: { name, handle: `${name.toLowerCase()}@example.com` },
+            text,
+            threadRef: ref,
+            // Fixed: the default message id is the receivedAt milliseconds.
+            receivedAt: '2026-10-28T09:00:00Z',
+          }),
+        ).threadId as string;
+      const t1 = await add('teams', 'r1', 'Sam', 'Klarna refund stuck for order 12');
+      const t2 = await add('jira', 'r2', 'Ana', 'Please give me Grafana access');
+      const t3 = await add('mail', 'r3', 'Ana', 'Klarna payouts are late');
+      const s1 = out(await call('subject_assign', { threadId: t1, name: 'Klarna refunds' }))
+        .subjectId as string;
+      const s2 = out(await call('subject_assign', { threadId: t2, name: 'Grafana access' }))
+        .subjectId as string;
+      const s3 = out(await call('subject_assign', { threadId: t3, name: 'Klarna payouts' }))
+        .subjectId as string;
+      await call('subject_search', {});
+      await call('subject_search', { query: 'klarna' });
+      await call('subject_search', { query: 'ana' });
+      await call('subject_search', { query: 'jira' });
+      await call('subject_search', { query: 'order 12' });
+      await call('subject_search', { query: 'nothing like this' });
+      await call('subject_search', { hasOpen: true, activeDays: 7, limit: 2 });
+      await call('subject_search', { waitingForMe: true });
+      await call('subject_relate', { a: s3, b: s1, note: 'Both Klarna' });
+      await call('subject_relate', { a: s1, b: s3 });
+      await call('subject_relate', { a: s1, b: s1 });
+      await call('subject_relate', { a: s1, b: 'nope' });
+      await call('subject_relate', { a: s2, b: s1 });
+      await call('subject_search', { query: 'klarna' });
+      const rel = (a: string, b: string) => inboxPaths.relation(W, relationId(a, b));
+      await owner.run(
+        relateSubjects(owner.ctx, {
+          a: s1,
+          b: s3,
+          subjectA: { memberUid: 'owner' },
+          subjectB: { memberUid: 'owner' },
+          existing: (await snap(rel(s1, s3))) as never,
+        }),
+      );
+      await owner.run(
+        rejectRelation(owner.ctx, {
+          relationId: relationId(s1, s2),
+          relation: (await snap(rel(s1, s2))) as never,
+        }),
+      );
+      await call('subject_relate', { a: s1, b: s2 });
+      await call('subject_search', { query: 'klarna refunds' });
+      // Urgent threads (thread_flag).
+      await call('thread_flag', { threadId: t1, reason: 'Order 12 is stuck at checkout' });
+      await call('thread_read', { threadId: t1 });
+      await call('thread_flag', { threadId: t1, urgent: false });
+      await call('thread_flag', { threadId: 'nope' });
+    });
+    const oks = r.ts.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      ...Array(6).fill(true),
+      ...Array(8).fill(true),
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+    ]);
+    expect(r.ts.calls[23]).toMatchObject({ out: { urgent: true } });
+    const hits = (i: number) =>
+      (out(r.ts.calls[i] as never).subjects as { name: string }[]).map((x) => x.name);
+    expect(hits(6)).toHaveLength(3);
+    expect(hits(7)).toEqual(['Klarna payouts', 'Klarna refunds']);
+    expect(hits(8)).toEqual(['Grafana access', 'Klarna payouts']);
+    expect(hits(9)).toEqual(['Grafana access']);
+    expect(hits(10)).toEqual(['Klarna refunds']);
+    expect(hits(11)).toEqual([]);
+    expect(r.ts.calls[19]).toMatchObject({
+      out: { subjects: [{ proposed: [{ name: 'Klarna refunds', note: 'Both Klarna' }] }, {}] },
+    });
+    expect(r.ts.calls[21]).toMatchObject({
+      out: { subjects: [{ name: 'Klarna refunds', related: [{ name: 'Klarna payouts' }] }] },
+    });
     expect(r.go.calls).toEqual(r.ts.calls);
     expect(r.go.docs).toEqual(r.ts.docs);
   }, 120_000);
