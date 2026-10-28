@@ -74,7 +74,8 @@ beforeAll(async () => {
   writeFileSync(join(dir, 'public', 'index.html'), '<!doctype html><title>Hivenod</title>');
   const repoConfig = JSON.parse(readFileSync(join(REPO, 'firebase.json'), 'utf8'));
   const app = repoConfig.hosting.find((h: { target?: string }) => h.target === 'app');
-  const { target: _target, ...site } = app;
+  const site = { ...app };
+  delete site.target;
   writeFileSync(
     join(dir, 'firebase.json'),
     JSON.stringify({

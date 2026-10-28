@@ -139,7 +139,8 @@ export function siteUrlFor(settings, defaultSiteUrl) {
 export function selfhostFirebaseConfig(repoConfig, s) {
   const app = (repoConfig.hosting ?? []).find((h) => h.target === 'app');
   if (!app) throw new Error('firebase.json has no hosting entry with target "app"');
-  const { target: _t, ...hosting } = structuredClone(app);
+  const hosting = structuredClone(app);
+  delete hosting.target;
   hosting.site = s.siteId ?? s.project;
   const own = [
     ...(s.domain ? [`https://${s.domain}`] : []),

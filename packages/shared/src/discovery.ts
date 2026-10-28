@@ -151,10 +151,7 @@ export function parseDiscovery(site: string, doc: unknown): Discovery {
   };
   for (const k of ['apiKey', 'authDomain', 'projectId'] as const)
     if (!firebase[k])
-      throw new DiscoveryError(
-        'missing-field',
-        `${base}${DISCOVERY_PATH} has no firebase.${k}.`,
-      );
+      throw new DiscoveryError('missing-field', `${base}${DISCOVERY_PATH} has no firebase.${k}.`);
   const loopback = isLoopbackSite(base);
   let cli: string;
   try {
