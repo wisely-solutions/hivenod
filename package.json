@@ -20,6 +20,7 @@
     "e2e:emu": "node scripts/e2e-emu.mjs",
     "size": "pnpm --filter @hive/web size",
     "perf:emu": "E2E_SERVE_GZIP=1 E2E_WORKERS=1 node scripts/e2e-emu.mjs perf-load",
+    "shots:landing": "SHOTS_LANDING=1 E2E_WORKERS=1 node scripts/e2e-emu.mjs shots-landing.spec.ts --project desktop-1440",
     "test:scripts": "vitest run --root scripts",
     "check:indexes": "node scripts/check-firestore-indexes.mjs",
     "deploy:preview": "node scripts/deploy.mjs preview",

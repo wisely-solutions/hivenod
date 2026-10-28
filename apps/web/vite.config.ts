@@ -34,11 +34,19 @@ function preloadSignedIn(): Plugin {
       const signedIn = find('/auth/SignedIn.tsx');
       const inbox = find('/inbox/InboxPage.tsx');
       const prewarm = find('/lib/prewarm.ts');
-      if (!entry || !signedIn || !inbox || !prewarm)
+      const landing = find('/landing/LandingPage.tsx');
+      if (!entry || !signedIn || !inbox || !prewarm || !landing)
         throw new Error('preload: signed-in chunks not found');
       const skip = closure(bundle, entry.fileName);
       const list = (c: { fileName: string }) =>
         [...closure(bundle, c.fileName)].filter((f) => !skip.has(f)).map((f) => `/${f}`);
+      // Signed-out visitors at "/" get the landing page (item g17GWUkfKRFh4mgn0ciQ): fetch its code
+      // and styles alongside the entry instead of after it.
+      const landingJs = list(landing);
+      const landingCss = [
+        ...((landing as { viteMetadata?: { importedCss?: Set<string> } }).viteMetadata
+          ?.importedCss ?? []),
+      ].map((f) => `/${f}`);
       // The early listeners (lib/prewarm.ts) count as part of the session start.
       const all = [...new Set([...list(prewarm), ...list(signedIn)])];
       // What the session needs to start (Firebase) is fetched first. The shell and the first
@@ -63,11 +71,14 @@ function preloadSignedIn(): Plugin {
         type: 'asset',
         fileName: 'preload.js',
         source:
-          `(function(){try{if(localStorage.getItem('hive-auth')!=='1')return;` +
+          `(function(){try{function link(rel,u){var l=document.createElement('link');l.rel=rel;l.href=u;return l;}` +
+          `if(localStorage.getItem('hive-auth')!=='1'){if(location.pathname==='/'){` +
+          `${JSON.stringify(landingJs)}.forEach(function(u){document.head.appendChild(link('modulepreload',u));});` +
+          `${JSON.stringify(landingCss)}.forEach(function(u){var l=link('preload',u);l.as='style';document.head.appendChild(l);});}` +
+          `return;}` +
           `var first=${JSON.stringify(first)};` +
           `var rest=${JSON.stringify(rest)};` +
           `if(location.pathname==='/')rest=rest.concat(${JSON.stringify(home)});` +
-          `function link(rel,u){var l=document.createElement('link');l.rel=rel;l.href=u;return l;}` +
           `function add(u,cb){var l=link('modulepreload',u);` +
           `if(cb){l.onload=cb;l.onerror=cb;}document.head.appendChild(l);}` +
           `${JSON.stringify(hosts)}.forEach(function(h){var l=link('preconnect',h);` +

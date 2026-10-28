@@ -30,6 +30,7 @@ import {
 } from './release-lib.mjs';
 import { cliBinProblems } from './cli-bin-smoke.mjs';
 import { sweepPairings } from './pairing-sweep-lib.mjs';
+import { fetchStars, starsJson } from './stars-lib.mjs';
 
 const [mode, name] = process.argv.slice(2);
 // Self-hosting: HIVENOD_FIREBASE_PROJECT is your Firebase project id (docs/SELF-HOST.md).
@@ -128,6 +129,11 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
       deployedAt: new Date().toISOString(),
     }) + '\n',
   );
+  // The landing page's GitHub star count (item g17GWUkfKRFh4mgn0ciQ): asked once here, so visitors
+  // never call GitHub. null on any failure; the page then shows no count.
+  const stars = await fetchStars({ token: process.env.GH_TOKEN_WISELY || process.env.GH_TOKEN });
+  writeFileSync(join(cwd, 'apps/web/dist/stars.json'), starsJson(stars));
+  console.log(`GitHub stars: ${stars ?? 'unknown (the page shows no count)'}`);
   fb(['deploy', '--only', 'hosting,firestore', '--message', `commit ${commit.slice(0, 7)}`], cwd);
   return commit;
 }

@@ -10,7 +10,7 @@ import {
 import { lazy, Suspense, useEffect } from 'react';
 import { releaseBoot } from './lib/boot';
 import { useRouterState } from '@tanstack/react-router';
-import { useAuthHint } from './auth/hint';
+import { getAuthHint, useAuthHint } from './auth/hint';
 import { LoadingMark } from './components/Loading';
 import { SignInPage } from './pages/SignInPage';
 import { isSettingsTab, type SettingsTab } from './pages/settingsTabs';
@@ -68,6 +68,15 @@ function Root() {
   return <MotionProvider>{body}</MotionProvider>;
 }
 
+// Needs you is the signed-in page at "/". The router loads a matched route's component ahead of
+// rendering it, so signed-out visitors (who see the landing page there) would download it and
+// Firebase for nothing; only a browser that may be signed in loads it early (item g17GWUkfKRFh4mgn0ciQ).
+const InboxPage = lazyRouteComponent(() => import('./inbox/InboxPage'), 'InboxPage');
+function IndexPage() {
+  return <InboxPage />;
+}
+IndexPage.preload = () => (getAuthHint() ? InboxPage.preload?.() : undefined);
+
 const rootRoute = createRootRoute({ component: Root });
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -78,7 +87,7 @@ const indexRoute = createRoute({
     ...(typeof s.sel === 'string' && s.sel ? { sel: s.sel } : {}),
     ...(s.f === 'approvals' || s.f === 'questions' || s.f === 'findings' ? { f: s.f } : {}),
   }),
-  component: lazyRouteComponent(() => import('./inbox/InboxPage'), 'InboxPage'),
+  component: IndexPage,
 });
 // The style guide is route-split, so it never counts toward the initial JS budget.
 const kitRoute = createRoute({
