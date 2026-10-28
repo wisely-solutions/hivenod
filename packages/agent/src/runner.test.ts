@@ -519,10 +519,10 @@ describe('hivenod run: the loop', () => {
     expect(c.markSeen).toHaveBeenCalled();
     expect(c.markOffline).toHaveBeenCalledTimes(1);
     const seenOrder = vi.mocked(c.markSeen).mock.invocationCallOrder;
-    expect(vi.mocked(c.waitForWork).mock.invocationCallOrder[0]).toBeGreaterThan(seenOrder[0]);
-    expect(vi.mocked(c.markOffline).mock.invocationCallOrder[0]).toBeGreaterThan(
-      seenOrder[seenOrder.length - 1],
-    );
+    const firstSeen = seenOrder[0] ?? Infinity;
+    const lastSeen = seenOrder[seenOrder.length - 1] ?? Infinity;
+    expect(vi.mocked(c.waitForWork).mock.invocationCallOrder[0] ?? 0).toBeGreaterThan(firstSeen);
+    expect(vi.mocked(c.markOffline).mock.invocationCallOrder[0] ?? 0).toBeGreaterThan(lastSeen);
     const ac = new AbortController();
     const d = fakeClient({
       waitForWork: vi.fn(async () => {
