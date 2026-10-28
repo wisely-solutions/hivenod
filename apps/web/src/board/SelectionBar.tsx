@@ -1,5 +1,8 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
+import { useReducedMotion } from '../ui/motion';
+import type { Countdown } from '../ui/overlay';
+import { useSecondsLeft } from '../ui/UndoButton';
 
 /** The look of a button on the selection bar (also used by the screens that fill it). */
 const BAR_BASE =
@@ -48,5 +51,45 @@ export function SelectionBar({
         <span className="max-sm:sr-only">Clear</span>
       </button>
     </div>
+  );
+}
+
+/**
+ * The pressed bulk button while its decision counts down (card eLSSIGOs): "Undo \u00b7 5" with a
+ * shrinking bar (no bar under reduced motion). The other buttons on the bar are dimmed.
+ */
+export function BarUndo({
+  countdown,
+  primary = false,
+}: {
+  countdown: Countdown;
+  primary?: boolean;
+}) {
+  const reduced = useReducedMotion();
+  const secs = useSecondsLeft(countdown);
+  return (
+    <button
+      type="button"
+      data-undo=""
+      className={`${primary ? BAR_PRIMARY : BAR_BUTTON} relative overflow-hidden`}
+      onClick={countdown.undo}
+    >
+      <span>
+        Undo
+        <span aria-hidden>
+          {' '}
+          {'\u00b7'} {secs}
+        </span>
+      </span>
+      {reduced ? null : (
+        <span
+          aria-hidden
+          data-keep-motion
+          data-testid="undo-bar"
+          className="absolute inset-x-0 bottom-0 h-1 origin-left animate-countdown bg-current opacity-60"
+          style={{ animationDuration: `${countdown.ms}ms` }}
+        />
+      )}
+    </button>
   );
 }

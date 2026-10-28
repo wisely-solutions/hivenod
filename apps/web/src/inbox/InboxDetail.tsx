@@ -17,6 +17,8 @@ import { formatEur } from '../shell/logic';
 import { AgentAvatar } from '../ui/avatar';
 import { Badge, Eyebrow } from '../ui/badge';
 import { Button } from '../ui/button';
+import { useCountdown } from '../ui/overlay';
+import { UndoButton } from '../ui/UndoButton';
 import { Tabs } from '../ui/form';
 import { Icon } from '../ui/icon';
 import type { Run } from '@hive/shared';
@@ -174,6 +176,7 @@ export function InboxDetail({
     if (problem) setError(problem);
   }
 
+  const counting = useCountdown(entry.key);
   const actions = released ? (
     released === 'releasing' ? (
       <Button variant="approve" loading disabled className="min-w-0 flex-1 sm:flex-none">
@@ -182,30 +185,51 @@ export function InboxDetail({
     ) : null
   ) : entry.kind === 'approval' ? (
     <>
-      <Button
-        variant="approve"
-        className="min-w-0 flex-1 px-2 max-[359px]:basis-full sm:flex-none sm:px-4"
-        leading={<Icon icon={Check} />}
-        onClick={() => onDecide({ kind: 'approve', rationale })}
-      >
-        {next ? `Approve → ${next.name}` : 'Approve'}
-        <Key>A</Key>
-      </Button>
+      {counting?.tag === 'approve' ? (
+        <UndoButton
+          countdown={counting}
+          variant="approve"
+          className="min-w-0 flex-1 px-2 max-[359px]:basis-full sm:flex-none sm:px-4"
+          keyHint={<Key>Z</Key>}
+        />
+      ) : (
+        <Button
+          variant="approve"
+          disabled={!!counting}
+          className="min-w-0 flex-1 px-2 max-[359px]:basis-full sm:flex-none sm:px-4"
+          leading={<Icon icon={Check} />}
+          onClick={() => onDecide({ kind: 'approve', rationale })}
+        >
+          {next ? `Approve → ${next.name}` : 'Approve'}
+          <Key>A</Key>
+        </Button>
+      )}
       <Button
         variant="sendback"
+        disabled={!!counting}
         className="shrink-0 px-2.5 max-[359px]:flex-1"
         onClick={() => onDialog('iterate')}
       >
         Send back…
         <Key>R</Key>
       </Button>
-      <Button
-        variant="sendback"
-        className="shrink-0 px-2.5 max-[359px]:flex-1"
-        onClick={() => onDialog('reject')}
-      >
-        Reject
-      </Button>
+      {counting?.tag === 'reject' ? (
+        <UndoButton
+          countdown={counting}
+          variant="sendback"
+          className="shrink-0 px-2.5 max-[359px]:flex-1"
+          keyHint={<Key>Z</Key>}
+        />
+      ) : (
+        <Button
+          variant="sendback"
+          disabled={!!counting}
+          className="shrink-0 px-2.5 max-[359px]:flex-1"
+          onClick={() => onDialog('reject')}
+        >
+          Reject
+        </Button>
+      )}
     </>
   ) : entry.kind === 'path' || entry.kind === 'proposal' ? (
     <PathEntryActions entry={entry} />

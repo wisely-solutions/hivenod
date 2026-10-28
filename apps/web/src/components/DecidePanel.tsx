@@ -6,7 +6,8 @@ import { stash } from '../lib/pendingDecisions';
 import { useReady } from '../auth/context';
 import { needsMyDecision } from '../shell/logic';
 import { Button } from '../ui/button';
-import { useToast } from '../ui/overlay';
+import { useCountdown, useToast } from '../ui/overlay';
+import { UndoButton } from '../ui/UndoButton';
 import { SendBackDialog } from './SendBackDialog';
 import { BarNote, DecisionBar, Key } from './DecisionBar';
 import { gateRuleLine, type InboxEntry } from '../inbox/logic';
@@ -80,13 +81,14 @@ export function DecidePanel({
     item,
     since: mountedAt - waitedMs(item),
   };
+  const counting = useCountdown(rejectEntry.key);
   useShortcut({
     id: 'decide:approve',
     keys: ['a'],
     label: 'Approve',
     group: 'Item',
     run: () => {
-      if (canDecide && !busy) approveNow();
+      if (canDecide && !busy && !counting) approveNow();
     },
   });
   useShortcut({
@@ -130,7 +132,6 @@ export function DecidePanel({
   function approveNow() {
     const ctx = actionContext(session.workspaceId);
     if (!ctx) return;
-    setBusy(true);
     setError(null);
     let p;
     try {
@@ -144,7 +145,6 @@ export function DecidePanel({
       });
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : 'Could not save. Try again.');
-      setBusy(false);
       return;
     }
     const final = p.advanced && !next;
@@ -154,7 +154,6 @@ export function DecidePanel({
         ? `Approved. Moved to ${next.name}.`
         : `Released. \u201c${item.title}\u201d is done.`;
     const plan = p;
-    const typed = note;
     const forget = stash(
       session.me.uid,
       session.workspaceId,
@@ -165,12 +164,18 @@ export function DecidePanel({
       message: final ? releasingMessage(item.title) : message,
       undoLabel: 'Undo',
       duration: 5000,
+      // The pressed Approve button counts down (card eLSSIGOs); no toast.
+      countdown: {
+        key: rejectEntry.key,
+        tag: 'approve',
+        announce: 'Approved. Undo available for 5 seconds',
+      },
       onUndo: () => {
         forget();
         setBusy(false);
-        setNote(typed);
       },
       onCommit: () => {
+        setBusy(true);
         // Move on like Needs you does, but only when the person is still looking at this item.
         // A final approval stays: the Done panel is what it shows.
         if (!final && mounted.current && live.current.itemId === itemId) live.current.onDecided?.();
@@ -209,19 +214,27 @@ export function DecidePanel({
           />
         }
       >
-        <Button variant="approve" loading={busy} onClick={approveNow}>
-          {next ? `Approve \u2192 ${next.name}` : 'Approve'}
-          <Key>A</Key>
-        </Button>
+        {counting?.tag === 'approve' ? (
+          <UndoButton countdown={counting} variant="approve" keyHint={<Key>Z</Key>} />
+        ) : (
+          <Button variant="approve" loading={busy} disabled={!!counting} onClick={approveNow}>
+            {next ? `Approve \u2192 ${next.name}` : 'Approve'}
+            <Key>A</Key>
+          </Button>
+        )}
         {earlier.length > 0 ? (
-          <Button variant="sendback" onClick={() => setBackOpen(true)}>
+          <Button variant="sendback" disabled={!!counting} onClick={() => setBackOpen(true)}>
             Send back…
             <Key>R</Key>
           </Button>
         ) : null}
-        <Button variant="sendback" onClick={() => setRejectOpen(true)}>
-          Reject
-        </Button>
+        {counting?.tag === 'reject' ? (
+          <UndoButton countdown={counting} variant="sendback" keyHint={<Key>Z</Key>} />
+        ) : (
+          <Button variant="sendback" disabled={!!counting} onClick={() => setRejectOpen(true)}>
+            Reject
+          </Button>
+        )}
       </DecisionBar>
       <DecisionDialog
         mode={rejectOpen ? 'reject' : null}

@@ -288,6 +288,23 @@ export interface ToastInput {
   onUndo?: () => void;
   /** Runs once when the countdown ends, or when the toast is dismissed or the app unmounts. */
   onCommit?: () => void;
+  /**
+   * A button-side Undo (card eLSSIGOs): nothing is shown as a toast. The same countdown, leave
+   * flush and commit rules apply, but the screen shows "Undo \u00b7 5" on the button that was
+   * pressed (see UndoButton) and a screen reader hears `announce`. `key` says where, `tag` which
+   * button (e.g. "approve", "reject").
+   */
+  countdown?: { key: string; tag: string; announce: string };
+}
+
+/** A decision counting down on its button. */
+export interface Countdown {
+  id: number;
+  key: string;
+  tag: string;
+  endsAt: number;
+  ms: number;
+  undo: () => void;
 }
 
 /** How many toasts show at once. */
@@ -302,6 +319,9 @@ const ToastContext = createContext<{
   dismiss: (id: number) => void;
   /** Ends every toast on screen (what was done stays done), e.g. when a sheet opens over them. */
   dismissAll: () => void;
+  countdowns: readonly Countdown[];
+  /** Undoes the countdown that started last. Returns whether there was one. */
+  undoLast: () => boolean;
 } | null>(null);
 
 export function useToast() {
@@ -310,21 +330,59 @@ export function useToast() {
   return ctx;
 }
 
+/** The countdowns on screen (for the buttons that show them). */
+export function useCountdowns(): readonly Countdown[] {
+  return useToast().countdowns;
+}
+
+/** The countdown of one key, if a decision there is counting down. */
+export function useCountdown(key: string): Countdown | undefined {
+  return useCountdowns().find((c) => c.key === key);
+}
+
+/** The Z key and anything else that wants "undo what I just did". */
+export function useUndoLast(): () => boolean {
+  return useToast().undoLast;
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
+  const [countdowns, setCountdowns] = useState<Countdown[]>([]);
+  const [announcement, setAnnouncement] = useState('');
   const idRef = useRef(0);
   const live = useRef(new Map<number, ToastItem>());
+  const silentTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 
   const settle = useCallback((id: number, how: 'commit' | 'undo') => {
     const t = live.current.get(id);
     if (!t) return;
     live.current.delete(id);
-    setItems((cur) => cur.filter((x) => x.id !== id));
+    clearTimeout(silentTimers.current.get(id));
+    silentTimers.current.delete(id);
+    if (t.countdown) {
+      setCountdowns((cur) => cur.filter((x) => x.id !== id));
+      setAnnouncement(how === 'undo' ? 'Undone.' : '');
+    } else {
+      setItems((cur) => cur.filter((x) => x.id !== id));
+    }
     if (how === 'undo') t.onUndo?.();
     else t.onCommit?.();
   }, []);
 
+  const undoLast = useCallback(() => {
+    const ids = [...live.current.values()].filter((t) => t.countdown && t.onUndo).map((t) => t.id);
+    const last = Math.max(0, ...ids);
+    if (!last) return false;
+    settle(last, 'undo');
+    return true;
+  }, [settle]);
+
+  /** Ends the toasts on screen. Decisions counting down on their button keep their Undo. */
   const dismissAll = useCallback(() => {
+    for (const t of [...live.current.values()]) if (!t.countdown) settle(t.id, 'commit');
+  }, [settle]);
+  /** Leaving the page commits everything, countdowns included. */
+  const flushAll = useCallback(() => {
     for (const id of [...live.current.keys()]) settle(id, 'commit');
   }, [settle]);
 
@@ -333,9 +391,31 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const id = ++idRef.current;
       const t = { ...input, id };
       live.current.set(id, t);
+      if (input.countdown) {
+        // No toast: the countdown lives on the pressed button. The provider keeps the clock.
+        const ms = undoWindowMs(input.duration ?? 5000);
+        silentTimers.current.set(
+          id,
+          setTimeout(() => settle(id, 'commit'), ms),
+        );
+        setCountdowns((cur) => [
+          ...cur,
+          {
+            id,
+            key: input.countdown!.key,
+            tag: input.countdown!.tag,
+            ms,
+            endsAt: Date.now() + ms,
+            undo: () => settle(id, 'undo'),
+          },
+        ]);
+        setAnnouncement(input.countdown.announce);
+        return id;
+      }
       // Only MAX_TOASTS fit on screen. The oldest one leaves now, with no Undo left to press, so
       // it settles now: dropping it from view alone would stop its countdown and strand the commit.
-      for (const old of [...live.current.keys()].slice(0, -MAX_TOASTS)) settle(old, 'commit');
+      const shown = [...live.current.values()].filter((x) => !x.countdown).map((x) => x.id);
+      for (const old of shown.slice(0, -MAX_TOASTS)) settle(old, 'commit');
       setItems((cur) => [...cur, t]);
       return id;
     },
@@ -343,20 +423,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 
   // Leaving the page (close, hide, kill) commits what is still counting down: see onLeave.
-  useEffect(() => onLeave(dismissAll), [dismissAll]);
+  useEffect(() => onLeave(flushAll), [flushAll]);
 
   // Navigation or unmount commits whatever is still pending, never drops it.
   useEffect(() => {
     const pending = live.current;
+    const timers = silentTimers.current;
     return () => {
       for (const t of pending.values()) t.onCommit?.();
       pending.clear();
+      for (const timer of timers.values()) clearTimeout(timer);
+      timers.clear();
     };
   }, []);
 
   return (
-    <ToastContext.Provider value={{ push, dismiss: (id) => settle(id, 'commit'), dismissAll }}>
+    <ToastContext.Provider
+      value={{ push, dismiss: (id) => settle(id, 'commit'), dismissAll, countdowns, undoLast }}
+    >
       {children}
+      {/* aria-live keeps it out of a modal dialog's hiding; sr-only keeps it off the screen. */}
+      <div role="status" aria-live="polite" data-testid="undo-announcement" className="sr-only">
+        {announcement}
+      </div>
       <div
         role="region"
         aria-label="Notifications"
