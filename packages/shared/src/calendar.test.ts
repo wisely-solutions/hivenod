@@ -71,7 +71,12 @@ describe('calendarUpsert', () => {
     bad([{ ...ev, source: ' ' }]);
     bad([{ ...ev, sourceEventId: '' }]);
     bad([ev, ev]);
-    bad(Array.from({ length: MAX_CALENDAR_EVENTS_PER_WRITE + 1 }, (_, i) => ({ ...ev, sourceEventId: `g${i}` })));
+    bad(
+      Array.from({ length: MAX_CALENDAR_EVENTS_PER_WRITE + 1 }, (_, i) => ({
+        ...ev,
+        sourceEventId: `g${i}`,
+      })),
+    );
     bad([ev], joao, 'maria');
     bad([ev], agent, '');
   });

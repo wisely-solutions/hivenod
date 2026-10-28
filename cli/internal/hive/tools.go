@@ -177,6 +177,30 @@ var ToolRuns = map[string]Run{
 		}
 		return c.ProposeStep(ctx, a.S("itemId"), p, a.S("project"))
 	},
+	"calendar_upsert": func(ctx context.Context, c *Client, a Args) (any, error) {
+		var events []CalendarEventArg
+		if arr, ok := a["events"].([]any); ok {
+			for _, e := range arr {
+				m, _ := e.(map[string]any)
+				ea := Args(m)
+				ev := CalendarEventArg{Source: ea.S("source"), SourceEventID: ea.S("sourceEventId"), Title: ea.SP("title"), Start: ea.S("start"), End: ea.S("end"), Attendees: ea.Strings("attendees")}
+				if v, ok := m["allDay"].(bool); ok {
+					ev.AllDay = &v
+				}
+				if v, ok := m["busyOnly"].(bool); ok {
+					ev.BusyOnly = &v
+				}
+				events = append(events, ev)
+			}
+		}
+		return c.CalendarUpsert(ctx, a.S("member"), events)
+	},
+	"calendar_delete": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.CalendarDelete(ctx, a.Strings("ids"), a.S("member"), a.S("source"), a.Strings("sourceEventIds"))
+	},
+	"calendar_free": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.CalendarFree(ctx, a.S("member"), a.S("from"), a.S("to"), a.F("minMinutes"))
+	},
 	"report_usage": func(ctx context.Context, c *Client, a Args) (any, error) {
 		u := Usage{TokensIn: *a.F("tokensIn"), TokensOut: *a.F("tokensOut"), TokensCached: a.F("tokensCached")}
 		if a.Has("model") {

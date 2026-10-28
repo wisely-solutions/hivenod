@@ -116,10 +116,13 @@ describe('calendar events', () => {
     const alice = as('alice');
     await ok(alice.run(calendarUpsert(alice.ctx, { memberUid: 'alice', events: [ev('h1', 9)] })));
     const bob = as('bob');
-    const forAlice = calendarUpsert({ ...bob.ctx, actor: { ...bob.ctx.actor, id: 'alice' } }, {
-      memberUid: 'alice',
-      events: [ev('h2', 9)],
-    });
+    const forAlice = calendarUpsert(
+      { ...bob.ctx, actor: { ...bob.ctx.actor, id: 'alice' } },
+      {
+        memberUid: 'alice',
+        events: [ev('h2', 9)],
+      },
+    );
     // Bob replaying a plan built for Alice: the actor and the busy writer do not match
     await denied(bob.run(forAlice));
     const eve = as('eve');
@@ -132,7 +135,10 @@ describe('calendar events', () => {
     await ok(a.run(p));
     const id = p.ids[0]!;
     // a hand-made busy-only event with a title
-    const bad = calendarUpsert(a.ctx, { memberUid: 'alice', events: [ev('b2', 9, { busyOnly: true })] });
+    const bad = calendarUpsert(a.ctx, {
+      memberUid: 'alice',
+      events: [ev('b2', 9, { busyOnly: true })],
+    });
     (bad.ops[0]!.data as Record<string, unknown>).title = 'Secret';
     await denied(a.run(bad));
     // delete clears the details
@@ -148,7 +154,11 @@ describe('calendar events', () => {
           {
             kind: 'update',
             path: calendarPaths.event(W, id),
-            data: { title: 'Back', updatedAt: SERVER_TIME, updatedBy: { type: 'agent', id: AGENTS.star } },
+            data: {
+              title: 'Back',
+              updatedAt: SERVER_TIME,
+              updatedBy: { type: 'agent', id: AGENTS.star },
+            },
           },
         ],
       }),
@@ -203,8 +213,16 @@ describe('busy store', () => {
     const pa = agentIn(AP, PERSONAL);
     const ca = agentIn(AC, CLIENT);
     await ok(w.run(calendarUpsert(w.ctx, { memberUid: 'alice', events: [ev('w', 9)] })));
-    await ok(pa.run(calendarUpsert(pa.ctx, { memberUid: 'alice', events: [ev('p', 10, { source: 'gcal' })] })));
-    await ok(ca.run(calendarUpsert(ca.ctx, { memberUid: 'alice', events: [ev('c', 13, { busyOnly: true })] })));
+    await ok(
+      pa.run(
+        calendarUpsert(pa.ctx, { memberUid: 'alice', events: [ev('p', 10, { source: 'gcal' })] }),
+      ),
+    );
+    await ok(
+      ca.run(
+        calendarUpsert(ca.ctx, { memberUid: 'alice', events: [ev('c', 13, { busyOnly: true })] }),
+      ),
+    );
     return { w, pa, ca };
   }
 
@@ -222,7 +240,10 @@ describe('busy store', () => {
     await denied(getDocs(col));
     await ok(setDoc(doc(ca.db, calendarPaths.agentHome(AC)), { workspaceId: CLIENT }));
     const all = await ok(getDocs(query(col, where('end', '>', Timestamp.fromDate(T(0))))));
-    const busy = all.docs.map((d) => ({ start: d.data().start.toDate(), end: d.data().end.toDate() }));
+    const busy = all.docs.map((d) => ({
+      start: d.data().start.toDate(),
+      end: d.data().end.toDate(),
+    }));
     expect(freeSlots({ from: T(8), to: T(15), busy, minMinutes: 30 })).toEqual([
       { start: T(8), end: T(9) },
       { start: T(11), end: T(13) },

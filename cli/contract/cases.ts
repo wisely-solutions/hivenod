@@ -59,6 +59,8 @@ import {
   type Step,
 } from '../../packages/shared/src/index';
 
+import { calendarCases } from './calendarCases';
+
 export const NOW_MS = 1_800_000_000_000;
 export const WORKSPACE_ID = 'w1';
 
@@ -1285,6 +1287,8 @@ function build(): ContractCase[] {
   });
   live('window passed', { lastSeenAt: ts(NOW_MS - AGENT_ONLINE_MS) });
   live('never seen', { lastSeenAt: null });
+
+  calendarCases(act, pure, { agent: AGENT, human: HUMAN });
 
   return cases;
 }

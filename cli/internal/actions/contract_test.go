@@ -114,6 +114,26 @@ var runners = map[string]runner{
 	"skipStep":       act(SkipStep),
 	"askPathChange":  act(AskPathChange),
 	"proposeStep":    act(ProposeStep),
+	"calendarUpsert": act(CalendarUpsert),
+	"calendarDelete": act(CalendarDelete),
+	"freeSlots": pure(func(in FreeSlotsInput) (any, error) {
+		slots, err := FreeSlots(in)
+		if err != nil {
+			return nil, err
+		}
+		out := []any{}
+		for _, s := range slots {
+			out = append(out, map[string]any{"start": Timestamp(s.Start), "end": Timestamp(s.End)})
+		}
+		return out, nil
+	}),
+	"calendarEventId": pure(func(in struct {
+		MemberUID     string `json:"memberUid"`
+		Source        string `json:"source"`
+		SourceEventID string `json:"sourceEventId"`
+	}) (any, error) {
+		return CalendarEventID(in.MemberUID, in.Source, in.SourceEventID), nil
+	}),
 
 	"agentSendBackTargets": pure(func(in projItem) (any, error) {
 		return ids(AgentSendBackTargets(in.Project, in.Item)), nil

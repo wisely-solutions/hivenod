@@ -774,6 +774,156 @@
         }
       },
       {
+        "name": "calendar_upsert",
+        "description": "Add or update events in a member's calendar in this organization, from a calendar you sync (for example their Google or Outlook calendar here). The same source + sourceEventId updates the same event, so send the whole window again on every sync. Members of this organization see the details; the member's other organizations only see the time as busy. busyOnly: you only know the time (no title or attendees are kept). At most 100 events per call.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member": {
+              "description": "Whose calendar: the member's uid, email or name (may be left out when the organization has one member)",
+              "type": "string"
+            },
+            "events": {
+              "minItems": 1,
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "description": "Where it comes from: google, outlook, …"
+                  },
+                  "sourceEventId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 600,
+                    "description": "The event's id in that calendar"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "start": {
+                    "type": "string",
+                    "description": "RFC 3339 time with a zone, e.g. 2026-11-02T09:00:00Z"
+                  },
+                  "end": {
+                    "type": "string",
+                    "description": "RFC 3339 time with a zone, after start"
+                  },
+                  "allDay": {
+                    "type": "boolean"
+                  },
+                  "attendees": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 320
+                    }
+                  },
+                  "busyOnly": {
+                    "description": "Only the time is known or may be shared",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "source",
+                  "sourceEventId",
+                  "start",
+                  "end"
+                ]
+              }
+            }
+          },
+          "required": [
+            "events"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "calendar_delete",
+        "description": "Remove events from a member's calendar in this organization (cancelled or deleted at the source), by the ids calendar_upsert returned, or by source and the source's event ids. Their busy time is freed everywhere.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "description": "Event ids from calendar_upsert",
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "member": {
+              "description": "With sourceEventIds: whose calendar (uid, email or name)",
+              "type": "string"
+            },
+            "source": {
+              "description": "With sourceEventIds: google, outlook, …",
+              "type": "string",
+              "maxLength": 40
+            },
+            "sourceEventIds": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "calendar_free",
+        "description": "A member's free time between from and to, across every organization they are in (busy time only, never details), as free slots of at least minMinutes. Use it to propose meeting times in a draft. Range: at most 62 days.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member": {
+              "description": "The member's uid, email or name (may be left out when the organization has one member)",
+              "type": "string"
+            },
+            "from": {
+              "type": "string",
+              "description": "RFC 3339 time with a zone"
+            },
+            "to": {
+              "type": "string",
+              "description": "RFC 3339 time with a zone, after from"
+            },
+            "minMinutes": {
+              "description": "Shortest slot; default 30",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1440
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "report_usage",
         "description": "Report the run's token usage so far (running totals for the whole run; they only grow) and the model. Usage is tracked and shown in Hivenod; it never stops a run.",
         "inputSchema": {
@@ -1545,6 +1695,156 @@
             "description",
             "afterStepId",
             "reason"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "calendar_upsert",
+        "description": "Add or update events in a member's calendar in this organization, from a calendar you sync (for example their Google or Outlook calendar here). The same source + sourceEventId updates the same event, so send the whole window again on every sync. Members of this organization see the details; the member's other organizations only see the time as busy. busyOnly: you only know the time (no title or attendees are kept). At most 100 events per call.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member": {
+              "description": "Whose calendar: the member's uid, email or name (may be left out when the organization has one member)",
+              "type": "string"
+            },
+            "events": {
+              "minItems": 1,
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40,
+                    "description": "Where it comes from: google, outlook, …"
+                  },
+                  "sourceEventId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 600,
+                    "description": "The event's id in that calendar"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "start": {
+                    "type": "string",
+                    "description": "RFC 3339 time with a zone, e.g. 2026-11-02T09:00:00Z"
+                  },
+                  "end": {
+                    "type": "string",
+                    "description": "RFC 3339 time with a zone, after start"
+                  },
+                  "allDay": {
+                    "type": "boolean"
+                  },
+                  "attendees": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 320
+                    }
+                  },
+                  "busyOnly": {
+                    "description": "Only the time is known or may be shared",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "source",
+                  "sourceEventId",
+                  "start",
+                  "end"
+                ]
+              }
+            }
+          },
+          "required": [
+            "events"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "calendar_delete",
+        "description": "Remove events from a member's calendar in this organization (cancelled or deleted at the source), by the ids calendar_upsert returned, or by source and the source's event ids. Their busy time is freed everywhere.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "description": "Event ids from calendar_upsert",
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "member": {
+              "description": "With sourceEventIds: whose calendar (uid, email or name)",
+              "type": "string"
+            },
+            "source": {
+              "description": "With sourceEventIds: google, outlook, …",
+              "type": "string",
+              "maxLength": 40
+            },
+            "sourceEventIds": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "calendar_free",
+        "description": "A member's free time between from and to, across every organization they are in (busy time only, never details), as free slots of at least minMinutes. Use it to propose meeting times in a draft. Range: at most 62 days.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member": {
+              "description": "The member's uid, email or name (may be left out when the organization has one member)",
+              "type": "string"
+            },
+            "from": {
+              "type": "string",
+              "description": "RFC 3339 time with a zone"
+            },
+            "to": {
+              "type": "string",
+              "description": "RFC 3339 time with a zone, after from"
+            },
+            "minMinutes": {
+              "description": "Shortest slot; default 30",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1440
+            }
+          },
+          "required": [
+            "from",
+            "to"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },

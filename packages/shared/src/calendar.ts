@@ -193,7 +193,9 @@ export function calendarUpsert(
 ): ActionPlan & { ids: string[] } {
   requireCalendarWriter(ctx, input.memberUid);
   checkCount(input.events.length);
-  const clean: CleanEvent[] = input.events.map((e, i) => cleanEvent(ctx, input.memberUid, e, i + 1));
+  const clean: CleanEvent[] = input.events.map((e, i) =>
+    cleanEvent(ctx, input.memberUid, e, i + 1),
+  );
   const seen = new Set<string>();
   for (const [i, c] of clean.entries()) {
     if (seen.has(c.id))
