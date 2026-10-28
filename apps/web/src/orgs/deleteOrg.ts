@@ -69,7 +69,8 @@ export async function purgeOrg(store: TreeStore, wid: string): Promise<number> {
     },
     count,
   );
-  for (const name of ['events', 'groups', 'invites', 'notified', 'members']) await flat(name);
+  for (const name of ['events', 'groups', 'invites', 'notified', 'members', 'calendar'])
+    await flat(name);
   await store.remove([base]);
   return count.n + 1;
 }
