@@ -149,23 +149,19 @@ function main() {
     );
     guardTimer = setInterval(() => guard('while running'), 1000);
     const cmd = `cd packages/agent && npx vitest run -c vitest.integration.config.ts test/claude.channel.smoke.test.ts`;
-    child = spawn(
-      'node',
-      ['scripts/emu-exec.mjs', cmd],
-      {
-        cwd: REPO,
-        detached: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          HIVE_SMOKE_CLAUDE_CHANNEL: '1',
-          HIVE_SMOKE_CLAUDE_CONFIG_DIR: cfg,
-          HIVE_SMOKE_DIR: T,
-          HIVE_SMOKE_TMUX: socket,
-          HIVE_SMOKE_ONLY: only,
-        },
+    child = spawn('node', ['scripts/emu-exec.mjs', cmd], {
+      cwd: REPO,
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        HIVE_SMOKE_CLAUDE_CHANNEL: '1',
+        HIVE_SMOKE_CLAUDE_CONFIG_DIR: cfg,
+        HIVE_SMOKE_DIR: T,
+        HIVE_SMOKE_TMUX: socket,
+        HIVE_SMOKE_ONLY: only,
       },
-    );
+    });
     const show = (b) => process.stdout.write(redact(String(b)));
     child.stdout.on('data', show);
     child.stderr.on('data', show);

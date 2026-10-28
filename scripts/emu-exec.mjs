@@ -23,7 +23,9 @@ const ports = await pickPorts(root, undefined, RULES_OFFSET);
 const tmp = mkdtempSync(join(tmpdir(), 'hive-emu-'));
 const config = join(tmp, 'firebase.json');
 writeFileSync(config, JSON.stringify(emulatorConfig(root, ports), null, 2));
-console.log(`emu-exec: emulators on auth ${ports.auth}, firestore ${ports.firestore} (hub ${ports.hub})`);
+console.log(
+  `emu-exec: emulators on auth ${ports.auth}, firestore ${ports.firestore} (hub ${ports.hub})`,
+);
 
 const plan = emuExecPlan({ root, config, tmp, ports, cmd });
 const child = spawn(plan.file, plan.args, { cwd: process.cwd(), stdio: 'inherit', env: plan.env });
