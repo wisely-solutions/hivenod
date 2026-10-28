@@ -1,6 +1,6 @@
 import type { Agent } from '@hive/shared';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { Bot, KeyRound, MoreHorizontal, Plus, ShieldOff, Trash2 } from 'lucide-react';
+import { Bot, KeyRound, MoreHorizontal, Pencil, Plus, ShieldOff, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useReady } from '../auth/context';
 import { PageHeader } from '../pages/Chrome';
@@ -20,6 +20,7 @@ import { openRunsOf } from './openRuns';
 import { agentStatus, colorIndex, scopeText, statusText, todayStats } from './logic';
 import { NewAgentModal } from './NewAgentModal';
 import { RemoveAgentDialog } from './RemoveAgentDialog';
+import { RenameAgentDialog } from './RenameAgentDialog';
 import { TokenDialog } from './TokenDialog';
 
 interface Issued {
@@ -55,6 +56,7 @@ export function AgentsPage() {
   const [revoking, setRevoking] = useState<Row<Agent> | null>(null);
   const [rotating, setRotating] = useState<Row<Agent> | null>(null);
   const [removing, setRemoving] = useState<Row<Agent> | null>(null);
+  const [renaming, setRenaming] = useState<Row<Agent> | null>(null);
   const [busy, setBusy] = useState(false);
 
   const active = agents.filter((a) => !a.data.revokedAt);
@@ -263,6 +265,12 @@ export function AgentsPage() {
                       label={`Actions for ${a.data.name}`}
                       actions={[
                         {
+                          id: 'rename',
+                          label: 'Rename…',
+                          icon: Pencil,
+                          onSelect: () => setRenaming(a),
+                        },
+                        {
                           id: 'rotate',
                           label: 'Rotate token',
                           icon: KeyRound,
@@ -323,6 +331,7 @@ export function AgentsPage() {
       />
 
       <RemoveAgentDialog agent={removing} onClose={() => setRemoving(null)} />
+      <RenameAgentDialog agent={renaming} onClose={() => setRenaming(null)} />
 
       <Dialog
         open={rotating !== null}

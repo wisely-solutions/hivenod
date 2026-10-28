@@ -160,7 +160,7 @@ Event types:
 - `decision.approved`, `decision.sentBack`, `decision.stopped`, `decision.answered`
 - `finding.raised`, `finding.triaged`
 - `run.started`, `run.heartbeat` (coalesced: at most one event per 5 min), `run.ended`
-- `agent.created`, `agent.revoked`, `agent.rotated`, `agent.updated` (settings changed, or `resumed: true`). A run end that pauses the agent says `agentPaused: true` in its `run.ended` / `item.released` event.
+- `agent.created`, `agent.revoked`, `agent.rotated`, `agent.renamed` (`oldName`, `newName`), `agent.updated` (settings changed, or `resumed: true`). A run end that pauses the agent says `agentPaused: true` in its `run.ended` / `item.released` event.
 - `project.created`, `project.processChanged`, `project.membersChanged`, `member.*`, `group.*`
 
 ## 6. Agent identity and tokens
