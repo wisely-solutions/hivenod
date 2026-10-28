@@ -284,33 +284,37 @@ test('members see agents but cannot create, rotate or revoke', async ({ page, br
   await ctx.close();
 });
 
-test('the agents screen has no accessibility violations, with the token sheet open', async ({
-  page,
-}) => {
-  await enter(page, 'Ada Axe');
-  await page.goto('/agents');
-  await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
-  const axe = async () => {
-    const { violations } = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'])
-      .analyze();
-    expect(
-      violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
-    ).toEqual([]);
-  };
-  await axe();
-  await openTokenForm(page);
-  await settle(page);
-  await axe();
-  await page.getByLabel('Name').fill('Scout');
-  await page.getByRole('button', { name: 'Create agent' }).click();
-  await expect(page.getByLabel('Agent token')).toBeVisible();
-  await settle(page);
-  await axe();
-  await saveToken(page);
-  await axe();
-  await expectNoHorizontalScroll(page);
-});
+for (const theme of ['light', 'dark'] as const) {
+  test(`the agents screen has no accessibility violations in ${theme}, with the token sheet open`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await enter(page, 'Ada Axe');
+    await page.goto('/agents');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
+    const axe = async () => {
+      const { violations } = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'])
+        .analyze();
+      expect(
+        violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
+      ).toEqual([]);
+    };
+    await axe();
+    await openTokenForm(page);
+    await settle(page);
+    await axe();
+    await page.getByLabel('Name').fill('Scout');
+    await page.getByRole('button', { name: 'Create agent' }).click();
+    await expect(page.getByLabel('Agent token')).toBeVisible();
+    await settle(page);
+    await axe();
+    await saveToken(page);
+    await axe();
+    await expectNoHorizontalScroll(page);
+  });
+}
 
 /** What `hivenod pair` does before it has a token: a pairing request, no sign-in. */
 async function asTerminal(cli = 'claude') {
@@ -460,7 +464,7 @@ test('the old ?connect= and ?new=1 links redirect to the Connect page, code kept
 
 for (const theme of ['light', 'dark'] as const) {
   test(`the Connect page is axe-clean in ${theme}, all four steps`, async ({ page }, info) => {
-    await page.addInitScript((t) => localStorage.setItem('hive-theme', t), theme);
+    await page.emulateMedia({ colorScheme: theme });
     await enter(page, 'Axel Axe');
     const term = await asTerminal();
     const shots = process.env.SHOTS_DIR;
@@ -472,6 +476,7 @@ for (const theme of ['light', 'dark'] as const) {
         });
     };
     const axe = async () => {
+      await settle(page);
       const { violations } = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'])
         .analyze();
@@ -480,6 +485,7 @@ for (const theme of ['light', 'dark'] as const) {
       ).toEqual([]);
     };
     await page.goto('/agents/connect');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     await expect(page.getByLabel('Install command', { exact: true })).toBeVisible();
     await axe();
     await snap('1-install');
