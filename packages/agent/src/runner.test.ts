@@ -515,8 +515,14 @@ describe('hivenod run: the loop', () => {
         .mockResolvedValueOnce({ timedOut: false, work: [row] }),
     });
     expect(await runner(c, { presenceMs: 0 }).run()).toBe(EXIT.ok);
-    expect(c.markSeen).toHaveBeenCalledTimes(2);
+    // Presence is wall-clock driven: assert first/last writes, never an exact count.
+    expect(c.markSeen).toHaveBeenCalled();
     expect(c.markOffline).toHaveBeenCalledTimes(1);
+    const seenOrder = vi.mocked(c.markSeen).mock.invocationCallOrder;
+    const firstSeen = seenOrder[0] ?? Infinity;
+    const lastSeen = seenOrder[seenOrder.length - 1] ?? Infinity;
+    expect(vi.mocked(c.waitForWork).mock.invocationCallOrder[0] ?? 0).toBeGreaterThan(firstSeen);
+    expect(vi.mocked(c.markOffline).mock.invocationCallOrder[0] ?? 0).toBeGreaterThan(lastSeen);
     const ac = new AbortController();
     const d = fakeClient({
       waitForWork: vi.fn(async () => {
