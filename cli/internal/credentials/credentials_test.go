@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/wisely-solutions/hivenod/cli/internal/discovery"
 	"github.com/wisely-solutions/hivenod/cli/internal/token"
 )
 
@@ -86,5 +88,54 @@ func TestDamaged(t *testing.T) {
 `), 0o600)
 	if s, c := Inspect(); s != OK || c.AgentName != "Bee" || c.SavedAt != "2026-10-27T10:00:00.000Z" {
 		t.Fatalf("ts file: %v %+v", s, c)
+	}
+}
+
+func TestServerSavedWithToken(t *testing.T) {
+	t.Setenv("HIVENOD_HOME", filepath.Join(t.TempDir(), "h"))
+	d := &discovery.Discovery{Protocol: 1, Backend: "firestore", Site: "https://your.host", CLI: "https://your.host/cli",
+		Firebase: discovery.Firebase{APIKey: "k", AuthDomain: "your.host", ProjectID: "p"}}
+	if _, err := Save(Stored{Token: tok, AgentName: "Bee", Server: d.Site, Discovery: d}); err != nil {
+		t.Fatal(err)
+	}
+	c := Read()
+	if c == nil || c.Server != "https://your.host" || c.Discovery == nil || c.Discovery.Firebase.ProjectID != "p" {
+		t.Fatalf("got %+v", c)
+	}
+	// A file without a server (every pairing before servers existed) means the hosted service.
+	if _, err := Save(Stored{Token: tok, AgentName: "Bee"}); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(Path())
+	if strings.Contains(string(raw), "server") || strings.Contains(string(raw), "discovery") {
+		t.Fatalf("hosted pairing must not write a server: %s", raw)
+	}
+	if c := Read(); c == nil || c.Server != "" || c.Discovery != nil {
+		t.Fatalf("got %+v", c)
+	}
+	write := func(extra string) {
+		if err := os.WriteFile(Path(), []byte(`{"token":"`+tok+`",`+extra+`}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The hosted service written out is the same as no server.
+	write(`"server":"https://hivenod.com/"`)
+	if c := Read(); c == nil || c.Server != "" {
+		t.Fatalf("got %+v", c)
+	}
+	// A saved discovery for another site is dropped (read anew), the server is kept.
+	write(`"server":"your.host","discovery":{"protocol":1,"backend":"firestore","site":"https://other.host","firebase":{"apiKey":"k","authDomain":"a","projectId":"p"},"cli":"x"}`)
+	if c := Read(); c == nil || c.Server != "https://your.host" || c.Discovery != nil {
+		t.Fatalf("got %+v", c)
+	}
+	// Emulators never stick to a public site.
+	write(`"server":"your.host","discovery":{"protocol":1,"backend":"firestore","site":"https://your.host","firebase":{"apiKey":"k","authDomain":"a","projectId":"p"},"cli":"x","emulators":{"auth":"127.0.0.1:9099"}}`)
+	if c := Read(); c == nil || c.Discovery == nil || c.Discovery.Emulators != nil {
+		t.Fatalf("got %+v", c)
+	}
+	// An unusable server makes the file damaged.
+	write(`"server":"http://your.host"`)
+	if s, _ := Inspect(); s != Damaged {
+		t.Fatalf("want damaged, got %v", s)
 	}
 }

@@ -17,3 +17,4 @@ export * from './itempath';
 export * from './pathActions';
 export * from './protocol';
 export * from './sendback';
+export * from './discovery';

@@ -6,6 +6,7 @@
  */
 import { hostname } from 'node:os';
 import { signInWithToken } from '@hive/shared/agent-auth';
+import { HOSTED_FIREBASE, type FirebaseWebConfig } from '@hive/shared/discovery';
 import { applyPlan, converters } from '@hive/shared/firestore';
 import {
   ActionError,
@@ -92,16 +93,29 @@ import {
 } from './errors';
 
 // Public web config (not a secret); security is enforced by firestore.rules. Defaults are the hosted
-// service (https://hivenod.com). A self-hosted install sets HIVENOD_FIREBASE_API_KEY, _AUTH_DOMAIN,
-// _PROJECT_ID (or HIVENOD_PROJECT_ID), _APP_ID and _MESSAGING_SENDER_ID (docs/SELF-HOST.md).
+// service (https://hivenod.com). A self-hosted install gives its site's address (--server or
+// HIVENOD_WEB_URL) and the config is read from its /.well-known/hivenod.json (server.ts); the
+// HIVENOD_FIREBASE_* variables (and HIVENOD_PROJECT_ID) still win when set (docs/SELF-HOST.md).
 const penv = process.env;
 export const FIREBASE_OPTIONS = {
-  apiKey: penv.HIVENOD_FIREBASE_API_KEY || 'AIzaSyCmFfvMHbbGr3lGdc_DefEkomtUOaLH6J4',
-  authDomain: penv.HIVENOD_FIREBASE_AUTH_DOMAIN || 'hivenod.com',
-  projectId: penv.HIVENOD_FIREBASE_PROJECT_ID || penv.HIVENOD_PROJECT_ID || 'hive-board-43be',
-  appId: penv.HIVENOD_FIREBASE_APP_ID || '1:493986079810:web:71cf28f12f79f3cf9bf9db',
-  messagingSenderId: penv.HIVENOD_FIREBASE_MESSAGING_SENDER_ID || '493986079810',
+  apiKey: penv.HIVENOD_FIREBASE_API_KEY || HOSTED_FIREBASE.apiKey,
+  authDomain: penv.HIVENOD_FIREBASE_AUTH_DOMAIN || HOSTED_FIREBASE.authDomain,
+  projectId:
+    penv.HIVENOD_FIREBASE_PROJECT_ID || penv.HIVENOD_PROJECT_ID || HOSTED_FIREBASE.projectId,
+  appId: penv.HIVENOD_FIREBASE_APP_ID || HOSTED_FIREBASE.appId,
+  messagingSenderId: penv.HIVENOD_FIREBASE_MESSAGING_SENDER_ID || HOSTED_FIREBASE.messagingSenderId,
 };
+
+/** The server this process talks to, once resolved (server.ts); null = FIREBASE_OPTIONS. */
+let activeServer: {
+  firebase: FirebaseWebConfig;
+  emulators?: { auth?: string; firestore?: string };
+} | null = null;
+
+/** Points every later Firebase app of this process at a server (from its discovery file). */
+export function useFirebaseConfig(c: typeof activeServer): void {
+  activeServer = c;
+}
 
 export const HEARTBEAT_INTERVAL_MS = 60_000;
 
@@ -140,12 +154,17 @@ interface Loaded extends Loc {
 export function firebaseApp(
   opts: Pick<ConnectOptions, 'authEmulator' | 'firestoreEmulator' | 'projectId'> = {},
 ) {
-  const authEmu = opts.authEmulator ?? process.env.FIREBASE_AUTH_EMULATOR_HOST;
-  const fsEmu = opts.firestoreEmulator ?? process.env.FIRESTORE_EMULATOR_HOST;
+  const authEmu =
+    opts.authEmulator ?? process.env.FIREBASE_AUTH_EMULATOR_HOST ?? activeServer?.emulators?.auth;
+  const fsEmu =
+    opts.firestoreEmulator ??
+    process.env.FIRESTORE_EMULATOR_HOST ??
+    activeServer?.emulators?.firestore;
+  const base = activeServer?.firebase ?? FIREBASE_OPTIONS;
   const app = initializeApp(
     {
-      ...FIREBASE_OPTIONS,
-      projectId: opts.projectId ?? process.env.HIVENOD_PROJECT_ID ?? FIREBASE_OPTIONS.projectId,
+      ...base,
+      projectId: opts.projectId ?? process.env.HIVENOD_PROJECT_ID ?? base.projectId,
     },
     `hive-agent-${Math.random().toString(36).slice(2)}`,
   );

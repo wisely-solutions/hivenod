@@ -1,0 +1,467 @@
+{
+  "comment": "Shared cases for the discovery parsers: packages/shared/src/discovery.ts and cli/internal/discovery (item 07W4gCboOicS0lM1bqwZ). Both must agree on every case.",
+  "sites": [
+    {
+      "name": "bare host means https",
+      "input": "your.host",
+      "want": "https://your.host"
+    },
+    {
+      "name": "trailing slash dropped",
+      "input": "https://your.host/",
+      "want": "https://your.host"
+    },
+    {
+      "name": "port kept",
+      "input": "https://your.host:8443",
+      "want": "https://your.host:8443"
+    },
+    {
+      "name": "default port dropped",
+      "input": "https://your.host:443/",
+      "want": "https://your.host"
+    },
+    {
+      "name": "upper case host",
+      "input": "https://Your.Host",
+      "want": "https://your.host"
+    },
+    {
+      "name": "sub path kept",
+      "input": "https://your.host/hivenod/",
+      "want": "https://your.host/hivenod"
+    },
+    {
+      "name": "whitespace trimmed",
+      "input": "  https://your.host  ",
+      "want": "https://your.host"
+    },
+    {
+      "name": "http on localhost",
+      "input": "http://localhost:5000",
+      "want": "http://localhost:5000"
+    },
+    {
+      "name": "http on 127.0.0.1",
+      "input": "http://127.0.0.1:5000/",
+      "want": "http://127.0.0.1:5000"
+    },
+    {
+      "name": "http elsewhere refused",
+      "input": "http://your.host",
+      "error": "insecure-site"
+    },
+    {
+      "name": "empty",
+      "input": "",
+      "error": "bad-site"
+    },
+    {
+      "name": "other scheme",
+      "input": "ftp://your.host",
+      "error": "bad-site"
+    },
+    {
+      "name": "query refused",
+      "input": "https://your.host/?x=1",
+      "error": "bad-site"
+    },
+    {
+      "name": "fragment refused",
+      "input": "https://your.host/#a",
+      "error": "bad-site"
+    },
+    {
+      "name": "credentials refused",
+      "input": "https://me:pw@your.host",
+      "error": "bad-site"
+    }
+  ],
+  "docs": [
+    {
+      "name": "full document",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "backend": "firestore",
+        "firebase": {
+          "apiKey": "key-1",
+          "authDomain": "your.host",
+          "projectId": "my-hivenod",
+          "appId": "1:2:web:3",
+          "messagingSenderId": "2"
+        },
+        "cli": "/cli",
+        "extra": "ignored"
+      },
+      "want": {
+        "protocol": 1,
+        "backend": "firestore",
+        "site": "https://your.host",
+        "firebase": {
+          "apiKey": "key-1",
+          "authDomain": "your.host",
+          "projectId": "my-hivenod",
+          "appId": "1:2:web:3",
+          "messagingSenderId": "2"
+        },
+        "cli": "https://your.host/cli"
+      }
+    },
+    {
+      "name": "minimal document: backend and cli defaulted, optional ids empty",
+      "site": "your.host/",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a.example",
+          "projectId": "p"
+        }
+      },
+      "want": {
+        "protocol": 1,
+        "backend": "firestore",
+        "site": "https://your.host",
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a.example",
+          "projectId": "p",
+          "appId": "",
+          "messagingSenderId": ""
+        },
+        "cli": "https://your.host/cli"
+      }
+    },
+    {
+      "name": "cli relative to a sub path site",
+      "site": "https://your.host/hivenod",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a.example",
+          "projectId": "p"
+        },
+        "cli": "downloads/"
+      },
+      "want": {
+        "protocol": 1,
+        "backend": "firestore",
+        "site": "https://your.host/hivenod",
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a.example",
+          "projectId": "p",
+          "appId": "",
+          "messagingSenderId": ""
+        },
+        "cli": "https://your.host/hivenod/downloads"
+      }
+    },
+    {
+      "name": "absolute cli on another https host",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a.example",
+          "projectId": "p"
+        },
+        "cli": "https://downloads.example/hivenod/cli/"
+      },
+      "want": {
+        "protocol": 1,
+        "backend": "firestore",
+        "site": "https://your.host",
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a.example",
+          "projectId": "p",
+          "appId": "",
+          "messagingSenderId": ""
+        },
+        "cli": "https://downloads.example/hivenod/cli"
+      }
+    },
+    {
+      "name": "emulators kept for a local site",
+      "site": "http://127.0.0.1:5000",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "fake",
+          "authDomain": "127.0.0.1",
+          "projectId": "demo-hive"
+        },
+        "emulators": {
+          "auth": "127.0.0.1:9099",
+          "firestore": "localhost:8080"
+        }
+      },
+      "want": {
+        "protocol": 1,
+        "backend": "firestore",
+        "site": "http://127.0.0.1:5000",
+        "firebase": {
+          "apiKey": "fake",
+          "authDomain": "127.0.0.1",
+          "projectId": "demo-hive",
+          "appId": "",
+          "messagingSenderId": ""
+        },
+        "cli": "http://127.0.0.1:5000/cli",
+        "emulators": {
+          "auth": "127.0.0.1:9099",
+          "firestore": "localhost:8080"
+        }
+      }
+    },
+    {
+      "name": "emulators ignored for a public site",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a.example",
+          "projectId": "p"
+        },
+        "emulators": {
+          "auth": "127.0.0.1:9099",
+          "firestore": "127.0.0.1:8080"
+        }
+      },
+      "want": {
+        "protocol": 1,
+        "backend": "firestore",
+        "site": "https://your.host",
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a.example",
+          "projectId": "p",
+          "appId": "",
+          "messagingSenderId": ""
+        },
+        "cli": "https://your.host/cli"
+      }
+    },
+    {
+      "name": "emulators on another host ignored",
+      "site": "http://localhost:5000",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a.example",
+          "projectId": "p"
+        },
+        "emulators": {
+          "auth": "evil.example:9099",
+          "firestore": "127.0.0.1:8080"
+        }
+      },
+      "want": {
+        "protocol": 1,
+        "backend": "firestore",
+        "site": "http://localhost:5000",
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a.example",
+          "projectId": "p",
+          "appId": "",
+          "messagingSenderId": ""
+        },
+        "cli": "http://localhost:5000/cli",
+        "emulators": {
+          "firestore": "127.0.0.1:8080"
+        }
+      }
+    },
+    {
+      "name": "not an object",
+      "site": "https://your.host",
+      "doc": [1, 2],
+      "error": "not-hivenod"
+    },
+    {
+      "name": "null",
+      "site": "https://your.host",
+      "doc": null,
+      "error": "not-hivenod"
+    },
+    {
+      "name": "other service",
+      "site": "https://your.host",
+      "doc": {
+        "service": "else",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a",
+          "projectId": "p"
+        }
+      },
+      "error": "not-hivenod"
+    },
+    {
+      "name": "protocol missing",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a",
+          "projectId": "p"
+        }
+      },
+      "error": "not-hivenod"
+    },
+    {
+      "name": "protocol not an integer",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1.5,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a",
+          "projectId": "p"
+        }
+      },
+      "error": "not-hivenod"
+    },
+    {
+      "name": "protocol as a string",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": "1",
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a",
+          "projectId": "p"
+        }
+      },
+      "error": "not-hivenod"
+    },
+    {
+      "name": "newer protocol",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 2,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a",
+          "projectId": "p"
+        }
+      },
+      "error": "newer-protocol"
+    },
+    {
+      "name": "unknown backend",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "backend": "api",
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a",
+          "projectId": "p"
+        }
+      },
+      "error": "unknown-backend"
+    },
+    {
+      "name": "no firebase block",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1
+      },
+      "error": "missing-field"
+    },
+    {
+      "name": "empty api key",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": " ",
+          "authDomain": "a",
+          "projectId": "p"
+        }
+      },
+      "error": "missing-field"
+    },
+    {
+      "name": "project id not a string",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a",
+          "projectId": 7
+        }
+      },
+      "error": "missing-field"
+    },
+    {
+      "name": "cli over plain http elsewhere",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a",
+          "projectId": "p"
+        },
+        "cli": "http://downloads.example/cli"
+      },
+      "error": "bad-cli"
+    },
+    {
+      "name": "cli with another scheme",
+      "site": "https://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a",
+          "projectId": "p"
+        },
+        "cli": "file:///etc"
+      },
+      "error": "bad-cli"
+    },
+    {
+      "name": "bad site",
+      "site": "http://your.host",
+      "doc": {
+        "service": "hivenod",
+        "protocol": 1,
+        "firebase": {
+          "apiKey": "k",
+          "authDomain": "a",
+          "projectId": "p"
+        }
+      },
+      "error": "insecure-site"
+    }
+  ]
+}

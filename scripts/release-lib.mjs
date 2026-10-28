@@ -152,3 +152,25 @@ export function versionRegressions(next, live) {
   }
   return problems;
 }
+
+/**
+ * The live /.well-known/hivenod.json (item 07W4gCboOicS0lM1bqwZ): JSON, a Hivenod discovery file,
+ * naming the project that was deployed. [] when it is right.
+ */
+export function discoveryProblems(status, contentType, body, project) {
+  if (status !== 200) return [`/.well-known/hivenod.json answered ${status}`];
+  const bad = [];
+  if (!/application\/json/.test(contentType ?? ''))
+    bad.push(`/.well-known/hivenod.json is ${contentType}`);
+  let doc;
+  try {
+    doc = JSON.parse(body);
+  } catch {
+    return [...bad, '/.well-known/hivenod.json is not JSON'];
+  }
+  if (doc?.service !== 'hivenod' || typeof doc?.protocol !== 'number')
+    bad.push('/.well-known/hivenod.json is not a Hivenod discovery file');
+  else if (doc.firebase?.projectId !== project)
+    bad.push(`/.well-known/hivenod.json names ${doc.firebase?.projectId}, not ${project}`);
+  return bad;
+}

@@ -7,18 +7,20 @@ import {
   indexedDBLocalPersistence,
   initializeAuth,
 } from 'firebase/auth';
+import { HOSTED_FIREBASE } from '@hive/shared/discovery';
 import { authDomainFor } from './auth-domain';
 
 // Public web config (not a secret: a Firebase web apiKey only identifies the project; security is
 // enforced by firestore.rules). The defaults are the hosted service at https://hivenod.com. To run
-// your own, build with VITE_FIREBASE_* set to your project's web app config (docs/SELF-HOST.md).
+// your own, build with VITE_FIREBASE_* set to your project's web app config (`pnpm selfhost:init`
+// writes them; docs/SELF-HOST.md). The build publishes the same values in /.well-known/hivenod.json.
 const env = import.meta.env;
 const config = {
-  apiKey: env.VITE_FIREBASE_API_KEY || 'AIzaSyCmFfvMHbbGr3lGdc_DefEkomtUOaLH6J4',
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || 'hivenod.com',
-  projectId: env.VITE_FIREBASE_PROJECT_ID || 'hive-board-43be',
-  appId: env.VITE_FIREBASE_APP_ID || '1:493986079810:web:71cf28f12f79f3cf9bf9db',
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || '493986079810',
+  apiKey: env.VITE_FIREBASE_API_KEY || HOSTED_FIREBASE.apiKey,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || HOSTED_FIREBASE.authDomain,
+  projectId: env.VITE_FIREBASE_PROJECT_ID || HOSTED_FIREBASE.projectId,
+  appId: env.VITE_FIREBASE_APP_ID || HOSTED_FIREBASE.appId,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || HOSTED_FIREBASE.messagingSenderId,
 };
 
 /** Build with VITE_USE_EMULATOR=1 to talk to the local Auth and Firestore emulators. */

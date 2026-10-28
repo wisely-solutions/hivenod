@@ -69,3 +69,25 @@ func TestCommands(t *testing.T) {
 		t.Fatalf("max-items range: %q", errs)
 	}
 }
+
+func TestServerFlag(t *testing.T) {
+	t.Setenv("HIVENOD_HOME", filepath.Join(t.TempDir(), "h"))
+	t.Setenv("HIVENOD_TOKEN", "")
+	t.Setenv("HIVENOD_WEB_URL", "")
+	if code, _, errs := call("whoami", "--server", "https://your.host"); code != 2 || !strings.Contains(errs, "--server goes with connect or pair") {
+		t.Fatalf("whoami --server: %d %q", code, errs)
+	}
+	if code, _, errs := call("pair", "--server", "http://your.host"); code != 1 || !strings.Contains(errs, "must use https") {
+		t.Fatalf("pair --server http: %d %q", code, errs)
+	}
+	if code, out, _ := call("--help"); code != 0 || !strings.Contains(out, "--server https://your.host") {
+		t.Fatal("help names --server")
+	}
+	// Already connected: --server does not read the site, it says who this machine is.
+	if _, err := credentials.Save(credentials.Stored{Token: tok, AgentName: "Bee", Server: "https://your.host"}); err != nil {
+		t.Fatal(err)
+	}
+	if code, out, _ := call("pair", "--server", "https://other.host"); code != 0 || !strings.Contains(out, "Already paired") {
+		t.Fatalf("pair when paired: %d %q", code, out)
+	}
+}

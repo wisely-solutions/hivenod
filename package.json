@@ -29,7 +29,8 @@
     "deploy:prod": "node scripts/deploy.mjs prod",
     "smoke:claude": "node scripts/smoke-claude.mjs",
     "release": "node scripts/deploy.mjs release",
-    "rollback:prod": "node scripts/deploy.mjs rollback"
+    "rollback:prod": "node scripts/deploy.mjs rollback",
+    "selfhost:init": "node scripts/selfhost-init.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

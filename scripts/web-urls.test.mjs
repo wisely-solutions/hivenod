@@ -34,6 +34,9 @@ const ALLOW = {
   'docs/SPEC.md': ['web.app'],
   // Self-hosting: the sign-in handler of the self-hoster's own project, in setup instructions.
   'docs/SELF-HOST.md': ['firebaseapp.com'],
+  // pnpm selfhost:init's tests: the default addresses of the self-hoster's own example project
+  // (my-hivenod), never the hosted service (item 07W4gCboOicS0lM1bqwZ).
+  'scripts/selfhost-lib.test.mjs': ['my-hivenod.web.app', 'my-hivenod.firebaseapp.com'],
   'scripts/release-lib.test.mjs': ['web.app', 'firebaseapp.com/__/'],
   'scripts/web-urls.test.mjs': [''], // this file
 };
