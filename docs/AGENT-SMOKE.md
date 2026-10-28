@@ -4,8 +4,8 @@ Card ZY6KC56r. Verifies the `hivenod` Claude Code channel plugin end to end in *
 Claude Code sessions** (model: haiku, a few cents) against the Firebase emulators.
 
 **Manual only. Never in CI, never in `pnpm e2e` / `test:rules`.** It needs a signed-in `claude` on the
-machine, spends model usage, drives a terminal UI through tmux (slow, timing dependent) and takes the
-emulator lock for several minutes. The vitest file
+machine, spends model usage, drives a terminal UI through tmux (slow, timing dependent) and keeps its
+own emulators busy for several minutes. The vitest file
 (`packages/agent/test/claude.channel.smoke.test.ts`) skips itself unless the wrapper set its
 environment, so `pnpm test:rules` never runs it.
 
