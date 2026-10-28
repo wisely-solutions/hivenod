@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import {
   adminDoc,
+  adminUpdate,
   adminSet,
   expectNoHorizontalScroll,
   newPerson,
@@ -13,6 +14,7 @@ import {
   workspaceOf,
   settle,
 } from './helpers';
+import { personalOrgPlan, SERVER_TIME } from '@hive/shared';
 
 /** Modals fade in: axe on a half-transparent surface reports a bogus color-contrast failure. */
 async function settled(page: Page) {
@@ -297,4 +299,50 @@ test('the chosen organization stays through reloads, a second tab and profile wr
   await expect(switcher(page)).toHaveAccessibleName('Chosen Co, switch organization');
   expect(await workspaceOf(who.email)).toBe(chosen);
   await tab2.close();
+});
+
+test('a Personal organization made by the operator command shows in the switcher, not switched to (item fJnu6)', async ({
+  page,
+}, info) => {
+  const pat = person('Pia Personal');
+  await page.goto('/');
+  await signIn(page, pat);
+  await expect(page.getByRole('heading', { name: 'Hi Pia' })).toBeVisible({ timeout: 20_000 });
+  await expect.poll(() => workspaceOf(pat.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
+  const wid = await workspaceOf(pat.email);
+  const uid = await uidOf(pat.email);
+  // The batch `notifier personal-org --apply` writes (packages/shared/src/personalOrg.ts),
+  // committed here as the emulator's admin: server time becomes now, the switcher entry the list.
+  const pid = `personal${Date.now()}`;
+  const plan = personalOrgPlan(
+    { workspaceId: pid, actor: { type: 'human', id: uid, name: 'Pia Personal' } },
+    { profile: { name: 'Pia Personal', email: pat.email, photoURL: null, color: 'c1' } },
+  );
+  const now = new Date();
+  const plain = (v: unknown): unknown =>
+    v === SERVER_TIME
+      ? now
+      : Array.isArray(v)
+        ? v.map(plain)
+        : v && typeof v === 'object'
+          ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)]))
+          : v;
+  for (const op of plan.ops.filter((o) => o.kind === 'set'))
+    await adminSet(op.path, plain(op.data) as Record<string, unknown>);
+  await adminUpdate(`users/${uid}`, { workspaceIds: [wid, pid] });
+
+  await page.reload();
+  await settle(page);
+  // Still in their own organization; Personal is one tap away in the switcher.
+  await expect(switcher(page)).not.toHaveAccessibleName('Personal, switch organization');
+  await switcher(page).click();
+  const list = page.getByRole('list', { name: 'Your organizations' });
+  await expect(list.getByRole('button', { name: /Personal/ })).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  if (process.env.SHOTS_DIR)
+    await page.screenshot({
+      path: `${process.env.SHOTS_DIR}/${info.project.name}-personal-switcher.png`,
+    });
+  await list.getByRole('button', { name: /Personal/ }).click();
+  await expect(switcher(page)).toHaveAccessibleName('Personal, switch organization');
 });

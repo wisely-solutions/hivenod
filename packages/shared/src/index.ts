@@ -21,3 +21,4 @@ export * from './discovery';
 export * from './inbox';
 export * from './outcomes';
 export * from './calendar';
+export * from './personalOrg';
