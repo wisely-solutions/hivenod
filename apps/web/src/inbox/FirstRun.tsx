@@ -124,7 +124,7 @@ export function FirstRun({
         </Step>
         <Step n={3} done={state.agent} title="Connect Claude Code">
           <p className="mb-2 text-14 text-text-2">
-            Nothing moves until an agent picks your idea up. One line in a terminal, one click here.
+            Nothing moves until an agent picks your idea up.
           </p>
           <Link to="/connect" className={linkBtn}>
             Connect Claude Code
