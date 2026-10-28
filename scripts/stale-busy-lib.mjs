@@ -24,10 +24,11 @@ export async function cleanStaleBusy({
   async function members(wid) {
     if (workspaces.has(wid)) return workspaces.get(wid);
     const res = await fetchFn(`${root}/workspaces/${encodeURIComponent(wid)}`, { headers });
-    let set = null;
-    if (res.status === 404) set = null;
-    else if (!res.ok) throw new Error(`workspace read failed: ${res.status}`);
-    else set = new Set(Object.keys((await res.json()).fields?.memberRoles?.mapValue?.fields ?? {}));
+    if (!res.ok && res.status !== 404) throw new Error(`workspace read failed: ${res.status}`);
+    const set =
+      res.status === 404
+        ? null
+        : new Set(Object.keys((await res.json()).fields?.memberRoles?.mapValue?.fields ?? {}));
     workspaces.set(wid, set);
     return set;
   }
