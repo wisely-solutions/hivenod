@@ -66,6 +66,9 @@ const HELP = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod item progress <itemId> <done> <total>
   hivenod item complete <itemId> --run <runId> [--cost ...]   moves on; stops at the next human gate
   hivenod finding raise <itemId> "title" "details"   suggests it to people (not work; no claim needed)
+  hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
+                       creates an item (work at the first step) where the project lets agents
+                       create items; at most 30 an hour
   hivenod item path <itemId>                           the item's path: every library step, skipped or not
   hivenod item shape <itemId> --run R [--skip a,b] [--reason "why"] --note "one line"
                        ends a shaping run (work list shows job shape): the steps it skips; people
@@ -177,6 +180,8 @@ const OPTIONS = {
   kind: { type: 'string' },
   after: { type: 'string' },
   description: { type: 'string' },
+  title: { type: 'string' },
+  attach: { type: 'string', multiple: true },
   instructions: { type: 'string' },
   once: { type: 'boolean' },
   headless: { type: 'boolean' },
@@ -218,6 +223,23 @@ export interface Command {
 
 async function dispatch(c: HiveClient, pos: string[], o: Opts): Promise<Command> {
   const [a, b] = pos;
+  if (a === 'create-item') {
+    const title = o.title ?? b;
+    if (!o.project || !title)
+      throw new HiveError(
+        'Usage: hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...',
+      );
+    const r = await c.createItem(o.project, title, o.description ?? '', o.attach ?? []);
+    return {
+      result: r,
+      text: () =>
+        [
+          `Created item ${r.itemId}. ${r.note}`,
+          ...r.attachments.map((f) => `  attached ${f.name}`),
+          ...(r.attachErrors ?? []).map((e) => `  not attached: ${e}`),
+        ].join('\n'),
+    };
+  }
   const key = `${a} ${b ?? ''}`.trim();
   switch (key) {
     case 'whoami':
