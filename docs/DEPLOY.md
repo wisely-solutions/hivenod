@@ -45,6 +45,14 @@ action URL for this project; see the card vyH5uux3 findings). The smoke test che
    `/version.json` must show this commit. On success it tags `release-<n>` (the rollback point)
    and pushes the tag. On a failed smoke test it redeploys the previous `release-<n>`.
 
+   It also writes `dist/stars.json` with the GitHub star count of wisely-solutions/hivenod (one
+   API call, using `GH_TOKEN_WISELY` or `GH_TOKEN` when set), which the landing page shows from 50
+   stars up. A failed call writes `{"stars":null}` and never fails the release.
+
+   The landing page's product screenshots are real, from a made-up demo organization on the
+   emulators: `pnpm shots:landing` rewrites `apps/web/src/landing/shots/*.webp` (commit them;
+   `SHOTS_PREVIEW=<dir>` keeps the full-size PNGs to look at first).
+
    If the release touches `firestore.indexes.json`, new composite indexes build for a few minutes
    and queries needing them fail (the app shows "Still preparing this view"). After the smoke test
    `pnpm release` therefore polls the Firestore admin API until every index is READY (15 min
