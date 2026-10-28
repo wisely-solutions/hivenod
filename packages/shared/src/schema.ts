@@ -155,6 +155,8 @@ export const EVENT_TYPES = [
   'step.rejected',
   // Agent send-back (card KLCTVnX8)
   'item.sentBack',
+  // Calendar (Inbox item w9SAf): events and busy blocks written, no titles in the event
+  'calendar.changed',
 ] as const;
 export const eventType = z.enum(EVENT_TYPES);
 export type EventType = z.infer<typeof eventType>;
@@ -175,6 +177,7 @@ export const AGENT_EVENT_TYPES = [
   'item.pathChanged',
   'step.proposed',
   'item.sentBack',
+  'calendar.changed',
 ] as const satisfies readonly EventType[];
 
 // ---------- users & workspaces ----------
