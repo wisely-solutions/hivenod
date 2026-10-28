@@ -210,28 +210,53 @@ export function calendarUpsert(
       'calendar.changed',
       {},
       { memberUids: [input.memberUid], upserted: clean.length, deleted: 0 },
-      (eventId) =>
-        clean.flatMap((c) => [
-          {
-            kind: 'set' as const,
-            path: calendarPaths.event(ctx.workspaceId, c.id),
-            data: { ...c.doc, lastEventId: eventId },
-          },
-          {
-            kind: 'set' as const,
-            path: calendarPaths.busyBlock(input.memberUid, busyBlockId(ctx.workspaceId, c.id)),
-            data: {
-              workspaceId: ctx.workspaceId,
-              start: c.start,
-              end: c.end,
-              deleted: false,
-              updatedAt: SERVER_TIME,
-              lastEventId: eventId,
-            },
-          },
-        ]),
+      (eventId) => clean.flatMap((c) => upsertOps(ctx, input.memberUid, c, eventId)),
     ),
   };
+}
+
+function upsertOps(ctx: ActionContext, memberUid: string, c: CleanEvent, eventId: string) {
+  return [
+    {
+      kind: 'set' as const,
+      path: calendarPaths.event(ctx.workspaceId, c.id),
+      data: { ...c.doc, lastEventId: eventId },
+    },
+    {
+      kind: 'set' as const,
+      path: calendarPaths.busyBlock(memberUid, busyBlockId(ctx.workspaceId, c.id)),
+      data: {
+        workspaceId: ctx.workspaceId,
+        start: c.start,
+        end: c.end,
+        deleted: false,
+        updatedAt: SERVER_TIME,
+        lastEventId: eventId,
+      },
+    },
+  ];
+}
+
+function deleteOps(ctx: ActionContext, e: { id: string; memberUid: string }, eventId: string) {
+  return [
+    {
+      kind: 'update' as const,
+      path: calendarPaths.event(ctx.workspaceId, e.id),
+      data: {
+        title: '',
+        attendees: [],
+        deleted: true,
+        updatedBy: { type: ctx.actor.type, id: ctx.actor.id },
+        updatedAt: SERVER_TIME,
+        lastEventId: eventId,
+      },
+    },
+    {
+      kind: 'update' as const,
+      path: calendarPaths.busyBlock(e.memberUid, busyBlockId(ctx.workspaceId, e.id)),
+      data: { deleted: true, updatedAt: SERVER_TIME, lastEventId: eventId },
+    },
+  ];
 }
 
 /**
@@ -257,27 +282,39 @@ export function calendarDelete(
     'calendar.changed',
     {},
     { memberUids: members, upserted: 0, deleted: input.events.length },
-    (eventId) =>
-      input.events.flatMap((e) => [
-        {
-          kind: 'update' as const,
-          path: calendarPaths.event(ctx.workspaceId, e.id),
-          data: {
-            title: '',
-            attendees: [],
-            deleted: true,
-            updatedBy: { type: ctx.actor.type, id: ctx.actor.id },
-            updatedAt: SERVER_TIME,
-            lastEventId: eventId,
-          },
-        },
-        {
-          kind: 'update' as const,
-          path: calendarPaths.busyBlock(e.memberUid, busyBlockId(ctx.workspaceId, e.id)),
-          data: { deleted: true, updatedAt: SERVER_TIME, lastEventId: eventId },
-        },
-      ]),
+    (eventId) => input.events.flatMap((e) => deleteOps(ctx, e, eventId)),
   );
+}
+
+/**
+ * Replaces one event by its copy in another calendar, in one batch (Inbox item fJnu6): after the
+ * agent has put an approved booking (source hivenod) into the member's own calendar (for example
+ * Google), the booking becomes that calendar's event, so the next sync updates it instead of
+ * adding the same meeting twice. The replaced event is soft-deleted, its busy block freed.
+ */
+export function calendarMirror(
+  ctx: ActionContext,
+  input: { memberUid: string; replacedId: string; event: CalendarEventInput },
+): ActionPlan & { id: string } {
+  requireCalendarWriter(ctx, input.memberUid);
+  if (!input.replacedId) throw new ActionError('Name the event it replaces');
+  const c = cleanEvent(ctx, input.memberUid, input.event, 1);
+  if (c.id === input.replacedId)
+    throw new ActionError("That is the same event: give the other calendar's event id");
+  const replaced = { id: input.replacedId, memberUid: input.memberUid };
+  return {
+    id: c.id,
+    ...plan(
+      ctx,
+      'calendar.changed',
+      {},
+      { memberUids: [input.memberUid], upserted: 1, deleted: 1 },
+      (eventId) => [
+        ...upsertOps(ctx, input.memberUid, c, eventId),
+        ...deleteOps(ctx, replaced, eventId),
+      ],
+    ),
+  };
 }
 
 // ---------- free time ----------

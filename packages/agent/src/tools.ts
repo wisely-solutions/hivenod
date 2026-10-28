@@ -4,7 +4,14 @@
  */
 import { z } from 'zod';
 import { OUTCOME_TYPES, outcomeGuide } from '@hive/shared';
-import { deleteEvents, freeTime, upsertEvents, type CalendarEventArg } from './calendar';
+import {
+  deleteEvents,
+  freeTime,
+  syncEvents,
+  mirrorBooking,
+  upsertEvents,
+  type CalendarEventArg,
+} from './calendar';
 import type { HiveClient } from './client';
 
 export interface ToolDef<S extends z.ZodRawShape = z.ZodRawShape> {
@@ -703,6 +710,70 @@ export const TOOLS: ToolDef[] = [
         from: a.from as string,
         to: a.to as string,
         minMinutes: a.minMinutes as number | undefined,
+      }),
+  }),
+  tool({
+    name: 'calendar_sync',
+    description:
+      "Sync a calendar you read yourself (for example the member's Google Calendar, through your own Google access) into their calendar in this organization. Pass the events exactly as the Google Calendar API lists them (single events, recurring ones expanded) for the window from..to (default: a day ago to 30 days ahead): new and changed events are saved, cancelled, declined and free ones are removed, and in a full sync an event no longer listed in the window is removed too. With incremental, pass only the changes since your last sync token: nothing is removed for being absent. Echoes nextSyncToken for your next incremental sync. For large calendars use `hivenod calendar sync <file>` instead.",
+    input: {
+      events: z
+        .array(z.record(z.string(), z.unknown()))
+        .max(2500)
+        .describe(
+          'Google Calendar API events: id, status, summary, start, end, attendees, transparency, eventType',
+        ),
+      source: z.string().max(40).optional().describe('Where they come from; default google'),
+      member: z
+        .string()
+        .optional()
+        .describe(
+          'Whose calendar: uid, email or name (may be left out when the organization has one member)',
+        ),
+      from: z.string().optional().describe('Window start, RFC 3339; default a day ago'),
+      to: z.string().optional().describe('Window end, RFC 3339; default 30 days ahead'),
+      incremental: z.boolean().optional().describe('Only changes since the last sync token'),
+      busyOnly: z.boolean().optional().describe('Keep only the times (no titles or attendees)'),
+      nextSyncToken: z.string().max(2000).optional().describe("The source's token, echoed back"),
+    },
+    run: (c, a) =>
+      syncEvents(c.calendarDeps(), {
+        member: a.member as string | undefined,
+        source: a.source as string | undefined,
+        from: a.from as string | undefined,
+        to: a.to as string | undefined,
+        incremental: a.incremental as boolean | undefined,
+        busyOnly: a.busyOnly as boolean | undefined,
+        feed: {
+          items: a.events as never,
+          ...(a.nextSyncToken ? { nextSyncToken: a.nextSyncToken as string } : {}),
+        },
+      }),
+  }),
+  tool({
+    name: 'calendar_mirror',
+    description:
+      "After the member approved a booking (a reply_book outcome), Hivenod put the meeting in their calendar. Once you have created it in their own calendar (for example their Google Calendar, with your own access, inviting the people in 'with'), call this with that calendar's event id: the booking becomes that event, so your next calendar sync updates it and never counts the meeting twice. Then send the reply and report outcome_done. Safe to call again.",
+    input: {
+      outcomeId: z.string().min(1).describe('The approved reply_book outcome'),
+      sourceEventId: z
+        .string()
+        .min(1)
+        .max(600)
+        .describe("The event's id in the member's calendar (e.g. the Google event id)"),
+      source: z.string().max(40).optional().describe('Which calendar; default google'),
+      start: z.string().optional().describe('Only if the calendar moved it: RFC 3339'),
+      end: z.string().optional().describe('Only if the calendar moved it: RFC 3339'),
+      title: z.string().max(300).optional().describe('Only if it differs from the booking'),
+    },
+    run: (c, a) =>
+      mirrorBooking(c.calendarDeps(), {
+        outcomeId: a.outcomeId as string,
+        sourceEventId: a.sourceEventId as string,
+        source: a.source as string | undefined,
+        start: a.start as string | undefined,
+        end: a.end as string | undefined,
+        title: a.title as string | undefined,
       }),
   }),
   tool({

@@ -25,7 +25,7 @@
   "reply_book": {
     "label": "Reply and book",
     "approve": "Send and book",
-    "description": "Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then send the reply and the invite, mirror the event to the source calendar and report outcome_done.",
+    "description": "Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done.",
     "fields": {
       "text": {
         "kind": "text",
