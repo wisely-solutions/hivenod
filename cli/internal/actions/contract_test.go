@@ -114,6 +114,18 @@ var runners = map[string]runner{
 	"skipStep":       act(SkipStep),
 	"askPathChange":  act(AskPathChange),
 	"proposeStep":    act(ProposeStep),
+	// Inbox (item 4PEHrOW5IfXBQWgOK9wo)
+	"addInboxRequest": act(AddInboxRequest),
+	"assignSubject":   act(AssignSubject),
+	"draftReply":      act(DraftReply),
+	"markSent":        act(MarkSent),
+	"inboxRequestKey": pure(func(in struct {
+		Source    string `json:"source"`
+		ThreadRef string `json:"threadRef"`
+		MessageID string `json:"messageId"`
+	}) (any, error) {
+		return InboxRequestKey(in.Source, in.ThreadRef, in.MessageID), nil
+	}),
 
 	"agentSendBackTargets": pure(func(in projItem) (any, error) {
 		return ids(AgentSendBackTargets(in.Project, in.Item)), nil

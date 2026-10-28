@@ -356,3 +356,71 @@ type Decision struct {
 	At          time.Time `firestore:"at" json:"at"`
 	LastEventID string    `firestore:"lastEventId" json:"lastEventId"`
 }
+
+// ---------- inbox (item 4PEHrOW5IfXBQWgOK9wo, packages/shared/src/inbox.ts) ----------
+
+// InboxSender is who sent a request.
+type InboxSender struct {
+	Name   string  `firestore:"name" json:"name"`
+	Handle *string `firestore:"handle" json:"handle"`
+}
+
+// InboxAttachment is a link a request carries.
+type InboxAttachment struct {
+	Name string `firestore:"name" json:"name"`
+	URL  string `firestore:"url" json:"url"`
+}
+
+// InboxDraft is the proposed reply (an agent's, or the member's edit).
+type InboxDraft struct {
+	Reply   string     `firestore:"reply" json:"reply"`
+	Actions []string   `firestore:"actions" json:"actions"`
+	By      ActorRef   `firestore:"by" json:"by"`
+	At      *time.Time `firestore:"at" json:"at,omitempty"`
+}
+
+// InboxApproved is what the member pressed Send on.
+type InboxApproved struct {
+	Reply   string     `firestore:"reply" json:"reply"`
+	Actions []string   `firestore:"actions" json:"actions"`
+	ByUID   string     `firestore:"byUid" json:"byUid"`
+	At      *time.Time `firestore:"at" json:"at,omitempty"`
+}
+
+// InboxSent is the fetching agent's confirmation that it posted the reply.
+type InboxSent struct {
+	Permalink *string    `firestore:"permalink" json:"permalink"`
+	By        string     `firestore:"by" json:"by"`
+	At        *time.Time `firestore:"at" json:"at,omitempty"`
+}
+
+// InboxRequest is workspaces/{w}/inboxRequests/{rid}.
+type InboxRequest struct {
+	MemberUID   string            `firestore:"memberUid" json:"memberUid"`
+	SubjectID   *string           `firestore:"subjectId" json:"subjectId"`
+	Status      string            `firestore:"status" json:"status"`
+	Source      string            `firestore:"source" json:"source"`
+	Sender      InboxSender       `firestore:"sender" json:"sender"`
+	Text        string            `firestore:"text" json:"text"`
+	ThreadRef   string            `firestore:"threadRef" json:"threadRef"`
+	MessageID   string            `firestore:"messageId" json:"messageId"`
+	Permalink   *string           `firestore:"permalink" json:"permalink"`
+	ReplyRef    *string           `firestore:"replyRef" json:"replyRef"`
+	ReceivedAt  time.Time         `firestore:"receivedAt" json:"receivedAt"`
+	Attachments []InboxAttachment `firestore:"attachments" json:"attachments"`
+	Draft       *InboxDraft       `firestore:"draft" json:"draft"`
+	Approved    *InboxApproved    `firestore:"approved" json:"approved"`
+	Sent        *InboxSent        `firestore:"sent" json:"sent"`
+	FetchedBy   string            `firestore:"fetchedBy" json:"fetchedBy"`
+	CreatedAt   time.Time         `firestore:"createdAt" json:"createdAt"`
+	UpdatedAt   time.Time         `firestore:"updatedAt" json:"updatedAt"`
+}
+
+// InboxSubject is workspaces/{w}/inboxSubjects/{sid}.
+type InboxSubject struct {
+	MemberUID string    `firestore:"memberUid" json:"memberUid"`
+	Name      string    `firestore:"name" json:"name"`
+	CreatedBy ActorRef  `firestore:"createdBy" json:"createdBy"`
+	CreatedAt time.Time `firestore:"createdAt" json:"createdAt"`
+	UpdatedAt time.Time `firestore:"updatedAt" json:"updatedAt"`
+}

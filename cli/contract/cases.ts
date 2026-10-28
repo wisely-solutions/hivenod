@@ -52,8 +52,14 @@ import {
   streakAfter,
   STUCK_QUESTION_PREFIX,
   stuckQuestion,
+  addInboxRequest,
+  assignSubject,
+  draftReply,
+  inboxRequestKey,
+  markSent,
   type ActionContext,
   type Actor,
+  type InboxRequestState,
   type AgentGuardState,
   type ItemState,
   type Step,
@@ -1285,6 +1291,155 @@ function build(): ContractCase[] {
   });
   live('window passed', { lastSeenAt: ts(NOW_MS - AGENT_ONLINE_MS) });
   live('never seen', { lastSeenAt: null });
+
+  // ---------- inbox (item 4PEHrOW5IfXBQWgOK9wo): the agent actions ----------
+  const inAdd = (
+    name: string,
+    actor: Actor,
+    over: Partial<Parameters<typeof addInboxRequest>[1]>,
+  ) =>
+    act(
+      `addInboxRequest/${name}`,
+      'addInboxRequest',
+      actor,
+      {
+        requestId: 'rq0123',
+        memberUid: 'joao',
+        source: 'teams',
+        sender: { name: ' Sam Example ', handle: 'sam@example.com' },
+        text: 'Can we move the review to Thursday?',
+        threadRef: 'thread-1',
+        messageId: 'm-1',
+        permalink: 'https://teams.example.com/m/1',
+        replyRef: 'conv:1',
+        receivedAt: new Date(NOW_MS - 3_600_000),
+        attachments: [{ name: ' agenda.pdf ', url: 'https://files.example.com/a.pdf' }],
+        ...over,
+      },
+      addInboxRequest,
+    );
+  inAdd('full', AGENT, {});
+  inAdd('minimal', AGENT, {
+    sender: { name: 'Sam' },
+    permalink: null,
+    replyRef: '  ',
+    attachments: undefined,
+  });
+  inAdd('blank handle', AGENT, { sender: { name: 'Sam', handle: '   ' } });
+  inAdd('person refused', HUMAN, {});
+  inAdd('bad source', AGENT, { source: 'Teams' });
+  inAdd('no sender', AGENT, { sender: { name: '  ' } });
+  inAdd('no text', AGENT, { text: ' \n ' });
+  inAdd('text too long', AGENT, { text: 'x'.repeat(50_001) });
+  inAdd('no thread', AGENT, { threadRef: '' });
+  inAdd('no message id', AGENT, { messageId: '' });
+  inAdd('bad permalink', AGENT, { permalink: 'teams://m/1' });
+  inAdd('bad attachment', AGENT, { attachments: [{ name: 'a', url: 'file:///etc/passwd' }] });
+  inAdd('too many attachments', AGENT, {
+    attachments: Array.from({ length: 21 }, (_, i) => ({
+      name: `f${i}`,
+      url: 'https://x.example/f',
+    })),
+  });
+  const REQ = (over: Partial<InboxRequestState> = {}): InboxRequestState => ({
+    memberUid: 'joao',
+    subjectId: null,
+    status: 'new',
+    fetchedBy: 'agentA',
+    draft: null,
+    ...over,
+  });
+  const file = (name: string, actor: Actor, input: Parameters<typeof assignSubject>[1]) =>
+    act(`assignSubject/${name}`, 'assignSubject', actor, input, assignSubject);
+  file('new subject', AGENT, {
+    requestId: 'rq1',
+    request: REQ(),
+    newName: '  Klarna   refunds (Payments) ',
+  });
+  file('existing subject', AGENT, { requestId: 'rq1', request: REQ(), subjectId: 's1' });
+  file('refile while drafting', AGENT, {
+    requestId: 'rq1',
+    request: REQ({ status: 'drafting', subjectId: 's0' }),
+    subjectId: 's1',
+  });
+  file('refile at your call', AGENT, {
+    requestId: 'rq1',
+    request: REQ({ status: 'yourCall', subjectId: 's0' }),
+    subjectId: 's1',
+  });
+  file('both given', AGENT, { requestId: 'rq1', request: REQ(), subjectId: 's1', newName: 'x' });
+  file('neither given', AGENT, { requestId: 'rq1', request: REQ() });
+  file('blank name', AGENT, { requestId: 'rq1', request: REQ(), newName: '   ' });
+  file('name too long', AGENT, { requestId: 'rq1', request: REQ(), newName: 'n'.repeat(121) });
+  file('done', AGENT, { requestId: 'rq1', request: REQ({ status: 'done' }), subjectId: 's1' });
+  file('sending', AGENT, {
+    requestId: 'rq1',
+    request: REQ({ status: 'sending' }),
+    subjectId: 's1',
+  });
+  file('ignored', AGENT, {
+    requestId: 'rq1',
+    request: REQ({ status: 'ignored' }),
+    subjectId: 's1',
+  });
+  file('person refused', HUMAN, { requestId: 'rq1', request: REQ(), subjectId: 's1' });
+  const dr = (name: string, actor: Actor, input: Parameters<typeof draftReply>[1]) =>
+    act(`draftReply/${name}`, 'draftReply', actor, input, draftReply);
+  const FILED = REQ({ status: 'drafting', subjectId: 's1' });
+  dr('plain', AGENT, { requestId: 'rq1', request: FILED, reply: '  Thursday works. ' });
+  dr('with actions', AGENT, {
+    requestId: 'rq1',
+    request: FILED,
+    reply: 'Thursday works.',
+    actions: [' book Thu 10:00 with Sam '],
+  });
+  dr('again at your call', AGENT, {
+    requestId: 'rq1',
+    request: REQ({ status: 'yourCall', subjectId: 's1' }),
+    reply: 'Better',
+  });
+  dr('unfiled', AGENT, { requestId: 'rq1', request: REQ(), reply: 'x' });
+  dr('empty', AGENT, { requestId: 'rq1', request: FILED, reply: ' ' });
+  dr('too long', AGENT, { requestId: 'rq1', request: FILED, reply: 'r'.repeat(20_001) });
+  dr('too many actions', AGENT, {
+    requestId: 'rq1',
+    request: FILED,
+    reply: 'ok',
+    actions: Array.from({ length: 11 }, () => 'a'),
+  });
+  dr('blank action', AGENT, { requestId: 'rq1', request: FILED, reply: 'ok', actions: [' '] });
+  dr('sending', AGENT, {
+    requestId: 'rq1',
+    request: REQ({ status: 'sending', subjectId: 's1' }),
+    reply: 'ok',
+  });
+  dr('person refused', HUMAN, { requestId: 'rq1', request: FILED, reply: 'ok' });
+  const ms = (name: string, actor: Actor, input: Parameters<typeof markSent>[1]) =>
+    act(`markSent/${name}`, 'markSent', actor, input, markSent);
+  const SENDING = REQ({ status: 'sending', subjectId: 's1' });
+  ms('with link', AGENT, {
+    requestId: 'rq1',
+    request: SENDING,
+    permalink: ' https://teams.example.com/m/2 ',
+  });
+  ms('without link', AGENT, { requestId: 'rq1', request: SENDING });
+  ms('not approved', AGENT, {
+    requestId: 'rq1',
+    request: REQ({ status: 'yourCall', subjectId: 's1' }),
+  });
+  ms('already done', AGENT, {
+    requestId: 'rq1',
+    request: REQ({ status: 'done', subjectId: 's1' }),
+  });
+  ms('another agent', OTHER, { requestId: 'rq1', request: SENDING });
+  ms('bad link', AGENT, { requestId: 'rq1', request: SENDING, permalink: 'nope' });
+  ms('person refused', HUMAN, { requestId: 'rq1', request: SENDING });
+  const key = (name: string, input: { source: string; threadRef: string; messageId: string }) =>
+    pure(`inboxRequestKey/${name}`, 'inboxRequestKey', input, (i) =>
+      inboxRequestKey(i.source, i.threadRef, i.messageId),
+    );
+  key('plain', { source: 'teams', threadRef: 'thread-1', messageId: 'm-1' });
+  key('unicode', { source: 'mail', threadRef: '<a&b@example.com>', messageId: 'ação' });
 
   return cases;
 }
