@@ -37,6 +37,13 @@ const ALLOW = {
   'packages/agent/src/interactive.ts': ['old `hive` CLI', 'delete out.HIVE_TOKEN'],
   // Denies the old token folder to the model (never reads it).
   'packages/agent/src/credentials.ts': ["The old `hive` CLI's folder", "join(homedir(), '.hive')"],
+  // The landing page names Hive, the agent that builds Hivenod (and the demo agent in its
+  // screenshots), not the product (item g17GWUkfKRFh4mgn0ciQ, Draft 2 approved by the owner).
+  'apps/web/src/landing/LandingPage.tsx': [
+    'Hive builds Hivenod on Hivenod',
+    'the agent Hive is building',
+    '<b>Hive</b> is building',
+  ],
 };
 
 function files(path) {

@@ -156,3 +156,16 @@ test('Get started opens Create account, Sign in opens Sign in; Privacy is reacha
   });
   await axe(page);
 });
+
+test('signed-out visitors load the landing page without the signed-in code', async ({ page }) => {
+  const scripts: string[] = [];
+  page.on('request', (r) => {
+    if (r.resourceType() === 'script') scripts.push(new URL(r.url()).pathname);
+  });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await settle(page);
+  expect(scripts.some((s) => /\/LandingPage-/.test(s))).toBe(true);
+  // Firebase and Needs you load only for a browser that may be signed in.
+  expect(scripts.filter((s) => /\/(db|app|SignedIn|InboxPage)-/.test(s))).toEqual([]);
+});
