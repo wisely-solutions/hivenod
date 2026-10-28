@@ -14,7 +14,9 @@
   "scripts": {
     "typecheck": "tsc -p .",
     "test": "vitest run --coverage",
-    "test:rules": "vitest run -c vitest.rules.config.ts"
+    "test:rules": "vitest run -c vitest.rules.config.ts",
+    "test:rules:core": "vitest run -c vitest.rules.config.ts --exclude rules/headroom.test.ts",
+    "test:rules:headroom": "vitest run -c vitest.rules.config.ts rules/headroom.test.ts"
   },
   "dependencies": {
     "zod": "^4.0.0"

@@ -276,7 +276,10 @@ test('Delete…: confirm, erases the item with its notes, files and runs, one Ac
   await menuOf(page, 'Write the FAQ').getByRole('menuitem', { name: 'Delete…' }).click();
   await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(card(page, 'Write the FAQ')).toHaveCount(0);
-  await expect.poll(() => adminDoc(`${base}/projects/blog/items/i2`)).toBeNull();
+  // The erase removes ~1000 log lines first; on a loaded 4-CPU runner that takes longer than the default 5 s.
+  await expect
+    .poll(() => adminDoc(`${base}/projects/blog/items/i2`), { timeout: 25_000 })
+    .toBeNull();
   expect(await adminDoc(`${base}/projects/blog/items/i2/messages/m1`)).toBeNull();
   expect(await adminDoc(`${base}/projects/blog/items/i2/attachments/a1`)).toBeNull();
   expect(await adminDoc(`${base}/runs/r2`)).toBeNull();

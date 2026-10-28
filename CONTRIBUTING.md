@@ -46,3 +46,11 @@ hosted values as defaults, see [docs/SELF-HOST.md](docs/SELF-HOST.md). `scripts/
 ## Security
 
 Do not open a public issue for a vulnerability. See [SECURITY.md](SECURITY.md).
+
+## CI layout
+
+`.github/workflows/ci.yml` runs these jobs in parallel (about 7 minutes wall clock): `check` (lint, typecheck,
+unit, scripts, build, size), `go`, `rules` (rules and integration tests against the emulators), `rules-headroom`
+(the expression-budget probe, about 6 minutes on its own), `e2e` in 6 Playwright shards with 2 workers each, and
+`perf`. Pull-request runs cancel when you push again; runs on `main` queue. `release.yml` and `rollback.yml`
+skip without the deploy credentials, so this public repository never deploys.
