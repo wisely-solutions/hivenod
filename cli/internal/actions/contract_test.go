@@ -102,6 +102,8 @@ var runners = map[string]runner{
 	"releaseClaim":   act(ReleaseClaim),
 	"reportProgress": act(ReportProgress),
 	"parkItem":       act(ParkItem),
+	"reportStatus":   act(ReportStatus),
+	"statusEveryOf":  pure(func(in model.Project) (any, error) { return StatusEveryOf(in), nil }),
 	"unparkItem":     act(UnparkItem),
 	"completeStep":   act(CompleteStep),
 	"endRun":         act(EndRun),
