@@ -82,14 +82,9 @@ async function enter(page: Page, name: string) {
   return wid;
 }
 
-for (const [theme, size] of [
-  ['light', { width: 1440, height: 900 }],
-  ['dark', { width: 390, height: 844 }],
-] as const) {
-  test(`rename an agent from the menu and from its page in ${theme} at ${size.width}`, async ({
-    page,
-  }) => {
-    await page.setViewportSize(size);
+// Runs in both Playwright projects, so 1440 and 390 wide.
+for (const theme of ['light', 'dark'] as const) {
+  test(`rename an agent from the menu and from its page in ${theme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: theme });
     await enter(page, `Rena Rename ${theme}`);
     await page.goto('/agents');
@@ -118,9 +113,9 @@ for (const [theme, size] of [
     );
 
     // The board card shows the new name.
-    await page.goto('/projects/blog');
+    await page.goto('/p/blog');
     await expect(page.getByText('IKEA agent').first()).toBeVisible();
-    await expect(page.getByText('Claude Code (desktop)')).toHaveCount(1);
+    await expect(page.getByText('Claude Code (desktop)')).toHaveCount(0);
 
     // From the agent's page.
     await page.goto('/agents/other');
