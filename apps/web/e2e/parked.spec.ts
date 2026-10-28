@@ -145,16 +145,9 @@ test('a parked item shows Waiting on its card; the agent reads working 1 · wait
   const detail = page.locator('[aria-label="Item detail"]:visible');
   await expect(detail).toContainText('Waiting: release batch with the docs update');
   await expect(detail.getByRole('button', { name: 'Stop work' })).toBeVisible();
-  // The detail's "Close item" button fails label-content-name-mismatch already on main (raised as
-  // a finding; not part of this item).
-  await themed(
-    page,
-    'parked-detail',
-    async () => {
-      await expect(detail).toBeVisible();
-    },
-    ['label-content-name-mismatch'],
-  );
+  await themed(page, 'parked-detail', async () => {
+    await expect(detail).toBeVisible();
+  });
   await page.goto('/p/blog');
   // The footer of the sidebar (desktop): the organization's agent line.
   if (info.project.name === 'desktop-1440')
