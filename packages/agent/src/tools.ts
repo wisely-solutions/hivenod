@@ -3,7 +3,7 @@
  * them into the JSON Schemas Claude Code shows. Descriptions are written for the model using them.
  */
 import { z } from 'zod';
-import { OUTCOME_TYPES, outcomeGuide } from '@hive/shared';
+import { MAX_STATUS_TEXT_CHARS, OUTCOME_TYPES, outcomeGuide } from '@hive/shared';
 import { deleteEvents, freeTime, upsertEvents, type CalendarEventArg } from './calendar';
 import type { HiveClient } from './client';
 
@@ -122,6 +122,28 @@ export const TOOLS: ToolDef[] = [
         a.itemId as string,
         a.done as number,
         a.total as number,
+        a.project as string | undefined,
+      ),
+  }),
+  tool({
+    name: 'status',
+    description:
+      'Say in one line where the work on the item you hold stands, with an optional percentage done (e.g. "Running release checks, e2e batch 2 of 3", 70). It replaces your previous status and shows on the card and in the item\'s history. Answer every <channel kind="status"> event with it; people are told when an item stays silent.',
+    input: {
+      itemId,
+      text: z
+        .string()
+        .min(1)
+        .max(MAX_STATUS_TEXT_CHARS)
+        .describe('One line: what you are doing now'),
+      pct: z.number().int().min(0).max(100).optional().describe('Percentage done, 0 to 100'),
+      project: projectId,
+    },
+    run: (c, a) =>
+      c.status(
+        a.itemId as string,
+        a.text as string,
+        a.pct as number | undefined,
         a.project as string | undefined,
       ),
   }),

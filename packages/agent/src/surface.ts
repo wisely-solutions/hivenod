@@ -7,7 +7,7 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { channelInstructions, MAX_ITEMS_LIMIT, workText } from './channel';
+import { channelInstructions, MAX_ITEMS_LIMIT, statusText, workText } from './channel';
 import type { HiveClient } from './client';
 import { inboxText, type InboxEventInfo } from './inboxfeed';
 import { createMcpServer } from './mcp';
@@ -43,6 +43,7 @@ export async function mcpSurface() {
     channelInstructions: instructions,
     workText: workTextSamples(),
     inboxText: inboxTextSamples(),
+    statusText: statusTextSamples(),
   };
 }
 
@@ -96,4 +97,28 @@ function inboxTextSamples() {
     { reason: 'carry_out', threadId: 't1', outcomeId: 'o1', outcomeType: 'reply', update: true },
   ];
   return infos.map((info) => ({ info, text: inboxText(info) }));
+}
+
+/** statusText samples (item AzveC; the Go port is checked against them). */
+function statusTextSamples() {
+  const items = [
+    { itemId: 'i1', title: 'Fix the login' },
+    { itemId: 'i2', title: 'y'.repeat(250) },
+  ];
+  const whys = [
+    { why: 'interval' as const },
+    { why: 'asked' as const, by: 'Ana' },
+    { why: 'asked' as const, by: '' },
+  ];
+  const out: {
+    item: (typeof items)[number];
+    why: (typeof whys)[number];
+    maxItems: number;
+    text: string;
+  }[] = [];
+  for (const item of items)
+    for (const why of whys)
+      for (const maxItems of [1, 3])
+        out.push({ item, why, maxItems, text: statusText(item, why, maxItems) });
+  return out;
 }
