@@ -3,6 +3,7 @@ import {
   CHANNEL_INSTRUCTIONS,
   ChannelSession,
   GIVE_BACK_SKIP_MS,
+  INBOX_INSTRUCTIONS,
   type ChannelEvent,
   channelInstructions,
   parseMaxItems,
@@ -59,9 +60,10 @@ describe('ChannelSession.stop (card pqqOWE3s)', () => {
 });
 
 describe('max_items (card cGSENsRF)', () => {
-  it('keeps the instructions and work text of a one-item session exactly as before', () => {
-    expect(channelInstructions(1)).toBe(CHANNEL_INSTRUCTIONS);
-    expect(channelInstructions()).toBe(CHANNEL_INSTRUCTIONS);
+  it('keeps the instructions (plus the inbox paragraph) and work text of a one-item session as before', () => {
+    expect(channelInstructions(1)).toBe(`${CHANNEL_INSTRUCTIONS}\n${INBOX_INSTRUCTIONS}`);
+    expect(channelInstructions()).toBe(channelInstructions(1));
+    expect(channelInstructions(3)).toContain(INBOX_INSTRUCTIONS);
     expect(workText({ ...row, itemId: 'i9' }, { why: 'arrived' }, 1)).toBe(
       workText(row, { why: 'arrived' }),
     );

@@ -24,6 +24,7 @@
  * minute. Waiting ones go out in order: approved outcomes, answers, new messages, the rest, then
  * nudges; oldest first. The Go CLI mirrors this file (cli/internal/hive/inboxfeed.go).
  */
+import { HiveError } from './errors';
 
 /** What the feed sees of a thread (the home agent's open threads). */
 export interface FeedThread {
@@ -85,6 +86,35 @@ export const INBOX_DEFAULTS = {
 } as const;
 /** The highest `--max-inbox` accepted. */
 export const MAX_INBOX_LIMIT = 10;
+
+/** Parses `--max-inbox` / HIVENOD_MAX_INBOX: a whole number 0..10 (0: off), or undefined. */
+export function parseMaxInbox(v: string | undefined, from: string): number | undefined {
+  if (v === undefined || v.trim() === '') return undefined;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0 || n > MAX_INBOX_LIMIT)
+    throw new HiveError(
+      `${from} must be a whole number from 0 to ${MAX_INBOX_LIMIT} (got "${v}").`,
+    );
+  return n;
+}
+
+/** The inbox options from the environment (HIVENOD_INBOX_* in milliseconds; tests and tuning). */
+export function inboxOptionsFromEnv(env: NodeJS.ProcessEnv = process.env): InboxFeedOptions {
+  const ms = (k: string) => {
+    const n = Number(env[k]);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  const o: InboxFeedOptions = {};
+  const per = ms('HIVENOD_INBOX_PER_MIN');
+  if (per !== undefined) o.perMinute = per;
+  const nudge = ms('HIVENOD_INBOX_NUDGE_MS');
+  if (nudge !== undefined) o.nudgeAfterMs = nudge;
+  const lease = ms('HIVENOD_INBOX_LEASE_MS');
+  if (lease !== undefined) o.leaseMs = lease;
+  const tick = ms('HIVENOD_INBOX_TICK_MS');
+  if (tick !== undefined) o.tickMs = tick;
+  return o;
+}
 
 export type InboxReason =
   | 'carry_out'
@@ -191,7 +221,7 @@ export function inboxText(e: InboxEventInfo): string {
       ? `carry out outcome ${e.outcomeId ?? '?'} exactly as approved (its fields, as the person left them), then report it with outcome_done`
       : e.reason === 'nudge_due'
         ? 'propose a nudge (outcome_propose, type nudge) if one makes sense, otherwise say why not with inbox_note'
-        : "investigate it (inbox_note for what you find, subject_assign if it is not filed, inbox_ask only if you must), then propose what should come of it (outcome_propose)";
+        : 'investigate it (inbox_note for what you find, subject_assign if it is not filed, inbox_ask only if you must), then propose what should come of it (outcome_propose)';
   if (e.update) {
     lines.push(
       `A sub-agent of yours already works on thread ${e.threadId}: pass this on to it (if it has finished, start a new one with thread_read).`,
@@ -252,6 +282,7 @@ export class InboxFeed {
   private sent: number[] = [];
   private types = new Map<string, FeedEventDoc | null>();
   private fetching = new Set<string>();
+  private toFetch: string[] = [];
   private wakes = new Map<string, string>();
   private stops: (() => void)[] = [];
   private timer: NodeJS.Timeout | null = null;
@@ -330,6 +361,7 @@ export class InboxFeed {
       }
       if (over) this.inflight.delete(slot);
     }
+    this.toFetch = [];
     for (const t of this.threads.values()) {
       if (t.state === 'investigating') this.investigating(t);
       else {
@@ -362,6 +394,7 @@ export class InboxFeed {
     }
     for (const [slot, d] of this.due)
       if (d.outcome && !this.outcomes.has(d.outcome.id)) this.due.delete(slot);
+    this.fetchAll(this.toFetch);
     this.pump();
   }
 
@@ -369,7 +402,7 @@ export class InboxFeed {
     const last = this.handled.get(t.id);
     if (last === t.lastEventId) return;
     if (!this.types.has(t.lastEventId)) {
-      this.fetch(t.lastEventId);
+      this.toFetch.push(t.lastEventId);
       return;
     }
     const ev = this.types.get(t.lastEventId) ?? null;
@@ -431,19 +464,25 @@ export class InboxFeed {
     });
   }
 
-  private fetch(eventId: string) {
-    if (this.fetching.has(eventId)) return;
-    this.fetching.add(eventId);
-    this.src.eventOf(eventId).then(
-      (e) => {
-        this.fetching.delete(eventId);
-        this.types.set(eventId, e);
-        this.evaluate();
-      },
-      () => {
-        this.fetching.delete(eventId); // tried again at the next snapshot or tick
-      },
-    );
+  /** One batch, then one look: the threads of a snapshot go out in priority order. */
+  private fetchAll(ids: string[]) {
+    const todo = ids.filter((id) => !this.fetching.has(id));
+    if (!todo.length) return;
+    for (const id of todo) this.fetching.add(id);
+    void Promise.all(
+      todo.map((id) =>
+        this.src.eventOf(id).then(
+          (e) => {
+            this.types.set(id, e);
+            return true;
+          },
+          () => false, // tried again at the next snapshot or tick
+        ),
+      ),
+    ).then((got) => {
+      for (const id of todo) this.fetching.delete(id);
+      if (got.some(Boolean)) this.evaluate();
+    });
   }
 
   private pump() {

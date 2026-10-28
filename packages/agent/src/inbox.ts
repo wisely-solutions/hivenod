@@ -44,6 +44,7 @@ import {
   query,
   where,
   type Firestore,
+  type Query,
   type QuerySnapshot,
 } from 'firebase/firestore';
 import { errorCode, HiveError } from './errors';
@@ -597,7 +598,7 @@ export class InboxOps {
     const ms = (t: unknown) =>
       t && typeof (t as Ts).toMillis === 'function' ? (t as Ts).toMillis() : 0;
     const live = <T>(
-      q: ReturnType<typeof query>,
+      q: Query,
       map: (id: string, d: Record<string, unknown>) => T,
       on: (rows: T[]) => void,
       onError: (e: unknown) => void,
