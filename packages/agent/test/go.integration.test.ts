@@ -786,10 +786,24 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
             },
           ],
         });
+        await call('inbox_add', {
+          source: 'mail',
+          sender: { name: 'Sam Example', handle: 'sam@example.com' },
+          text: 'Lunch on Friday?',
+          threadRef: 'mail-thread-1',
+          receivedAt: '2026-10-28T09:00:00Z',
+          member: 'owner',
+        });
       },
       { projectIds: [], scope: 'inbox' },
     );
-    expect(r.ts.calls.map((c) => (c as { ok: boolean }).ok)).toEqual([false, false, false, true]);
+    expect(r.ts.calls.map((c) => (c as { ok: boolean }).ok)).toEqual([
+      false,
+      false,
+      false,
+      true,
+      true,
+    ]);
     expect(JSON.stringify(r.ts.calls[0])).toContain('limited to Inbox and Calendar');
     expect(r.go.calls).toEqual(r.ts.calls);
     expect(r.go.docs).toEqual(r.ts.docs);
