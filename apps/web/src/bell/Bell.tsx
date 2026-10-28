@@ -5,7 +5,16 @@
  */
 import { bellText, type BellKind } from '@hive/shared';
 import { Link } from '@tanstack/react-router';
-import { Bell, Check, CircleHelp, MessageSquare, Undo2, type LucideIcon } from 'lucide-react';
+import {
+  Bell,
+  Check,
+  CircleHelp,
+  Mail,
+  MailQuestion,
+  MessageSquare,
+  Undo2,
+  type LucideIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
@@ -18,6 +27,8 @@ const KIND: Record<BellKind, { icon: LucideIcon; tone: string }> = {
   question: { icon: CircleHelp, tone: 'bg-agent-soft text-agent' },
   answer: { icon: MessageSquare, tone: 'bg-approve-bg text-approve-text' },
   sentBack: { icon: Undo2, tone: 'bg-sendback-bg text-sendback' },
+  inboxAsk: { icon: MailQuestion, tone: 'bg-agent-soft text-agent' },
+  inboxCall: { icon: Mail, tone: 'bg-gate-bg text-gate-text' },
 };
 
 /** The unread count on the bell: 99+ past 99. */

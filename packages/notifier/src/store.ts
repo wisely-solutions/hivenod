@@ -8,6 +8,7 @@ import {
   notifiedSchema,
   notifyPath,
   notifyPrefsSchema,
+  outcomeType,
   projectSchema,
   pushSubSchema,
   telegramLinkSchema,
@@ -15,7 +16,7 @@ import {
   type Project,
 } from '@hive/shared';
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
-import { FRESH_MS, type Engine, type Ports } from './engine';
+import { FRESH_MS, type Engine, type InboxWaiting, type Ports } from './engine';
 
 /** Old bell entries are pruned when a person gets a new one, at most once an hour per person. */
 const PRUNE_EVERY_MS = 3_600_000;
@@ -133,9 +134,149 @@ export function watchAll(
       },
       (e) => log(`projects ${wid}: ${String(e)}`),
     );
+    const stopInbox = watchInbox(wid);
     return () => {
       stopProjects();
+      stopInbox();
       projects.forEach((s) => s());
+    };
+  };
+
+  /**
+   * Inbox (item 4PEHr): threads waiting for their member, and the proposals that put them at
+   * Your call. A thread's arrival is its question's time (Needs you) or the oldest open proposal
+   * (Your call), so a new question or a new round is told again.
+   */
+  const watchInbox = (wid: string) => {
+    type T = {
+      memberUid: string;
+      subjectId: string | null;
+      state: 'needsYou' | 'yourCall';
+      title: string;
+      urgent: boolean;
+      question: { text: string; by: string; at: number } | null;
+      updatedAt: number;
+    };
+    let threads = new Map<string, T>();
+    let proposals = new Map<string, { label: string; by: string; at: number }[]>();
+    const keys = new Set<string>();
+    const subjects = new Map<string, string>();
+    const subjectName = async (sid: string | null) => {
+      if (!sid) return '';
+      const hit = subjects.get(sid);
+      if (hit !== undefined) return hit;
+      const d = await db.doc(`workspaces/${wid}/inboxSubjects/${sid}`).get();
+      const name = (d.data()?.name as string | undefined) ?? '';
+      subjects.set(sid, name);
+      return name;
+    };
+    let gen = 0;
+    const publish = async () => {
+      const mine = ++gen;
+      const now = new Map<string, InboxWaiting>();
+      for (const [tid, t] of threads) {
+        let w: InboxWaiting | null = null;
+        if (t.state === 'needsYou' && t.question) {
+          w = {
+            wid,
+            tid,
+            memberUid: t.memberUid,
+            state: 'needsYou',
+            title: t.title,
+            subjectName: '',
+            text: t.question.text,
+            byName: await nameOf(wid, t.question.by),
+            arrival: `q${t.question.at}`,
+            sinceMs: t.question.at,
+            urgent: t.urgent,
+          };
+        } else if (t.state === 'yourCall') {
+          const ps = (proposals.get(tid) ?? []).sort((a, b) => a.at - b.at);
+          const first = ps[0];
+          w = {
+            wid,
+            tid,
+            memberUid: t.memberUid,
+            state: 'yourCall',
+            title: t.title,
+            subjectName: '',
+            text: [...new Set(ps.map((p) => p.label))].join(', ') || 'Outcomes proposed',
+            byName: first ? await nameOf(wid, first.by) : '',
+            arrival: `c${first?.at ?? t.updatedAt}`,
+            sinceMs: first?.at ?? t.updatedAt,
+            urgent: t.urgent,
+          };
+        }
+        if (!w) continue;
+        w.subjectName = await subjectName(t.subjectId);
+        now.set(`${wid}/${tid}`, w);
+      }
+      if (mine !== gen) return;
+      for (const k of keys) if (!now.has(k)) engine.setInbox(null, k);
+      keys.clear();
+      for (const [k, w] of now) {
+        keys.add(k);
+        engine.setInbox(w, k);
+      }
+      kick();
+    };
+    const ms = (v: unknown) => (v as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
+    const stopThreads = db
+      .collection(`workspaces/${wid}/inboxThreads`)
+      .where('state', 'in', ['needsYou', 'yourCall'])
+      .onSnapshot(
+        (snap) => {
+          const next = new Map<string, T>();
+          for (const d of snap.docs) {
+            const x = d.data();
+            if (typeof x.memberUid !== 'string') continue;
+            const q = x.question as { text?: string; by?: string; at?: unknown } | null;
+            next.set(d.id, {
+              memberUid: x.memberUid,
+              subjectId: typeof x.subjectId === 'string' ? x.subjectId : null,
+              state: x.state,
+              title: typeof x.title === 'string' ? x.title : '',
+              // Not written by the agent tools yet: an urgent flag is honoured when it is.
+              urgent: x.urgent === true,
+              question:
+                q && typeof q.text === 'string'
+                  ? { text: q.text, by: q.by ?? '', at: ms(q.at) }
+                  : null,
+              updatedAt: ms(x.updatedAt),
+            });
+          }
+          threads = next;
+          void publish().catch((e) => log(`inbox ${wid}: ${String(e)}`));
+        },
+        (e) => log(`inbox threads ${wid}: ${String(e)}`),
+      );
+    const stopOutcomes = db
+      .collection(`workspaces/${wid}/inboxOutcomes`)
+      .where('state', '==', 'proposed')
+      .onSnapshot(
+        (snap) => {
+          const next = new Map<string, { label: string; by: string; at: number }[]>();
+          for (const d of snap.docs) {
+            const x = d.data();
+            if (typeof x.threadId !== 'string') continue;
+            next.set(x.threadId, [
+              ...(next.get(x.threadId) ?? []),
+              {
+                label: outcomeType(String(x.type))?.label ?? String(x.type),
+                by: String(x.proposedBy ?? ''),
+                at: ms(x.createdAt),
+              },
+            ]);
+          }
+          proposals = next;
+          void publish().catch((e) => log(`inbox ${wid}: ${String(e)}`));
+        },
+        (e) => log(`inbox outcomes ${wid}: ${String(e)}`),
+      );
+    return () => {
+      stopThreads();
+      stopOutcomes();
+      keys.forEach((k) => engine.setInbox(null, k));
     };
   };
 

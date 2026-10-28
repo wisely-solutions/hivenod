@@ -8,7 +8,7 @@ import {
   type Project,
 } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
-import { Engine, type Ports, type WaitingItem } from './engine';
+import { Engine, type InboxWaiting, type Ports, type WaitingItem } from './engine';
 
 const H = 3_600_000;
 const ts = (ms: number) => ({ seconds: ms / 1000, nanoseconds: 0, toMillis: () => ms });
@@ -436,5 +436,80 @@ describe('the bell (item 3ENs)', () => {
     // No pop-ups for these: push and Telegram stay as they are.
     expect(w.sentPush).toHaveLength(0);
     expect(w.sentTg).toHaveLength(0);
+  });
+});
+
+describe('inbox threads (item 4PEHr)', () => {
+  const thread = (w: ReturnType<typeof world>, over: Partial<InboxWaiting> = {}): InboxWaiting => ({
+    wid: 'w',
+    tid: 't1',
+    memberUid: 'ana',
+    state: 'needsYou',
+    title: 'Move the review to Thursday?',
+    subjectName: 'Review dates (Payments)',
+    text: 'Is Thursday 10:00 fine?',
+    byName: 'Payments agent',
+    arrival: 'q1',
+    sinceMs: w.t.now - 60_000,
+    urgent: false,
+    ...over,
+  });
+
+  it('a question tells its member alone, once, on the bell, push and Telegram', async () => {
+    const w = world();
+    w.engine.setInbox(thread(w), 't1');
+    await w.engine.sweep();
+    await w.engine.sweep();
+    expect(w.sentPush.map((p) => p.endpoint)).toEqual(['https://p/ana']);
+    expect(w.sentPush[0]!.notice.url).toBe('/inbox/w/t/t1');
+    expect(w.sentPush[0]!.notice.title).toBe('Needs you: Move the review to Thursday?');
+    expect(w.sentTg).toEqual([expect.objectContaining({ chatId: 7, hasAction: false })]);
+    const bell = [...w.bells.entries()];
+    expect(bell).toHaveLength(1);
+    expect(bell[0]![0]).toBe('ana/i-t1-q1');
+    expect(bell[0]![1]).toMatchObject({
+      kind: 'inboxAsk',
+      projectId: 'inbox',
+      itemId: 't1',
+      projectName: 'Inbox · Review dates (Payments)',
+      actorName: 'Payments agent',
+    });
+  });
+
+  it('a new round (Your call after the answer) is a new arrival', async () => {
+    const w = world();
+    w.engine.setInbox(thread(w), 't1');
+    await w.engine.sweep();
+    w.engine.setInbox(thread(w, { state: 'yourCall', arrival: 'c2', text: 'Reply, Snooze' }), 't1');
+    await w.engine.sweep();
+    expect(w.sentPush.map((p) => p.notice.title)).toEqual([
+      'Needs you: Move the review to Thursday?',
+      'Your call: Move the review to Thursday?',
+    ]);
+    expect([...w.bells.values()].map((b) => b.kind)).toEqual(['inboxAsk', 'inboxCall']);
+  });
+
+  it('an old arrival goes to the bell only; nobody else is ever told', async () => {
+    const w = world();
+    w.engine.setInbox(thread(w, { sinceMs: w.t.now - 3 * H }), 't1');
+    w.engine.setInbox(null, 't1');
+    w.engine.setInbox(thread(w, { sinceMs: w.t.now - 3 * H }), 't1');
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(0);
+    expect([...w.bells.keys()]).toEqual(['ana/i-t1-q1']);
+  });
+
+  it('quiet hours hold it back, but an urgent thread goes out at once', async () => {
+    const quiet = {
+      ...DEFAULT_NOTIFY_PREFS,
+      quiet: { enabled: true, from: '11:00', to: '13:00', tz: 'UTC' },
+    };
+    const w = world({ prefs: { ana: quiet } });
+    w.engine.setInbox(thread(w), 't1');
+    w.engine.setInbox(thread(w, { tid: 't2', urgent: true, arrival: 'q9' }), 't2');
+    await w.engine.sweep();
+    expect(w.sentPush.map((p) => p.notice.title)).toEqual([
+      'Urgent · Needs you: Move the review to Thursday?',
+    ]);
   });
 });
