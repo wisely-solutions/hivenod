@@ -3,45 +3,101 @@ on:
   pull_request:
   push:
     branches: [main]
+# Pull requests: a new push cancels the older run of the same branch. main: every push gets its own
+# group, so a burst of merges queues instead of cancelling the run that was about to go green.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions:
+  contents: read
 jobs:
   check:
+    name: lint, typecheck, unit, build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:scripts
       - run: pnpm build
       - run: pnpm size
-      - name: Rules tests (emulator)
-        run: pnpm test:rules
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
+
+  go:
+    name: go (CLI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - run: pnpm --filter @hive/web exec playwright install --with-deps chromium
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - run: go vet ./...
+        working-directory: cli
+      - run: go test ./...
+        working-directory: cli
+
+  rules:
+    name: rules and integration (emulators)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          emulators: 'true'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - run: pnpm test:rules:core
+
+  # The expression-budget probe is one file that takes about 7 minutes by itself: its own job.
+  rules-headroom:
+    name: rules headroom (emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          emulators: 'true'
+      - run: pnpm test:rules:headroom
+
+  e2e:
+    name: e2e (shard ${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          emulators: 'true'
+          browser: 'true'
       - name: E2E (against the auth + firestore emulators)
-        run: pnpm e2e:emu
+        run: pnpm e2e:emu --shard=${{ matrix.shard }}/3
         env:
           CI: 'true'
           # The 5-minute limit is for the 8-CPU VM; the hosted runner has 4 CPUs.
-          E2E_BUDGET_MIN: '12'
+          E2E_BUDGET_MIN: '14'
+
+  perf:
+    name: first-load speed
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          emulators: 'true'
+          browser: 'true'
       - name: First-load speed on a throttled phone (numbers only, shared runners are noisy)
         run: |
           PERF_DIR="$PWD/perf-out" pnpm perf:emu
