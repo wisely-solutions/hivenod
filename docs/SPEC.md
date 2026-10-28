@@ -115,6 +115,10 @@ workspaces/{wid}/runs/{rid}          agentUid, projectId, itemId, stepId, starte
 workspaces/{wid}/runs/{rid}/log/{n}  at, level, text            (agent log lines, max 500 per run)
 workspaces/{wid}/events/{eid}        actor{type:'human'|'agent', id, name}, projectId?, itemId?, runId?,
                                      type, data{}, at
+workspaces/{wid}/calendar/{id}       memberUid, title, start, end, allDay, attendees[], source, sourceEventId, busyOnly, deleted,
+                                     updatedBy{type,id}, updatedAt, lastEventId   (id = <memberUid>_<base64url(source\nsourceEventId)>)
+users/{uid}/busy/{wid}_{id}          workspaceId, start, end, deleted, updatedAt, lastEventId   (no title, ever)
+agentHomes/{agentUid}                workspaceId   (written once by the agent; lets rules outside its org know it)
 ```
 
 **Inbox** (item 4PEHrOW5IfXBQWgOK9wo): `workspaces/{wid}/inboxSubjects`, `inboxThreads`,
@@ -144,6 +148,7 @@ The rules in `firestore.rules` are the backend. Rules tests must cover every all
 - Only an `admin` can manage members, groups, agents and project deletion.
 - Agent tokens: an agent with `revokedAt` set is denied everything (including reads).
 - **Agent settings and guardrails (card zSzW3LXy).** An agent's settings (projects, guardrails) and resuming a paused agent are admin-only. Which agents may do a project's agent steps (`project.stepAgents`) changes only by admins and the project's creator (`canSetStepAgents` in the rules, mirrored by `canEditAgentSettings` in `packages/shared/src/agents.ts`); anyone who edits the process may still drop the limit of a step the save removes. A step limited to some agents is claimable by those agents only (empty or missing = any agent allowed on the project). A paused agent claims nothing. The agent keeps its own `failStreak` in the batch that ends one of its runs: a done run resets it, a failed run adds exactly one and, at `maxFailedRuns`, must set `pausedAt` (paused); a released run does not count. Only an admin clears a pause; nobody pauses by hand (revoke stays the stop switch). A heartbeat may carry the run's token usage so far (counters only grow, `tokensCached ≤ tokensIn`). All new fields are optional, so agents and projects from before need no migration.
+- **Calendar (Inbox item w9SAf).** Events belong to one member and one organization (`workspaces/{wid}/calendar`): members and active agents of that organization read them; nobody outside it. Agents write them for any member of their organization, a member only their own (a booking). Every event is mirrored in the same batch to the member's busy store `users/{uid}/busy/{wid}_{id}` (start, end, organization, never a title), with one `calendar.changed` event (`memberUids`, `upserted`, `deleted` counts, no titles). The member reads all their busy blocks; an agent reads them only for members of its own organization, after writing its `agentHomes/{agentUid}` doc once. Busy-only and deleted events carry no title or attendees; deletes are soft (`deleted: true`), so batches of up to 100 events stay tracked. Tools: `calendar_upsert`, `calendar_delete`, `calendar_free` (free slots from the busy store across all the member's organizations), MCP and `hivenod calendar …`, in TypeScript and Go (contract cases in `cli/contract/calendarCases.ts`). No Cloud Functions.
 - **Stop work (card BrK0r2FE).** Admins and the deciders of any gate of the project (João, Q23; `canStopWork` in the rules, mirrored by `stopGateFor` in `packages/shared/src/stopwork.ts`; a non-admin's action names that gate in its event, `gateStepId`) may stop an agent's work on a claimed item at an agent step: in one batch the claim is cleared, the claimed run ends as `stopped` with `stoppedBy` = them (unless it had already ended), the item gets `workStopped` and goes to `queued` (Go back: on hold) or `stopped` (Cancel completely), with an `item.workStopped` event (and, for Go back with a reason, a note for the next agent). No agent claims an item whose `workStopped` is set (rules `claimIt`), so a held one waits until Resume (`item.resumed`, same people) clears it. A stop never touches the agent's failure streak. Optional fields: no migration.
 
 ### 5.2 Writes are batches
@@ -164,7 +169,7 @@ Event types:
 - `decision.approved`, `decision.sentBack`, `decision.stopped`, `decision.answered`
 - `finding.raised`, `finding.triaged`
 - `run.started`, `run.heartbeat` (coalesced: at most one event per 5 min), `run.ended`
-- `agent.created`, `agent.revoked`, `agent.rotated`, `agent.updated` (settings changed, or `resumed: true`). A run end that pauses the agent says `agentPaused: true` in its `run.ended` / `item.released` event.
+- `agent.created`, `agent.revoked`, `agent.rotated`, `agent.renamed` (`oldName`, `newName`), `agent.updated` (settings changed, or `resumed: true`). A run end that pauses the agent says `agentPaused: true` in its `run.ended` / `item.released` event.
 - `project.created`, `project.processChanged`, `project.membersChanged`, `member.*`, `group.*`
 
 ## 6. Agent identity and tokens

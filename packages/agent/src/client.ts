@@ -522,6 +522,13 @@ export class HiveClient {
     }));
   }
 
+  // ---------- calendar (Inbox item w9SAf; the tools live in ./calendar) ----------
+
+  /** What the calendar tools need: the database, this agent as actor, and the write path. */
+  calendarDeps() {
+    return { db: this.db, ctx: this.ctx, write: (p: Pick<ActionPlan, 'ops'>) => this.write(p) };
+  }
+
   // ---------- operations (SPEC section 10) ----------
 
   whoami() {

@@ -11,10 +11,11 @@ import {
 } from '@hive/shared';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { collection, collectionGroup, orderBy, query, Timestamp, where } from 'firebase/firestore';
-import { Bot, ChevronDown, ChevronLeft, ChevronRight, Hand } from 'lucide-react';
+import { Bot, ChevronDown, Pencil, ChevronLeft, ChevronRight, Hand } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AgentSettings, PausedBanner } from '../agents/AgentSettings';
 import { RemoveAgentDialog } from '../agents/RemoveAgentDialog';
+import { RenameAgentDialog } from '../agents/RenameAgentDialog';
 import { agentStatus, colorIndex, presenceText, scopeText } from '../agents/logic';
 import { useReady } from '../auth/context';
 import { db } from '../lib/db';
@@ -118,6 +119,7 @@ function Profile({
   const now = useNow(1000);
   const navigate = useNavigate();
   const [removing, setRemoving] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [since] = useState(() => Timestamp.fromMillis(Date.now() - 30 * DAY));
   const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
 
@@ -213,7 +215,22 @@ function Profile({
           size="lg"
         />
         <div className="min-w-0">
-          <h1 className="truncate text-28 font-semibold">{agent.data.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-28 font-semibold" data-testid="agent-name">
+              {agent.data.name}
+            </h1>
+            {isAdmin && status.kind !== 'revoked' ? (
+              <Button
+                variant="ghost"
+                className="shrink-0"
+                aria-label={`Rename ${agent.data.name}`}
+                leading={<Icon icon={Pencil} />}
+                onClick={() => setRenaming(true)}
+              >
+                Rename
+              </Button>
+            ) : null}
+          </div>
           <p
             aria-live="polite"
             className={cn(
@@ -274,6 +291,7 @@ function Profile({
           </Button>
         ) : null}
       </header>
+      <RenameAgentDialog agent={renaming ? agent : null} onClose={() => setRenaming(false)} />
       <RemoveAgentDialog
         agent={removing ? agent : null}
         onClose={() => setRemoving(false)}

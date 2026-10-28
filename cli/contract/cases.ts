@@ -74,6 +74,8 @@ import {
   type Step,
 } from '../../packages/shared/src/index';
 
+import { calendarCases } from './calendarCases';
+
 export const NOW_MS = 1_800_000_000_000;
 export const WORKSPACE_ID = 'w1';
 
@@ -1572,6 +1574,7 @@ function build(): ContractCase[] {
   tf('first line', { text: '\n\n  Hello   there \nsecond' });
   tf('long', { text: 'é'.repeat(130) });
   tf('blank', { text: ' \n ' });
+  calendarCases(act, pure, { agent: AGENT, human: HUMAN });
 
   return cases;
 }

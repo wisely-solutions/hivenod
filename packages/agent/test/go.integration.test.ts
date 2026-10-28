@@ -190,6 +190,9 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
       'inboxEvents',
     ])
       await read(`workspaces/${W}/${c}`);
+    await read(`workspaces/${W}/calendar`);
+    await read('users/alice/busy');
+    await read('agentHomes');
     for (const r of await read(`workspaces/${W}/runs`)) await read(`workspaces/${W}/runs/${r}/log`);
     for (const p of await read(`workspaces/${W}/projects`)) {
       await read(`workspaces/${W}/projects/${p}/decisions`);
@@ -619,6 +622,148 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       });
       await call('complete', { itemId: 'old', runId: old.runId });
     });
+    expect(r.go.calls).toEqual(r.ts.calls);
+    expect(r.go.docs).toEqual(r.ts.docs);
+  }, 120_000);
+
+  it('calendar (item w9SAf): upsert, free across organizations, delete, errors', async () => {
+    const r = await both(async (call) => {
+      await put({
+        [paths.member(W, 'alice')]: {
+          name: 'Alice',
+          email: 'alice@example.com',
+          photoURL: null,
+          color: '#000',
+        },
+        // Busy time Alice has in another organization (no title, only the time).
+        'users/alice/busy/wOther_x': {
+          workspaceId: 'wOther',
+          start: new Date('2030-01-07T12:00:00Z'),
+          end: new Date('2030-01-07T13:30:00Z'),
+          deleted: false,
+          updatedAt: now(),
+          lastEventId: 'seed',
+        },
+      });
+      const up = out(
+        await call('calendar_upsert', {
+          member: 'Alice@Example.com',
+          events: [
+            {
+              source: 'google',
+              sourceEventId: 'g1',
+              title: ' Standup ',
+              start: '2030-01-07T09:00:00Z',
+              end: '2030-01-07T09:30:00+00:00',
+              attendees: ['bob@example.com'],
+            },
+            {
+              source: 'google',
+              sourceEventId: 'g2',
+              title: 'Private',
+              start: '2030-01-07T10:00Z',
+              end: '2030-01-07T11:00:00.000Z',
+              busyOnly: true,
+            },
+          ],
+        }),
+      ) as { ids: string[] };
+      await call('calendar_upsert', {
+        member: 'alice',
+        events: [
+          {
+            source: 'google',
+            sourceEventId: 'g1',
+            title: 'Standup (moved)',
+            start: '2030-01-07T09:15:00Z',
+            end: '2030-01-07T09:45:00Z',
+            allDay: false,
+          },
+        ],
+      });
+      await call('calendar_free', {
+        member: 'alice',
+        from: '2030-01-07T08:00:00Z',
+        to: '2030-01-07T17:00:00Z',
+      });
+      await call('calendar_free', {
+        member: 'Alice',
+        from: '2030-01-07T08:00:00Z',
+        to: '2030-01-07T17:00:00Z',
+        minMinutes: 90,
+      });
+      await call('calendar_delete', { member: 'alice', source: 'google', sourceEventIds: ['g2'] });
+      await call('calendar_delete', { ids: [up.ids[0]!, 'alice_nope'] });
+      await call('calendar_free', {
+        member: 'alice',
+        from: '2030-01-07T08:00:00Z',
+        to: '2030-01-07T17:00:00Z',
+      });
+      // errors
+      await call('calendar_upsert', {
+        member: 'alice',
+        events: [
+          { source: 'google', sourceEventId: 'x', start: 'tomorrow', end: '2030-01-07T09:00:00Z' },
+        ],
+      });
+      await call('calendar_upsert', {
+        member: 'alice',
+        events: [
+          {
+            source: 'google',
+            sourceEventId: 'x',
+            start: '2030-01-07T10:00:00Z',
+            end: '2030-01-07T09:00:00Z',
+          },
+        ],
+      });
+      await call('calendar_upsert', {
+        member: 'eve',
+        events: [
+          {
+            source: 'google',
+            sourceEventId: 'x',
+            start: '2030-01-07T08:00:00Z',
+            end: '2030-01-07T09:00:00Z',
+          },
+        ],
+      });
+      await call('calendar_free', { from: '2030-01-07T08:00:00Z', to: '2030-01-07T09:00:00Z' });
+      await call('calendar_free', {
+        member: 'alice',
+        from: '2030-01-07T08:00:00Z',
+        to: '2030-04-07T09:00:00Z',
+      });
+      await call('calendar_delete', {});
+    });
+    const oks = r.ts.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(r.ts.calls[2]).toMatchObject({
+      out: {
+        free: [
+          { start: '<iso>', end: '<iso>' },
+          { start: '<iso>', end: '<iso>' },
+          { start: '<iso>', end: '<iso>' },
+        ],
+        busyBlocks: 3,
+      },
+    });
+    expect((r.ts.calls[3] as { out: { free: unknown[] } }).out.free).toHaveLength(1);
+    expect(r.ts.calls[6]).toMatchObject({ out: { busyBlocks: 1 } });
     expect(r.go.calls).toEqual(r.ts.calls);
     expect(r.go.docs).toEqual(r.ts.docs);
   }, 120_000);

@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { OUTCOME_TYPES, outcomeGuide } from '@hive/shared';
+import { deleteEvents, freeTime, upsertEvents, type CalendarEventArg } from './calendar';
 import type { HiveClient } from './client';
 
 export interface ToolDef<S extends z.ZodRawShape = z.ZodRawShape> {
@@ -550,6 +551,95 @@ export const TOOLS: ToolDef[] = [
       const { itemId: id, project, ...proposal } = a as Record<string, unknown>;
       return c.proposeStep(id as string, proposal as never, project as string | undefined);
     },
+  }),
+  // ----- calendar (Inbox item w9SAf) -----
+  tool({
+    name: 'calendar_upsert',
+    description:
+      "Add or update events in a member's calendar in this organization, from a calendar you sync (for example their Google or Outlook calendar here). The same source + sourceEventId updates the same event, so send the whole window again on every sync. Members of this organization see the details; the member's other organizations only see the time as busy. busyOnly: you only know the time (no title or attendees are kept). At most 100 events per call.",
+    input: {
+      member: z
+        .string()
+        .optional()
+        .describe(
+          "Whose calendar: the member's uid, email or name (may be left out when the organization has one member)",
+        ),
+      events: z
+        .array(
+          z.object({
+            source: z.string().min(1).max(40).describe('Where it comes from: google, outlook, …'),
+            sourceEventId: z.string().min(1).max(600).describe("The event's id in that calendar"),
+            title: z.string().max(300).optional(),
+            start: z.string().describe('RFC 3339 time with a zone, e.g. 2026-11-02T09:00:00Z'),
+            end: z.string().describe('RFC 3339 time with a zone, after start'),
+            allDay: z.boolean().optional(),
+            attendees: z.array(z.string().max(320)).max(50).optional(),
+            busyOnly: z.boolean().optional().describe('Only the time is known or may be shared'),
+          }),
+        )
+        .min(1)
+        .max(100),
+    },
+    run: (c, a) =>
+      upsertEvents(
+        c.calendarDeps(),
+        a.member as string | undefined,
+        a.events as CalendarEventArg[],
+      ),
+  }),
+  tool({
+    name: 'calendar_delete',
+    description:
+      "Remove events from a member's calendar in this organization (cancelled or deleted at the source), by the ids calendar_upsert returned, or by source and the source's event ids. Their busy time is freed everywhere.",
+    input: {
+      ids: z
+        .array(z.string().min(1))
+        .max(100)
+        .optional()
+        .describe('Event ids from calendar_upsert'),
+      member: z
+        .string()
+        .optional()
+        .describe('With sourceEventIds: whose calendar (uid, email or name)'),
+      source: z.string().max(40).optional().describe('With sourceEventIds: google, outlook, …'),
+      sourceEventIds: z.array(z.string().min(1).max(600)).max(100).optional(),
+    },
+    run: (c, a) =>
+      deleteEvents(c.calendarDeps(), {
+        ids: a.ids as string[] | undefined,
+        member: a.member as string | undefined,
+        source: a.source as string | undefined,
+        sourceEventIds: a.sourceEventIds as string[] | undefined,
+      }),
+  }),
+  tool({
+    name: 'calendar_free',
+    description:
+      "A member's free time between from and to, across every organization they are in (busy time only, never details), as free slots of at least minMinutes. Use it to propose meeting times in a draft. Range: at most 62 days.",
+    input: {
+      member: z
+        .string()
+        .optional()
+        .describe(
+          "The member's uid, email or name (may be left out when the organization has one member)",
+        ),
+      from: z.string().describe('RFC 3339 time with a zone'),
+      to: z.string().describe('RFC 3339 time with a zone, after from'),
+      minMinutes: z
+        .number()
+        .int()
+        .min(1)
+        .max(1440)
+        .optional()
+        .describe('Shortest slot; default 30'),
+    },
+    run: (c, a) =>
+      freeTime(c.calendarDeps(), {
+        member: a.member as string | undefined,
+        from: a.from as string,
+        to: a.to as string,
+        minMinutes: a.minMinutes as number | undefined,
+      }),
   }),
   tool({
     name: 'report_usage',
