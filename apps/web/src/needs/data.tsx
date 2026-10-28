@@ -99,7 +99,10 @@ function useExtras(wid: string, uid: string) {
   const members = useLiveCollection(`workspaces/${wid}/members`, memberProfileSchema);
   const names = useMemo(() => namesFrom(members), [members]);
   const threads = usePart<InboxThread>(
-    useLiveQuery(`needs-threads:${wid}:${uid}`, () => myThreadsQuery(wid, uid), inboxThreadSchema),
+    // `synced`: a cached empty answer the server confirms unchanged must still count as answered.
+    useLiveQuery(`needs-threads:${wid}:${uid}`, () => myThreadsQuery(wid, uid), inboxThreadSchema, {
+      synced: true,
+    }),
   );
   return { groups, names, threads };
 }
@@ -148,6 +151,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
     () =>
       isAdmin ? query(collection(db, `workspaces/${wid}/projects`)) : myProjectsQuery(wid, uid),
     projectSchema,
+    { synced: true },
   );
   const projects = useMemo(
     () =>

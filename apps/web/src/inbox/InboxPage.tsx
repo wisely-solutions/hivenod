@@ -489,11 +489,18 @@ export function InboxPage() {
     { value: 'findings', label: 'Findings', count: counts.findings },
   ];
 
-  const setSearch = (patch: Partial<{ f: string; who: string; org: string }>) => {
-    const next: Record<string, string> = { ...keep, ...patch };
-    for (const k of Object.keys(next)) if (!next[k] || next[k] === 'all') delete next[k];
-    void navigate({ to: '/', search: next as never, replace: true });
-  };
+  // From the search as it is now (not this render's copy): two quick changes must both stick.
+  const setSearch = (patch: Partial<{ f: string; who: string; org: string }>) =>
+    void navigate({
+      to: '/',
+      search: (prev: Record<string, unknown>) => {
+        const next: Record<string, unknown> = { ...prev, ...patch };
+        delete next.sel;
+        for (const k of Object.keys(next)) if (!next[k] || next[k] === 'all') delete next[k];
+        return next as never;
+      },
+      replace: true,
+    });
   const chips = (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
       <Segmented
@@ -514,7 +521,7 @@ export function InboxPage() {
       />
       {manyOrgs ? (
         <Select
-          label="Organization"
+          label="Filter by organization"
           hideLabel
           inline
           value={orgFilter ?? 'all'}
