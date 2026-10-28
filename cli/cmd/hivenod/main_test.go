@@ -96,16 +96,18 @@ func TestServerFlag(t *testing.T) {
 func TestInboxCommands(t *testing.T) {
 	t.Setenv("HIVENOD_HOME", filepath.Join(t.TempDir(), "h"))
 	t.Setenv("HIVENOD_TOKEN", "")
-	if code, out, _ := call("inbox", "--help"); code != 0 || !strings.Contains(out, "Nothing is sent before") {
+	if code, out, _ := call("inbox", "--help"); code != 0 || !strings.Contains(out, "Nothing is carried out before") {
 		t.Fatalf("help: %d %q", code, out)
 	}
 	for _, args := range [][]string{
 		{"inbox", "frob"},
 		{"inbox", "add", "--source", "teams"},
-		{"inbox", "read"},
-		{"inbox", "draft", "rq1"},
-		{"subject", "assign", "rq1"},
-		{"subject", "assign", "rq1", "--name", "A", "--subject-id", "s1"},
+		{"thread", "read"},
+		{"inbox", "note", "it1"},
+		{"subject", "assign", "it1"},
+		{"subject", "assign", "it1", "--name", "A", "--subject-id", "s1"},
+		{"outcome", "propose", "it1"},
+		{"outcome", "done", "o1", "--status", "maybe"},
 	} {
 		if code, _, errs := call(args...); code != 2 || !strings.Contains(errs, "hivenod inbox add") {
 			t.Errorf("%v: %d %q", args, code, errs)

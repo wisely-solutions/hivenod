@@ -1,27 +1,38 @@
 /**
- * Inbox tools for agents (item 4PEHrOW5IfXBQWgOK9wo; actions in packages/shared/src/inbox.ts):
- * inbox_add, inbox_list, inbox_read, subject_list, subject_assign, inbox_draft, inbox_sent.
- * The Go CLI mirrors this file (cli/internal/hive/inbox.go); packages/agent/test/go.integration
- * compares both against the emulators.
+ * Inbox tools for agents (item 4PEHrOW5IfXBQWgOK9wo; actions in packages/shared/src/inbox.ts,
+ * outcomes in packages/shared/src/outcomes.ts): inbox_add, inbox_list, thread_read,
+ * subject_list, subject_assign, inbox_note, inbox_ask, outcome_propose, outcome_done,
+ * thread_wake. The Go CLI mirrors this file (cli/internal/hive/inbox.go);
+ * packages/agent/test/go.integration.test.ts compares both against the emulators.
  *
- * Nothing here sends anything: an agent posts a reply in the source channel only for a request
- * its person pressed Send on (status `sending`, `approved.reply`), and then calls inbox_sent.
+ * Nothing here carries anything out by itself: an agent sends, books or hands over only for an
+ * outcome its person approved (state approved, with the approved fields), then reports
+ * outcome_done.
  */
 import { createHash } from 'node:crypto';
 import {
   ActionError,
-  addInboxRequest,
+  addInboxMessage,
+  addThreadNote,
+  askMember,
   assignSubject,
-  draftReply,
+  digest24,
+  finishOutcome,
+  inboxMessageKey,
   inboxPaths,
-  inboxRequestIdFromDigest,
-  inboxRequestKey,
-  markSent,
+  inboxThreadKey,
   paths,
+  proposeOutcome,
+  THREAD_OPEN,
+  wakeThread,
   type ActionContext,
   type ActionPlan,
-  type InboxRequest,
+  type InboxMessage,
+  type InboxOutcome,
   type InboxSubject,
+  type InboxThread,
+  type OutcomeStateOf,
+  type ThreadStateOf,
 } from '@hive/shared';
 import { applyPlan } from '@hive/shared/firestore';
 import { collection, doc, getDoc, getDocs, query, where, type Firestore } from 'firebase/firestore';
@@ -37,38 +48,45 @@ export interface InboxDeps {
 }
 
 export const INBOX_DENIED =
-  'Hivenod refused this inbox change (permission denied): the request may have changed since it was read (read it again with inbox_read), or this agent was revoked.';
+  'Hivenod refused this inbox change (permission denied): the thread may have changed since it was read (read it again with thread_read), or this agent was revoked.';
+const READ_DENIED =
+  'Hivenod refused to read the inbox (permission denied): this agent may have been revoked.';
 
-/** The request id of an input (the dedup key's SHA-256). */
-export function inboxRequestId(source: string, threadRef: string, messageId: string): string {
-  const hex = createHash('sha256')
-    .update(inboxRequestKey(source, threadRef, messageId), 'utf8')
-    .digest('hex');
-  return inboxRequestIdFromDigest(hex);
+/** The first 24 hex digits of SHA-256(key). */
+export function digestOf(key: string): string {
+  return digest24(createHash('sha256').update(key, 'utf8').digest('hex'));
 }
 
-const ACTIVE = ['new', 'drafting', 'yourCall', 'sending'];
-const EXCERPT = 200;
+type Ts = { toMillis(): number };
+type Stored<T> = Omit<T, 'receivedAt' | 'lastMessageAt' | 'createdAt' | 'updatedAt' | 'at'> & {
+  receivedAt: Ts;
+  lastMessageAt: Ts;
+  createdAt: Ts;
+};
 
-type Stored = Omit<InboxRequest, 'receivedAt'> & { receivedAt: { toMillis(): number } };
-
-const iso = (t: { toMillis(): number } | null | undefined) =>
-  t ? new Date(t.toMillis()).toISOString() : null;
+const iso = (t: Ts | null | undefined) => (t ? new Date(t.toMillis()).toISOString() : null);
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-export const NEXT: Record<string, (byMe: boolean) => string> = {
-  new: () => 'File it under a subject: subject_list, then subject_assign.',
-  drafting: () =>
-    "Draft the reply in the person's voice with inbox_draft (it waits for their Send; nothing is sent before).",
-  yourCall: () =>
-    'Waiting for the person to Send, Edit or Ignore it in Hivenod. You may revise the draft with inbox_draft.',
-  sending: (byMe) =>
-    byMe
-      ? 'The person pressed Send: post approved.reply exactly as written in the source thread, as them, then call inbox_sent.'
-      : 'The person pressed Send; the agent that brought it in posts it.',
-  done: () => 'Done: the reply was sent.',
-  ignored: () => 'The person ignored it: do nothing.',
+export const NEXT: Record<string, string> = {
+  investigating:
+    "Investigate: read the messages and the subject's other threads, note what you find (inbox_note), ask the person if you must (inbox_ask), then propose what should come of it (outcome_propose).",
+  needsYou: "Waiting for the person's answer to your question.",
+  yourCall: 'Waiting for the person to approve, edit or reject the proposed outcomes.',
+  waiting: 'Waiting. A new message from them reopens it.',
+  done: 'Done.',
+  ignored: 'The person ignored it: do nothing.',
 };
+export const CARRY_OUT =
+  'Carry out the approved outcome exactly as approved (its fields, as the person left them), then report it with outcome_done.';
+
+const COLLECTIONS = [
+  'inboxThreads',
+  'inboxSubjects',
+  'inboxMessages',
+  'inboxOutcomes',
+  'inboxEvents',
+] as const;
+type Coll = (typeof COLLECTIONS)[number];
 
 export class InboxOps {
   constructor(private readonly d: InboxDeps) {}
@@ -95,20 +113,48 @@ export class InboxOps {
     try {
       return await fn();
     } catch (e) {
-      if (errorCode(e) === 'permission-denied')
-        throw new HiveError(
-          'Hivenod refused to read the inbox (permission denied): this agent may have been revoked.',
-        );
+      if (errorCode(e) === 'permission-denied') throw new HiveError(READ_DENIED);
       throw e;
     }
   }
 
-  private async members(): Promise<string[]> {
-    const ws = await this.read(() => getDoc(doc(this.d.db, paths.workspace(this.d.workspaceId))));
-    return Object.keys((ws.data()?.memberRoles as Record<string, string> | undefined) ?? {});
+  private async get<T>(path: string): Promise<T | null> {
+    const snap = await this.read(() => getDoc(doc(this.d.db, path)));
+    return snap.exists() ? (snap.data() as T) : null;
   }
 
-  /** The member a request is for: the given uid, else the person who connected this agent. */
+  private async list<T>(
+    name: Coll,
+    field: string,
+    op: '==' | 'in' | 'array-contains',
+    value: unknown,
+  ) {
+    const w = this.d.workspaceId;
+    // Literal collection paths, so scripts/check-firestore-indexes.mjs can check them.
+    const q = {
+      inboxThreads: () =>
+        query(collection(this.d.db, `workspaces/${w}/inboxThreads`), where(field, op, value)),
+      inboxSubjects: () =>
+        query(collection(this.d.db, `workspaces/${w}/inboxSubjects`), where(field, op, value)),
+      inboxMessages: () =>
+        query(collection(this.d.db, `workspaces/${w}/inboxMessages`), where(field, op, value)),
+      inboxOutcomes: () =>
+        query(collection(this.d.db, `workspaces/${w}/inboxOutcomes`), where(field, op, value)),
+      inboxEvents: () =>
+        query(collection(this.d.db, `workspaces/${w}/inboxEvents`), where(field, op, value)),
+    }[name]();
+    const snap = await this.read(() => getDocs(q));
+    return snap.docs.map((s) => ({ id: s.id, data: s.data() as T }));
+  }
+
+  private async members(): Promise<string[]> {
+    const ws = await this.get<{ memberRoles?: Record<string, string> }>(
+      paths.workspace(this.d.workspaceId),
+    );
+    return Object.keys(ws?.memberRoles ?? {});
+  }
+
+  /** The member it is for: the given uid, else the person who connected this agent. */
   private async member(given?: string): Promise<string> {
     const members = await this.members();
     if (given) {
@@ -124,43 +170,30 @@ export class InboxOps {
     return creator;
   }
 
-  private async request(requestId: string): Promise<Stored> {
-    const snap = await this.read(() =>
-      getDoc(doc(this.d.db, inboxPaths.request(this.d.workspaceId, requestId))),
-    );
-    if (!snap.exists()) throw new HiveError(`Inbox request ${requestId} not found.`);
-    return snap.data() as Stored;
+  private async thread(threadId: string): Promise<Stored<InboxThread>> {
+    const t = await this.get<Stored<InboxThread>>(inboxPaths.thread(this.d.workspaceId, threadId));
+    if (!t) throw new HiveError(`Thread ${threadId} not found.`);
+    return t;
   }
 
-  private async subject(subjectId: string): Promise<InboxSubject | null> {
-    const snap = await this.read(() =>
-      getDoc(doc(this.d.db, inboxPaths.subject(this.d.workspaceId, subjectId))),
+  private async outcome(outcomeId: string): Promise<Stored<InboxOutcome>> {
+    const o = await this.get<Stored<InboxOutcome>>(
+      inboxPaths.outcome(this.d.workspaceId, outcomeId),
     );
-    return snap.exists() ? (snap.data() as InboxSubject) : null;
+    if (!o) throw new HiveError(`Outcome ${outcomeId} not found.`);
+    return o;
   }
 
-  private async subjectsOf(member: string) {
-    const snap = await this.read(() =>
-      getDocs(
-        query(
-          collection(this.d.db, `workspaces/${this.d.workspaceId}/inboxSubjects`),
-          where('memberUid', '==', member),
-        ),
-      ),
-    );
-    return snap.docs.map((s) => ({ id: s.id, data: s.data() as InboxSubject }));
-  }
-
-  private async active() {
-    const snap = await this.read(() =>
-      getDocs(
-        query(
-          collection(this.d.db, `workspaces/${this.d.workspaceId}/inboxRequests`),
-          where('status', 'in', ACTIVE),
-        ),
-      ),
-    );
-    return snap.docs.map((s) => ({ id: s.id, data: s.data() as Stored }));
+  private state(t: Stored<InboxThread>): ThreadStateOf {
+    return {
+      memberUid: t.memberUid,
+      subjectId: t.subjectId,
+      state: t.state,
+      fetchedBy: t.fetchedBy,
+      refs: t.refs ?? [],
+      waiting: t.waiting ?? null,
+      question: t.question ?? null,
+    };
   }
 
   async add(input: {
@@ -174,228 +207,379 @@ export class InboxOps {
     replyRef?: string;
     member?: string;
     attachments?: { name: string; url: string }[];
+    thread?: string;
+    fromMember?: boolean;
+    title?: string;
   }) {
     const ms = Date.parse(input.receivedAt);
     if (Number.isNaN(ms))
       throw new HiveError('receivedAt is not a valid ISO 8601 time (e.g. 2026-10-28T09:00:00Z).');
     const memberUid = await this.member(input.member);
     const messageId = input.messageId ?? String(ms);
-    const requestId = inboxRequestId(input.source, input.threadRef, messageId);
+    const mid = `im${digestOf(inboxMessageKey(memberUid, input.source, input.threadRef, messageId))}`;
+    const ref = digestOf(inboxThreadKey(memberUid, input.source, input.threadRef));
     const dup = async () => {
-      const snap = await this.read(() =>
-        getDoc(doc(this.d.db, inboxPaths.request(this.d.workspaceId, requestId))),
-      );
-      if (!snap.exists()) return null;
-      const r = snap.data() as Stored;
+      const m = await this.get<InboxMessage>(inboxPaths.message(this.d.workspaceId, mid));
+      if (!m) return null;
+      const t = await this.get<InboxThread>(inboxPaths.thread(this.d.workspaceId, m.threadId));
       return {
-        requestId,
+        messageId: mid,
+        threadId: m.threadId,
+        newThread: false,
         duplicate: true,
-        status: r.status,
-        member: r.memberUid,
+        state: t?.state ?? null,
+        member: m.memberUid,
         note: 'Already in Inbox (same source, thread and message): nothing was added.',
       };
     };
     const before = await dup();
     if (before) return before;
-    const plan = this.wrap(() =>
-      addInboxRequest(this.d.ctx, {
-        requestId,
-        memberUid,
-        source: input.source,
-        sender: { name: input.sender.name, handle: input.sender.handle ?? null },
-        text: input.text,
-        threadRef: input.threadRef,
-        messageId,
-        permalink: input.permalink ?? null,
-        replyRef: input.replyRef ?? null,
-        receivedAt: new Date(ms),
-        attachments: input.attachments ?? [],
-      }),
-    );
-    try {
-      await this.write(plan);
-    } catch (e) {
-      // Another agent (or call) brought the same input in a moment ago.
-      const now = await dup().catch(() => null);
-      if (now) return now;
-      throw e;
-    }
-    return {
-      requestId,
-      duplicate: false,
-      status: 'new',
-      member: memberUid,
-      note: 'Brought into Inbox. File it under a subject next: subject_list, then subject_assign.',
-    };
-  }
-
-  private row(id: string, r: Stored) {
-    return {
-      requestId: id,
-      member: r.memberUid,
-      status: r.status,
-      source: r.source,
-      sender: r.sender.name,
-      receivedAt: iso(r.receivedAt),
-      subjectId: r.subjectId,
-      excerpt: r.text.slice(0, EXCERPT),
-    };
-  }
-
-  /** Requests waiting for agents: to file, to draft, and (brought in by this agent) to send. */
-  async list() {
-    const all = (await this.active()).sort(
-      (a, b) => a.data.receivedAt.toMillis() - b.data.receivedAt.toMillis() || cmp(a.id, b.id),
-    );
-    return {
-      toFile: all.filter((r) => r.data.status === 'new').map((r) => this.row(r.id, r.data)),
-      toDraft: all.filter((r) => r.data.status === 'drafting').map((r) => this.row(r.id, r.data)),
-      toSend: all
-        .filter((r) => r.data.status === 'sending' && r.data.fetchedBy === this.d.uid)
-        .map((r) => this.row(r.id, r.data)),
-    };
-  }
-
-  async readRequest(requestId: string) {
-    const r = await this.request(requestId);
-    const subject = r.subjectId ? await this.subject(r.subjectId) : null;
-    let related: unknown[] = [];
-    if (r.subjectId) {
-      const snap = await this.read(() =>
-        getDocs(
-          query(
-            collection(this.d.db, `workspaces/${this.d.workspaceId}/inboxRequests`),
-            where('subjectId', '==', r.subjectId),
-          ),
-        ),
+    const attempt = async () => {
+      let joined: { threadId: string; state: ThreadStateOf } | null = null;
+      if (input.thread) {
+        const t = await this.get<Stored<InboxThread>>(
+          inboxPaths.thread(this.d.workspaceId, input.thread),
+        );
+        if (!t || t.memberUid !== memberUid)
+          throw new HiveError(`Thread ${input.thread} not found among this person's threads.`);
+        joined = { threadId: input.thread, state: this.state(t) };
+      } else {
+        const own = await this.get<Stored<InboxThread>>(
+          inboxPaths.thread(this.d.workspaceId, `it${ref}`),
+        );
+        if (own) joined = { threadId: `it${ref}`, state: this.state(own) };
+        else {
+          const hit = (
+            await this.list<Stored<InboxThread>>('inboxThreads', 'refs', 'array-contains', ref)
+          )
+            .filter((t) => t.data.memberUid === memberUid)
+            .sort((a, b) => cmp(a.id, b.id))[0];
+          if (hit) joined = { threadId: hit.id, state: this.state(hit.data) };
+        }
+      }
+      const plan = this.wrap(() =>
+        addInboxMessage(this.d.ctx, {
+          messageDocId: mid,
+          ref,
+          memberUid,
+          direction: input.fromMember ? 'out' : 'in',
+          source: input.source,
+          sender: { name: input.sender.name, handle: input.sender.handle ?? null },
+          text: input.text,
+          threadRef: input.threadRef,
+          messageId,
+          permalink: input.permalink ?? null,
+          replyRef: input.replyRef ?? null,
+          receivedAt: new Date(ms),
+          attachments: input.attachments ?? [],
+          thread: joined,
+          ...(input.title !== undefined ? { title: input.title } : {}),
+        }),
       );
-      related = snap.docs
-        .filter((s) => s.id !== requestId)
-        .map((s) => ({ id: s.id, data: s.data() as Stored }))
-        .sort(
-          (a, b) => b.data.receivedAt.toMillis() - a.data.receivedAt.toMillis() || cmp(a.id, b.id),
-        )
-        .slice(0, 10)
-        .map(({ id, data }) => ({
-          requestId: id,
-          status: data.status,
-          source: data.source,
-          sender: data.sender.name,
-          receivedAt: iso(data.receivedAt),
-          excerpt: data.text.slice(0, 500),
-          sentReply: data.status === 'done' && data.approved ? data.approved.reply : null,
-        }));
+      await this.write(plan);
+      return plan;
+    };
+    let plan;
+    try {
+      plan = await attempt();
+    } catch (e) {
+      if (!(e instanceof HiveError) || e.message !== INBOX_DENIED) throw e;
+      // Another agent brought the same message (or the same new thread) in a moment ago.
+      const now = await dup();
+      if (now) return now;
+      plan = await attempt();
     }
-    const byMe = r.fetchedBy === this.d.uid;
     return {
-      requestId,
-      member: r.memberUid,
-      status: r.status,
-      source: r.source,
-      sender: { name: r.sender.name, handle: r.sender.handle },
-      text: r.text,
-      threadRef: r.threadRef,
-      messageId: r.messageId,
-      permalink: r.permalink,
-      replyRef: r.replyRef,
-      receivedAt: iso(r.receivedAt),
-      attachments: r.attachments.map((a) => ({ name: a.name, url: a.url })),
-      fetchedBy: r.fetchedBy,
-      fetchedByMe: byMe,
-      subject: r.subjectId ? { subjectId: r.subjectId, name: subject?.name ?? null } : null,
-      draft: r.draft
-        ? { reply: r.draft.reply, actions: r.draft.actions, by: r.draft.by.type }
-        : null,
-      approved: r.approved ? { reply: r.approved.reply, actions: r.approved.actions } : null,
-      sent: r.sent ? { permalink: r.sent.permalink } : null,
-      related,
-      next: NEXT[r.status]!(byMe),
+      messageId: mid,
+      threadId: plan.threadId,
+      newThread: plan.newThread,
+      duplicate: false,
+      state: plan.state,
+      member: memberUid,
+      note: plan.newThread
+        ? 'Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.'
+        : 'Added to its thread.',
+    };
+  }
+
+  private threadRow(id: string, t: Stored<InboxThread>) {
+    return {
+      threadId: id,
+      member: t.memberUid,
+      state: t.state,
+      title: t.title,
+      subjectId: t.subjectId,
+      lastMessageAt: iso(t.lastMessageAt),
+    };
+  }
+
+  /** What agents have to do: threads to work, approved outcomes to carry out, snoozes due. */
+  async listWork() {
+    const threads = (
+      await this.list<Stored<InboxThread>>('inboxThreads', 'state', 'in', [
+        'investigating',
+        'waiting',
+      ])
+    ).sort(
+      (a, b) =>
+        a.data.lastMessageAt.toMillis() - b.data.lastMessageAt.toMillis() || cmp(a.id, b.id),
+    );
+    const now = Date.now();
+    const outcomes = (
+      await this.list<Stored<InboxOutcome>>('inboxOutcomes', 'state', '==', 'approved')
+    )
+      .filter((o) => o.data.executor === this.d.uid)
+      .sort((a, b) => a.data.createdAt.toMillis() - b.data.createdAt.toMillis() || cmp(a.id, b.id));
+    return {
+      toWork: threads
+        .filter((t) => t.data.state === 'investigating')
+        .map((t) => this.threadRow(t.id, t.data)),
+      toCarryOut: outcomes.map((o) => ({
+        outcomeId: o.id,
+        threadId: o.data.threadId,
+        member: o.data.memberUid,
+        type: o.data.type,
+        fields: o.data.fields,
+      })),
+      toWake: threads
+        .filter((t) => {
+          const u =
+            t.data.state === 'waiting' ? (t.data.waiting?.until as Ts | null | undefined) : null;
+          return !!u && u.toMillis() <= now;
+        })
+        .map((t) => this.threadRow(t.id, t.data)),
+    };
+  }
+
+  async readThread(threadId: string) {
+    const t = await this.thread(threadId);
+    const subject = t.subjectId
+      ? await this.get<InboxSubject>(inboxPaths.subject(this.d.workspaceId, t.subjectId))
+      : null;
+    const messages = (
+      await this.list<Stored<InboxMessage>>('inboxMessages', 'threadId', '==', threadId)
+    )
+      .sort(
+        (a, b) => a.data.receivedAt.toMillis() - b.data.receivedAt.toMillis() || cmp(a.id, b.id),
+      )
+      .map(({ id, data: m }) => ({
+        messageId: id,
+        direction: m.direction,
+        source: m.source,
+        sender: { name: m.sender.name, handle: m.sender.handle },
+        text: m.text,
+        threadRef: m.threadRef,
+        permalink: m.permalink,
+        replyRef: m.replyRef,
+        receivedAt: iso(m.receivedAt),
+        attachments: m.attachments.map((a) => ({ name: a.name, url: a.url })),
+      }));
+    const outcomes = (
+      await this.list<Stored<InboxOutcome>>('inboxOutcomes', 'threadId', '==', threadId)
+    )
+      .sort((a, b) => a.data.createdAt.toMillis() - b.data.createdAt.toMillis() || cmp(a.id, b.id))
+      .map(({ id, data: o }) => ({
+        outcomeId: id,
+        type: o.type,
+        state: o.state,
+        fields: o.fields,
+        note: o.note,
+        executor: o.executor,
+        executorIsMe: o.executor === this.d.uid,
+        decision: o.decision ? { edited: o.decision.edited, reason: o.decision.reason } : null,
+        result: o.result
+          ? {
+              text: o.result.text,
+              permalink: o.result.permalink,
+              itemId: o.result.itemId,
+              error: o.result.error,
+            }
+          : null,
+      }));
+    const shown = ['thread.note', 'thread.asked', 'thread.answered', 'outcome.rejected'];
+    const timeline = (
+      await this.list<{
+        type: string;
+        at: Ts;
+        actor: { type: string };
+        data: Record<string, unknown>;
+      }>('inboxEvents', 'threadId', '==', threadId)
+    )
+      .filter((e) => shown.includes(e.data.type))
+      .sort((a, b) => a.data.at.toMillis() - b.data.at.toMillis() || cmp(a.id, b.id))
+      .map(({ data: e }) => ({
+        type: e.type,
+        by: e.actor.type,
+        at: iso(e.at),
+        text: (e.data.text ?? e.data.answer ?? e.data.reason ?? null) as string | null,
+      }));
+    const carry = outcomes.some((o) => o.state === 'approved' && o.executorIsMe);
+    const until = t.waiting?.until as Ts | null | undefined;
+    return {
+      threadId,
+      member: t.memberUid,
+      state: t.state,
+      waiting: t.waiting ? { on: t.waiting.on, until: iso(until ?? null) } : null,
+      question: t.question ? { text: t.question.text, answer: t.question.answer } : null,
+      title: t.title,
+      subject: t.subjectId ? { subjectId: t.subjectId, name: subject?.name ?? null } : null,
+      fetchedBy: t.fetchedBy,
+      fetchedByMe: t.fetchedBy === this.d.uid,
+      messages,
+      outcomes,
+      timeline,
+      next: carry ? CARRY_OUT : NEXT[t.state]!,
     };
   }
 
   async subjects(given?: string) {
     const member = await this.member(given);
-    const subs = await this.subjectsOf(member);
-    const reqs = (await this.active()).filter((r) => r.data.memberUid === member);
-    const count = (sid: string, statuses: string[]) =>
-      reqs.filter((r) => r.data.subjectId === sid && statuses.includes(r.data.status)).length;
+    const subs = await this.list<InboxSubject>('inboxSubjects', 'memberUid', '==', member);
+    const open = (
+      await this.list<Stored<InboxThread>>('inboxThreads', 'state', 'in', [...THREAD_OPEN])
+    ).filter((t) => t.data.memberUid === member);
+    const count = (sid: string, states: readonly string[]) =>
+      open.filter((t) => t.data.subjectId === sid && states.includes(t.data.state)).length;
     const subjects = subs
       .map((s) => ({
         subjectId: s.id,
         name: s.data.name,
-        waiting: count(s.id, ['yourCall']),
-        open: count(s.id, ACTIVE),
+        forYou: count(s.id, ['needsYou', 'yourCall']),
+        open: count(s.id, THREAD_OPEN),
       }))
       .sort(
         (a, b) =>
-          b.waiting - a.waiting ||
+          b.forYou - a.forYou ||
           b.open - a.open ||
           cmp(a.name, b.name) ||
           cmp(a.subjectId, b.subjectId),
       );
-    return {
-      member,
-      subjects,
-      unfiled: reqs.filter((r) => r.data.subjectId === null && r.data.status === 'new').length,
-    };
+    return { member, subjects, unfiled: open.filter((t) => t.data.subjectId === null).length };
   }
 
-  async assign(requestId: string, subjectId?: string, name?: string) {
+  async assign(threadId: string, subjectId?: string, name?: string) {
     if ((subjectId === undefined) === (name === undefined))
       throw new HiveError('Give either subjectId (an existing subject) or name (a new one).');
-    const r = await this.request(requestId);
+    const t = await this.thread(threadId);
     let target = subjectId;
     if (target !== undefined) {
-      const s = await this.subject(target);
-      if (!s || s.memberUid !== r.memberUid)
+      const s = await this.get<InboxSubject>(inboxPaths.subject(this.d.workspaceId, target));
+      if (!s || s.memberUid !== t.memberUid)
         throw new HiveError(
           `Subject ${target} not found among this person's subjects (see subject_list).`,
         );
     } else {
       // Reuse a subject of the same name rather than making a twin.
       const want = name!.trim().replace(/\s+/g, ' ').toLowerCase();
-      const same = (await this.subjectsOf(r.memberUid))
+      const same = (await this.list<InboxSubject>('inboxSubjects', 'memberUid', '==', t.memberUid))
         .filter((s) => s.data.name.toLowerCase() === want)
         .sort((a, b) => cmp(a.id, b.id))[0];
       if (same) target = same.id;
     }
     const plan = this.wrap(() =>
       assignSubject(this.d.ctx, {
-        requestId,
-        request: r,
+        threadId,
+        thread: this.state(t),
         ...(target !== undefined ? { subjectId: target } : { newName: name! }),
       }),
     );
     await this.write(plan);
-    const s = plan.created ? null : await this.subject(plan.subjectId);
+    const s = plan.created
+      ? null
+      : await this.get<InboxSubject>(inboxPaths.subject(this.d.workspaceId, plan.subjectId));
     const subjectName = plan.created ? name!.trim().replace(/\s+/g, ' ') : (s?.name ?? '');
     return {
-      requestId,
+      threadId,
       subjectId: plan.subjectId,
       name: subjectName,
       created: plan.created,
-      status: r.status === 'new' ? 'drafting' : r.status,
       note: plan.created
-        ? `Filed under a new subject "${subjectName}". Draft the reply next: inbox_draft.`
-        : `Filed under "${subjectName}". Draft the reply next: inbox_draft.`,
+        ? `Filed under a new subject "${subjectName}".`
+        : `Filed under "${subjectName}".`,
     };
   }
 
-  async draft(requestId: string, reply: string, actions: string[] = []) {
-    const r = await this.request(requestId);
+  async note(threadId: string, text: string) {
+    const t = await this.thread(threadId);
     await this.write(
-      this.wrap(() => draftReply(this.d.ctx, { requestId, request: r, reply, actions })),
+      this.wrap(() => addThreadNote(this.d.ctx, { threadId, thread: this.state(t), text })),
+    );
+    return { threadId, note: 'Noted on the timeline.' };
+  }
+
+  async ask(threadId: string, question: string) {
+    const t = await this.thread(threadId);
+    await this.write(
+      this.wrap(() => askMember(this.d.ctx, { threadId, thread: this.state(t), question })),
     );
     return {
-      requestId,
-      status: 'yourCall',
-      note: 'Drafted. It waits for the person to Send, Edit or Ignore it in Hivenod; nothing is sent before.',
+      threadId,
+      state: 'needsYou',
+      note: 'Asked. The thread waits in Needs you; the answer shows in thread_read.',
     };
   }
 
-  async sent(requestId: string, permalink?: string) {
-    const r = await this.request(requestId);
-    await this.write(this.wrap(() => markSent(this.d.ctx, { requestId, request: r, permalink })));
-    return { requestId, status: 'done', note: 'Marked as sent. It shows as Done in the timeline.' };
+  async propose(threadId: string, type: string, fields: Record<string, unknown>, note?: string) {
+    const t = await this.thread(threadId);
+    const plan = this.wrap(() =>
+      proposeOutcome(this.d.ctx, { threadId, thread: this.state(t), type, fields, note }),
+    );
+    await this.write(plan);
+    return {
+      outcomeId: plan.outcomeId,
+      threadId,
+      type,
+      state: 'proposed',
+      note: 'Proposed. It waits for the person to approve, edit or reject it; nothing is carried out before.',
+    };
+  }
+
+  async done(
+    outcomeId: string,
+    status: 'done' | 'failed',
+    result: { text?: string; permalink?: string; itemId?: string; error?: string } = {},
+  ) {
+    const o = await this.outcome(outcomeId);
+    const t = await this.thread(o.threadId);
+    const st: OutcomeStateOf = {
+      memberUid: o.memberUid,
+      threadId: o.threadId,
+      type: o.type,
+      fields: o.fields,
+      state: o.state,
+      executor: o.executor,
+    };
+    await this.write(
+      this.wrap(() =>
+        finishOutcome(this.d.ctx, {
+          outcomeId,
+          outcome: st,
+          thread: this.state(t),
+          status,
+          result,
+        }),
+      ),
+    );
+    const after = await this.thread(o.threadId);
+    return {
+      outcomeId,
+      state: status,
+      threadId: o.threadId,
+      threadState: after.state,
+      note:
+        status === 'done'
+          ? 'Reported as done.'
+          : 'Reported as failed: the thread is back to investigating.',
+    };
+  }
+
+  async wake(threadId: string) {
+    const t = await this.thread(threadId);
+    await this.write(
+      this.wrap(() =>
+        wakeThread(this.d.ctx, { threadId, thread: this.state(t), nowMs: Date.now() }),
+      ),
+    );
+    return { threadId, state: 'investigating', note: 'Awake: investigate it again.' };
   }
 }

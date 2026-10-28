@@ -3,6 +3,7 @@
  * them into the JSON Schemas Claude Code shows. Descriptions are written for the model using them.
  */
 import { z } from 'zod';
+import { OUTCOME_TYPES, outcomeGuide } from '@hive/shared';
 import type { HiveClient } from './client';
 
 export interface ToolDef<S extends z.ZodRawShape = z.ZodRawShape> {
@@ -173,7 +174,7 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: 'inbox_add',
     description:
-      'Bring a request someone sent to a person of your organization into their Hivenod Inbox (a Teams or Slack message, a mail, a Jira, GitLab or GitHub mention, …), so it gets a draft answer that the person sends with one tap. Bring in what needs an answer from them, with the full text. The same source + threadRef + messageId is never added twice. Next: file it with subject_assign (after subject_list), then write the answer with inbox_draft. Nothing is ever sent before the person presses Send.',
+      "Bring a message someone sent to a person of your organization into their Hivenod Inbox (a Teams or Slack message, a mail, a Jira, GitLab or GitHub mention, …), with its full text. It joins its thread (same source thread, or the thread you name: the same ask on another channel), or starts a new one. A message from them reopens a waiting or closed thread. The same message is never added twice. Set fromMember when it is the person's own reply that you spotted (they answered outside Hivenod). Next: file a new thread with subject_assign (after subject_list), then investigate it (thread_read, inbox_note, inbox_ask) and propose what should come of it (outcome_propose). Nothing is carried out before the person approves.",
     input: {
       source: z
         .string()
@@ -206,7 +207,7 @@ export const TOOLS: ToolDef[] = [
         .string()
         .max(2000)
         .optional()
-        .describe('Whatever you need later to post the reply in the same place (ids, channel, …)'),
+        .describe('Whatever you need later to reply in the same place (ids, channel, …)'),
       member: z
         .string()
         .min(1)
@@ -220,27 +221,41 @@ export const TOOLS: ToolDef[] = [
         .max(20)
         .optional()
         .describe('Links to its files'),
+      thread: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('An existing thread it belongs to (the same ask on another channel)'),
+      fromMember: z
+        .boolean()
+        .optional()
+        .describe("The person's own reply (it does not reopen the thread)"),
+      title: z
+        .string()
+        .max(200)
+        .optional()
+        .describe("A new thread's title; defaults to its first line"),
     },
     run: (c, a) => c.inbox().add(a as never),
   }),
   tool({
     name: 'inbox_list',
     description:
-      'List the Inbox requests of your organization waiting for agents: toFile (new: file them with subject_assign), toDraft (filed: answer them with inbox_draft) and toSend (approved by their person and brought in by you: post approved.reply, then inbox_sent).',
+      'What agents have to do in the Inbox of your organization: toWork (threads to investigate), toCarryOut (outcomes their person approved that you carry out: do exactly what the approved fields say, then outcome_done) and toWake (snoozed threads whose date has come: thread_wake).',
     input: {},
-    run: (c) => c.inbox().list(),
+    run: (c) => c.inbox().listWork(),
   }),
   tool({
-    name: 'inbox_read',
+    name: 'thread_read',
     description:
-      'Read one Inbox request in full: sender, source, text, thread and reply reference, its subject and the other requests in that subject (with what was answered before), the draft, what the person approved, and what to do next.',
-    input: { requestId: z.string().min(1).describe('Inbox request id') },
-    run: (c, a) => c.inbox().readRequest(a.requestId as string),
+      'Read one Inbox thread in full: its state, the messages (from every channel), the subject, the outcomes proposed and what the person decided, the notes, questions and answers, and what to do next.',
+    input: { threadId: z.string().min(1).describe('Thread id') },
+    run: (c, a) => c.inbox().readThread(a.threadId as string),
   }),
   tool({
     name: 'subject_list',
     description:
-      'A person\'s Inbox subjects: lasting, well-named topics that collect every request about them, from any source and sender (e.g. "Klarna refunds (M&S Payments)"). Read them before subject_assign and reuse the one a request belongs to; make a new one only for a new topic.',
+      'A person\'s Inbox subjects: lasting, well-named topics that collect every thread about them, from any source and sender (e.g. "Klarna refunds (M&S Payments)"), with how many threads wait for the person and how many are open. Read them before subject_assign and reuse the one a thread belongs to; make a new one only for a new topic.',
     input: {
       member: z
         .string()
@@ -254,9 +269,9 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: 'subject_assign',
     description:
-      'File an Inbox request under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. "Grafana access (Pairpoint)"). A name that matches an existing subject reuses it. Give exactly one of the two.',
+      'File a thread under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. "Grafana access (Pairpoint)"). A name that matches an existing subject reuses it. Give exactly one of the two. Also moves a thread to a better subject.',
     input: {
-      requestId: z.string().min(1).describe('Inbox request id'),
+      threadId: z.string().min(1).describe('Thread id'),
       subjectId: z.string().min(1).optional().describe('An existing subject'),
       name: z.string().min(1).max(120).optional().describe('Or the name of a new subject'),
     },
@@ -264,38 +279,83 @@ export const TOOLS: ToolDef[] = [
       c
         .inbox()
         .assign(
-          a.requestId as string,
+          a.threadId as string,
           a.subjectId as string | undefined,
           a.name as string | undefined,
         ),
   }),
   tool({
-    name: 'inbox_draft',
+    name: 'inbox_note',
     description:
-      'Write the proposed answer to an Inbox request, in its person\'s own voice and style, using the context you can reach (the subject\'s earlier requests, knowledge bases, repos, tickets). It waits for them to Send, Edit or Ignore it in Hivenod: nothing is sent before their Send. You may draft again while it waits. actions are follow-ups to do once sent, in plain words ("book Thu 10:00-10:30 with Sam").',
+      "Add an investigation note to a thread's timeline (what you checked and found: tickets, repos, the calendar, earlier answers). The person sees it with the thread.",
     input: {
-      requestId: z.string().min(1).describe('Inbox request id'),
-      reply: z.string().min(1).max(20000).describe('The answer, ready to send as written'),
-      actions: z.array(z.string().min(1).max(500)).max(10).optional(),
+      threadId: z.string().min(1).describe('Thread id'),
+      text: z.string().min(1).max(8000),
+    },
+    run: (c, a) => c.inbox().note(a.threadId as string, a.text as string),
+  }),
+  tool({
+    name: 'inbox_ask',
+    description:
+      'Ask the person a question about a thread when only they can answer it. The thread waits in their Needs you; the answer shows in thread_read and the thread comes back for you to go on.',
+    input: {
+      threadId: z.string().min(1).describe('Thread id'),
+      question: z.string().min(1).max(4000),
+    },
+    run: (c, a) => c.inbox().ask(a.threadId as string, a.question as string),
+  }),
+  tool({
+    name: 'outcome_propose',
+    description: `Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\n${outcomeGuide()}`,
+    input: {
+      threadId: z.string().min(1).describe('Thread id'),
+      type: z.enum(OUTCOME_TYPES as [string, ...string[]]).describe('The outcome type'),
+      fields: z
+        .record(z.string(), z.union([z.string(), z.boolean()]))
+        .describe("The type's fields"),
+      note: z.string().max(2000).optional().describe('Why you propose it, for the person'),
     },
     run: (c, a) =>
       c
         .inbox()
-        .draft(a.requestId as string, a.reply as string, (a.actions as string[] | undefined) ?? []),
+        .propose(
+          a.threadId as string,
+          a.type as string,
+          a.fields as Record<string, unknown>,
+          a.note as string | undefined,
+        ),
   }),
   tool({
-    name: 'inbox_sent',
+    name: 'outcome_done',
     description:
-      'Mark an Inbox request as sent, after you posted its approved reply (approved.reply from inbox_read, exactly as written) in the same thread of its source, as its person. Only for a request its person pressed Send on (status sending) and that you brought in.',
+      'Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out.',
     input: {
-      requestId: z.string().min(1).describe('Inbox request id'),
-      permalink: z
-        .string()
-        .max(2048)
-        .optional()
-        .describe('An http(s) link to the reply you posted'),
+      outcomeId: z.string().min(1).describe('Outcome id'),
+      status: z.enum(['done', 'failed']),
+      result: z
+        .object({
+          text: z.string().max(20000).optional(),
+          permalink: z.string().max(2048).optional(),
+          itemId: z.string().max(128).optional(),
+          error: z.string().max(1000).optional(),
+        })
+        .optional(),
     },
-    run: (c, a) => c.inbox().sent(a.requestId as string, a.permalink as string | undefined),
+    run: (c, a) =>
+      c
+        .inbox()
+        .done(
+          a.outcomeId as string,
+          a.status as 'done' | 'failed',
+          (a.result as Record<string, string> | undefined) ?? {},
+        ),
+  }),
+  tool({
+    name: 'thread_wake',
+    description:
+      'Wake a snoozed thread whose date has come (inbox_list toWake): it goes back to investigating.',
+    input: { threadId: z.string().min(1).describe('Thread id') },
+    run: (c, a) => c.inbox().wake(a.threadId as string),
   }),
   tool({
     name: 'release',

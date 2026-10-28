@@ -136,7 +136,8 @@ var ToolRuns = map[string]Run{
 	},
 	// Inbox (item 4PEHrOW5IfXBQWgOK9wo)
 	"inbox_add": func(ctx context.Context, c *Client, a Args) (any, error) {
-		in := InboxAddIn{Source: a.S("source"), Text: a.S("text"), ThreadRef: a.S("threadRef"), ReceivedAt: a.S("receivedAt"), MessageID: a.SP("messageId"), Permalink: a.SP("permalink"), ReplyRef: a.SP("replyRef"), Member: a.S("member")}
+		in := InboxAddIn{Source: a.S("source"), Text: a.S("text"), ThreadRef: a.S("threadRef"), ReceivedAt: a.S("receivedAt"), MessageID: a.SP("messageId"), Permalink: a.SP("permalink"), ReplyRef: a.SP("replyRef"), Member: a.S("member"), Thread: a.S("thread"), Title: a.SP("title")}
+		in.FromMember, _ = a["fromMember"].(bool)
 		if snd, ok := a["sender"].(map[string]any); ok {
 			sa := Args(snd)
 			in.SenderName, in.Handle = sa.S("name"), sa.SP("handle")
@@ -149,22 +150,28 @@ var ToolRuns = map[string]Run{
 		}
 		return c.InboxAdd(ctx, in)
 	},
-	"inbox_list": func(ctx context.Context, c *Client, a Args) (any, error) { return c.InboxList(ctx) },
-	"inbox_read": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.InboxRead(ctx, a.S("requestId"))
-	},
+	"inbox_list":  func(ctx context.Context, c *Client, a Args) (any, error) { return c.InboxList(ctx) },
+	"thread_read": func(ctx context.Context, c *Client, a Args) (any, error) { return c.ThreadRead(ctx, a.S("threadId")) },
 	"subject_list": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.SubjectList(ctx, a.S("member"))
 	},
 	"subject_assign": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.SubjectAssign(ctx, a.S("requestId"), a.SP("subjectId"), a.SP("name"))
+		return c.SubjectAssign(ctx, a.S("threadId"), a.SP("subjectId"), a.SP("name"))
 	},
-	"inbox_draft": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.InboxDraft(ctx, a.S("requestId"), a.S("reply"), a.Strings("actions"))
+	"inbox_note": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.InboxNote(ctx, a.S("threadId"), a.S("text"))
 	},
-	"inbox_sent": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.InboxSent(ctx, a.S("requestId"), a.SP("permalink"))
+	"inbox_ask": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.InboxAsk(ctx, a.S("threadId"), a.S("question"))
 	},
+	"outcome_propose": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.OutcomePropose(ctx, a.S("threadId"), a.S("type"), asMap(a["fields"]), a.SP("note"))
+	},
+	"outcome_done": func(ctx context.Context, c *Client, a Args) (any, error) {
+		r := Args(asMap(a["result"]))
+		return c.OutcomeDone(ctx, a.S("outcomeId"), a.S("status"), OutcomeResult{r.SP("text"), r.SP("permalink"), r.SP("itemId"), r.SP("error")})
+	},
+	"thread_wake": func(ctx context.Context, c *Client, a Args) (any, error) { return c.ThreadWake(ctx, a.S("threadId")) },
 	// park / unpark exist in channel sessions only (ChannelTools gives them the session).
 	"park":   func(context.Context, *Client, Args) (any, error) { return nil, Errf(parkNoSession) },
 	"unpark": func(context.Context, *Client, Args) (any, error) { return nil, Errf(parkNoSession) },
