@@ -408,7 +408,10 @@ const PlanDecision = forwardRef<
   const thread = entry.thread!;
   const { session } = useReady();
   const outs = useThreadOutcomes(entry.wid, thread.id, session.me.uid);
-  const rows = outs.state === 'ready' ? outs.data : [];
+  // While Today redraws (the listener starts again), keep the steps last seen: no flash.
+  const [kept, setKept] = useState<Row<InboxOutcome>[]>([]);
+  if (outs.state === 'ready' && outs.data !== kept) setKept(outs.data);
+  const rows = outs.state === 'ready' ? outs.data : kept;
   const pl = planInputOf(plan, rows);
   const loaded = plan.data.steps.every((id) => pl.outcomes[id]);
   const view = planView(pl.plan, pl.outcomes);

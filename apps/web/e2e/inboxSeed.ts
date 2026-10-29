@@ -168,7 +168,7 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
     async finishStep(
       pid: string,
       status: 'done' | 'failed' | 'started',
-      result: { error?: string; itemId?: string } = {},
+      result: { error?: string; itemId?: string; permalink?: string } = {},
     ) {
       const plan = (await getDoc(doc(db, inboxPaths.plan(wid, pid)))).data() as PlanInput['plan'];
       const outcomes: Record<string, OutcomeStateOf> = {};

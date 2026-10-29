@@ -46,7 +46,8 @@ dispatch, route and give back; the sub-agents do the work.
    Steps run in order: a `carry_out` comes once per step (with `plan_id` and `step`, "3 of 5"),
    only when that step is approved and its turn; carry out exactly that step and report it with
    `outcome_done`. For a Build it step, create the item, report `status: started` with its
-   `itemId`, and report `done` when the item is Done. A `rejected` event with `plan_id` means
+   `itemId`; the channel sends `item_done` when the item is Done (report the step done) or
+   `item_stopped` when it was stopped or deleted (report it failed with the reason). A `rejected` event with `plan_id` means
    the plan stopped: re-plan or ask.
 6. **Keep the main context small.** Sub-agents report in one line and report their own run cost
    with complete, send_back or end_run. Keep a short table item_id -> sub-agent in your head or

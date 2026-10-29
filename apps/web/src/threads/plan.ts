@@ -183,3 +183,19 @@ export const BAR: Record<PlanStepView['ui'], string> = {
   skipped: 'bg-line',
   stopped: 'bg-line',
 };
+
+/**
+ * The project and item of a Build it step's link (<site>/p/<project>?item=<item>, filled in by
+ * the CLI when the agent reports the item made), or null.
+ */
+export function itemLinkParts(
+  link: string | null | undefined,
+): { pid: string; iid: string } | null {
+  const m = /\/p\/([^/?#]+)\?item=([^&#]+)/.exec(link ?? '');
+  if (!m) return null;
+  try {
+    return { pid: decodeURIComponent(m[1]!), iid: decodeURIComponent(m[2]!) };
+  } catch {
+    return null;
+  }
+}
