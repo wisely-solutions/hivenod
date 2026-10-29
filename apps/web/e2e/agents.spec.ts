@@ -65,7 +65,9 @@ async function enter(page: Page, name: string) {
   const owner = person(name);
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   const wid = await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('')
@@ -281,7 +283,9 @@ test('members see agents but cannot create, rotate or revoke', async ({ page, br
   await other.goto(link);
   await signIn(other, mia);
   await other.getByRole('button', { name: 'Join organization' }).click();
-  await expect(other.getByRole('heading', { name: 'Hi Mia' })).toBeVisible({ timeout: 20_000 });
+  await expect(other.getByRole('heading', { name: /^Good \w+, Mia$/ })).toBeVisible({
+    timeout: 20_000,
+  });
   await other.goto('/agents');
   await expect(other.getByRole('listitem', { name: 'Scout' })).toBeVisible();
   await expect(other.getByRole('button', { name: 'New agent' })).toHaveCount(0);

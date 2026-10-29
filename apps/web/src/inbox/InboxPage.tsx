@@ -387,18 +387,29 @@ export function InboxPage() {
 
   // Undo runs up to 5 s after the decision: read where the person is now, not where they were.
   const latest = useRef({ sel, desktop, go, nav, list });
+  // Where each decision was, and what came after it: a written decision leaves the list before
+  // its card hears back, and the focus must still move to the one below it.
+  const placeOf = useRef(new Map<string, { at: number; next: string | null }>());
   useEffect(() => {
     latest.current = { sel, desktop, go, nav, list };
+    list.forEach((e, i) => placeOf.current.set(e.key, { at: i, next: nextKey(nav, e.key) }));
   });
   /** A decision card's plan was written: it collapses to its done row, the next one takes focus. */
   const cardDone = (key: string, label: string) => {
     const cur = latest.current;
-    const at = Math.max(
-      0,
-      cur.list.findIndex((e) => e.key === key),
-    );
+    const place = placeOf.current.get(key);
+    const i = cur.list.findIndex((e) => e.key === key);
+    const at = i >= 0 ? i : (place?.at ?? 0);
     setDone((d) => [...d, { key, label, at }]);
-    if (cur.sel === key) cur.go(nextKey(cur.nav, key));
+    if (cur.sel === key) {
+      const next =
+        i >= 0
+          ? nextKey(cur.nav, key)
+          : place?.next && cur.nav.some((e) => e.key === place.next)
+            ? place.next
+            : (cur.nav[Math.min(at, cur.nav.length - 1)]?.key ?? null);
+      cur.go(next);
+    }
   };
   const skip = (key: string) => {
     setSkipped((cur) => [...cur.filter((k) => k !== key), key]);
@@ -462,8 +473,9 @@ export function InboxPage() {
 
   const step = (dir: 1 | -1) => {
     if (!nav.length) return;
-    // Nothing selected yet (phone): the first j/k lands on the first item, not the second.
-    if (!focusedRow) return go(nav[0]!.key);
+    // Nothing selected yet on a phone: the first j/k lands on the first item, not the second.
+    // On desktop the first one is already the focused decision (Today's card), so j moves on.
+    if (!focusedRow && !desktop) return go(nav[0]!.key);
     const i = Math.max(
       0,
       nav.findIndex((e) => e.key === selectedRow?.key),
@@ -990,19 +1002,6 @@ export function InboxPage() {
           <Skeleton className="h-16 w-full" />
         </div>
       ) : null}
-      {showFirstRun ? (
-        <div className="mb-4">
-          <FirstRun
-            state={first}
-            project={firstProject}
-            onDismiss={() => {
-              void setDoc(doc(db, firstRunPath(uid, wid)), { ...first, dismissed: true }).catch(
-                () => undefined,
-              );
-            }}
-          />
-        </div>
-      ) : null}
       {loading ? null : (
         <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start xl:gap-6">
           <div className="min-w-0">
@@ -1058,6 +1057,19 @@ export function InboxPage() {
           </aside>
         </div>
       )}
+      {showFirstRun ? (
+        <div className="mt-6">
+          <FirstRun
+            state={first}
+            project={firstProject}
+            onDismiss={() => {
+              void setDoc(doc(db, firstRunPath(uid, wid)), { ...first, dismissed: true }).catch(
+                () => undefined,
+              );
+            }}
+          />
+        </div>
+      ) : null}
       {detail}
       {dialogs}
       {picked.size > 0 ? (

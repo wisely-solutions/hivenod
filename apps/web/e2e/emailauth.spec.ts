@@ -23,7 +23,9 @@ test('sign up with email: blocked until the address is confirmed, then a workspa
   await expect(page.getByRole('button', { name: /^Resend in \d+s$/ })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Resend email' })).toBeEnabled({ timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /^Hi / })).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toHaveCount(0);
   await expectNoHorizontalScroll(page);
   await settle(page);
   await page.screenshot({
@@ -37,7 +39,7 @@ test('sign up with email: blocked until the address is confirmed, then a workspa
   await page.getByRole('link', { name: 'Open Hivenod' }).click();
 
   // Confirmed: the workspace is created (the rules now let it through).
-  await expect(page.getByRole('heading', { name: /^Hi emma/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, emma/ })).toBeVisible();
 });
 
 test('the Check your email screen moves on by itself once confirmed elsewhere', async ({
@@ -58,7 +60,9 @@ test('the Check your email screen moves on by itself once confirmed elsewhere', 
   await expect(p2.getByRole('heading', { name: 'Email confirmed' })).toBeVisible();
   await other.close();
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.getByRole('heading', { name: /^Hi nora/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: /^Good \w+, nora/ })).toBeVisible({
+    timeout: 15_000,
+  });
 });
 
 test('sign in with a confirmed account, wrong password says so, forgot password resets', async ({
@@ -75,7 +79,7 @@ test('sign in with a confirmed account, wrong password says so, forgot password 
   );
   await expect(page.getByRole('heading', { name: 'Email confirmed' })).toBeVisible();
   await page.getByRole('link', { name: 'Open Hivenod' }).click();
-  await expect(page.getByRole('heading', { name: /^Hi rita/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, rita/ })).toBeVisible();
   await page.goto('/me');
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('link', { name: 'Get started' }).first()).toBeVisible();
@@ -101,7 +105,7 @@ test('sign in with a confirmed account, wrong password says so, forgot password 
   await page.getByLabel('Email').fill(who.email);
   await page.getByLabel('Password').fill('a brand new password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('heading', { name: /^Hi rita/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, rita/ })).toBeVisible();
 });
 
 test('an existing address is not revealed; an expired link is explained', async ({ page }) => {
@@ -131,7 +135,7 @@ test('Google still works from the product page', async ({ page }) => {
   const who = person('Gina Google');
   await page.goto('/');
   await signIn(page, who);
-  await expect(page.getByRole('heading', { name: /^Hi Gina/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, Gina/ })).toBeVisible();
 });
 
 test('the emails carry a continue URL that lands on Hivenod', async ({ page }) => {
@@ -152,7 +156,7 @@ test('the emails carry a continue URL that lands on Hivenod', async ({ page }) =
   await page.goto(verify!);
   await expect(page.getByRole('heading', { name: 'Email confirmed' })).toBeVisible();
   await page.getByRole('link', { name: 'Open Hivenod' }).click();
-  await expect(page.getByRole('heading', { name: /^Hi carl/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, carl/ })).toBeVisible();
 
   await page.goto('/me');
   await page.getByRole('button', { name: 'Sign out' }).click();

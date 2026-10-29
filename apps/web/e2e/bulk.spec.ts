@@ -12,7 +12,9 @@ async function seed(page: Page) {
   const owner = person('Bea Bulk');
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
@@ -74,7 +76,9 @@ test('the palette ranks exact and prefix first, matches descriptions, and opens 
   page,
 }) => {
   const { pid } = await seed(page);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible();
   await palette(page, 'faster');
   const opts = page.getByRole('option');
   await expect(opts).toHaveCount(1);
@@ -203,7 +207,9 @@ test('the all-items list spans projects and links from All projects', async ({ p
     await page.screenshot({ path: `${SHOTS}/bulk-all-${test.info().project.name}-${theme}.png` });
   }
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible();
   await palette(page, 'faster');
   await page.screenshot({ path: `${SHOTS}/bulk-palette-${test.info().project.name}.png` });
 });

@@ -24,7 +24,9 @@ test('edit the title, type and description, add a file, see it in the history', 
   const owner = person('Edit Edna');
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
@@ -146,7 +148,9 @@ test('an admin can edit an item someone else made', async ({ page }) => {
   const owner = person('Owner Olga');
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');

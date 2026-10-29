@@ -12,7 +12,7 @@ import { motion, useReducedMotion } from '../ui/motion';
 import type { NeedsEntry } from '../needs/logic';
 import { bandOf } from '../threads/logic';
 import { proposalSentence } from './logic';
-import { bandEdge, ConfidenceMeter, OrgChip, RankChip, rankText, SenderAvatar } from './parts';
+import { bandEdge, ConfidenceMeter, RankChip, rankText, SenderAvatar } from './parts';
 
 export function DecisionRow({
   entry,
@@ -61,17 +61,28 @@ export function DecisionRow({
       >
         <SenderAvatar name={sender ?? t.title} size="sm" />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-14 font-semibold text-ink">
-            {t.title || 'Untitled thread'}
-          </span>
-          <span className="truncate text-13 text-text-2">{summary}</span>
-          {org ? (
-            <span className="mt-1 flex">
-              <OrgChip name={org.name} color={org.color} />
+          <span className="flex min-w-0 items-center gap-1.5">
+            {org ? (
+              <span
+                aria-hidden
+                className="size-2 shrink-0 rounded-full"
+                style={{ background: org.color }}
+              />
+            ) : null}
+            <span className="truncate text-14 font-semibold text-ink">
+              {t.title || 'Untitled thread'}
             </span>
-          ) : null}
+          </span>
+          <span className="truncate text-13 text-text-2">
+            {org ? <span className="sr-only">{org.name} · </span> : null}
+            {summary}
+          </span>
         </span>
-        {rank ? <RankChip text={rank} band={band} /> : null}
+        {rank ? (
+          <span className="max-sm:hidden">
+            <RankChip text={rank} band={band} />
+          </span>
+        ) : null}
         {first && !asked ? (
           <ConfidenceMeter value={first.data.confidence} compact className="max-sm:hidden" />
         ) : null}

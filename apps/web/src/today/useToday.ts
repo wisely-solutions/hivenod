@@ -86,11 +86,13 @@ export function useToday(
     const o = all.orgs.find((x) => x.wid === wid);
     return o ? { name: o.name, color: colorOf(wid) } : null;
   };
-  const senderOf = (e: NeedsEntry): { name: string; source: string } | null => {
+  const senderOf = (e: NeedsEntry): { name: string; source: string; at: number } | null => {
     if (!e.thread) return null;
     const list: InboxMessage[] = messages.get(`${e.wid}/${e.thread.id}`) ?? [];
     const last = [...list].reverse().find((m) => m.direction === 'in') ?? list[list.length - 1];
-    return last ? { name: last.sender.name, source: last.source } : null;
+    return last
+      ? { name: last.sender.name, source: last.source, at: last.receivedAt.toMillis() }
+      : null;
   };
   const areaOf = (e: NeedsEntry) => {
     const sid = e.thread?.data.subjectId;

@@ -108,17 +108,19 @@ export function TidyUps({
       data-tidy-ups=""
       className="mt-1 rounded-card border border-dashed border-line-strong/60 bg-surface-2 p-3.5 sm:p-4"
     >
-      <div className="flex flex-wrap items-center gap-3">
-        <Icon icon={Archive} size={18} className="shrink-0 text-text-2" />
-        <p className="min-w-0 flex-1 text-14 text-text-2">
-          <span className="font-semibold text-ink">
-            {n} {n === 1 ? 'tidy-up' : 'tidy-ups'}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <p className="flex min-w-0 flex-1 gap-3 text-14 text-text-2">
+          <Icon icon={Archive} size={18} className="mt-0.5 shrink-0 text-text-2" />
+          <span className="min-w-0">
+            <span className="font-semibold text-ink">
+              {n} {n === 1 ? 'tidy-up' : 'tidy-ups'}
+            </span>
+            {n
+              ? ` · ${tidySummary(batch.map((e) => ({ outcome: e.proposals![0]!.data, thread: e.thread!.data })))}`
+              : ''}
           </span>
-          {n
-            ? ` · ${tidySummary(batch.map((e) => ({ outcome: e.proposals![0]!.data, thread: e.thread!.data })))}`
-            : ''}
         </p>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 gap-2 max-sm:[&>*]:flex-1">
           <Button
             variant="secondary"
             aria-expanded={open}

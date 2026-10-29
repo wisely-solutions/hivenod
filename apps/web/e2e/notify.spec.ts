@@ -18,7 +18,9 @@ async function seed(page: Page) {
   const owner = person('João');
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
@@ -78,7 +80,7 @@ test('the tab title carries the Needs-you count', async ({ page }) => {
   for (const n of [1, 2])
     await adminSet(itemPath(wid, pid, `t${n}`), waiting(uid, 1, { title: `Post ${n}` }));
   await expect(page.getByText('2 things need you.')).toBeVisible();
-  await expect(page).toHaveTitle('(2) Needs you · Hivenod');
+  await expect(page).toHaveTitle('(2) Today · Hivenod');
   await page.goto('/projects');
   await expect(page).toHaveTitle(/^\(2\) All projects · Hivenod$/);
 });

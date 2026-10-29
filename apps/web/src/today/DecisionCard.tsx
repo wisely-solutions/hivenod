@@ -29,8 +29,10 @@ import {
   Forward,
   ListChecks,
   MessageSquareReply,
+  MoreHorizontal,
   Pencil,
   Reply,
+  SkipForward,
   Sparkles,
   Undo2,
   X,
@@ -74,7 +76,7 @@ export interface DecisionCardProps {
   entry: NeedsEntry;
   org: { name: string; color: string } | null;
   area: string | null;
-  sender: { name: string; source: string } | null;
+  sender: { name: string; source: string; at: number } | null;
   now: number;
   /** The member's calendar (busy blocks with details or not), for the slot strip. */
   busy: ReadonlyArray<{ start: Date; end: Date }>;
@@ -128,16 +130,17 @@ function CardHead({ props, label }: { props: DecisionCardProps; label?: string }
   const t = entry.thread!.data;
   const band = bandOf(t, now);
   const rank = rankText(t, band, now);
+  const age = waitLabel(sender?.at ?? entry.since, now);
   return (
     <>
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 max-sm:flex-wrap max-sm:gap-y-2">
         <SenderAvatar name={sender?.name ?? t.title} />
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-baseline gap-x-2 text-14">
             <span className="font-semibold text-ink">{sender?.name ?? 'Inbox'}</span>
             <span className="text-13 text-text-2">
               {sender?.source ? `${sender.source} · ` : ''}
-              {waitLabel(entry.since, now)} ago
+              {age === 'just now' ? age : `${age} ago`}
             </span>
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -145,7 +148,11 @@ function CardHead({ props, label }: { props: DecisionCardProps; label?: string }
             {area ? <Chip>{area}</Chip> : null}
           </div>
         </div>
-        <RankChip text={rank} band={band} />
+        {rank ? (
+          <span className="max-sm:order-last max-sm:basis-full max-sm:pl-[3.25rem]">
+            <RankChip text={rank} band={band} />
+          </span>
+        ) : null}
       </div>
       <h2 className="mt-3 text-16 font-semibold leading-snug text-ink sm:text-[17px]">
         <button
@@ -380,6 +387,7 @@ const ProposalCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
         onSelect: () => threadAct('close'),
       },
       { id: 'open', label: 'Open thread', icon: ExternalLink, onSelect: onOpen },
+      { id: 'skip', label: 'Skip for now', icon: SkipForward, onSelect: onSkip },
     ];
 
     return shell(
@@ -472,7 +480,12 @@ const ProposalCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
               keyHint={<Key>Z</Key>}
             />
           ) : (
-            <Button variant="approve" onClick={approve} leading={<Icon icon={Check} size={16} />}>
+            <Button
+              variant="approve"
+              className="max-sm:flex-1"
+              onClick={approve}
+              leading={<Icon icon={Check} size={16} />}
+            >
               {type?.approve ?? 'Approve'}
               <Key>A</Key>
             </Button>
@@ -490,20 +503,30 @@ const ProposalCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
             }}
             leading={<Icon icon={editing ? Undo2 : Pencil} size={15} />}
           >
-            {editing ? 'Cancel edit' : 'Edit'}
+            <span className={editing ? undefined : 'max-sm:sr-only'}>
+              {editing ? 'Cancel edit' : 'Edit'}
+            </span>
             {editing ? null : <Key>E</Key>}
           </Button>
           <ActionMenu
             label="Other actions"
             actions={menu}
             trigger={
-              <Button variant="ghost" disabled={!!pending}>
-                Other
-                <Icon icon={ChevronDown} size={15} />
+              <Button variant="ghost" disabled={!!pending} aria-label="Other actions">
+                <span className="inline-flex items-center gap-1">
+                  <span className="max-sm:hidden">Other</span>
+                  <Icon icon={ChevronDown} size={15} className="max-sm:hidden" />
+                  <Icon icon={MoreHorizontal} size={18} className="sm:hidden" />
+                </span>
               </Button>
             }
           />
-          <Button variant="ghost" className="ml-auto" disabled={!!pending} onClick={onSkip}>
+          <Button
+            variant="ghost"
+            className="ml-auto max-sm:hidden"
+            disabled={!!pending}
+            onClick={onSkip}
+          >
             Skip
             <Key>S</Key>
           </Button>

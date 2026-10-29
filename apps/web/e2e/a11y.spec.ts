@@ -9,7 +9,7 @@ test('a new screen gets its own title and keyboard focus, and a dialog gives foc
   test.setTimeout(120_000);
   await seed(page);
   await page.goto('/');
-  await expect(page).toHaveTitle(/Needs you · Hivenod$/);
+  await expect(page).toHaveTitle(/Today · Hivenod$/);
 
   await page.getByRole('link', { name: 'All projects' }).click();
   await expect(page).toHaveTitle(/^(\(\d+\) )?All projects · Hivenod$/);

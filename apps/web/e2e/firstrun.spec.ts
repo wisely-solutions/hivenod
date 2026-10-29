@@ -4,7 +4,9 @@ import { person, signIn } from './helpers';
 test('first run: checklist, project opens its board, idea typed in place', async ({ page }) => {
   await page.goto('/');
   await signIn(page, person('Firstrun'));
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
 
   const list = page.getByRole('region', { name: 'Get started' });
   await expect(list).toBeVisible();
@@ -54,7 +56,9 @@ test('first run: checklist, project opens its board, idea typed in place', async
       .forEach((k) => localStorage.removeItem(k)),
   );
   await page.reload();
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible();
   await expect(page.getByRole('region', { name: 'Get started' })).toHaveCount(0);
 
   // The Connect guide's install command wraps instead of scrolling sideways.

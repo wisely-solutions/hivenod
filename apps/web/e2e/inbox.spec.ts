@@ -22,7 +22,9 @@ async function seed(page: Page, opts: { otherDecider?: boolean } = {}) {
   await fastTimers(page);
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
@@ -146,7 +148,7 @@ test('the Needs-you nav badge never climbs across a reload (card JtZDsMEb)', asy
     (window as unknown as { __badge: string[] }).__badge = seen;
     const scan = () => {
       // Sidebar link and phone tab both carry "Needs you N waiting, M only you" when it shows.
-      for (const el of document.querySelectorAll('[aria-label^="Needs you, "]')) {
+      for (const el of document.querySelectorAll('[aria-label^="Today, "]')) {
         const t = el.getAttribute('aria-label') ?? '';
         if (seen[seen.length - 1] !== t) seen.push(t);
       }
@@ -160,11 +162,9 @@ test('the Needs-you nav badge never climbs across a reload (card JtZDsMEb)', asy
   });
   await page.reload();
   await expect(page.getByText('3 things need you.')).toBeVisible();
-  await expect(
-    page.locator('[aria-label="Needs you 3 waiting, 3 only you"]').first(),
-  ).toBeAttached();
+  await expect(page.locator('[aria-label="Today 3 waiting, 3 only you"]').first()).toBeAttached();
   const seen = await page.evaluate(() => (window as unknown as { __badge: string[] }).__badge);
-  expect(seen.filter((t) => t !== 'Needs you 3 waiting, 3 only you')).toEqual([]);
+  expect(seen.filter((t) => t !== 'Today 3 waiting, 3 only you')).toEqual([]);
 });
 
 test('an item at the gate shows up live, is approved with a rationale and moves on', async ({

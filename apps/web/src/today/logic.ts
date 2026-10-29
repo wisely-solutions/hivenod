@@ -121,7 +121,9 @@ export function tidySummary(
   if (snooze.length === 1) {
     const until = Date.parse(String(snooze[0]!.outcome.fields.until ?? ''));
     const to = Number.isNaN(until) ? '' : ` to ${WEEKDAYS[new Date(until).getDay()]}`;
-    parts.push(`snooze “${snooze[0]!.thread.title || 'a thread'}”${to}`);
+    const title = snooze[0]!.thread.title || 'a thread';
+    const short = title.length > 28 ? `${title.slice(0, 27).trimEnd()}…` : title;
+    parts.push(`snooze “${short}”${to}`);
   } else if (snooze.length) parts.push(`snooze ${snooze.length}`);
   const close = of('no_reply');
   if (close.length) parts.push(`close ${close.length} ${close.length === 1 ? 'FYI' : 'FYIs'}`);

@@ -7,7 +7,7 @@ const isPhone = () => test.info().project.name !== 'desktop-1440';
 async function enter(page: Page) {
   await page.goto('/');
   await signIn(page, person('Shelly Shell'));
-  await expect(page.getByRole('heading', { name: /^Hi Shelly/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, Shelly/ })).toBeVisible();
 }
 
 async function axe(page: Page) {
@@ -188,7 +188,7 @@ test('the install hint shows from the second visit and can be dismissed', async 
   await hint.getByRole('button', { name: 'Dismiss install hint' }).click();
   await expect(hint).toBeHidden();
   await page.reload();
-  await expect(page.getByRole('heading', { name: /^Hi Shelly/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, Shelly/ })).toBeVisible();
   await expect(hint).toBeHidden();
 });
 
@@ -249,12 +249,12 @@ test('Enter activates a focused button on Needs you, and arriving there moves fo
 }) => {
   await enter(page);
   // The session starts on Needs you; that must not stop focus moving when coming back to it.
-  await expect(page.getByRole('heading', { name: /^Hi Shelly/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, Shelly/ })).toBeVisible();
   const link = (href: string) => page.locator(`nav a[href="${href}"]:visible`).first();
   await link('/inbox').click();
   await expect(page).toHaveURL(/\/inbox/);
   await link('/').click();
-  await expect(page.getByRole('heading', { name: /^Hi Shelly/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, Shelly/ })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('content');
   // Enter on a focused button is the button's, not the inbox "open item" shortcut.
   const search = page.getByRole('button', { name: 'Search' }).first();
