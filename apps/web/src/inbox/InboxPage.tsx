@@ -988,7 +988,7 @@ export function InboxPage() {
     <Popover
       label="Filters"
       align="end"
-      contentClassName="w-[min(26rem,calc(100vw-24px))] p-4"
+      contentClassName="w-[min(26rem,calc(100vw-16px))] p-3 sm:p-4"
       trigger={
         <Button
           variant="secondary"
