@@ -24,6 +24,19 @@ func TestWorkTextMatchesTypeScript(t *testing.T) {
 	}
 }
 
+// StatusText must read exactly like the TypeScript statusText (item AzveC; samples in surface.json).
+func TestStatusTextMatchesTypeScript(t *testing.T) {
+	samples := mcpserver.LoadSurface().StatusText
+	if len(samples) < 10 {
+		t.Fatalf("only %d samples", len(samples))
+	}
+	for _, s := range samples {
+		if got := StatusText(s.Item.ItemID, s.Item.Title, s.Why.Why, s.Why.By, s.MaxItems); got != s.Text {
+			t.Errorf("%+v %+v %d:\n got %q\nwant %q", s.Item, s.Why, s.MaxItems, got, s.Text)
+		}
+	}
+}
+
 func TestClipLikeTypeScript(t *testing.T) {
 	if clip("abc", 5) != "abc" || clip("abcdef", 4) != "abc…" {
 		t.Fatal(clip("abcdef", 4))

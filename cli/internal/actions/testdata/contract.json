@@ -1828,6 +1828,808 @@
       "output": { "error": "Only agents can do this" }
     },
     {
+      "name": "reportStatus/reports",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "  Running   release checks ",
+        "pct": 70
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "statusUpdate": {
+                "runId": "run1",
+                "text": "Running release checks",
+                "pct": 70,
+                "at": { "__hive": "serverTime" },
+                "by": "agentA"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": { "status": { "text": "Running release checks", "pct": 70 } },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reportStatus/no pct",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "Reading the brief"
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "statusUpdate": {
+                "runId": "run1",
+                "text": "Reading the brief",
+                "pct": null,
+                "at": { "__hive": "serverTime" },
+                "by": "agentA"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": { "status": { "text": "Reading the brief", "pct": null } },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reportStatus/pct null",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "Reading",
+        "pct": null
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "statusUpdate": {
+                "runId": "run1",
+                "text": "Reading",
+                "pct": null,
+                "at": { "__hive": "serverTime" },
+                "by": "agentA"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": { "status": { "text": "Reading", "pct": null } },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reportStatus/pct 0",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "Start",
+        "pct": 0
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "statusUpdate": {
+                "runId": "run1",
+                "text": "Start",
+                "pct": 0,
+                "at": { "__hive": "serverTime" },
+                "by": "agentA"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": { "status": { "text": "Start", "pct": 0 } },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reportStatus/pct 100",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "Done",
+        "pct": 100
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "statusUpdate": {
+                "runId": "run1",
+                "text": "Done",
+                "pct": 100,
+                "at": { "__hive": "serverTime" },
+                "by": "agentA"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": { "status": { "text": "Done", "pct": 100 } },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reportStatus/pct 101",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "x",
+        "pct": 101
+      },
+      "output": { "error": "The percentage is a whole number from 0 to 100" }
+    },
+    {
+      "name": "reportStatus/pct -1",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "x",
+        "pct": -1
+      },
+      "output": { "error": "The percentage is a whole number from 0 to 100" }
+    },
+    {
+      "name": "reportStatus/pct 1.5",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "x",
+        "pct": 1.5
+      },
+      "output": { "error": "The percentage is a whole number from 0 to 100" }
+    },
+    {
+      "name": "reportStatus/empty",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "  \n "
+      },
+      "output": { "error": "Say in one line where the work stands" }
+    },
+    {
+      "name": "reportStatus/200 chars",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "statusUpdate": {
+                "runId": "run1",
+                "text": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+                "pct": null,
+                "at": { "__hive": "serverTime" },
+                "by": "agentA"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": {
+                "status": {
+                  "text": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+                  "pct": null
+                }
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reportStatus/long",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      },
+      "output": { "error": "Keep the status under 200 characters" }
+    },
+    {
+      "name": "reportStatus/repeat",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null,
+          "statusUpdate": {
+            "runId": "run1",
+            "text": "Tests",
+            "pct": 50,
+            "at": { "__hive": "timestamp", "ms": 1799999940000 },
+            "by": "agentA"
+          }
+        },
+        "text": "Tests",
+        "pct": 50
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "statusUpdate": {
+                "runId": "run1",
+                "text": "Tests",
+                "pct": 50,
+                "at": { "__hive": "serverTime" },
+                "by": "agentA"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": { "status": { "text": "Tests", "pct": 50 }, "repeat": true },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reportStatus/changed",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null,
+          "statusUpdate": {
+            "runId": "run1",
+            "text": "Tests",
+            "pct": 50,
+            "at": { "__hive": "timestamp", "ms": 1799999940000 },
+            "by": "agentA"
+          }
+        },
+        "text": "Tests",
+        "pct": 60
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "statusUpdate": {
+                "runId": "run1",
+                "text": "Tests",
+                "pct": 60,
+                "at": { "__hive": "serverTime" },
+                "by": "agentA"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": { "status": { "text": "Tests", "pct": 60 } },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reportStatus/too soon",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null,
+          "statusUpdate": {
+            "runId": "run1",
+            "text": "Tests",
+            "pct": 50,
+            "at": { "__hive": "timestamp", "ms": 1799999971000 },
+            "by": "agentA"
+          }
+        },
+        "text": "More tests"
+      },
+      "output": {
+        "error": "You reported a status less than 30 seconds ago: wait a little before the next one"
+      }
+    },
+    {
+      "name": "reportStatus/old run too soon is fine",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null,
+          "statusUpdate": {
+            "runId": "runOld",
+            "text": "Tests",
+            "pct": 50,
+            "at": { "__hive": "timestamp", "ms": 1799999999000 },
+            "by": "agentA"
+          }
+        },
+        "text": "Tests",
+        "pct": 50
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/projects/p1/items/i1",
+            "data": {
+              "statusUpdate": {
+                "runId": "run1",
+                "text": "Tests",
+                "pct": 50,
+                "at": { "__hive": "serverTime" },
+                "by": "agentA"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/events/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "projectId": "p1",
+              "itemId": "i1",
+              "runId": "run1",
+              "type": "item.updated",
+              "data": { "status": { "text": "Tests", "pct": 50 } },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reportStatus/not holding",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": null,
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "x"
+      },
+      "output": { "error": "You do not hold this item" }
+    },
+    {
+      "name": "reportStatus/person refused",
+      "action": "reportStatus",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "projectId": "p1",
+        "itemId": "i1",
+        "item": {
+          "title": "Fix login",
+          "type": "task",
+          "stepId": "build",
+          "status": "working",
+          "claim": {
+            "runId": "run1",
+            "agentUid": "agentA",
+            "heartbeatAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          },
+          "gate": null,
+          "sendBackCount": 0,
+          "costEur": 0.25,
+          "triage": null
+        },
+        "text": "x"
+      },
+      "output": { "error": "Only agents can do this" }
+    },
+    { "name": "statusEveryOf/undefined", "action": "statusEveryOf", "input": {}, "output": 0 },
+    {
+      "name": "statusEveryOf/0",
+      "action": "statusEveryOf",
+      "input": { "statusEvery": 0 },
+      "output": 0
+    },
+    {
+      "name": "statusEveryOf/15",
+      "action": "statusEveryOf",
+      "input": { "statusEvery": 15 },
+      "output": 15
+    },
+    {
+      "name": "statusEveryOf/30",
+      "action": "statusEveryOf",
+      "input": { "statusEvery": 30 },
+      "output": 30
+    },
+    {
+      "name": "statusEveryOf/60",
+      "action": "statusEveryOf",
+      "input": { "statusEvery": 60 },
+      "output": 60
+    },
+    {
+      "name": "statusEveryOf/45",
+      "action": "statusEveryOf",
+      "input": { "statusEvery": 45 },
+      "output": 0
+    },
+    {
       "name": "parkItem/parks",
       "action": "parkItem",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },

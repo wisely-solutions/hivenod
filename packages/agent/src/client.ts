@@ -35,6 +35,8 @@ import {
   shapesNewItems,
   parkItem,
   parkOf,
+  reportStatus,
+  statusEveryOf,
   reportProgress,
   unparkItem,
   decodeToken,
@@ -914,6 +916,49 @@ export class HiveClient {
     );
     await this.write(p, l);
     return { itemId, progress: { done, total } };
+  }
+
+  /**
+   * The one-line status of the item this agent holds (item AzveC), with an optional percentage.
+   * It replaces the previous status; people see it on the card and in the item's history.
+   */
+  async status(itemId: string, text: string, pct?: number | null, projectId?: string) {
+    const l = await this.load(itemId, projectId);
+    const p = this.wrap(() =>
+      reportStatus(this.ctx, {
+        projectId: l.projectId,
+        itemId,
+        item: l.item,
+        text,
+        pct: pct ?? null,
+      }),
+    );
+    await this.write(p, l);
+    const u = (
+      p.ops.find((o) => o.kind === 'update')?.data as {
+        statusUpdate: { text: string; pct: number | null };
+      }
+    ).statusUpdate;
+    return { itemId, status: { text: u.text, pct: u.pct } };
+  }
+
+  /**
+   * Who asked for a status (item AzveC): the person named by the event an ask wrote, when the
+   * item's lastEventId is still that event. Best effort: '' when unreadable.
+   */
+  async askedBy(eventId: string, byUid: string): Promise<string> {
+    try {
+      const ev = await getDoc(doc(this.db, paths.event(this.workspaceId, eventId)));
+      const e = ev.data() as { actor?: { id?: string; name?: string } } | undefined;
+      return e?.actor?.id === byUid ? (e.actor.name ?? '') : '';
+    } catch {
+      return '';
+    }
+  }
+
+  /** How often the project asks for a status, in minutes (item AzveC; 0 = never). */
+  async statusEvery(projectId: string): Promise<number> {
+    return statusEveryOf(await this.getProject(projectId));
   }
 
   /**

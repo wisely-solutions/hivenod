@@ -35,6 +35,10 @@ import {
   type Step,
   type StopMode,
   MAX_STOP_REASON_CHARS,
+  SILENCE_AFTER_CHOICES,
+  STATUS_EVERY_CHOICES,
+  type SilenceAfter,
+  type StatusEvery,
 } from './schema';
 
 /** Placeholder for `serverTimestamp()`; rules require `at == request.time`. */
@@ -106,6 +110,8 @@ export type ItemState = Pick<
       | 'pathRefused'
       | 'pathRev'
       | 'parked'
+      | 'statusUpdate'
+      | 'statusAsk'
     >
   >;
 export type ProjectState = Pick<Project, 'steps'>;
@@ -969,13 +975,24 @@ export function updateProject(
     description: string;
     /** Item DhsO9: only when it changes (admins and the project's creator). */
     agentsMayCreateItems?: boolean;
+    /** Item AzveC: only when it changes (admins and the project's creator). */
+    statusEvery?: StatusEvery;
+    /** Item AzveC: only when it changes (admins and the project's creator). */
+    silenceAfter?: SilenceAfter;
   },
 ) {
   requireHuman(ctx);
-  const setting =
-    input.agentsMayCreateItems === undefined
+  if (input.statusEvery !== undefined && !STATUS_EVERY_CHOICES.includes(input.statusEvery))
+    throw new ActionError('Ask for a status every 15, 30 or 60 minutes, or never');
+  if (input.silenceAfter !== undefined && !SILENCE_AFTER_CHOICES.includes(input.silenceAfter))
+    throw new ActionError('Flag silence after 20, 40, 60 or 120 minutes, or never');
+  const setting = {
+    ...(input.agentsMayCreateItems === undefined
       ? {}
-      : { agentsMayCreateItems: input.agentsMayCreateItems };
+      : { agentsMayCreateItems: input.agentsMayCreateItems }),
+    ...(input.statusEvery === undefined ? {} : { statusEvery: input.statusEvery }),
+    ...(input.silenceAfter === undefined ? {} : { silenceAfter: input.silenceAfter }),
+  };
   return plan(
     ctx,
     'project.updated',
