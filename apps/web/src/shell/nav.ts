@@ -35,8 +35,8 @@ export const NAV: NavEntry[] = [
 
 export const ME: NavEntry = { to: '/settings', label: 'Settings', icon: Settings, key: 's' };
 
-/** The four phone tabs (SPEC section 8). */
-export const TABS: NavEntry[] = [NAV[0]!, NAV[2]!, NAV[5]!, ME];
+/** The four phone tabs (SPEC section 8); Activity stays in the sidebar, `g a` and the palette. */
+export const TABS: NavEntry[] = [NAV[0]!, NAV[1]!, NAV[2]!, ME];
 
 export function isActivePath(current: string, to: NavPath): boolean {
   return to === '/' ? current === '/' : current === to || current.startsWith(`${to}/`);

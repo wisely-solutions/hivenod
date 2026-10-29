@@ -26,6 +26,14 @@ test('the shell frames the app and has no accessibility violations', async ({ pa
     const tabs = page.getByRole('navigation', { name: 'Tabs' });
     await expect(tabs).toBeVisible();
     await expect(tabs.getByRole('link')).toHaveCount(4);
+    await expect(tabs.getByRole('link').or(tabs.getByRole('button'))).toHaveText([
+      /^Needs you/,
+      /^Inbox/,
+      '',
+      /^All projects/,
+      /^Settings/,
+    ]);
+    await expect(tabs.getByRole('link', { name: 'Activity' })).toHaveCount(0);
     await expect(page.getByRole('complementary', { name: 'Main' })).toBeHidden();
     for (const l of await tabs.getByRole('link').all()) {
       expect((await l.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -243,8 +251,8 @@ test('Enter activates a focused button on Needs you, and arriving there moves fo
   // The session starts on Needs you; that must not stop focus moving when coming back to it.
   await expect(page.getByRole('heading', { name: /^Hi Shelly/ })).toBeVisible();
   const link = (href: string) => page.locator(`nav a[href="${href}"]:visible`).first();
-  await link('/activity').click();
-  await expect(page).toHaveURL(/\/activity/);
+  await link('/inbox').click();
+  await expect(page).toHaveURL(/\/inbox/);
   await link('/').click();
   await expect(page.getByRole('heading', { name: /^Hi Shelly/ })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('content');
