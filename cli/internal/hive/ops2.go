@@ -30,7 +30,7 @@ func nextState(l *loaded) map[string]any {
 	return map[string]any{"movedTo": StepRef{next.ID, next.Name}, "status": status, "waitingForPeople": next.Kind == "human"}
 }
 
-const notHolding = "You do not hold this item with that run. Claim it first (hivenod work claim)."
+const notHolding = "You do not hold this item with that run. Claim it first (call claim)."
 
 func (c *Client) stoppedFor(ctx context.Context, runID string) error {
 	run, err := c.loadRun(ctx, runID)

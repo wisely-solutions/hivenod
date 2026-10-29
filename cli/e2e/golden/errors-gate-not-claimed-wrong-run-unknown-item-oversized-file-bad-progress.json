@@ -13,7 +13,7 @@
     {
       "tool": "ask",
       "ok": false,
-      "out": "You have not claimed this item, so you cannot ask a question on it yet. Run hivenod work claim i1 first."
+      "out": "You have not claimed this item, so you cannot ask a question on it yet. Call claim with itemId i1 first."
     },
     {
       "tool": "add_note",
@@ -23,18 +23,18 @@
     {
       "tool": "read_item",
       "ok": false,
-      "out": "Item nope not found. Check the id (hivenod work list) and that this agent may use its project."
+      "out": "Item nope not found. Check the id (list_work) and that this agent may use its project."
     },
     {
       "tool": "attach",
       "ok": false,
-      "out": "big.txt is 901 KB, over the 900 KB limit for inline attachments. Host it somewhere and attach its URL instead: hivenod item attach <itemId> https://…"
+      "out": "big.txt is 901 KB, over the 900 KB limit for inline attachments. Host it somewhere and attach its URL instead (attach with the URL as source)"
     },
     {
       "tool": "claim",
       "ok": true,
       "out": {
-        "hint": "Call read_item / hivenod item read for the full brief, then log, attach and complete.",
+        "hint": "Call read_item for the full brief, then log, attach and complete.",
         "itemId": "i1",
         "job": null,
         "projectId": "p1",
@@ -52,12 +52,12 @@
     {
       "tool": "complete",
       "ok": false,
-      "out": "You do not hold this item with that run. Claim it first (hivenod work claim)."
+      "out": "You do not hold this item with that run. Claim it first (call claim)."
     },
     {
       "tool": "log",
       "ok": false,
-      "out": "Hivenod refused this change (permission denied). This agent may not be allowed on this project, or the item is no longer in the state it was read in. Read the item again with hivenod item read."
+      "out": "Hivenod refused to read this (permission denied): this agent may not use this project, or was revoked."
     },
     {
       "tool": "log",

@@ -52,7 +52,7 @@
       "tool": "claim",
       "ok": true,
       "out": {
-        "hint": "A shaping run: read the item and the step library (read_item / hivenod item read), then choose the steps it needs with shape_item / hivenod item shape. Do not do the work itself.",
+        "hint": "A shaping run: read the item and the step library (read_item), then choose the steps it needs with shape_item. Do not do the work itself.",
         "itemId": "u1",
         "job": "shape",
         "projectId": "p1",
@@ -157,7 +157,7 @@
       "tool": "claim",
       "ok": true,
       "out": {
-        "hint": "Call read_item / hivenod item read for the full brief, then log, attach and complete.",
+        "hint": "Call read_item for the full brief, then log, attach and complete.",
         "itemId": "u1",
         "job": null,
         "projectId": "p1",
@@ -296,7 +296,7 @@
       "tool": "claim",
       "ok": true,
       "out": {
-        "hint": "Call read_item / hivenod item read for the full brief, then log, attach and complete.",
+        "hint": "Call read_item for the full brief, then log, attach and complete.",
         "itemId": "old",
         "job": null,
         "projectId": "p1",
