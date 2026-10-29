@@ -33,7 +33,7 @@ async function axe(page: Page) {
   ).toEqual([]);
 }
 
-async function look(page: Page, name: string) {
+async function look(page: Page, name: string, full = true) {
   const shots = process.env.SHOTS_DIR;
   if (shots) mkdirSync(shots, { recursive: true });
   for (const scheme of ['light', 'dark'] as const) {
@@ -43,7 +43,7 @@ async function look(page: Page, name: string) {
     await expectNoHorizontalScroll(page);
     await axe(page);
     if (shots)
-      await page.screenshot({ path: `${shots}/askagent-${name}-${scheme}.png`, fullPage: true });
+      await page.screenshot({ path: `${shots}/askagent-${name}-${scheme}.png`, fullPage: full });
   }
   await page.emulateMedia({ colorScheme: 'light' });
 }
@@ -258,7 +258,7 @@ test.describe('desktop 1440', () => {
       const dialog = page.getByRole('dialog', { name: 'Ask Desk agent' });
       await expect(dialog).toBeVisible();
       await expect(box(dialog)).toBeVisible();
-      await look(page, 'today-dialog-1440');
+      await look(page, 'today-dialog-1440', false);
       await box(dialog).locator('[data-ask-box]').fill('Is Rita joining?');
       await box(dialog).getByRole('button', { name: /Ask/ }).click();
       await expect(box(dialog).locator('button[data-undo]')).toBeVisible();
@@ -268,7 +268,7 @@ test.describe('desktop 1440', () => {
       await expect(dialog.locator('[data-instructing]')).toContainText(
         'Asked · Desk agent is on it',
       );
-      await look(page, 'today-asked-1440');
+      await look(page, 'today-asked-1440', false);
     } finally {
       await s.stop();
     }

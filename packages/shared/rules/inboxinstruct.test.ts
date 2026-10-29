@@ -19,6 +19,12 @@ useEmulator();
 
 const T = inboxPaths.thread(W, 'itr1');
 const thread = async () => (await snap(T)) as unknown as ThreadStateOf;
+type Doc = {
+  instructions: Record<string, Record<string, unknown>>;
+  instruct: Record<string, unknown>;
+  suggestedChips?: string[];
+};
+const raw = async () => (await snap(T)) as unknown as Doc;
 const FAR = Date.now() + 3_600_000 * 24;
 
 async function brought() {
@@ -66,7 +72,7 @@ describe('ask the agent: the member instructs', () => {
     await brought();
     const first = await instruct();
     await ok(first.run());
-    const t = (await snap(T)) as Record<string, any>;
+    const t = await raw();
     expect(t.instructions[first.p.eventId]).toMatchObject({
       text: 'Prep',
       chip: null,
@@ -104,7 +110,7 @@ describe('ask the agent: the member instructs', () => {
     await denied(bob.run(forge(bp.ops, T, {})));
     const { p } = await instruct();
     const id = p.eventId;
-    const entry = p.ops[0]!.data[`instructions.${id}`] as Record<string, unknown>;
+    const entry = p.ops[0]!.data![`instructions.${id}`] as Record<string, unknown>;
     // By someone else, answered already, with both text and chip, a recheck chip, too long.
     for (const over of [
       { by: 'bob' },
@@ -157,7 +163,7 @@ describe('ask the agent: the member instructs', () => {
                 ...o,
                 data: {
                   ...Object.fromEntries(
-                    Object.entries(o.data).filter(([k]) => k !== `instructions.${id}`),
+                    Object.entries(o.data ?? {}).filter(([k]) => k !== `instructions.${id}`),
                   ),
                   'instructions.zz': entry,
                 },
@@ -182,7 +188,7 @@ describe('ask the agent: the member instructs', () => {
       as('alice').run(forge(p.ops, T, { [`instructions.${first.p.eventId}.state`]: 'pending' })),
     );
     // 20 kept: the action drops the oldest answered one.
-    const t = (await snap(T)) as Record<string, any>;
+    const t = await raw();
     const many: Record<string, unknown> = {};
     for (let i = 0; i < 20; i++)
       many[`old${String(i).padStart(2, '0')}`] = {
@@ -191,7 +197,7 @@ describe('ask the agent: the member instructs', () => {
       };
     await put({ [T]: { ...t, instructions: many } });
     const full = await instruct();
-    expect(full.p.ops[0]!.data['instructions.old00']).toBe(DELETE_FIELD);
+    expect(full.p.ops[0]!.data!['instructions.old00']).toBe(DELETE_FIELD);
     // Keeping all 21 is refused, dropping two too.
     await denied(
       as('alice').run(
@@ -200,7 +206,7 @@ describe('ask the agent: the member instructs', () => {
             ? {
                 ...o,
                 data: Object.fromEntries(
-                  Object.entries(o.data).filter(([k]) => k !== 'instructions.old00'),
+                  Object.entries(o.data ?? {}).filter(([k]) => k !== 'instructions.old00'),
                 ),
               }
             : o,
@@ -209,7 +215,7 @@ describe('ask the agent: the member instructs', () => {
     );
     await denied(as('alice').run(forge(full.p.ops, T, { 'instructions.old01': DELETE_FIELD })));
     await ok(full.run());
-    expect(Object.keys(((await snap(T)) as any).instructions)).toHaveLength(20);
+    expect(Object.keys((await raw()).instructions)).toHaveLength(20);
   });
 });
 
@@ -224,7 +230,7 @@ describe('ask the agent: the home agent answers', () => {
     const id = await asked();
     await denied(as(AGENTS.star).run(await answer(id, as(AGENTS.star))));
     await ok(as(AGENTS.a).run(await answer(id, as(AGENTS.a), { kind: 'outcome', refId: 'o1' })));
-    const t = (await snap(T)) as Record<string, any>;
+    const t = await raw();
     expect(t.instructions[id]).toMatchObject({
       state: 'answered',
       answer: { kind: 'outcome', refId: 'o1', note: 'Here is what I found.' },
@@ -247,7 +253,7 @@ describe('ask the agent: the home agent answers', () => {
     const a = as(AGENTS.a);
     const p = await answer(id);
     const k = `instructions.${id}.answer`;
-    const ans = p.ops[0]!.data[k] as Record<string, unknown>;
+    const ans = p.ops[0]!.data![k] as Record<string, unknown>;
     for (const over of [
       { kind: 'shrug' },
       { kind: 'outcome' },
@@ -267,7 +273,7 @@ describe('ask the agent: the home agent answers', () => {
       a.run(
         p.ops.map((o) =>
           o === ev
-            ? { ...o, data: { ...o.data, data: { ...(o.data.data as object), kind: 'ask' } } }
+            ? { ...o, data: { ...o.data, data: { ...(o.data!.data as object), kind: 'ask' } } }
             : o,
         ),
       ),
@@ -294,7 +300,7 @@ describe('ask the agent: the home agent answers', () => {
     });
     const a = as(AGENTS.a);
     const p = await answer(id);
-    expect(p.ops[0]!.data['instruct.state']).toBeUndefined();
+    expect(p.ops[0]!.data!['instruct.state']).toBeUndefined();
     await denied(a.run(forge(p.ops, T, { 'instruct.state': 'done' })));
     await ok(a.run(p));
   });
@@ -311,7 +317,7 @@ describe('ask the agent: suggested chips', () => {
       });
     const a = as(AGENTS.a);
     await ok(a.run(await go(a, ['summarize', 'recheck'])));
-    expect(((await snap(T)) as any).suggestedChips).toEqual(['summarize', 'recheck']);
+    expect((await raw()).suggestedChips).toEqual(['summarize', 'recheck']);
     await denied(as(AGENTS.star).run(await go(as(AGENTS.star), ['summarize'])));
     const p = await go(a, ['follow_up']);
     await denied(a.run(forge(p.ops, T, { suggestedChips: ['dance'] })));

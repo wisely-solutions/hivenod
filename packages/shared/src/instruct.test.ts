@@ -74,10 +74,10 @@ describe('instructThread', () => {
   it('a chip instead of text; any thread state', () => {
     const p = instructThread(joao, {
       threadId: 't1',
-      thread: { ...TH, state: 'closed' },
+      thread: { ...TH, state: 'done' },
       chip: 'prepare_meeting',
     });
-    expect(p.ops[0]!.data['instructions.e2']).toMatchObject({
+    expect(p.ops[0]!.data!['instructions.e2']).toMatchObject({
       text: null,
       chip: 'prepare_meeting',
     });
@@ -112,15 +112,18 @@ describe('instructThread', () => {
     expect(instructPending(done, NOW)).toBe(false);
   });
   it('at most 20 kept: the oldest answered one goes', () => {
-    const instructions: NonNullable<ThreadStateOf['instructions']> = {};
+    const instructions: Record<
+      string,
+      { state: 'pending' | 'answered'; at: ReturnType<typeof at> }
+    > = {};
     for (let i = 0; i < 20; i++)
       instructions[`i${String(i).padStart(2, '0')}`] = {
         state: i === 0 ? 'pending' : 'answered',
         at: at(NOW - (20 - i) * 60_000 - INSTRUCT_RETRY_MS),
       };
     const p = instructThread(joao, { threadId: 't1', thread: { ...TH, instructions }, text: 'x' });
-    expect(p.ops[0]!.data['instructions.i01']).toBe(DELETE_FIELD);
-    expect(p.ops[0]!.data['instructions.i00']).toBeUndefined();
+    expect(p.ops[0]!.data!['instructions.i01']).toBe(DELETE_FIELD);
+    expect(p.ops[0]!.data!['instructions.i00']).toBeUndefined();
   });
 });
 
@@ -160,7 +163,7 @@ describe('answerInstruction', () => {
       instructionId: 'i0',
       kind: 'ask',
     });
-    expect(p.ops[0]!.data['instruct.state']).toBeUndefined();
+    expect(p.ops[0]!.data!['instruct.state']).toBeUndefined();
   });
   it('refuses: another agent, the member, unknown, answered, bad kind, refs', () => {
     const go = (ctx: ActionContext, extra: Record<string, unknown>, thread = PENDING) =>
