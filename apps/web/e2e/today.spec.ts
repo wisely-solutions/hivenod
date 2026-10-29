@@ -286,6 +286,9 @@ test.describe('phone 390', () => {
     const s = await open(page);
     try {
       const swipe = async (dx: number) => {
+        // Let the stack settle (the card that took the focus may still be moving into place).
+        await page.waitForTimeout(500);
+        await card(page).scrollIntoViewIfNeeded();
         const box = (await card(page).boundingBox())!;
         const y = box.y + 60;
         const x = box.x + box.width / 2;
