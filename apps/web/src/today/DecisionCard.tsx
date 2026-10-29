@@ -43,9 +43,12 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
+import { swipeAction } from '../inbox/logic';
+import { motion, useReducedMotion } from '../ui/motion';
 import { useReady } from '../auth/context';
 import { Key } from '../components/DecisionBar';
 import { stash } from '../lib/pendingDecisions';
@@ -93,6 +96,8 @@ export interface DecisionCardProps {
   onSkip: () => void;
   /** After the window: the card's one-line done row. */
   onDone: (label: string) => void;
+  /** Phone: the card swipes (right approves, left skips) and a tap opens it. */
+  swipe?: boolean;
 }
 
 const TYPE_ICON: Record<string, LucideIcon> = {
@@ -125,43 +130,139 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
     const { entry } = props;
     const t = entry.thread!.data;
     const band = bandOf(t, props.now);
-    return t.state === 'needsYou'
-      ? shell(
-          band,
-          <>
-            <CardHead props={props} />
-            <QuestionPanel
-              wid={entry.wid}
-              thread={entry.thread!}
-              agentName={props.agentName}
-              onDone={props.onDone}
-              onSkip={props.onSkip}
-            />
-          </>,
-          t.title,
-        )
-      : shell(
-          band,
-          <>
-            <CardHead props={props} />
-            <ProposalPanel
-              ref={ref}
-              wid={entry.wid}
-              thread={entry.thread!}
-              proposals={entry.proposals ?? []}
-              sender={props.sender}
-              now={props.now}
-              busy={props.busy}
-              agentName={props.agentName}
-              onDone={props.onDone}
-              onOpen={props.onOpen}
-              onSkip={props.onSkip}
-            />
-          </>,
-          t.title,
-        );
+    const inner = useRef<DecisionCardHandle>(null);
+    useImperativeHandle(ref, () => ({
+      approve: () => inner.current?.approve(),
+      edit: () => inner.current?.edit(),
+      reject: () => inner.current?.reject(),
+    }));
+    const card =
+      t.state === 'needsYou'
+        ? shell(
+            band,
+            <>
+              <CardHead props={props} />
+              <QuestionPanel
+                wid={entry.wid}
+                thread={entry.thread!}
+                agentName={props.agentName}
+                onDone={props.onDone}
+                onSkip={props.onSkip}
+              />
+            </>,
+            t.title,
+          )
+        : shell(
+            band,
+            <>
+              <CardHead props={props} />
+              <ProposalPanel
+                ref={inner}
+                wid={entry.wid}
+                thread={entry.thread!}
+                proposals={entry.proposals ?? []}
+                sender={props.sender}
+                now={props.now}
+                busy={props.busy}
+                agentName={props.agentName}
+                onDone={props.onDone}
+                onOpen={props.onOpen}
+                onSkip={props.onSkip}
+              />
+            </>,
+            t.title,
+          );
+    if (!props.swipe) return card;
+    return (
+      <SwipeCard
+        canApprove={t.state !== 'needsYou'}
+        onApprove={() => inner.current?.approve()}
+        onSkip={props.onSkip}
+        onOpen={props.onOpen}
+      >
+        {card}
+      </SwipeCard>
+    );
   },
 );
+
+/**
+ * The phone's swipeable decision card (design 2.7): right approves (the Undo then shows on its
+ * button, the card stays), left skips, a tap on the card opens the decision view. The buttons
+ * do the same, so nothing depends on the gesture. The card never flies away; under reduced
+ * motion it does not spring either.
+ */
+function SwipeCard({
+  canApprove,
+  onApprove,
+  onSkip,
+  onOpen,
+  children,
+}: {
+  canApprove: boolean;
+  onApprove: () => void;
+  onSkip: () => void;
+  onOpen: () => void;
+  children: ReactNode;
+}) {
+  const reduced = useReducedMotion();
+  const dragged = useRef(false);
+  const [hint, setHint] = useState<'approve' | 'skip' | null>(null);
+  return (
+    <div className="relative" data-swipe-card="">
+      {hint ? (
+        <div
+          aria-hidden
+          className={cn(
+            'absolute inset-0 flex items-center rounded-panel px-5 text-14 font-semibold',
+            hint === 'skip'
+              ? 'justify-end bg-canvas text-text-2'
+              : 'justify-start bg-approve-bg text-approve-text',
+          )}
+        >
+          {hint === 'skip' ? 'Skip' : 'Approve'}
+        </div>
+      ) : null}
+      <motion.div
+        drag="x"
+        dragDirectionLock
+        dragSnapToOrigin
+        dragElastic={reduced ? 0.15 : 0.5}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragTransition={reduced ? { bounceStiffness: 2000, bounceDamping: 100 } : undefined}
+        onPointerDown={() => {
+          dragged.current = false;
+        }}
+        onDragStart={() => {
+          dragged.current = true;
+        }}
+        onDrag={(_, info) => setHint(info.offset.x < 0 ? 'skip' : canApprove ? 'approve' : null)}
+        onDragEnd={(_, info) => {
+          setHint(null);
+          const a = swipeAction(info.offset.x);
+          if (a === 'approve' && canApprove) onApprove();
+          else if (a === 'iterate') onSkip();
+        }}
+        onClickCapture={(e) => {
+          // The click that ends a swipe does nothing; a tap on the card (not a control) opens it.
+          if (dragged.current) {
+            e.stopPropagation();
+            e.preventDefault();
+            return;
+          }
+          const el = e.target as HTMLElement;
+          if (
+            !el.closest('button, a, input, textarea, select, label, [role="menu"], [role="dialog"]')
+          )
+            onOpen();
+        }}
+        className="relative"
+      >
+        {children}
+      </motion.div>
+    </div>
+  );
+}
 
 /** Header shared by both cards: sender, organization, area, age, rank, the title. */
 function CardHead({ props, label }: { props: DecisionCardProps; label?: string }) {

@@ -30,9 +30,11 @@ test('the shell frames the app and has no accessibility violations', async ({ pa
       /^Today/,
       /^Inbox/,
       '',
-      /^All projects/,
-      /^Settings/,
+      /^Calendar/,
+      /^Projects/,
     ]);
+    // Settings moved under the avatar in the top bar (item kt3E7).
+    await expect(page.getByRole('banner').getByRole('link', { name: /, Settings$/ })).toBeVisible();
     await expect(tabs.getByRole('link', { name: 'Activity' })).toHaveCount(0);
     await expect(page.getByRole('complementary', { name: 'Main' })).toBeHidden();
     for (const l of await tabs.getByRole('link').all()) {
