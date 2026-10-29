@@ -1,0 +1,710 @@
+{
+  "calls": [
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "im3264cb16257ba83783ce5f27",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "it4c3e7b4fb947ff7d15159877"
+      }
+    },
+    {
+      "tool": "thread_answer_instruction",
+      "ok": false,
+      "out": "There is no request nope on this thread."
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "instructions": [
+          {
+            "at": "<iso>",
+            "chip": null,
+            "instructionId": "<id>",
+            "state": "pending",
+            "text": "Prepare me for the Thursday review."
+          }
+        ],
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "im3264cb16257ba83783ce5f27",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "teams",
+            "text": "Looking forward to the review on Thursday.",
+            "threadRef": "review-3"
+          }
+        ],
+        "next": "The person asked you something on this thread (instructions, <id>): do it within the rules (investigate, then a note, a question, a proposal or a plan; nothing outward without their approval) and answer with thread_answer_instruction.",
+        "outcomes": [],
+        "plans": [],
+        "question": null,
+        "state": "investigating",
+        "subject": null,
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "timeline": [],
+        "title": "Looking forward to the review on Thursday.",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "thread_answer_instruction",
+      "ok": false,
+      "out": "Answer with a note: give its text."
+    },
+    {
+      "tool": "thread_answer_instruction",
+      "ok": true,
+      "out": {
+        "instructionId": "<id>",
+        "kind": "note",
+        "note": "Answered: the person sees your answer under their request.",
+        "threadId": "it4c3e7b4fb947ff7d15159877"
+      }
+    },
+    {
+      "tool": "thread_answer_instruction",
+      "ok": false,
+      "out": "This request was answered already."
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": true,
+      "out": {
+        "note": "Proposed. It waits for the person to approve, edit or reject it; nothing is carried out before.",
+        "outcomeId": "<id>",
+        "state": "proposed",
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "type": "reply"
+      }
+    },
+    {
+      "tool": "thread_answer_instruction",
+      "ok": false,
+      "out": "Outcome not-there not found."
+    },
+    {
+      "tool": "thread_answer_instruction",
+      "ok": true,
+      "out": {
+        "instructionId": "<id>",
+        "kind": "outcome",
+        "note": "Answered: the person sees your answer under their request.",
+        "threadId": "it4c3e7b4fb947ff7d15159877"
+      }
+    },
+    {
+      "tool": "thread_suggest_chips",
+      "ok": false,
+      "out": "MCP error -32602: Input validation error: Invalid arguments for tool thread_suggest_chips: chips[1]: must be one of \"prepare_meeting\", \"recheck\", \"follow_up\", \"summarize\", \"draft_reply\""
+    },
+    {
+      "tool": "thread_suggest_chips",
+      "ok": true,
+      "out": {
+        "chips": [
+          "summarize",
+          "recheck"
+        ],
+        "note": "Set: the person sees up to 3 chips, yours first.",
+        "threadId": "it4c3e7b4fb947ff7d15159877"
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "instructions": [
+          {
+            "answer": {
+              "kind": "note",
+              "note": "Sam leads it; bring the Q3 numbers.",
+              "refId": null
+            },
+            "at": "<iso>",
+            "chip": null,
+            "instructionId": "<id>",
+            "state": "answered",
+            "text": "Prepare me for the Thursday review."
+          },
+          {
+            "answer": {
+              "kind": "outcome",
+              "note": null,
+              "refId": "<id>"
+            },
+            "at": "<iso>",
+            "chip": "draft_reply",
+            "instructionId": "<id>",
+            "state": "answered",
+            "text": null
+          }
+        ],
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "im3264cb16257ba83783ce5f27",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "teams",
+            "text": "Looking forward to the review on Thursday.",
+            "threadRef": "review-3"
+          }
+        ],
+        "next": "Waiting for the person to approve, edit or reject the proposed outcomes.",
+        "outcomes": [
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "text": "Thanks Sam, see you Thursday."
+            },
+            "note": "You asked for a reply.",
+            "outcomeId": "<id>",
+            "result": null,
+            "state": "proposed",
+            "type": "reply"
+          }
+        ],
+        "plans": [],
+        "question": null,
+        "state": "yourCall",
+        "subject": null,
+        "suggestedChips": [
+          "summarize",
+          "recheck"
+        ],
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "timeline": [],
+        "title": "Looking forward to the review on Thursday.",
+        "urgent": false,
+        "waiting": null
+      }
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      }
+    ],
+    "workspaces/w1/inboxThreads": [
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "instruct": {
+          "at": "<ts>",
+          "id": "<id>",
+          "state": "done"
+        },
+        "instructions": {
+          "<id>": {
+            "answer": {
+              "at": "<ts>",
+              "kind": "outcome",
+              "note": null,
+              "refId": "<id>"
+            },
+            "at": "<ts>",
+            "by": "owner",
+            "chip": "draft_reply",
+            "state": "answered",
+            "text": null
+          }
+        },
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "4c3e7b4fb947ff7d15159877"
+        ],
+        "state": "yourCall",
+        "subjectId": null,
+        "suggestedChips": [
+          "summarize",
+          "recheck"
+        ],
+        "title": "Looking forward to the review on Thursday.",
+        "updatedAt": "<ts>",
+        "waiting": null
+      }
+    ],
+    "workspaces/w1/inboxMessages": [
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "teams",
+        "text": "Looking forward to the review on Thursday.",
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "threadRef": "review-3"
+      }
+    ],
+    "workspaces/w1/inboxOutcomes": [
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {
+          "text": "Thanks Sam, see you Thursday."
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "You asked for a reply.",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "proposed",
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "type": "reply",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/inboxEvents": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "chips": [
+            "summarize",
+            "recheck"
+          ]
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "type": "thread.chips_suggested"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "im3264cb16257ba83783ce5f27",
+          "newThread": true,
+          "sender": "Sam Example",
+          "source": "teams"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "fields": {
+            "text": "Thanks Sam, see you Thursday."
+          },
+          "outcomeId": "<id>",
+          "type": "reply"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "type": "outcome.proposed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "instructionId": "<id>",
+          "kind": "note",
+          "note": "Sam leads it; bring the Q3 numbers.",
+          "refId": null
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "type": "thread.instruction_answered"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "instructionId": "<id>",
+          "kind": "outcome",
+          "note": null,
+          "refId": "<id>"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "type": "thread.instruction_answered"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "chip": "draft_reply",
+          "text": null
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "type": "thread.instructed"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "chip": null,
+          "text": "Prepare me for the Thursday review."
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it4c3e7b4fb947ff7d15159877",
+        "type": "thread.instructed"
+      }
+    ],
+    "workspaces/w1/projects": [
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      },
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      }
+    ],
+    "workspaces/w1/projects/p1/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      },
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": {
+          "approvals": {},
+          "rejections": {},
+          "stepId": "review"
+        },
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "waiting",
+        "stepId": "review",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects/p2/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ]
+  }
+}
