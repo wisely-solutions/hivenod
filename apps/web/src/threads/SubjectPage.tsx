@@ -1,6 +1,8 @@
 /**
- * One subject (item 4PEHrOW5IfXBQWgOK9wo, part 3): its threads, open and closed, its timeline,
- * and the member's reorganizing: rename, merge into another subject, split threads off.
+ * One subject (item 4PEHrOW5IfXBQWgOK9wo, part 3; laid out like the thread page in item
+ * kt3E7u9EliL3q2veDDI0, design 2.5): its threads on the left, open first, as cards with their
+ * state and latest message, the timeline in a disclosure; related subjects and the label on the
+ * right. Rename, area, merge and split sit in the ⋯ menu.
  */
 import {
   mergeSubjects,
@@ -10,9 +12,22 @@ import {
   type ActionPlan,
 } from '@hive/shared';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import {
+  ChevronDown,
+  ChevronRight,
+  Combine,
+  MoreHorizontal,
+  Pencil,
+  Split,
+  Tag,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useReady } from '../auth/context';
-import { Button } from '../ui/button';
+import { useThreadMessages } from '../today/data';
+import { SenderAvatar } from '../today/parts';
+import { Button, IconButton } from '../ui/button';
+import { Icon } from '../ui/icon';
+import { ActionMenu } from '../ui/menu';
 import { Skeleton } from '../ui/feedback';
 import { Input, Select } from '../ui/form';
 import { Dialog, useToast } from '../ui/overlay';
@@ -37,6 +52,7 @@ export function SubjectPage() {
   const [splitOpen, setSplitOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
   const rows = useMemo(
     () =>
@@ -61,6 +77,8 @@ export function SubjectPage() {
       ].sort((a, b) => a.localeCompare(b)),
     [mine],
   );
+  const refs = useMemo(() => rows.map((r) => ({ wid, id: r.id })), [rows, wid]);
+  const latest = useThreadMessages(uid, refs);
   const entries = useMemo(
     () => timeline([], events.state === 'ready' ? events.data : []).reverse(),
     [events],
@@ -113,171 +131,238 @@ export function SubjectPage() {
     return c;
   };
 
+  const menu = [
+    {
+      id: 'rename',
+      label: 'Rename',
+      icon: Pencil,
+      onSelect: () => {
+        setName(s.name);
+        setRenaming(true);
+      },
+    },
+    {
+      id: 'area',
+      label: s.area ? `Area: ${s.area}` : 'Set area',
+      icon: Tag,
+      onSelect: () => {
+        setArea(s.area ?? '');
+        setEditingArea(true);
+      },
+    },
+    { id: 'merge', label: 'Merge…', icon: Combine, onSelect: () => setMergeOpen(true) },
+    {
+      id: 'split',
+      label: 'Split…',
+      icon: Split,
+      disabled: rows.length === 0,
+      onSelect: () => setSplitOpen(true),
+    },
+  ];
+
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="mx-auto w-full">
       <BackLink>Inbox</BackLink>
-      {renaming ? (
-        <form
-          className="mb-2 flex flex-wrap items-end gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void act(
-              () => renameSubject(ctx(), { subjectId: sid, subject: s, name }),
-              'Renamed.',
-              () => setRenaming(false),
-            );
-          }}
-        >
-          <div className="min-w-0 flex-1 basis-60">
-            <Input label="Subject name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <Button type="submit" variant="primary" loading={busy}>
-            Save
-          </Button>
-          <Button variant="secondary" onClick={() => setRenaming(false)}>
-            Cancel
-          </Button>
-        </form>
-      ) : (
-        <h1 className="mb-1 text-24 font-semibold text-ink [overflow-wrap:anywhere]">{s.name}</h1>
-      )}
-      <p className="text-14 text-text-2">
-        {waiting > 0 ? `${waiting} waiting for you · ` : ''}
-        {rows.length} thread{rows.length === 1 ? '' : 's'}
-      </p>
-      <div className="mt-2">
-        <LabelChip wid={wid} subjectId={sid} subject={s} withAdd />
-      </div>
-      {editingArea ? (
-        <form
-          className="mt-3 flex flex-wrap items-end gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void act(
-              () => setSubjectArea(ctx(), { subjectId: sid, subject: s, area }),
-              area.trim() ? 'Area saved.' : 'Area cleared.',
-              () => setEditingArea(false),
-            );
-          }}
-        >
-          <div className="min-w-0 flex-1 basis-60">
-            <Input
-              label="Area or tag"
-              list="inbox-areas"
-              placeholder="A client, a product, admin (empty: none)"
-              value={area}
-              onChange={(e) => setArea(e.target.value)}
-            />
-            <datalist id="inbox-areas">
-              {knownAreas.map((a) => (
-                <option key={a} value={a} />
-              ))}
-            </datalist>
-          </div>
-          <Button type="submit" variant="primary" loading={busy}>
-            Save area
-          </Button>
-          <Button variant="secondary" onClick={() => setEditingArea(false)}>
-            Cancel
-          </Button>
-        </form>
-      ) : null}
-      <div className="mt-4 flex flex-wrap gap-2">
-        {!renaming ? (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setName(s.name);
-              setRenaming(true);
-            }}
-          >
-            Rename
-          </Button>
-        ) : null}
-        {!editingArea ? (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setArea(s.area ?? '');
-              setEditingArea(true);
-            }}
-          >
-            {s.area ? `Area: ${s.area}` : 'Set area'}
-          </Button>
-        ) : null}
-        <Button variant="secondary" onClick={() => setMergeOpen(true)}>
-          Merge…
-        </Button>
-        <Button variant="secondary" disabled={rows.length === 0} onClick={() => setSplitOpen(true)}>
-          Split…
-        </Button>
-      </div>
-      {error ? (
-        <p role="alert" className="mt-3 text-14 text-sendback">
-          {error}
-        </p>
-      ) : null}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-6">
+        <div className="min-w-0">
+          {renaming ? (
+            <form
+              className="mb-2 flex flex-wrap items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void act(
+                  () => renameSubject(ctx(), { subjectId: sid, subject: s, name }),
+                  'Renamed.',
+                  () => setRenaming(false),
+                );
+              }}
+            >
+              <div className="min-w-0 flex-1 basis-60">
+                <Input
+                  label="Subject name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <Button type="submit" variant="primary" loading={busy}>
+                Save
+              </Button>
+              <Button variant="secondary" onClick={() => setRenaming(false)}>
+                Cancel
+              </Button>
+            </form>
+          ) : (
+            <div className="mb-1 flex items-start gap-2">
+              <h1 className="min-w-0 flex-1 text-24 font-semibold text-ink [overflow-wrap:anywhere]">
+                {s.name}
+              </h1>
+              <ActionMenu
+                label="Subject actions"
+                actions={menu}
+                trigger={
+                  <IconButton label="Subject actions">
+                    <Icon icon={MoreHorizontal} size={18} />
+                  </IconButton>
+                }
+              />
+            </div>
+          )}
+          <p className="text-14 text-text-2">
+            {waiting > 0 ? `${waiting} waiting for you · ` : ''}
+            {rows.length} thread{rows.length === 1 ? '' : 's'}
+          </p>
+          {editingArea ? (
+            <form
+              className="mt-3 flex flex-wrap items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void act(
+                  () => setSubjectArea(ctx(), { subjectId: sid, subject: s, area }),
+                  area.trim() ? 'Area saved.' : 'Area cleared.',
+                  () => setEditingArea(false),
+                );
+              }}
+            >
+              <div className="min-w-0 flex-1 basis-60">
+                <Input
+                  label="Area or tag"
+                  list="inbox-areas"
+                  placeholder="A client, a product, admin (empty: none)"
+                  value={area}
+                  onChange={(e) => setArea(e.target.value)}
+                />
+                <datalist id="inbox-areas">
+                  {knownAreas.map((a) => (
+                    <option key={a} value={a} />
+                  ))}
+                </datalist>
+              </div>
+              <Button type="submit" variant="primary" loading={busy}>
+                Save area
+              </Button>
+              <Button variant="secondary" onClick={() => setEditingArea(false)}>
+                Cancel
+              </Button>
+            </form>
+          ) : null}
+          {error ? (
+            <p role="alert" className="mt-3 text-14 text-sendback">
+              {error}
+            </p>
+          ) : null}
 
-      <Section title="Threads">
-        {rows.length === 0 ? (
-          <p className="text-14 text-text-2">No threads in this subject.</p>
-        ) : (
-          <ul className="overflow-hidden rounded-card border border-line bg-surface">
-            {rows.map((t) => (
-              <li key={t.id} className="border-b border-line last:border-b-0">
-                <Link
-                  to="/inbox/$wid/t/$tid"
-                  params={{ wid, tid: t.id }}
-                  data-thread={t.id}
-                  className="flex min-h-11 items-center gap-3 px-4 py-2 transition-colors hover:bg-canvas foc:outline-2 foc:-outline-offset-2 foc:outline-focus"
-                >
-                  <span className="min-w-0 flex-1 truncate text-14 text-ink">
-                    {t.data.title || 'Untitled thread'}
-                  </span>
-                  <span className="hidden text-13 text-text-2 sm:inline">
-                    {when(t.data.lastMessageAt.toMillis())}
-                  </span>
-                  <UrgentMark on={t.data.urgent} />
-                  <StateChip state={t.data.state} waiting={t.data.waiting} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      <RelatedSubjects wid={wid} sid={sid} uid={uid} />
-
-      <Section title="Timeline">
-        {entries.length === 0 ? (
-          <p className="text-14 text-text-2">Nothing yet.</p>
-        ) : (
-          <ol className="flex flex-col gap-2" aria-label="Timeline">
-            {entries.map((e) =>
-              e.kind === 'event' ? (
-                <li key={e.id} data-event={e.event.type} className="flex gap-3 text-14 text-text-2">
-                  <span className="shrink-0 tabular-nums">{when(e.at)}</span>
-                  <span className="min-w-0 [overflow-wrap:anywhere]">
-                    {eventText(e.event)}
-                    {e.event.threadId ? (
-                      <>
-                        {' · '}
-                        <Link
-                          to="/inbox/$wid/t/$tid"
-                          params={{ wid, tid: e.event.threadId }}
-                          className="text-agent underline"
-                        >
-                          {rows.find((r) => r.id === e.event.threadId)?.data.title || 'thread'}
-                        </Link>
-                      </>
-                    ) : null}
-                  </span>
-                </li>
-              ) : null,
+          <Section title="Threads">
+            {rows.length === 0 ? (
+              <p className="text-14 text-text-2">No threads in this subject.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {rows.map((t) => {
+                  const ms = latest.get(`${wid}/${t.id}`) ?? [];
+                  const last = ms[ms.length - 1];
+                  return (
+                    <li key={t.id}>
+                      <Link
+                        to="/inbox/$wid/t/$tid"
+                        params={{ wid, tid: t.id }}
+                        data-thread={t.id}
+                        className="flex gap-3 rounded-card border border-line bg-surface p-3.5 transition-colors duration-120 hov:bg-canvas foc:outline-2 foc:outline-offset-2 foc:outline-focus"
+                      >
+                        <SenderAvatar name={last?.sender.name ?? t.data.title} size="sm" />
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="flex items-start gap-2">
+                            <span className="min-w-0 flex-1 truncate text-14 font-semibold text-ink">
+                              {t.data.title || 'Untitled thread'}
+                            </span>
+                            <UrgentMark on={t.data.urgent} />
+                            <StateChip state={t.data.state} waiting={t.data.waiting} />
+                          </span>
+                          {last ? (
+                            <span className="line-clamp-2 text-13 text-text-2">
+                              {last.direction === 'out' ? 'You' : last.sender.name}: {last.text}
+                            </span>
+                          ) : null}
+                          <span className="text-12 text-text-3">
+                            {when(t.data.lastMessageAt.toMillis())}
+                          </span>
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </ol>
-        )}
-      </Section>
+          </Section>
+
+          <div className="mt-6 border-t border-line pt-3">
+            <button
+              type="button"
+              aria-expanded={timelineOpen}
+              onClick={() => setTimelineOpen((v) => !v)}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-btn text-14 font-medium text-text-2 hov:text-ink foc:outline-2 foc:outline-focus"
+            >
+              <Icon icon={timelineOpen ? ChevronDown : ChevronRight} size={16} />
+              Timeline <span className="text-text-3">({entries.length})</span>
+            </button>
+            {timelineOpen ? (
+              entries.length === 0 ? (
+                <p className="text-14 text-text-2">Nothing yet.</p>
+              ) : (
+                <ol className="mt-2 flex flex-col gap-2" aria-label="Timeline">
+                  {entries.map((e) =>
+                    e.kind === 'event' ? (
+                      <li
+                        key={e.id}
+                        data-event={e.event.type}
+                        className="flex gap-3 text-14 text-text-2"
+                      >
+                        <span className="shrink-0 tabular-nums">{when(e.at)}</span>
+                        <span className="min-w-0 [overflow-wrap:anywhere]">
+                          {eventText(e.event)}
+                          {e.event.threadId ? (
+                            <>
+                              {' · '}
+                              <Link
+                                to="/inbox/$wid/t/$tid"
+                                params={{ wid, tid: e.event.threadId }}
+                                className="text-agent underline"
+                              >
+                                {rows.find((r) => r.id === e.event.threadId)?.data.title ||
+                                  'thread'}
+                              </Link>
+                            </>
+                          ) : null}
+                        </span>
+                      </li>
+                    ) : null,
+                  )}
+                </ol>
+              )
+            ) : null}
+          </div>
+        </div>
+
+        <aside
+          aria-label="About this subject"
+          className="mt-6 flex flex-col gap-4 lg:sticky lg:top-4 lg:mt-0"
+        >
+          <section className="rounded-panel border border-line bg-surface p-4 shadow-e1">
+            <h2 className="mb-2 font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3">
+              Label and area
+            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <LabelChip wid={wid} subjectId={sid} subject={s} withAdd />
+              {s.area ? (
+                <span className="inline-flex h-6 items-center rounded-full bg-canvas px-2.5 text-12 font-medium text-text-2">
+                  {s.area}
+                </span>
+              ) : null}
+            </div>
+          </section>
+          <div className="rounded-panel border border-line bg-surface px-4 pb-4 shadow-e1 [&>section]:mt-4">
+            <RelatedSubjects wid={wid} sid={sid} uid={uid} />
+          </div>
+        </aside>
+      </div>
 
       <MergeDialog
         open={mergeOpen}

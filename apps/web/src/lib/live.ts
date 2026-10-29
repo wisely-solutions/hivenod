@@ -21,6 +21,8 @@ function listen<T>(
   start: (onNext: (v: T) => void, onError: (e: FirestoreError) => void) => () => void,
   onNext: (v: T) => void,
   onFail: (code: string) => void,
+  /** Report a refusal at once (the retries go on, and a later answer still replaces it). */
+  failFast = false,
 ): () => void {
   let stop: (() => void) | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -29,6 +31,7 @@ function listen<T>(
   const begin = () => {
     stop = start(onNext, (e) => {
       if (e.code === 'permission-denied' && tries < 4 && !closed) {
+        if (failFast && tries === 0) onFail(e.code);
         tries += 1;
         timer = setTimeout(begin, 350 * tries);
       } else {
@@ -59,9 +62,17 @@ export function useLiveDoc<S extends z.ZodType>(
    * the local cache, so `fromCache` turns false even when nothing changed. Use it where a missing
    * cached document must not pass for a missing one on the server (deciding "new user").
    */
-  opts?: { synced?: boolean },
+  opts?: {
+    synced?: boolean;
+    /**
+     * Show a refused read at once instead of after the retries (a page another person's link
+     * opens, e.g. an Inbox thread that is not yours). A retry that is answered still wins.
+     */
+    failFast?: boolean;
+  },
 ): Live<z.infer<S> | null> {
   const synced = Boolean(opts?.synced);
+  const failFast = Boolean(opts?.failFast);
   const [value, setValue] = useState<{ key: string | null; live: Live<z.infer<S> | null> }>({
     key: null,
     live: { state: 'loading' },
@@ -86,8 +97,9 @@ export function useLiveDoc<S extends z.ZodType>(
         }
       },
       (code) => setValue({ key: path, live: { state: 'error', code } }),
+      failFast,
     );
-  }, [path, schema, synced]);
+  }, [path, schema, synced, failFast]);
   return path && value.key === path ? value.live : { state: 'loading' };
 }
 
