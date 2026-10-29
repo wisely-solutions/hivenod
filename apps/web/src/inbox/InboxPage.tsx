@@ -629,9 +629,7 @@ export function InboxPage() {
   // shorter header on a phone.
   const showWho = manyOrgs || scope !== 'all' || (whoCounts.onlyYou > 0 && whoCounts.shared > 0);
   const activeFilters =
-    (filter !== 'all' ? 1 : 0) +
-    (scope !== 'all' ? 1 : 0) +
-    (labelFilter ? 1 : 0);
+    (filter !== 'all' ? 1 : 0) + (scope !== 'all' ? 1 : 0) + (labelFilter ? 1 : 0);
   const chips = (
     <div className="flex flex-col gap-3">
       <Segmented
