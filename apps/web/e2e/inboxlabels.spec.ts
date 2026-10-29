@@ -252,6 +252,8 @@ test('Inbox labels: suggested by the agent, confirmed or changed, filtered, edit
     await page.getByRole('button', { name: 'Add label' }).click();
     await page.getByRole('menuitem', { name: 'Internal' }).click();
     await expect(chipOf(page, 'Internal')).toBeVisible();
+    // The subject's timeline folds into a disclosure (item kt3E7).
+    await page.getByRole('button', { name: /^Timeline/ }).click();
     await expect(page.getByText('You set the label to “Internal”')).toBeVisible();
     await look(page, 'subject', info.project.name);
 

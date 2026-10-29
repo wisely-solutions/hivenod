@@ -257,8 +257,9 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
       page.getByRole('heading', { name: /move the payments review/, level: 1 }),
     ).toBeVisible();
     await expect(page.getByText('The team is out on Wednesday.')).toBeVisible();
-    await expect(page.getByText('Sam Example')).toBeVisible();
-    await expect(page.getByText('teams', { exact: true })).toBeVisible();
+    const msg = page.locator('[data-message]').first();
+    await expect(msg.getByText('Sam Example', { exact: true })).toBeVisible();
+    await expect(msg.getByText('teams', { exact: true })).toBeVisible();
     await expect(page.getByText(/noted: .Thursday 10:00 is free/)).toBeVisible();
     await page.getByLabel('Your answer').fill('10:00, please.');
     await page.getByRole('button', { name: 'Answer' }).click();
@@ -282,6 +283,9 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await expect(out.getByText('Thursday 10:00 works for me.')).toBeVisible();
     await expect(out.locator('[data-confidence="high"]')).toHaveText('Sure');
     // The agent panel (item kt3E7): what it checked, and what happens on approval.
+    // On a phone the panel is a bottom sheet: its handle opens the rest.
+    if (info.project.name === 'iphone-se')
+      await page.getByRole('button', { name: 'Notes, outcomes and related' }).click();
     await expect(
       page.getByRole('list', { name: 'What the agent checked' }).getByRole('listitem'),
     ).toHaveText(['Your calendar: Thu 10:00-11:00 free', 'Your answer: 10:00']);

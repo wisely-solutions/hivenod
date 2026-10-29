@@ -44,6 +44,7 @@ import { Chip, OrgChip } from '../today/parts';
 import { useMyCalendar } from '../today/useToday';
 import { Pill } from '../ui/badge';
 import { Button, IconButton } from '../ui/button';
+import { cn } from '../ui/cn';
 import { Skeleton } from '../ui/feedback';
 import { Input, Select, Textarea } from '../ui/form';
 import { Icon } from '../ui/icon';
@@ -168,6 +169,8 @@ export function ThreadPage() {
     .map((e) => ({ id: e.id, event: e.data }));
   const org = all.orgs.find((o) => o.wid === wid);
   const due = t.due ? t.due.toMillis() : null;
+  const deciding =
+    proposed.length > 0 || (t.state === 'needsYou' && !!t.question && !t.question.answer);
 
   async function act(make: () => Pick<ActionPlan, 'ops'>) {
     setError(null);
@@ -269,7 +272,7 @@ export function ThreadPage() {
         <BackLink>Inbox</BackLink>
       )}
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_25rem] lg:items-start lg:gap-6">
-        <div className="min-w-0 max-lg:pb-[45dvh]">
+        <div className={cn('min-w-0', !wide && deciding && 'pb-[45dvh]')}>
           <header>
             <div className="flex items-start gap-2">
               <h1 className="min-w-0 flex-1 text-20 font-semibold leading-tight text-ink [overflow-wrap:anywhere] sm:text-24">

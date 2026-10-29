@@ -224,12 +224,17 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
       </>
     );
 
-    if (!sheet)
+    // A bottom sheet only while there is something to decide; otherwise the panel follows the
+    // conversation on the page.
+    if (!sheet || (!shown && !asks))
       return (
         <aside
           aria-label="Agent panel"
           data-agent-panel=""
-          className="overflow-hidden rounded-panel border border-line bg-surface shadow-e1"
+          className={cn(
+            'overflow-hidden rounded-panel border border-line bg-surface shadow-e1',
+            sheet && 'mt-6',
+          )}
         >
           {head}
           <div className="mt-3">
@@ -268,9 +273,6 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
           {open ? head : null}
           {proposal}
           {question}
-          {!proposal && !question && !open ? (
-            <p className="px-4 pb-2 text-13 text-text-2">Nothing to decide here now.</p>
-          ) : null}
           {open ? (
             <>
               {read}
