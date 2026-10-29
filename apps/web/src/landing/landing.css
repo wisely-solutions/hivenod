@@ -202,7 +202,7 @@
 .lp-hero {
   position: relative;
   overflow: hidden;
-  padding: 76px 0 56px;
+  padding: 76px 0 8px;
 }
 .lp-glow {
   position: absolute;
@@ -761,7 +761,7 @@
   display: grid;
   grid-template-columns: 76px 1fr 1.25fr;
   gap: 0 44px;
-  align-items: center;
+  align-items: start;
   padding: 34px 0;
 }
 .lp-time {
@@ -769,8 +769,7 @@
   font: 700 15px var(--font-mono);
   text-align: right;
   color: var(--lp-t2);
-  align-self: start;
-  margin-top: 40px;
+  margin-top: 4px;
 }
 .lp-time::after {
   content: '';
@@ -801,9 +800,7 @@
   color: var(--lp-t2);
 }
 .lp .lp-you {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
+  display: inline-block;
   margin-top: 16px;
   font-size: 14px;
   padding: 8px 12px;
@@ -1054,7 +1051,6 @@
   }
   .lp-time {
     text-align: left;
-    margin-top: 0;
   }
   .lp-time::after {
     left: -30px;

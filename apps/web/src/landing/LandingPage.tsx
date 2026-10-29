@@ -701,7 +701,9 @@ function Day() {
               </li>
               <li>
                 <span className="lp-dot lp-h" aria-hidden />
-                <b>Waiting for you</b>&nbsp;· Accept
+                <span>
+                  <b>Waiting for you</b> · Accept
+                </span>
               </li>
             </ul>
           </li>
