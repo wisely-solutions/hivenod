@@ -11,8 +11,8 @@ test('a new screen gets its own title and keyboard focus, and a dialog gives foc
   await page.goto('/');
   await expect(page).toHaveTitle(/Today · Hivenod$/);
 
-  await page.getByRole('link', { name: 'All projects' }).click();
-  await expect(page).toHaveTitle(/^(\(\d+\) )?All projects · Hivenod$/);
+  await page.getByRole('link', { name: 'Projects', exact: true }).click();
+  await expect(page).toHaveTitle(/^(\(\d+\) )?Projects · Hivenod$/);
   await expect(page.locator('#content')).toBeFocused();
 
   await page.getByRole('link', { name: 'Activity' }).click();

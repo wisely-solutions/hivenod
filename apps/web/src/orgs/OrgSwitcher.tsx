@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { Check, ChevronsUpDown, Info, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useReady } from '../auth/context';
 import { ResponsiveModal } from '../components/ResponsiveModal';
@@ -95,10 +95,7 @@ export function OrgList({ onDone }: { onDone?: () => void }) {
               <OrgMark name={o.name} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-14 font-medium text-ink">{o.name}</span>
-                <span className="block text-13 text-text-2">
-                  {o.role === 'admin' ? 'Admin' : 'Member'} · {o.members}{' '}
-                  {o.members === 1 ? 'person' : 'people'}
-                </span>
+                <span className="block text-13 text-text-2">{orgDetail(o.role, o.members)}</span>
               </span>
               {current ? <Icon icon={Check} size={18} className="text-ink" /> : null}
             </button>
@@ -174,18 +171,29 @@ export function NewOrgModal({ open, onClose }: { open: boolean; onClose: () => v
   );
 }
 
-/** Organization name that opens the switcher. `compact` is the icon-only sidebar. */
+/** "Admin · 4 people": the line under an organization's name. */
+export function orgDetail(role: string | undefined, members: number): string {
+  return `${role === 'admin' ? 'Admin' : 'Member'} · ${members} ${members === 1 ? 'person' : 'people'}`;
+}
+
+/**
+ * Organization name that opens the switcher. `compact` is the icon-only sidebar; `detailed` adds
+ * the role and size under the name (the sidebar's Organization zone, item icVly).
+ */
 export function OrgSwitcher({
   compact = false,
+  detailed = false,
   className,
 }: {
   compact?: boolean;
+  detailed?: boolean;
   className?: string;
 }) {
   const { session } = useReady();
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState(false);
   const name = session.workspace.name;
+  const detail = orgDetail(session.role, Object.keys(session.workspace.memberRoles).length);
   return (
     <>
       <Popover
@@ -199,13 +207,24 @@ export function OrgSwitcher({
             className={cn(
               'flex min-h-11 items-center gap-2 rounded-btn border border-line bg-canvas px-2 text-left text-14 transition-colors hover:border-line-strong foc:outline-2 foc:outline-focus',
               compact ? 'justify-center px-0' : 'w-full',
+              detailed && !compact && 'min-h-14 gap-2.5 px-2.5',
               className,
             )}
           >
             <OrgMark name={name} />
             {compact ? null : (
               <>
-                <span className="min-w-0 flex-1 truncate font-medium text-ink">{name}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-ink">{name}</span>
+                  {detailed ? (
+                    // Drawn by CSS, so the button's visible text stays the name its label starts with.
+                    <span
+                      aria-hidden
+                      data-detail={detail}
+                      className="block truncate text-12 text-text-2 before:content-[attr(data-detail)]"
+                    />
+                  ) : null}
+                </span>
                 <Icon icon={ChevronsUpDown} size={16} className="shrink-0 text-text-3" />
               </>
             )}
@@ -213,16 +232,26 @@ export function OrgSwitcher({
         }
       >
         <p className="mb-2 px-2 font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3">
-          Organizations
+          Switch organization
         </p>
         <OrgList onDone={() => setOpen(false)} />
+        <p
+          data-switch-scope
+          className="mx-1 mt-2 flex gap-2 rounded-btn bg-canvas px-2.5 py-2 text-13 text-text-2"
+        >
+          <Icon icon={Info} size={15} className="mt-0.5 shrink-0" />
+          <span>
+            Switching changes the Organization section: projects, agents, settings. Today, Inbox and
+            Calendar stay across all your organizations.
+          </span>
+        </p>
         <button
           type="button"
           onClick={() => {
             setOpen(false);
             setCreating(true);
           }}
-          className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-btn border-t border-line px-2 pt-1 text-left text-14 text-text-2 hov:text-ink foc:outline-2 foc:outline-focus"
+          className="mt-2 flex min-h-11 w-full items-center gap-3 rounded-btn border-t border-line px-2 pt-1 text-left text-14 text-text-2 hov:text-ink foc:outline-2 foc:outline-focus"
         >
           <Icon icon={Plus} size={18} />
           New organization

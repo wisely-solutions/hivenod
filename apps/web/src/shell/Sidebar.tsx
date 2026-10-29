@@ -9,11 +9,27 @@ import { Icon } from '../ui/icon';
 import { Tooltip } from '../ui/overlay';
 import { useShellData } from './data';
 import { activityText, spendText } from './logic';
-import { ME, NAV } from './nav';
+import { ME, ORG_NAV, YOU_NAV } from './nav';
+import { useWaitingThreads } from '../threads/data';
 import { OrgSwitcher } from '../orgs/OrgSwitcher';
 import { BellButton } from '../bell/Bell';
 import { useNeedsAll } from '../needs/data';
 import { NeedsBadge, needsLabel } from '../needs/NeedsBadge';
+
+/** A zone's heading: "YOU · all organizations", "ORGANIZATION" (hidden in the icon-only sidebar). */
+const zoneHead =
+  'px-3 pb-1.5 font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3 max-xl:hidden';
+
+/** The organization tabs of Settings (item icVly): the sidebar's Organization settings entry. */
+const ORG_SETTINGS = /^\/settings\/(organization|members|groups|projects|labels)\/?$/;
+
+/** What each You entry spans, for its tooltip. */
+function scopeTitle(to: string): string {
+  if (to === '/') return 'Today: everything waiting for you, in all your organizations';
+  if (to === '/inbox') return 'Inbox: your threads, in all your organizations';
+  if (to === '/calendar') return 'Calendar: your calendars, in all your organizations';
+  return '';
+}
 
 const item =
   'group relative flex min-h-11 items-center gap-3 rounded-btn px-3 text-14 text-text-2 transition-colors ' +
@@ -30,6 +46,9 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
   const all = useNeedsAll();
   const count = all.ready ? all.counts : { total: 0, onlyYou: 0 };
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const waiting = useWaitingThreads() ?? 0;
+  const orgName = session.workspace.name;
+  const orgSettings = ORG_SETTINGS.test(path);
   const live = projects.filter((p) => !p.data.archivedAt);
   const total = activity.working + activity.idle;
   // An agent may work on several items at once (card cGSENsRF) and park some (item QjTTL).
@@ -48,21 +67,13 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
             Hivenod
           </span>
         </Link>
+        <span className="ml-auto max-xl:hidden">
+          <BellButton />
+        </span>
       </div>
 
-      <div className="px-2 pb-2">
-        <div className="xl:hidden">
-          <div className="flex flex-col">
-            <OrgSwitcher compact />
-          </div>
-          <div className="mt-1 flex justify-center">
-            <BellButton />
-          </div>
-        </div>
-        <div className="flex items-center gap-1 max-xl:hidden">
-          <div className="min-w-0 flex-1">
-            <OrgSwitcher />
-          </div>
+      <div className="px-2 pb-1 xl:hidden">
+        <div className="flex justify-center">
           <BellButton />
         </div>
       </div>
@@ -81,62 +92,138 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
         </button>
       </div>
 
-      <nav aria-label="Primary" className="mt-3 flex flex-col gap-0.5 px-2">
-        {NAV.map((n) => (
-          <Link
-            key={n.to}
-            to={n.to}
-            activeOptions={{ exact: n.to === '/' }}
-            aria-label={n.badge ? needsLabel(n.label, count.total, count.onlyYou) : n.label}
-            title={n.label}
-            className={item}
-          >
-            <Icon icon={n.icon} size={18} />
-            <span className="flex-1 max-xl:hidden">{n.label}</span>{' '}
-            {n.badge && count.total > 0 ? (
-              <>
-                <NeedsBadge total={count.total} onlyYou={count.onlyYou} className="max-xl:hidden" />
-                <span
-                  aria-hidden
-                  className="absolute right-2.5 top-2 size-2 rounded-full bg-gate xl:hidden"
-                />
-              </>
-            ) : null}
-          </Link>
-        ))}
-      </nav>
-
-      <div className="mt-5 min-h-0 flex-1 overflow-y-auto px-2 [@media(max-height:560px)]:min-h-fit [@media(max-height:560px)]:flex-none [@media(max-height:560px)]:overflow-visible">
-        <p className="px-3 pb-1 font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3 max-xl:hidden">
-          Projects
+      {/* Zone 1 (item icVly, model A): you, across every organization. The switcher never changes it. */}
+      <nav aria-label="You, all organizations" data-zone="you" className="mt-4 flex flex-col px-2">
+        <p aria-hidden className={zoneHead}>
+          You
+          <span className="ml-1.5 font-sans font-normal normal-case tracking-normal text-text-3">
+            · all organizations
+          </span>
         </p>
-        <ul className="flex flex-col gap-0.5">
-          {live.map((p) => {
-            const n = needs.byProject[p.id] ?? 0;
+        <div className="flex flex-col gap-0.5">
+          {YOU_NAV.map((n) => {
+            const inbox = n.to === '/inbox';
+            const badge = n.badge ? count.total > 0 : inbox && waiting > 0;
             return (
-              <li key={p.id}>
-                <Link
-                  to="/p/$pid"
-                  params={{ pid: p.id }}
-                  title={p.data.name}
-                  className={cn(item, path === `/p/${p.id}` && 'bg-canvas font-medium text-ink')}
-                >
-                  <span aria-hidden className="w-[18px] text-center text-16 leading-none">
-                    {p.data.emoji || p.data.name.charAt(0).toUpperCase()}
+              <Link
+                key={n.to}
+                to={n.to}
+                activeOptions={{ exact: n.to === '/' }}
+                aria-label={
+                  n.badge
+                    ? needsLabel(n.label, count.total, count.onlyYou)
+                    : inbox && waiting > 0
+                      ? `${n.label} ${waiting} waiting`
+                      : n.label
+                }
+                title={scopeTitle(n.to)}
+                className={item}
+              >
+                <Icon icon={n.icon} size={18} />
+                <span className="flex-1 max-xl:hidden">{n.label}</span>{' '}
+                {n.badge && badge ? (
+                  <NeedsBadge
+                    total={count.total}
+                    onlyYou={count.onlyYou}
+                    className="max-xl:hidden"
+                  />
+                ) : null}
+                {inbox && badge ? (
+                  <span aria-hidden data-inbox-badge className="max-xl:hidden">
+                    <Badge count={waiting} />
                   </span>
-                  <span className="flex-1 truncate max-xl:sr-only">{p.data.name}</span>
-                  {n > 0 ? (
-                    <Badge tone="gate" className="max-xl:absolute max-xl:right-1 max-xl:top-1">
-                      <span className="sr-only">Needs you: </span>
-                      {n}
-                    </Badge>
-                  ) : null}
-                </Link>
-              </li>
+                ) : null}
+                {badge ? (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'absolute right-2.5 top-2 size-2 rounded-full xl:hidden',
+                      n.badge ? 'bg-gate' : 'bg-line-strong',
+                    )}
+                  />
+                ) : null}
+              </Link>
             );
           })}
-        </ul>
-      </div>
+        </div>
+      </nav>
+
+      <div aria-hidden className="mx-4 my-3 border-t border-line max-xl:mx-3" />
+
+      {/* Zone 2: the organization picked in the switcher. Switching changes only this part. */}
+      <nav
+        aria-label={`Organization, ${orgName}`}
+        data-zone="org"
+        className="flex min-h-0 flex-1 flex-col px-2 [@media(max-height:560px)]:min-h-fit [@media(max-height:560px)]:flex-none"
+      >
+        <p aria-hidden className={zoneHead}>
+          Organization
+        </p>
+        <div className="xl:hidden">
+          <div className="flex flex-col">
+            <OrgSwitcher compact />
+          </div>
+        </div>
+        <div className="max-xl:hidden">
+          <OrgSwitcher detailed />
+        </div>
+        <div className="mt-2 min-h-0 flex-1 overflow-y-auto [@media(max-height:560px)]:overflow-visible">
+          {live.length ? (
+            <ul className="flex flex-col gap-0.5">
+              {live.map((p) => {
+                const n = needs.byProject[p.id] ?? 0;
+                return (
+                  <li key={p.id}>
+                    <Link
+                      to="/p/$pid"
+                      params={{ pid: p.id }}
+                      title={
+                        n > 0
+                          ? `${p.data.name}: ${n} ${n === 1 ? 'needs' : 'need'} you in ${orgName}`
+                          : p.data.name
+                      }
+                      className={cn(
+                        item,
+                        path === `/p/${p.id}` && 'bg-canvas font-medium text-ink',
+                      )}
+                    >
+                      <span aria-hidden className="w-[18px] text-center text-16 leading-none">
+                        {p.data.emoji || p.data.name.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="flex-1 truncate max-xl:sr-only">{p.data.name}</span>
+                      {n > 0 ? (
+                        <Badge tone="gate" className="max-xl:absolute max-xl:right-1 max-xl:top-1">
+                          <span className="sr-only">Needs you: </span>
+                          {n}
+                        </Badge>
+                      ) : null}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          <div className={cn('flex flex-col gap-0.5', live.length > 0 && 'mt-1')}>
+            {ORG_NAV.map((n) => (
+              <Link key={n.to} to={n.to} aria-label={n.label} title={n.label} className={item}>
+                <Icon icon={n.icon} size={18} />
+                <span className="flex-1 max-xl:hidden">{n.label}</span>
+              </Link>
+            ))}
+            <Link
+              to="/settings/$tab"
+              params={{ tab: 'organization' }}
+              aria-label="Organization settings"
+              title={`Organization settings · ${orgName}`}
+              data-status={orgSettings ? 'active' : undefined}
+              className={item}
+            >
+              <Icon icon={Settings} size={18} />
+              <span className="flex-1 max-xl:hidden">Organization settings</span>
+            </Link>
+          </div>
+        </div>
+      </nav>
 
       <div className="shrink-0 border-t border-line p-2">
         <div

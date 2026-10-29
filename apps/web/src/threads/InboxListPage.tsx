@@ -329,6 +329,7 @@ export function InboxListPage() {
     <div className="mx-auto w-full max-w-4xl">
       <PageHeader
         title="Inbox"
+        allOrgs={!scope && orgs.length > 1}
         subtitle={
           inbox.state === 'ready'
             ? waiting > 0

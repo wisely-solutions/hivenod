@@ -47,8 +47,8 @@ test('the shell frames the app and has no accessibility violations', async ({ pa
   } else {
     const side = page.getByRole('complementary', { name: 'Main' });
     await expect(side).toBeVisible();
-    for (const name of ['Today', 'All projects', 'Decision insights', 'Activity', 'Agents']) {
-      await expect(side.getByRole('link', { name })).toBeVisible();
+    for (const name of ['Today', 'Projects', 'Decision insights', 'Activity', 'Agents']) {
+      await expect(side.getByRole('link', { name, exact: true })).toBeVisible();
     }
     await expect(side.getByText('0 agents working · 0 idle')).toBeVisible();
     await expect(side.getByText(/^Spend this month €0$/)).toBeVisible();
@@ -71,7 +71,7 @@ test('the sidebar collapses to icons below 1280 px', async ({ page }) => {
 test('every screen route renders inside the shell', async ({ page }) => {
   await enter(page);
   for (const [path, heading] of [
-    ['/projects', 'All projects'],
+    ['/projects', 'Projects'],
     ['/insights', 'Decision insights'],
     ['/activity', 'Activity'],
     ['/agents', 'Agents'],

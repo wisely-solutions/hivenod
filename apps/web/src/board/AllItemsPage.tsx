@@ -6,7 +6,7 @@ import { useShellData } from '../shell/data';
 import { ListView } from './ListView';
 import { listRows, type ListRow } from './logic';
 
-/** Every open item of every project in one list (card O2Ehb9CG), reached from All projects. */
+/** Every open item of every project in one list (card O2Ehb9CG), reached from Projects. */
 export function AllItemsPage() {
   const { session } = useReady();
   const { projects, agents, items, loading } = useShellData();
