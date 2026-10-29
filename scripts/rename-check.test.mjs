@@ -16,6 +16,11 @@ const SCAN = [
   'apps/web/vite.config.ts',
   'apps/web/public',
   'packages/shared/src',
+  // The Go CLI: production sources and the install scripts (not tests, contract data, fixtures).
+  'cli/cmd',
+  'cli/internal',
+  'cli/install',
+  'cli/README.md',
 ];
 
 const OLD_NAME = [
@@ -31,6 +36,12 @@ const OLD_NAME = [
 
 /** file -> substrings of lines that may mention the old name, and why. */
 const ALLOW = {
+  // Go: "the hive package" is the internal package name (cli/internal/hive), a technical identifier,
+  // and the panic text is a programmer error that no user sees.
+  'cli/internal/actions/core.go': ['exported for the hive package'],
+  'cli/internal/hive/channeltools.go': ['hive: no Go handler for tool'],
+  'cli/internal/hive/tools.go': ['hive: no Go handler for tool'],
+  'cli/internal/hive/config.go': ['// Package hive is the agent client'],
   // The landing page names Hive, the agent that builds Hivenod (and the demo agent in its
   // screenshots), not the product (item g17GWUkfKRFh4mgn0ciQ, Draft 2 approved by the owner).
   'apps/web/src/landing/LandingPage.tsx': [
@@ -46,11 +57,17 @@ function files(path) {
   return readdirSync(abs, { recursive: true })
     .map((f) => join(abs, String(f)))
     .filter((f) => statSync(f).isFile())
-    .filter((f) => /\.(tsx?|mjs|js|html|css|json)$/.test(f) && !/\.test\.tsx?$/.test(f));
+    .filter(
+      (f) =>
+        /\.(tsx?|mjs|js|html|css|json|go|sh|ps1|md)$/.test(f) &&
+        !/\.test\.tsx?$/.test(f) &&
+        !/_test\.go$/.test(f) &&
+        !/(^|\/)testdata\//.test(relative(root, f)),
+    );
 }
 
 describe('rename to Hivenod (card wQ7ZfmYr)', () => {
-  it('leaves no user-visible Hive in the web app, shared texts or the CLI', () => {
+  it('leaves no user-visible Hive in the web app, shared texts or the CLI (Go sources and install scripts)', () => {
     const hits = [];
     for (const file of SCAN.flatMap(files)) {
       const rel = relative(root, file);
@@ -63,6 +80,14 @@ describe('rename to Hivenod (card wQ7ZfmYr)', () => {
         });
     }
     expect(hits).toEqual([]);
+  });
+
+  it('scans the Go CLI and catches an old name there', () => {
+    const scanned = SCAN.flatMap(files).map((f) => relative(root, f));
+    expect(scanned.some((f) => f.startsWith('cli/internal/') && f.endsWith('.go'))).toBe(true);
+    expect(scanned.some((f) => f === 'cli/install/install.sh')).toBe(true);
+    expect(scanned.some((f) => f.endsWith('_test.go') || f.includes('testdata/'))).toBe(false);
+    expect(OLD_NAME.some(({ re }) => re.test('fmt.Println("Run `hive login` first")'))).toBe(true);
   });
 
   it('names the app Hivenod in the tab title and the PWA manifest', () => {

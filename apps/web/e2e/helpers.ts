@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { pollFor } from './poll';
 
 const rand = () => Math.random().toString(36).slice(2, 8);
 
@@ -257,9 +258,10 @@ async function userByEmail(email: string): Promise<UserDoc | undefined> {
 
 /** The workspace id of the person who signed in with this email. */
 export async function workspaceOf(email: string): Promise<string> {
-  const wid = (await userByEmail(email))?.fields.workspaceId?.stringValue;
-  if (!wid) throw new Error('No workspace for that email yet');
-  return wid;
+  return pollFor(
+    async () => (await userByEmail(email))?.fields.workspaceId?.stringValue,
+    'No workspace for that email yet',
+  );
 }
 
 /** A valid minimal project document (agent step then a human gate). */
@@ -309,8 +311,7 @@ export async function adminDoc(path: string): Promise<RawDoc | null> {
 
 /** The Auth uid of the person who signed in with this email (their users/{uid} document id). */
 export async function uidOf(email: string): Promise<string> {
-  const mine = await userByEmail(email);
-  if (!mine) throw new Error('No user for that email yet');
+  const mine = await pollFor(() => userByEmail(email), 'No user for that email yet');
   return mine.name.split('/').pop()!;
 }
 

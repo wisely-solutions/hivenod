@@ -32,4 +32,10 @@ export const ALLOWLIST = [
     reason:
       'Item delete walks its subcollections (log lines, messages, files) in batches: a plain collection read with only limit(), no where/orderBy, so it needs no composite index.',
   },
+  {
+    file: 'cli/internal/hive/inbox.go',
+    text: 'c.DB.Collection(model.Paths.InboxCollection(c.WorkspaceID, coll)).Where(field, op, value)',
+    reason:
+      'listInbox is the generic inbox helper: it always applies exactly one Where() on one field and no OrderBy, which automatic single-field indexes serve whatever the field and operator. The helper cannot add a second filter or an order, so no call site can need a composite index.',
+  },
 ];
