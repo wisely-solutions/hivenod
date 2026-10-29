@@ -270,6 +270,19 @@ describe('the proposing agent revises, append-only', () => {
     );
     expect((await outcome(oid)).state).toBe('revising');
     await ok(revise(oid, 'ok'));
+    // Once there are versions, another agent of the organization still cannot add one.
+    await ask(oid);
+    await denied(
+      s.run(
+        reviseOutcome(s.ctx, {
+          outcomeId: oid,
+          outcome: { ...(await outcome(oid)), proposedBy: AGENTS.star },
+          thread: await thread(),
+          fields: { text: 'x' },
+        }),
+      ),
+    );
+    await ok(revise(oid, 'v3'));
   });
 
   it('refused: rewriting v1, skipping a number, fields not the latest, another type, bad fields', async () => {
