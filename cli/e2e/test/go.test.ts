@@ -36,7 +36,7 @@ import {
   type ItemState,
 } from '@hive/shared';
 import { toFirestoreValue } from '@hive/shared/firestore';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1257,9 +1257,23 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
 
   it('paths: shaping, skip, ask path change, propose step; a legacy item without paths', async () => {
     const r = await scenario(async (call) => {
+      // Same updatedAt for both: Timestamp.now() differs by a millisecond between the two seeds,
+      // which would decide the hand-out order instead of the id tiebreak. Far future: after the i1 seed.
+      const tie = Timestamp.fromMillis(4_000_000_000_000);
       await put({
-        [I('u1')]: itemDoc({ stepId: 'intake', status: 'queued', shape: null, title: 'Fix typo' }),
-        [I('old')]: itemDoc({ stepId: 'intake', status: 'queued', title: 'Old item' }),
+        [I('u1')]: itemDoc({
+          stepId: 'intake',
+          status: 'queued',
+          shape: null,
+          title: 'Fix typo',
+          updatedAt: tie,
+        }),
+        [I('old')]: itemDoc({
+          stepId: 'intake',
+          status: 'queued',
+          title: 'Old item',
+          updatedAt: tie,
+        }),
       });
       await call('list_work', {});
       const { runId } = out(await call('claim', { itemId: 'u1' })) as { runId: string };
