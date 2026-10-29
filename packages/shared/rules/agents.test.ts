@@ -126,6 +126,25 @@ describe('agent scoping and revocation', () => {
       await denied(updateDoc(doc(m.db, paths.agent(W, AGENTS.a)), { cliVersion: '9.9.9' }));
     }
   });
+  it('allows the agent its own session and host id with presence (item N0biX); ATTACK: not long, not a number, not without presence, not another agent, not a member', async () => {
+    const a = as(AGENTS.a);
+    const ref = doc(a.db, paths.agent(W, AGENTS.a));
+    const ids = { seenSession: 's'.repeat(24), seenHostId: 'h'.repeat(32) };
+    await ok(updateDoc(ref, { lastSeenAt: serverTimestamp(), seenHost: 'box', ...ids }));
+    await denied(updateDoc(ref, { lastSeenAt: serverTimestamp(), seenSession: 'x'.repeat(65) }));
+    await denied(updateDoc(ref, { lastSeenAt: serverTimestamp(), seenHostId: 'x'.repeat(65) }));
+    await denied(updateDoc(ref, { lastSeenAt: serverTimestamp(), seenSession: 5 }));
+    await denied(updateDoc(ref, { lastSeenAt: serverTimestamp(), seenHostId: 5 }));
+    await denied(updateDoc(ref, { seenSession: 'other' }));
+    await denied(updateDoc(ref, { seenHostId: 'other' }));
+    await denied(
+      updateDoc(doc(a.db, paths.agent(W, AGENTS.star)), { lastSeenAt: serverTimestamp(), ...ids }),
+    );
+    for (const who of ['alice', 'bob', 'owner']) {
+      const m = as(who);
+      await denied(updateDoc(doc(m.db, paths.agent(W, AGENTS.a)), { seenSession: 'forged' }));
+    }
+  });
   it('ATTACK: denies an agent widening its own projectIds or un-revoking', async () => {
     const a = as(AGENTS.a);
     await denied(updateDoc(doc(a.db, paths.agent(W, AGENTS.a)), { projectIds: '*' }));

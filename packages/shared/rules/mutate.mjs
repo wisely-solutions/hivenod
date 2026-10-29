@@ -38,6 +38,14 @@ const MUTATIONS = [
     [["&& strOrNull(request.resource.data.get('cliVersion', null), 40))", '&& true)']],
   ],
   [
+    'agent seenSession unbounded',
+    [["&& strOrNull(request.resource.data.get('seenSession', null), 64)", '']],
+  ],
+  [
+    'agent seenHostId unbounded',
+    [["&& strOrNull(request.resource.data.get('seenHostId', null), 64))", ')']],
+  ],
+  [
     'cliVersion without presence',
     [
       [

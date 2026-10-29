@@ -48,13 +48,17 @@ type Agent struct {
 	// ProjectIDs is a []any of ids or the string "*" (every project).
 	ProjectIDs any `firestore:"projectIds" json:"projectIds"`
 	// Scope is "inbox" for an Inbox and Calendar agent (item fJnu6), "" otherwise.
-	Scope            string      `firestore:"scope" json:"scope,omitempty"`
-	CreatedBy        string      `firestore:"createdBy" json:"createdBy"`
-	CreatedAt        time.Time   `firestore:"createdAt" json:"createdAt"`
-	RevokedAt        *time.Time  `firestore:"revokedAt" json:"revokedAt"`
-	LastSeenAt       *time.Time  `firestore:"lastSeenAt" json:"lastSeenAt"`
-	SignedOutAt      *time.Time  `firestore:"signedOutAt" json:"signedOutAt"`
-	SeenHost         *string     `firestore:"seenHost" json:"seenHost"`
+	Scope       string     `firestore:"scope" json:"scope,omitempty"`
+	CreatedBy   string     `firestore:"createdBy" json:"createdBy"`
+	CreatedAt   time.Time  `firestore:"createdAt" json:"createdAt"`
+	RevokedAt   *time.Time `firestore:"revokedAt" json:"revokedAt"`
+	LastSeenAt  *time.Time `firestore:"lastSeenAt" json:"lastSeenAt"`
+	SignedOutAt *time.Time `firestore:"signedOutAt" json:"signedOutAt"`
+	SeenHost    *string    `firestore:"seenHost" json:"seenHost"`
+	// SeenSession and SeenHostID (item N0biX): the channel session that last stamped presence, and
+	// a stable id of its machine and user, so a restart on the same machine takes over at once.
+	SeenSession      *string     `firestore:"seenSession" json:"seenSession"`
+	SeenHostID       *string     `firestore:"seenHostId" json:"seenHostId"`
 	CLIVersion       *string     `firestore:"cliVersion" json:"cliVersion"`
 	TokenHint        string      `firestore:"tokenHint" json:"tokenHint"`
 	PreviousAgentUID *string     `firestore:"previousAgentUid" json:"previousAgentUid"`
