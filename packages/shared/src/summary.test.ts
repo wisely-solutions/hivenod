@@ -508,8 +508,10 @@ describe('rules block', () => {
   it('is generated from the limits', () => {
     const b = summaryRulesBlock();
     expect(b).toMatch(/BEGIN summary checks/);
-    expect(b).toContain("'stacked_bar' ? 2 : 1) && l.size() <= 4");
-    expect(b).toContain('(l.size() <= 7 || summaryNodeOk(l[7]))');
-    expect(b).not.toContain('(l.size() <= 8 ||');
+    expect(b).toContain("(v.kind != 'stacked_bar' || v.series.size() >= 2)");
+    expect(b).toContain('v.series.size() >= 1 && v.series.size() <= 4');
+    expect(b).toContain('(l.size() <= 3 || summaryVisualOk(l[3]))');
+    expect(b).not.toContain('(l.size() <= 4 || summaryVisualOk(');
+    expect(b).toContain('(l.size() <= 4 || summaryBulletOk(l[4]))');
   });
 });
