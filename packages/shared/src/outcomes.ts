@@ -44,7 +44,18 @@ export interface OutcomeType {
    * proposed with high confidence). Never on a type that sends or books.
    */
   batchable?: boolean;
+  /**
+   * Who does the step (item qwFAWxZM5xkcE7PPjAzi, plans): 'agent' (an action, the default) or
+   * 'human' (a person-approval gate the member decides; never carried out by an agent). The same
+   * words as a process step's kind.
+   */
+  kind?: OutcomeKind;
+  /** Allowed as a step of a plan. */
+  plan?: boolean;
+  /** Only as a step of a plan: outcome_propose refuses it alone. */
+  planOnly?: boolean;
 }
+export type OutcomeKind = 'agent' | 'human';
 
 const text = (label: string, help: string, required = true): OutcomeField => ({
   kind: 'text',
@@ -75,6 +86,7 @@ export const OUTCOMES = {
     },
     executor: 'agent',
     after: { state: 'waiting', waitingOn: 'them' },
+    plan: true,
   },
   reply_book: {
     label: 'Reply and book',
@@ -100,6 +112,33 @@ export const OUTCOMES = {
     },
     executor: 'agent',
     after: { state: 'waiting', waitingOn: 'them' },
+    plan: true,
+  },
+  book: {
+    label: 'Book',
+    approve: 'Book',
+    description:
+      "A plan step: book a meeting (pick the time with calendar_free); the reply is its own step. On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); when it is this step's turn you create it in the member's own calendar with your own access, call calendar_mirror with its id and report outcome_done.",
+    fields: {
+      start: {
+        kind: 'datetime',
+        label: 'Starts',
+        required: true,
+        help: 'ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00',
+      },
+      end: {
+        kind: 'datetime',
+        label: 'Ends',
+        required: true,
+        help: 'ISO 8601 with its offset, after start',
+      },
+      with: line('With', 'Who is invited: names or emails, separated by commas'),
+      title: line('Title', 'What the calendar shows; by default "Meeting with <with>"', false),
+    },
+    executor: 'agent',
+    after: { state: 'waiting', waitingOn: 'them' },
+    plan: true,
+    planOnly: true,
   },
   no_reply: {
     label: 'No reply needed',
@@ -123,6 +162,7 @@ export const OUTCOMES = {
     },
     executor: 'agent',
     after: { state: 'waiting', waitingOn: 'item' },
+    plan: true,
   },
   handover: {
     label: 'Hand over',
@@ -134,6 +174,7 @@ export const OUTCOMES = {
     },
     executor: 'agent',
     after: { state: 'waiting', waitingOn: 'thirdParty' },
+    plan: true,
   },
   snooze: {
     label: 'Snooze',
@@ -152,6 +193,7 @@ export const OUTCOMES = {
     after: { state: 'waiting', waitingOn: 'date' },
     untilField: 'until',
     batchable: true,
+    plan: true,
   },
   nudge: {
     label: 'Nudge',
@@ -160,6 +202,7 @@ export const OUTCOMES = {
     fields: { text: text('Nudge', 'The reminder, ready to send as written') },
     executor: 'agent',
     after: { state: 'waiting', waitingOn: 'them' },
+    plan: true,
   },
   ignore: {
     label: 'Ignore',
@@ -170,11 +213,40 @@ export const OUTCOMES = {
     after: { state: 'ignored' },
     batchable: true,
   },
+  approval: {
+    label: 'Your approval',
+    approve: 'Approve',
+    description:
+      'A plan step for the member: a gate they decide before the next steps run. Put one before anything that changes money, prices, contracts or public content. Never carried out by an agent.',
+    fields: {
+      what: line('What you approve', 'One line: what the member approves'),
+      detail: text('Detail', 'The change, e.g. old → new prices', false),
+      link: line('Link', 'Where to look, an http(s) link', false),
+    },
+    executor: 'none',
+    after: { state: 'done' },
+    kind: 'human',
+    plan: true,
+    planOnly: true,
+  },
 } as const satisfies Record<string, OutcomeType>;
 
 export type OutcomeTypeId = keyof typeof OUTCOMES;
 export const OUTCOME_TYPES = Object.keys(OUTCOMES) as OutcomeTypeId[];
 export const MAX_OUTCOME_FIELDS = 10;
+
+/** A type's kind (default 'agent'). */
+export function outcomeKind(id: string): OutcomeKind {
+  return outcomeType(id)?.kind ?? 'agent';
+}
+/** The types allowed as plan steps, in registry order. */
+export const PLAN_TYPES = OUTCOME_TYPES.filter(
+  (k) => (OUTCOMES as Record<string, OutcomeType>)[k]!.plan === true,
+);
+/** The types an agent may propose alone (outcome_propose). */
+export const SINGLE_TYPES = OUTCOME_TYPES.filter(
+  (k) => (OUTCOMES as Record<string, OutcomeType>)[k]!.planOnly !== true,
+);
 
 export function outcomeType(id: string): OutcomeType | null {
   return Object.prototype.hasOwnProperty.call(OUTCOMES, id)
@@ -244,6 +316,9 @@ export function outcomeRulesBlock(): string {
     '      // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by',
     '      // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)',
     `      function outcomeTypes() { return ${list(entries.map(([k]) => k))}; }`,
+    `      function outcomeSingle() { return ${list(entries.filter(([, t]) => !t.planOnly).map(([k]) => k))}; }`,
+    `      function outcomePlanTypes() { return ${list(entries.filter(([, t]) => t.plan).map(([k]) => k))}; }`,
+    `      function outcomeHuman() { return ${list(entries.filter(([, t]) => t.kind === 'human').map(([k]) => k))}; }`,
     `      function outcomeImmediate() { return ${list(entries.filter(([, t]) => t.executor === 'none').map(([k]) => k))}; }`,
     `      function outcomeAfter() { return ${map((t) => q(t.after.state))}; }`,
     `      function outcomeWaitingOn() { return ${map((t) => (t.after.waitingOn ? q(t.after.waitingOn) : 'null'))}; }`,
@@ -259,9 +334,13 @@ export function outcomeRulesBlock(): string {
   ].join('\n');
 }
 
-/** For the agent's outcome_propose tool description: every type and its fields. */
-export function outcomeGuide(): string {
+/**
+ * For the agent's tool descriptions: every type and its fields. `plan`: the plan step types
+ * (plan_propose); otherwise the types proposed alone (outcome_propose).
+ */
+export function outcomeGuide(which: 'single' | 'plan' = 'single'): string {
   return Object.entries(OUTCOMES as Record<string, OutcomeType>)
+    .filter(([, t]) => (which === 'plan' ? t.plan === true : t.planOnly !== true))
     .map(([k, t]) => {
       const fs = Object.entries(t.fields)
         .map(([n, f]) => `${n}${f.required ? '' : '?'} (${f.kind}: ${f.help})`)

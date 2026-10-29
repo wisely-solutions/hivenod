@@ -18486,6 +18486,48 @@
       }
     },
     {
+      "name": "proposeOutcome/approval alone",
+      "action": "proposeOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentB",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "type": "approval",
+        "fields": { "what": "New prices" }
+      },
+      "output": {
+        "error": "approval is only a step of a plan (plan_propose). Types alone: reply, reply_book, no_reply, make_it_work, handover, snooze, nudge, ignore."
+      }
+    },
+    {
+      "name": "proposeOutcome/book alone",
+      "action": "proposeOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentB",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "type": "book",
+        "fields": { "start": "2026-11-05T10:00:00Z", "end": "2026-11-05T11:00:00Z", "with": "Sam" }
+      },
+      "output": {
+        "error": "book is only a step of a plan (plan_propose). Types alone: reply, reply_book, no_reply, make_it_work, handover, snooze, nudge, ignore."
+      }
+    },
+    {
       "name": "proposeOutcome/unknown field",
       "action": "proposeOutcome",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
@@ -20241,7 +20283,7 @@
       "action": "cleanOutcomeFields",
       "input": { "type": "x", "fields": {} },
       "output": {
-        "error": "Unknown outcome type x. Types: reply, reply_book, no_reply, make_it_work, handover, snooze, nudge, ignore."
+        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, approval."
       }
     },
     {

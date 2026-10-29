@@ -58,11 +58,7 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome: a person's Hivenod 
   Nothing is carried out before the person approves it in Hivenod.`
 
 func outcomeTypeList() string {
-	ids := make([]string, len(actions.Outcomes))
-	for i, t := range actions.Outcomes {
-		ids[i] = t.ID
-	}
-	return strings.Join(ids, ", ")
+	return strings.Join(actions.SingleOutcomeTypes(), ", ")
 }
 
 func runInbox(args []string, stdout, stderr io.Writer) int {
