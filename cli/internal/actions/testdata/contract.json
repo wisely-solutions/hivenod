@@ -21365,6 +21365,1503 @@
       "output": { "error": "Only agents can do this" }
     },
     {
+      "name": "reviseOutcome/re-check: an open proposal unasked",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "proposed",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked."
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "proposed",
+              "fields": { "text": "Thursday 10:00, or 14:00." },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "versions": [
+                {
+                  "n": 1,
+                  "fields": { "text": "Thursday works." },
+                  "note": "They asked.",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": null,
+                  "asked": null
+                },
+                {
+                  "n": 2,
+                  "fields": { "text": "Thursday 10:00, or 14:00." },
+                  "note": "",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": "id01",
+                  "asked": null
+                }
+              ],
+              "revise": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.revised",
+              "data": {
+                "outcomeId": "o1",
+                "type": "reply",
+                "version": 2,
+                "fields": { "text": "Thursday 10:00, or 14:00." }
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "version": 2
+      }
+    },
+    {
+      "name": "reviseOutcome/re-check: not the home agent",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "proposed",
+          "executor": "agentA",
+          "proposedBy": "agentB",
+          "note": "They asked."
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": {
+        "error": "Nobody asked for changes on this outcome (or the person cancelled the request)."
+      }
+    },
+    {
+      "name": "reviseOutcome/re-check: answered already",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "proposed",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked."
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": { "state": "done" }
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": {
+        "error": "Nobody asked for changes on this outcome (or the person cancelled the request)."
+      }
+    },
+    {
+      "name": "reviseOutcome/re-check: while asked for changes keeps the ask",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "revising",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "proposed",
+              "fields": { "text": "Thursday 10:00, or 14:00." },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "versions": [
+                {
+                  "n": 1,
+                  "fields": { "text": "Thursday works." },
+                  "note": "They asked to move it.",
+                  "confidence": "high",
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": null,
+                  "asked": null
+                },
+                {
+                  "n": 2,
+                  "fields": { "text": "Thursday 10:00, or 14:00." },
+                  "note": "",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": "id01",
+                  "asked": { "instruction": "Mention 14:00", "chips": ["shorter"] }
+                }
+              ],
+              "revise": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.revised",
+              "data": {
+                "outcomeId": "o1",
+                "type": "reply",
+                "version": 2,
+                "fields": { "text": "Thursday 10:00, or 14:00." }
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "version": 2
+      }
+    },
+    {
+      "name": "reviseOutcome/re-check: an unrun approved step",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "x" },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1",
+          "proposedBy": "agentA",
+          "note": ""
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3"],
+            "cursor": 1,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1",
+              "proposedBy": "agentA",
+              "note": ""
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1",
+              "proposedBy": "agentA",
+              "note": ""
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1",
+              "proposedBy": "agentA",
+              "note": ""
+            }
+          }
+        }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "state": "proposed",
+              "fields": { "text": "Thursday 10:00, or 14:00." },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "versions": [
+                {
+                  "n": 1,
+                  "fields": { "text": "x" },
+                  "note": "",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": null,
+                  "asked": null
+                },
+                {
+                  "n": 2,
+                  "fields": { "text": "Thursday 10:00, or 14:00." },
+                  "note": "",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": "id01",
+                  "asked": null
+                }
+              ],
+              "revise": null,
+              "decision": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.revised",
+              "data": {
+                "outcomeId": "o3",
+                "type": "reply",
+                "version": 2,
+                "fields": { "text": "Thursday 10:00, or 14:00." }
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "version": 2
+      }
+    },
+    {
+      "name": "reviseOutcome/re-check: the step at its turn",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o2",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "x" },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1",
+          "proposedBy": "agentA",
+          "note": ""
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3"],
+            "cursor": 1,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1",
+              "proposedBy": "agentA",
+              "note": ""
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1",
+              "proposedBy": "agentA",
+              "note": ""
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1",
+              "proposedBy": "agentA",
+              "note": ""
+            }
+          }
+        }
+      },
+      "output": { "error": "This step has started (it is its turn): it cannot be revised now." }
+    },
+    {
+      "name": "reviseOutcome/re-check: an approved step without its plan",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "x" },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1",
+          "proposedBy": "agentA",
+          "note": ""
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": { "error": "This outcome is a step of a plan: give its plan." }
+    },
+    {
+      "name": "recheckDone/still good stamps the open ones",
+      "action": "recheckDone",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "result": "still_good",
+        "note": "  Nothing new. ",
+        "outcomes": {
+          "o9": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA",
+            "proposedBy": "agentA",
+            "note": "They asked."
+          },
+          "o8": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "rejected",
+            "executor": "agentA"
+          },
+          "o7": {
+            "memberUid": "joao",
+            "threadId": "it2",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA"
+          },
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          }
+        },
+        "plans": {
+          "pl1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3"],
+            "cursor": 1,
+            "state": "active"
+          }
+        }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "recheck.state": "done",
+              "recheck.result": "still_good",
+              "recheck.note": "Nothing new.",
+              "recheck.at": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "checkedAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o9",
+            "data": {
+              "checkedAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.rechecked",
+              "data": { "result": "still_good", "note": "Nothing new.", "checked": ["o3", "o9"] },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "checked": ["o3", "o9"]
+      }
+    },
+    {
+      "name": "recheckDone/revised",
+      "action": "recheckDone",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "result": "revised",
+        "note": null,
+        "outcomes": {
+          "o9": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA",
+            "proposedBy": "agentA",
+            "note": "They asked."
+          },
+          "o8": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "rejected",
+            "executor": "agentA"
+          },
+          "o7": {
+            "memberUid": "joao",
+            "threadId": "it2",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA"
+          },
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          }
+        },
+        "plans": {
+          "pl1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3"],
+            "cursor": 1,
+            "state": "active"
+          }
+        }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "recheck.state": "done",
+              "recheck.result": "revised",
+              "recheck.note": null,
+              "recheck.at": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.rechecked",
+              "data": { "result": "revised", "note": null, "checked": [] },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "checked": []
+      }
+    },
+    {
+      "name": "recheckDone/asked",
+      "action": "recheckDone",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "result": "asked",
+        "note": "  Nothing new. ",
+        "outcomes": {}
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "recheck.state": "done",
+              "recheck.result": "asked",
+              "recheck.note": "Nothing new.",
+              "recheck.at": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.rechecked",
+              "data": { "result": "asked", "note": "Nothing new.", "checked": [] },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "checked": []
+      }
+    },
+    {
+      "name": "recheckDone/without the plans",
+      "action": "recheckDone",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "result": "still_good",
+        "note": "  Nothing new. ",
+        "outcomes": {
+          "o9": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA",
+            "proposedBy": "agentA",
+            "note": "They asked."
+          },
+          "o8": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "rejected",
+            "executor": "agentA"
+          },
+          "o7": {
+            "memberUid": "joao",
+            "threadId": "it2",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA"
+          },
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          }
+        }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "recheck.state": "done",
+              "recheck.result": "still_good",
+              "recheck.note": "Nothing new.",
+              "recheck.at": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o9",
+            "data": {
+              "checkedAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.rechecked",
+              "data": { "result": "still_good", "note": "Nothing new.", "checked": ["o9"] },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "checked": ["o9"]
+      }
+    },
+    {
+      "name": "recheckDone/bad result",
+      "action": "recheckDone",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "result": "fine",
+        "note": "  Nothing new. ",
+        "outcomes": {
+          "o9": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA",
+            "proposedBy": "agentA",
+            "note": "They asked."
+          },
+          "o8": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "rejected",
+            "executor": "agentA"
+          },
+          "o7": {
+            "memberUid": "joao",
+            "threadId": "it2",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA"
+          },
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          }
+        },
+        "plans": {
+          "pl1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3"],
+            "cursor": 1,
+            "state": "active"
+          }
+        }
+      },
+      "output": { "error": "The result is still_good, revised, asked." }
+    },
+    {
+      "name": "recheckDone/long note",
+      "action": "recheckDone",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "result": "still_good",
+        "note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "outcomes": {
+          "o9": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA",
+            "proposedBy": "agentA",
+            "note": "They asked."
+          },
+          "o8": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "rejected",
+            "executor": "agentA"
+          },
+          "o7": {
+            "memberUid": "joao",
+            "threadId": "it2",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA"
+          },
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          }
+        },
+        "plans": {
+          "pl1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3"],
+            "cursor": 1,
+            "state": "active"
+          }
+        }
+      },
+      "output": { "error": "The note is at most 500 characters." }
+    },
+    {
+      "name": "recheckDone/nothing pending",
+      "action": "recheckDone",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "result": "still_good",
+        "note": "  Nothing new. ",
+        "outcomes": {
+          "o9": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA",
+            "proposedBy": "agentA",
+            "note": "They asked."
+          },
+          "o8": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "rejected",
+            "executor": "agentA"
+          },
+          "o7": {
+            "memberUid": "joao",
+            "threadId": "it2",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA"
+          },
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          }
+        },
+        "plans": {
+          "pl1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3"],
+            "cursor": 1,
+            "state": "active"
+          }
+        }
+      },
+      "output": { "error": "Nobody asked to re-check this thread." }
+    },
+    {
+      "name": "recheckDone/answered already",
+      "action": "recheckDone",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": { "state": "done" }
+        },
+        "result": "still_good",
+        "note": "  Nothing new. ",
+        "outcomes": {
+          "o9": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA",
+            "proposedBy": "agentA",
+            "note": "They asked."
+          },
+          "o8": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "rejected",
+            "executor": "agentA"
+          },
+          "o7": {
+            "memberUid": "joao",
+            "threadId": "it2",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA"
+          },
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          }
+        },
+        "plans": {
+          "pl1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3"],
+            "cursor": 1,
+            "state": "active"
+          }
+        }
+      },
+      "output": { "error": "Nobody asked to re-check this thread." }
+    },
+    {
+      "name": "recheckDone/not the home agent",
+      "action": "recheckDone",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "result": "still_good",
+        "note": "  Nothing new. ",
+        "outcomes": {
+          "o9": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA",
+            "proposedBy": "agentA",
+            "note": "They asked."
+          },
+          "o8": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "rejected",
+            "executor": "agentA"
+          },
+          "o7": {
+            "memberUid": "joao",
+            "threadId": "it2",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA"
+          },
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          }
+        },
+        "plans": {
+          "pl1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3"],
+            "cursor": 1,
+            "state": "active"
+          }
+        }
+      },
+      "output": {
+        "error": "Only the thread's home agent (the one that brought it in) answers a re-check."
+      }
+    },
+    {
+      "name": "recheckDone/person refused",
+      "action": "recheckDone",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "recheck": {
+            "state": "pending",
+            "requestedAt": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "result": "still_good",
+        "note": "  Nothing new. ",
+        "outcomes": {
+          "o9": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA",
+            "proposedBy": "agentA",
+            "note": "They asked."
+          },
+          "o8": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "rejected",
+            "executor": "agentA"
+          },
+          "o7": {
+            "memberUid": "joao",
+            "threadId": "it2",
+            "type": "reply",
+            "fields": { "text": "Thursday works." },
+            "state": "proposed",
+            "executor": "agentA"
+          },
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1",
+            "proposedBy": "agentA",
+            "note": ""
+          }
+        },
+        "plans": {
+          "pl1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3"],
+            "cursor": 1,
+            "state": "active"
+          }
+        }
+      },
+      "output": { "error": "Only agents can do this" }
+    },
+    {
       "name": "finishOutcome/plan/first step done",
       "action": "finishOutcome",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },

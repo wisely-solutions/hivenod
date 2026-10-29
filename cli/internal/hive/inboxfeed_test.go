@@ -21,6 +21,8 @@ type fakeInbox struct {
 	itemSt   map[string]string // item id -> status ("gone": deleted)
 	looks    int
 	revising []FeedRevise
+	onK      func([]FeedRecheck)
+	rechecks []FeedRecheck
 	events   map[string]*FeedEvent
 	woken    []string
 	subs     int
@@ -47,6 +49,13 @@ func (f *fakeInbox) WatchRevising(_ context.Context, on func([]FeedRevise)) {
 	f.mu.Lock()
 	f.onR = on
 	rows := f.revising
+	f.mu.Unlock()
+	on(rows)
+}
+func (f *fakeInbox) WatchRechecks(_ context.Context, on func([]FeedRecheck)) {
+	f.mu.Lock()
+	f.onK = on
+	rows := f.rechecks
 	f.mu.Unlock()
 	on(rows)
 }
@@ -292,6 +301,52 @@ func TestInboxFeedRevise(t *testing.T) {
 	rv2.Chips, rv2.Instruction = []string{"warmer"}, ""
 	r.revise([]FeedRevise{rv2})
 	r.want("t5:revise", "t1:new", "t5:revise")
+}
+
+func (r *feedRig) recheck(rows []FeedRecheck) {
+	r.src.mu.Lock()
+	r.src.rechecks = rows
+	on := r.src.onK
+	r.src.mu.Unlock()
+	if on != nil {
+		on(rows)
+	}
+	r.settle()
+}
+
+// Re-check (item bmNoIvvqKCdAorLSShE9): one recheck event per request, at priority 1 (before
+// new work); answered, the slot frees; a later request is a new event.
+func TestInboxFeedRecheck(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 1})
+	r.event("e-t1", "inbox.added", map[string]any{"newThread": true})
+	rk := FeedRecheck{ThreadID: "t7", MemberUID: "joao", Title: "Review move", AtMs: r.now.UnixMilli()}
+	r.src.mu.Lock()
+	r.src.rechecks = []FeedRecheck{rk}
+	r.src.threads = []FeedThread{r.th("t1", nil)}
+	r.src.mu.Unlock()
+	r.feed.Start()
+	r.settle()
+	r.want("t7:recheck")
+	r.mu.Lock()
+	e := r.pushed[0]
+	r.mu.Unlock()
+	for _, w := range []string{"check \"Review move\" (thread t7) again", "calendar_free", "outcome_propose revises=<outcomeId>", "thread_recheck_done", "inbox_ask"} {
+		if !strings.Contains(e.Content, w) {
+			t.Fatalf("%q lacks %q", e.Content, w)
+		}
+	}
+	// The same request again (a reconnect) is not sent twice.
+	r.recheck([]FeedRecheck{rk})
+	r.want("t7:recheck")
+	// Answered: the slot frees, the new thread goes out.
+	r.recheck(nil)
+	r.want("t7:recheck", "t1:new")
+	// A new request later is a new event.
+	r.set(nil, nil)
+	rk2 := rk
+	rk2.AtMs += 60_000
+	r.recheck([]FeedRecheck{rk2})
+	r.want("t7:recheck", "t1:new", "t7:recheck")
 }
 
 func (r *feedRig) plans(rows []FeedPlan) {

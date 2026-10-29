@@ -493,6 +493,9 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 		if o.PlanID != nil {
 			row["planId"], row["step"] = *o.PlanID, stepOf[d.ID]
 		}
+		if o.CheckedAt != nil {
+			row["checkedAt"] = isoPtr(o.CheckedAt)
+		}
 		// Ask for changes: how many versions, and what the person asks while revising.
 		if len(o.Versions) > 0 || revise != nil {
 			row["versions"] = max(len(o.Versions), 1)
@@ -541,11 +544,19 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 	if carry {
 		next = CarryOut
 	}
-	return map[string]any{
+	out := map[string]any{
 		"threadId": id, "member": t.MemberUID, "state": t.State, "waiting": waiting, "question": question,
 		"title": t.Title, "subject": subject, "fetchedBy": t.FetchedBy, "fetchedByMe": t.FetchedBy == c.UID, "urgent": t.Urgent, "due": isoPtr(t.Due),
 		"messages": messages, "outcomes": outcomes, "plans": plans, "timeline": timeline, "next": next,
-	}, nil
+	}
+	// Re-check (item bmNoIvvqKCdAorLSShE9): the person's last request, and what to do while it waits.
+	if r := t.Recheck; r != nil {
+		out["recheck"] = map[string]any{"state": r.State, "requestedAt": isoPtr(r.RequestedAt), "result": strOrNull(r.Result), "note": strOrNull(r.Note), "at": isoPtr(r.At)}
+		if r.State == "pending" && t.FetchedBy == c.UID && !carry {
+			out["next"] = RecheckNext
+		}
+	}
+	return out, nil
 }
 
 // labelList is the workspace's label list: the admin's document, else the defaults.
@@ -793,6 +804,14 @@ func (c *Client) outcomeRevise(ctx context.Context, id, typ string, fields map[s
 	if typ != "" {
 		in.Type = &typ
 	}
+	if o.PlanID != nil {
+		// A re-check may revise an approved step that has not run: the action needs its plan.
+		pl, _, err := c.planInput(ctx, *o.PlanID)
+		if err != nil {
+			return nil, err
+		}
+		in.Plan = &pl
+	}
 	r, err := actions.ReviseOutcome(c.actx(), in)
 	if err != nil {
 		return nil, wrap(err)
@@ -1017,6 +1036,46 @@ func (c *Client) ThreadDue(ctx context.Context, id string, due, reason *string) 
 		note = "Due date set: the person sees it ranked by it in Today."
 	}
 	return map[string]any{"threadId": id, "due": strOrNull(at), "note": note}, nil
+}
+
+// RecheckNext is thread_read's next while the person's re-check request waits for this agent.
+const RecheckNext = "The person asked you to check this thread again: re-read the messages (any new ones especially), calendar_free and the context, then for each open proposal and each plan step that has not run either keep it, or write its next version with outcome_propose revises=<outcomeId> (only what changed), or ask with inbox_ask; finish with thread_recheck_done (still_good, revised or asked)."
+
+// ThreadRecheckDone answers the person's re-check request (thread_recheck_done).
+func (c *Client) ThreadRecheckDone(ctx context.Context, id, result string, note *string) (map[string]any, error) {
+	t, err := c.thread(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	ocs, err := listInbox[model.InboxOutcome](ctx, c, "inboxOutcomes", "threadId", "==", id)
+	if err != nil {
+		return nil, err
+	}
+	in := actions.RecheckDoneInput{ThreadID: id, Thread: actions.ThreadStateFrom(t), Result: result, Note: note,
+		Outcomes: map[string]actions.OutcomeState{}, Plans: map[string]actions.PlanState{}}
+	for _, d := range ocs {
+		in.Outcomes[d.ID] = actions.OutcomeStateFrom(d.Data)
+	}
+	ps, err := c.threadPlans(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range ps {
+		in.Plans[p.ID] = actions.PlanStateFrom(p.Data)
+	}
+	r, err := actions.RecheckDone(c.actx(), in)
+	if err != nil {
+		return nil, wrap(err)
+	}
+	if err := c.inboxWrite(ctx, r.Plan); err != nil {
+		return nil, err
+	}
+	notes := map[string]string{
+		"still_good": "Answered: the person sees \"Checked again\" on the open proposals.",
+		"revised":    "Answered: the person sees the new versions and what changed.",
+		"asked":      "Answered: the person sees your question.",
+	}
+	return map[string]any{"threadId": id, "result": result, "checked": r.Checked, "note": notes[result]}, nil
 }
 
 // ThreadFlag marks a thread urgent or not (thread_flag).

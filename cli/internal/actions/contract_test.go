@@ -125,6 +125,7 @@ var runners = map[string]runner{
 	"proposeOutcome":  act(ProposeOutcome),
 	"finishOutcome":   act(FinishOutcome),
 	"reviseOutcome":   act(ReviseOutcome),
+	"recheckDone":     act(RecheckDone),
 	"wakeThread":      act(WakeThread),
 	"proposePlan":     act(ProposePlan),
 	"planThreadState": pure(func(in struct {
