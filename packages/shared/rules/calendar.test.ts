@@ -394,4 +394,39 @@ describe('busy blocks after leaving or deleting an organization', () => {
     const seen = await getDocs(collection(agentIn(AC, CLIENT).db, calendarPaths.busy('alice')));
     expect(seen.docs.map((d) => d.data().workspaceId)).toEqual([CLIENT]);
   });
+
+  it('leftovers: removed by an admin, or the organization is gone, the member clears them; agents never do', async () => {
+    const p = await setup();
+    // an admin removes alice from the client's organization (her browser is not involved)
+    await put({
+      [paths.workspace(CLIENT)]: {
+        name: 'Org',
+        ownerUid: 'zoe',
+        adminUids: ['zoe'],
+        memberRoles: { zoe: 'admin' },
+        createdAt: now(),
+        lastEventId: 'seed',
+      },
+    });
+    const a = as('alice');
+    await denied(deleteDoc(doc(agentIn(AC, CLIENT).db, p.aliceC))); // an agent cannot delete
+    await denied(deleteDoc(doc(as('bob').db, p.aliceC))); // not bob's
+    await denied(deleteDoc(doc(a.db, p.aliceW))); // still in W
+    await ok(deleteDoc(doc(a.db, p.aliceC)));
+    expect(await exists(p.aliceC)).toBe(false);
+    // an organization with no document at all
+    const ghost = block('alice', 'wGhost', 'x');
+    await put({
+      [ghost]: {
+        workspaceId: 'wGhost',
+        start: Timestamp.fromDate(T(9)),
+        end: Timestamp.fromDate(T(10)),
+        deleted: false,
+        updatedAt: now(),
+        lastEventId: 'seed',
+      },
+    });
+    await ok(deleteDoc(doc(a.db, ghost)));
+    expect(await exists(ghost)).toBe(false);
+  });
 });
