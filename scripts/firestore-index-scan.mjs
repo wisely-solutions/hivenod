@@ -6,13 +6,16 @@
  * A "query" is any call of the modular SDK's `query()`. Every `where()` / `orderBy()` call that
  * is not a direct argument of an analysed `query()` is reported too, so a query built some
  * other way (spread arrays, helpers) can never slip through silently: it is "unanalysable" and
- * must be in the allowlist with a reason.
+ * must be in the allowlist with a reason. Go queries in cli/ are found by scanGo() below.
  */
+import { execFileSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 export const SOURCE_DIRS = ['apps/web/src', 'packages/shared/src'];
+export const GO_SOURCE_DIRS = ['cli'];
 const FIRESTORE_MODULES = new Set([
   'firebase/firestore',
   'firebase/firestore/lite',
@@ -229,6 +232,62 @@ export function scan(root, opts = {}) {
       ts.forEachChild(node, stray);
     };
     stray(sf);
+  }
+  return { queries, unanalysable };
+}
+
+/** Production Go sources: no tests, no fixtures. Paths relative to `root`. */
+export const isGoProductionSource = (p) =>
+  p.endsWith('.go') && !p.endsWith('_test.go') && !/(^|\/)(testdata|vendor|node_modules)\//.test(p);
+
+function goFiles(root) {
+  return GO_SOURCE_DIRS.flatMap((d) => {
+    try {
+      return readdirSync(join(root, d), { recursive: true })
+        .map((f) => join(d, String(f)).split('\\').join('/'))
+        .filter(isGoProductionSource);
+    } catch {
+      return [];
+    }
+  }).sort();
+}
+
+/**
+ * Go queries (`Collection(..).Where(..).OrderBy(..)`), found by scripts/go-query-scan (go/ast,
+ * standard library only, no network). Same result shape as scan(); a query the scanner cannot
+ * reduce to literals comes back as unanalysable.
+ * @param {string} root repo root
+ * @param {{ goFiles?: string[] }} [opts] files relative to root (default: every production .go under cli/)
+ */
+export function scanGo(root, opts = {}) {
+  const files = opts.goFiles ?? goFiles(root);
+  if (files.length === 0) return { queries: [], unanalysable: [] };
+  const tool = join(dirname(fileURLToPath(import.meta.url)), 'go-query-scan', 'main.go');
+  const env = { ...process.env, PATH: `${process.env.PATH ?? ''}:/usr/local/go/bin` };
+  let raw;
+  try {
+    raw = execFileSync('go', ['run', tool, root, ...files], {
+      env,
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+    });
+  } catch (e) {
+    throw new Error(
+      `the Go query scanner failed (is the Go toolchain installed?): ${e.stderr || e.message}`,
+      { cause: e },
+    );
+  }
+  const queries = [];
+  const unanalysable = [];
+  for (const q of JSON.parse(raw)) {
+    if (q.error) unanalysable.push({ file: q.file, line: q.line, text: q.text, reason: q.error });
+    else
+      queries.push({
+        file: q.file,
+        line: q.line,
+        text: q.text,
+        shape: { group: q.group, scope: q.scope, filters: q.filters, orders: q.orders },
+      });
   }
   return { queries, unanalysable };
 }
