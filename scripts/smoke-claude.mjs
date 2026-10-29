@@ -148,7 +148,7 @@ function main() {
       { mode: 0o600 },
     );
     guardTimer = setInterval(() => guard('while running'), 1000);
-    const cmd = `cd packages/agent && npx vitest run -c vitest.integration.config.ts test/claude.channel.smoke.test.ts`;
+    const cmd = `cd cli/e2e && npx vitest run -c vitest.config.ts test/claude.channel.smoke.test.ts`;
     child = spawn('node', ['scripts/emu-exec.mjs', cmd], {
       cwd: REPO,
       detached: true,

@@ -19,8 +19,9 @@
  * Then, item QjTTL, one session with max_items 1:
  *  9. the model parks its item with a reason: it stays claimed and parked, and the next item is
  *     handed over and finished; a person's note on the parked item reaches the session and wakes it.
- * Item EJ2Cxq4k, first and only with HIVENOD_SMOKE_GO=1: `hivenod connect` (Go) confirmed by a
- * plain member installs the plugin itself, and `hivenod claude` gets an item and finishes it.
+ * Item EJ2Cxq4k, first: `hivenod connect` confirmed by a plain member installs the plugin
+ * itself, and `hivenod claude` gets an item and finishes it.
+ * `hivenod` is the Go CLI (cli/, built once), the only agent client since item MlWOc3O5NyfZcLgetrVo.
  * Then, item 4PEHr, one session with max_items 1 holding an item:
  * 10. an Inbox thread brought in by the agent arrives as an inbox event although max_items is
  *     full; a sub-agent investigates it and proposes an outcome (the item stays held);
@@ -28,6 +29,7 @@
  *     reports it with outcome_done.
  * `pnpm smoke:claude --only connect|basic|max-items|park|inbox` runs one of the parts.
  */
+import { GoAgent } from './agentcli';
 import { goBinary } from './gobin';
 import { createAgentIdentity } from '@hive/shared/agent-auth';
 import {
@@ -67,7 +69,7 @@ import {
   put,
   useEmulator,
   W,
-} from '../../shared/rules/harness';
+} from '../../../packages/shared/rules/harness';
 
 const CONFIG = process.env.HIVE_SMOKE_CLAUDE_CONFIG_DIR ?? '';
 const DIR = process.env.HIVE_SMOKE_DIR ?? '';
@@ -79,7 +81,6 @@ if (run) useEmulator();
 
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1:9099';
 const FS_HOST = process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080';
-const PKG = fileURLToPath(new URL('..', import.meta.url));
 const REPO = fileURLToPath(new URL('../../..', import.meta.url));
 
 const LIB: Step[] = [
@@ -150,7 +151,7 @@ let prepared: Promise<void> | null = null;
 /** Builds the CLI and installs the plugin into the private Claude config, once per run. */
 function prepare() {
   prepared ??= (async () => {
-    execFileSync('pnpm', ['build'], { cwd: PKG, stdio: 'ignore' });
+    goBinary();
     for (const d of [BIN(), PROJECT_DIR(), join(DIR, 'home'), join(DIR, 'hivenod-home')])
       mkdirSync(d, { recursive: true });
     const claude = (args: string[]) =>
@@ -198,14 +199,9 @@ async function smokeAgent(name: string) {
     [I('i0')]: itemDoc({ stepId: 'review', status: 'stopped' }),
   });
   // `hivenod` as the plugin runs it, pointed at the emulators (the token is a test token).
-  // HIVENOD_SMOKE_GO=1: the Go binary (item zLwtX2WEEg3mER4CR74g) instead of the TypeScript CLI.
-  const cli =
-    process.env.HIVENOD_SMOKE_GO === '1'
-      ? `${goBinary()} `
-      : `${process.execPath} ${join(PKG, 'dist/cli.js')} `;
-  console.log(
-    `[smoke] hivenod is ${process.env.HIVENOD_SMOKE_GO === '1' ? 'the Go binary' : 'the TypeScript CLI'}: ${cli.trim()}`,
-  );
+  // The Go binary (item zLwtX2WEEg3mER4CR74g).
+  const cli = `${goBinary()} `;
+  console.log(`[smoke] hivenod is the Go binary: ${cli.trim()}`);
   writeFileSync(
     join(BIN(), 'hivenod'),
     `#!/bin/sh\nexec env FIRESTORE_EMULATOR_HOST=${FS_HOST} FIREBASE_AUTH_EMULATOR_HOST=${AUTH_HOST} HIVENOD_PROJECT_ID=hive-rules-test HIVENOD_FIREBASE_API_KEY=fake-api-key HIVENOD_HOME=${join(DIR, 'hivenod-home')} HIVENOD_TOKEN=${token} ${cli}"$@"\n`,
@@ -342,7 +338,7 @@ describe.skipIf(!run)('hivenod plugin: real Claude Code sessions', () => {
   // Item EJ2Cxq4k: the connect flow with the Go binary. `hivenod connect` (no browser) shows a
   // code; a plain member confirms it; connect saves the token and installs the plugin into the
   // private Claude config itself; `hivenod claude` starts the session and work arrives.
-  it.skipIf((!!ONLY && ONLY !== 'connect') || process.env.HIVENOD_SMOKE_GO !== '1')(
+  it.skipIf(!!ONLY && ONLY !== 'connect')(
     'connect: hivenod connect, a member confirms, hivenod claude gets the work',
     async () => {
       for (const d of [BIN(), PROJECT_DIR(), join(DIR, 'home'), join(DIR, 'connect-home')])
@@ -834,13 +830,8 @@ describe.skipIf(!run)('hivenod plugin: real Claude Code sessions', () => {
         async () => ((await read(I('x1'))).claim as { agentUid?: string } | null)?.agentUid === uid,
         'x',
       );
-      const { HiveClient } = await import('../src/client');
-      const c = await HiveClient.connect({
-        token: lastToken,
-        projectId: 'hive-rules-test',
-        authEmulator: AUTH_HOST,
-      });
-      const added = await c.inbox().add({
+      const c = await GoAgent.start(uid, lastToken);
+      const added = await c.call('inbox_add', {
         source: 'teams',
         sender: { name: 'Sam Example', handle: 'sam@example.com' },
         text: 'Hi! Can we move our review from Wednesday to Thursday at 10:00?',

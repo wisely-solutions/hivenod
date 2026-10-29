@@ -1,0 +1,496 @@
+{
+  "calls": [
+    {
+      "tool": "create_item",
+      "ok": false,
+      "out": "This project does not let agents create items. An admin or the project creator can switch on \"Agents may create items\" in Settings, Projects."
+    },
+    {
+      "tool": "create_item",
+      "ok": true,
+      "out": {
+        "attachErrors": [
+          "<tmp>: File not found: <tmp>"
+        ],
+        "attachments": [
+          {
+            "attachmentId": "<id>",
+            "kind": "markdown",
+            "name": "notes.md"
+          }
+        ],
+        "itemId": "<id>",
+        "note": "Created in Blog at Intake: it is work now, and any agent of that step can claim it (also you).",
+        "project": "Blog",
+        "projectId": "p1",
+        "status": "queued",
+        "step": "Intake"
+      }
+    },
+    {
+      "tool": "list_work",
+      "ok": true,
+      "out": [
+        {
+          "claim": null,
+          "itemId": "i1",
+          "job": null,
+          "progress": null,
+          "project": "Blog",
+          "projectId": "p1",
+          "sendBackCount": 0,
+          "status": "queued",
+          "step": "Draft",
+          "stepId": "draft",
+          "title": "Post about bees",
+          "type": "idea"
+        },
+        {
+          "claim": null,
+          "itemId": "<id>",
+          "job": null,
+          "progress": null,
+          "project": "Blog",
+          "projectId": "p1",
+          "sendBackCount": 0,
+          "status": "queued",
+          "step": "Intake",
+          "stepId": "intake",
+          "title": "Checkout times out",
+          "type": "task"
+        }
+      ]
+    },
+    {
+      "tool": "claim",
+      "ok": true,
+      "out": {
+        "hint": "Call read_item / hivenod item read for the full brief, then log, attach and complete.",
+        "itemId": "<id>",
+        "job": null,
+        "projectId": "p1",
+        "resumed": false,
+        "runId": "<id>",
+        "stepId": "intake",
+        "title": "Checkout times out"
+      }
+    },
+    {
+      "tool": "create_item",
+      "ok": false,
+      "out": "This agent cannot use the project \"p2\". Its projects: Blog."
+    },
+    {
+      "tool": "create_item",
+      "ok": false,
+      "out": "This agent cannot use the project \"Nope\". Its projects: Blog."
+    },
+    {
+      "tool": "create_item",
+      "ok": false,
+      "out": "An item needs a title."
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "attachmentId": "<id>",
+          "kind": "markdown",
+          "name": "notes.md"
+        },
+        "itemId": "<id>",
+        "projectId": "p1",
+        "runId": null,
+        "type": "attachment.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "stepId": "intake",
+          "takeover": null
+        },
+        "itemId": "<id>",
+        "projectId": "p1",
+        "runId": "<id>",
+        "type": "item.claimed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "title": "Checkout times out"
+        },
+        "itemId": "<id>",
+        "projectId": "p1",
+        "runId": null,
+        "type": "item.created"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      }
+    ],
+    "workspaces/w1/runs": [
+      {
+        "agentUid": "<agent>",
+        "costEur": 0,
+        "endedAt": null,
+        "heartbeatAt": "<ts>",
+        "heartbeatEventAt": "<ts>",
+        "itemId": "<id>",
+        "lastEventId": "<id>",
+        "model": null,
+        "projectId": "p1",
+        "startedAt": "<ts>",
+        "status": "running",
+        "stepId": "intake",
+        "summary": null,
+        "tokensIn": 0,
+        "tokensOut": 0
+      }
+    ],
+    "workspaces/w1/projects": [
+      {
+        "<id>": true,
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      },
+      {
+        "<id>": true,
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      }
+    ],
+    "workspaces/w1/projects/p1/items": [
+      {
+        "attachmentCount": 1,
+        "claim": {
+          "agentUid": "<agent>",
+          "heartbeatAt": "<ts>",
+          "runId": "<id>"
+        },
+        "costEur": 0,
+        "createdBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "gate": null,
+        "lastEventId": "<id>",
+        "order": "<ms>",
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "agent",
+          "label": "Research agent"
+        },
+        "sourceRunId": null,
+        "status": "working",
+        "stepAt": "<ts>",
+        "stepId": "intake",
+        "summary": "Asked on Telegram.",
+        "title": "Checkout times out",
+        "triage": null,
+        "type": "task",
+        "updatedAt": "<ts>"
+      },
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      },
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": {
+          "approvals": {},
+          "rejections": {},
+          "stepId": "review"
+        },
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "waiting",
+        "stepId": "review",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects/p1/items/<id>/attachments": [
+      {
+        "at": "<ts>",
+        "by": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "bytes": 7,
+        "content": "# Steps",
+        "kind": "markdown",
+        "lastEventId": "<id>",
+        "name": "notes.md",
+        "runId": null,
+        "url": null
+      }
+    ],
+    "workspaces/w1/projects/p2/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ]
+  }
+}

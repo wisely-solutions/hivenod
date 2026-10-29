@@ -22,8 +22,13 @@ TypeScript CLI in `packages/agent` for agents; the web app stays TypeScript.
     work, inbox and status events) are snapshot-tested against `internal/hive/testdata/texts.json`.
     After changing one on purpose: `UPDATE_GO_SURFACE=1 go test ./internal/hive/`, then review the
     diff.
-- `packages/agent/test/go.integration.test.ts` runs the same MCP scenarios through the TypeScript
-  server and this binary on the emulators and compares results and documents (`pnpm test:rules`).
+- `e2e/` (`@hive/cli-e2e`) is the black-box suite: it builds this binary once and drives it over
+  MCP (stdio) and its commands against the Auth and Firestore emulators and the real rules
+  (`pnpm test:rules`). `e2e/test/go.test.ts` compares tool results and the resulting documents
+  (ids, times and temp paths masked) with the golden files in `e2e/golden/`, first recorded while
+  the TypeScript client and this binary agreed; after an intended change run
+  `UPDATE_GOLDEN=1 pnpm test:rules` and review the diff. The channel, agent, paths, send-back and
+  self-hosting suites sit next to it, and so does the real-Claude smoke (`pnpm smoke:claude`).
 
 Build and test (Go 1.27+):
 

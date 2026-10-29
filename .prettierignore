@@ -3,3 +3,4 @@ dist
 docs/SPEC.md
 cli/internal/mcpserver/surface.json
 cli/internal/hive/testdata/texts.json
+cli/e2e/golden

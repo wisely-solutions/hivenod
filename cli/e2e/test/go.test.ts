@@ -1,13 +1,13 @@
 /**
- * Contract harness for the Go CLI (item zLwtX2WEEg3mER4CR74g): every scenario runs twice against
- * the real Auth and Firestore emulators and the real rules, once through the TypeScript
- * `hivenod mcp` (in memory) and once through the Go binary (`hivenod mcp` over stdio), from the
- * same fresh world. The tool results and the resulting Firestore documents must be identical once
- * random ids, timestamps and clock values are masked. Needs Go (HIVENOD_GO or `go` on PATH); without
- * it the suite is skipped with a warning.
+ * Contract suite for the Go CLI (item zLwtX2WEEg3mER4CR74g; Go-only since item MlWOc3O5NyfZcLgetrVo):
+ * every scenario runs against the real Auth and Firestore emulators and the real rules, through the
+ * Go binary (`hivenod mcp` over stdio), from a fresh world. The tool results and the resulting
+ * Firestore documents, with random ids, timestamps and clock values masked, must equal the
+ * recorded golden files in ../golden (first recorded when the TypeScript client and the Go CLI
+ * gave the same results). After an intended change: UPDATE_GOLDEN=1 pnpm test:rules, then review
+ * the diff. Needs Go (HIVENOD_GO or `go` on PATH); without it the suite is skipped with a warning.
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { createAgentIdentity } from '@hive/shared/agent-auth';
 import {
@@ -29,7 +29,6 @@ import {
 } from '@hive/shared';
 import { toFirestoreValue } from '@hive/shared/firestore';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { readCredentials } from '../src/credentials';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -48,10 +47,9 @@ import {
   snap,
   useEmulator,
   W,
-} from '../../shared/rules/harness';
-import { HiveClient } from '../src/client';
-import { createMcpServer } from '../src/mcp';
+} from '../../../packages/shared/rules/harness';
 import { GO, goBinary } from './gobin';
+import { matchesGolden } from './golden';
 
 useEmulator();
 
@@ -65,7 +63,7 @@ beforeAll(() => {
   if (GO) BIN = goBinary();
 }, 300_000);
 
-// ---------- the two implementations behind one interface ----------
+// ---------- the Go binary behind one interface ----------
 
 type Call = (name: string, args: Record<string, unknown>) => Promise<{ ok: boolean; out: unknown }>;
 interface Impl {
@@ -93,22 +91,6 @@ async function viaClient(
     call: async (name: string, args: Record<string, unknown>) =>
       decode((await client.callTool({ name, arguments: args })) as never),
     close: () => client.close(),
-  };
-}
-
-async function tsImpl(token: string): Promise<Impl> {
-  const { server, close } = createMcpServer(() =>
-    HiveClient.connect({ token, projectId: PROJECT, authEmulator: AUTH_HOST }),
-  );
-  const [a, b] = InMemoryTransport.createLinkedPair();
-  await server.connect(a);
-  const c = await viaClient(b);
-  return {
-    call: c.call,
-    close: async () => {
-      await c.close();
-      await close();
-    },
   };
 }
 
@@ -216,6 +198,8 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
 }
 
 const ID = /\b[A-Za-z0-9]{20}\b/g;
+/** Temporary folders (random names) in file paths. */
+const TMP = tmpdir();
 /** Masks what differs between two equal runs: random ids, the agent uid, timestamps, clocks. */
 function mask(v: unknown, uid: string): unknown {
   if (typeof v === 'string')
@@ -223,6 +207,9 @@ function mask(v: unknown, uid: string): unknown {
       .split(uid)
       .join('<agent>')
       .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z/g, '<iso>')
+      .split(TMP)
+      .join('<tmp>')
+      .replace(/<tmp>[^\s:"]*/g, '<tmp>')
       .replace(ID, '<id>');
   if (typeof v === 'number') return v > 1e12 ? '<ms>' : v;
   if (Array.isArray(v)) return v.map((x) => mask(x, uid));
@@ -243,32 +230,27 @@ interface Result {
 }
 
 /**
- * Runs a scenario on a fresh world with each implementation and returns both results. `steps`
- * gets a `call` that records each result (masked) and returns it unmasked for the next calls.
+ * Runs a scenario on a fresh world through the Go binary. `scenario` gets a `call` that records
+ * each result (masked) and returns it unmasked for the next calls.
  */
-async function both(
+async function scenario(
   scenario: (call: Call, uid: string) => Promise<void>,
   agentExtra: Record<string, unknown> = {},
-): Promise<{ ts: Result; go: Result }> {
-  const run = async (make: (t: string) => Promise<Impl>): Promise<Result> => {
-    await reset();
-    const { uid, token } = await newAgent(agentExtra);
-    const impl = await make(token);
-    const calls: unknown[] = [];
-    try {
-      await scenario(async (name, args) => {
-        const r = await impl.call(name, args);
-        calls.push({ tool: name, ...(mask(r, uid) as object) });
-        return r;
-      }, uid);
-    } finally {
-      await impl.close();
-    }
-    return { calls, docs: await snapshot(uid) };
-  };
-  const ts = await run(tsImpl);
-  const go = await run(goImpl);
-  return { ts, go };
+): Promise<Result> {
+  await reset();
+  const { uid, token } = await newAgent(agentExtra);
+  const impl = await goImpl(token);
+  const calls: unknown[] = [];
+  try {
+    await scenario(async (name, args) => {
+      const r = await impl.call(name, args);
+      calls.push({ tool: name, ...(mask(r, uid) as object) });
+      return r;
+    }, uid);
+  } finally {
+    await impl.close();
+  }
+  return { calls, docs: await snapshot(uid) };
 }
 
 const out = (r: { out: unknown }) => r.out as Record<string, unknown>;
@@ -277,12 +259,12 @@ const out = (r: { out: unknown }) => r.out as Record<string, unknown>;
 
 const d = GO ? describe : describe.skip;
 
-d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
+d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
   it('claim, log, attach, ask, progress, finding, end run, complete', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hive-att-'));
     const html = join(dir, 'report.html');
     writeFileSync(html, '<h1>Bees</h1>');
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       await call('list_work', {});
       const { runId } = out(await call('claim', { itemId: 'i1' })) as { runId: string };
       await call('read_item', { itemId: 'i1' });
@@ -307,24 +289,20 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       await call('read_item', { itemId: 'i1' });
     });
     // Sanity: the scenario really worked (not two identical failures).
-    expect(r.ts.calls.every((c) => (c as { ok: boolean }).ok)).toBe(true);
-    expect(r.ts.calls.find((c) => (c as { tool: string }).tool === 'complete')).toMatchObject({
+    expect(r.calls.every((c) => (c as { ok: boolean }).ok)).toBe(true);
+    expect(r.calls.find((c) => (c as { tool: string }).tool === 'complete')).toMatchObject({
       out: { movedTo: { stepId: 'review' }, status: 'waiting' },
     });
-    expect(r.ts.docs['workspaces/w1/runs/<id>/log']).toHaveLength(2);
-    expect(r.go.calls).toEqual(r.ts.calls);
-    expect(r.go.docs).toEqual(r.ts.docs);
+    expect(r.docs['workspaces/w1/runs/<id>/log']).toHaveLength(2);
+    matchesGolden(r);
   }, 120_000);
 
   it('create_item (item DhsO9): created where allowed, with files; refused when off or not its project', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hive-att-'));
     const md = join(dir, 'notes.md');
     writeFileSync(md, '# Steps');
-    // The TypeScript side keeps its rate-limit file in a throwaway home too.
-    const home = mkdtempSync(join(tmpdir(), 'hivenod-home-'));
-    process.env.HIVENOD_HOME = home;
-    try {
-      const r = await both(async (call) => {
+    {
+      const r = await scenario(async (call) => {
         // Off (absent) in p1 at first.
         await call('create_item', { project: 'p1', title: 'Too early' });
         await put({ [P('p1')]: projectDoc({}, { agentsMayCreateItems: true }) });
@@ -344,18 +322,15 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
         await call('create_item', { project: 'Nope', title: 'x' });
         await call('create_item', { project: 'p1', title: '   ' });
       });
-      const oks = r.ts.calls.map((c) => (c as { ok: boolean }).ok);
+      const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
       expect(oks).toEqual([false, true, true, true, false, false, false]);
-      expect(r.ts.calls[1]).toMatchObject({ out: { status: 'queued', step: 'Intake' } });
-      expect(r.go.calls).toEqual(r.ts.calls);
-      expect(r.go.docs).toEqual(r.ts.docs);
-    } finally {
-      delete process.env.HIVENOD_HOME;
+      expect(r.calls[1]).toMatchObject({ out: { status: 'queued', step: 'Intake' } });
+      matchesGolden(r);
     }
   }, 120_000);
 
   it('inbox (item 4PEHr): messages, threads, dedup, subjects, notes, questions, outcomes approved by the person', async () => {
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       const base = {
         source: 'teams',
         sender: { name: 'Sam Example', handle: 'sam@example.com' },
@@ -453,7 +428,7 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       await call('thread_read', { threadId: 'nope' });
       await call('subject_list', { member: 'alice' });
     });
-    const oks = r.ts.calls.map((c) => (c as { ok: boolean }).ok);
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
     expect(oks).toEqual([
       true,
       true,
@@ -487,16 +462,15 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       false,
       true,
     ]);
-    expect(r.ts.calls[1]).toMatchObject({ out: { duplicate: true } });
-    expect(r.ts.calls[3]).toMatchObject({ out: { newThread: false } });
-    expect(r.ts.calls[20]).toMatchObject({ out: { next: expect.stringMatching(/approved/) } });
-    expect(r.ts.calls[21]).toMatchObject({ out: { threadState: 'waiting' } });
-    expect(r.go.calls).toEqual(r.ts.calls);
-    expect(r.go.docs).toEqual(r.ts.docs);
+    expect(r.calls[1]).toMatchObject({ out: { duplicate: true } });
+    expect(r.calls[3]).toMatchObject({ out: { newThread: false } });
+    expect(r.calls[20]).toMatchObject({ out: { next: expect.stringMatching(/approved/) } });
+    expect(r.calls[21]).toMatchObject({ out: { threadState: 'waiting' } });
+    matchesGolden(r);
   }, 120_000);
 
   it('subject search and related subjects (item 4PEHr): found by name, people, channel and text; links the person OKs', async () => {
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       const owner = as('owner');
       const add = async (source: string, ref: string, name: string, text: string) =>
         out(
@@ -556,7 +530,7 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       await call('thread_flag', { threadId: t1, urgent: false });
       await call('thread_flag', { threadId: 'nope' });
     });
-    const oks = r.ts.calls.map((c) => (c as { ok: boolean }).ok);
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
     expect(oks).toEqual([
       ...Array(6).fill(true),
       ...Array(8).fill(true),
@@ -573,30 +547,29 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       true,
       false,
     ]);
-    expect(r.ts.calls[23]).toMatchObject({ out: { urgent: true } });
+    expect(r.calls[23]).toMatchObject({ out: { urgent: true } });
     const hits = (i: number) =>
-      (out(r.ts.calls[i] as never).subjects as { name: string }[]).map((x) => x.name);
+      (out(r.calls[i] as never).subjects as { name: string }[]).map((x) => x.name);
     expect(hits(6)).toHaveLength(3);
     expect(hits(7)).toEqual(['Klarna payouts', 'Klarna refunds']);
     expect(hits(8)).toEqual(['Grafana access', 'Klarna payouts']);
     expect(hits(9)).toEqual(['Grafana access']);
     expect(hits(10)).toEqual(['Klarna refunds']);
     expect(hits(11)).toEqual([]);
-    expect(r.ts.calls[19]).toMatchObject({
+    expect(r.calls[19]).toMatchObject({
       out: { subjects: [{ proposed: [{ name: 'Klarna refunds', note: 'Both Klarna' }] }, {}] },
     });
-    expect(r.ts.calls[21]).toMatchObject({
+    expect(r.calls[21]).toMatchObject({
       out: { subjects: [{ name: 'Klarna refunds', related: [{ name: 'Klarna payouts' }] }] },
     });
-    expect(r.go.calls).toEqual(r.ts.calls);
-    expect(r.go.docs).toEqual(r.ts.docs);
+    matchesGolden(r);
   }, 120_000);
 
   it('errors: gate, not claimed, wrong run, unknown item, oversized file, bad progress', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hive-att-'));
     const big = join(dir, 'big.txt');
     writeFileSync(big, 'x'.repeat(901 * 1024));
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       await call('claim', { itemId: 'gated' });
       await call('complete', { itemId: 'gated', runId: 'whatever' });
       await call('ask', { itemId: 'i1', question: 'Tone?' });
@@ -611,13 +584,12 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       await call('release', { itemId: 'i1' });
       await call('release', { itemId: 'i1' });
     });
-    expect(r.ts.calls.filter((c) => !(c as { ok: boolean }).ok).length).toBeGreaterThanOrEqual(8);
-    expect(r.go.calls).toEqual(r.ts.calls);
-    expect(r.go.docs).toEqual(r.ts.docs);
+    expect(r.calls.filter((c) => !(c as { ok: boolean }).ok).length).toBeGreaterThanOrEqual(8);
+    matchesGolden(r);
   }, 120_000);
 
   it('a failed run releases the item and counts toward the pause; 3 in a row pause the agent', async () => {
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       for (let i = 0; i < 3; i++) {
         const { runId } = out(await call('claim', { itemId: 'i1' })) as { runId: string };
         await call('end_run', { runId, status: 'failed', summary: `fail ${i}` });
@@ -625,23 +597,22 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       await call('list_work', {});
       await call('claim', { itemId: 'i1' });
     });
-    expect(r.go.calls).toEqual(r.ts.calls);
-    expect(r.go.docs).toEqual(r.ts.docs);
+    matchesGolden(r);
   }, 120_000);
 
   it('a revoked agent is told plainly', async () => {
-    const r = await both(
+    const r = await scenario(
       async (call) => {
         await call('list_work', {});
         await call('read_item', { itemId: 'i1' });
       },
       { revokedAt: now() },
     );
-    expect(r.go.calls).toEqual(r.ts.calls);
+    matchesGolden({ calls: r.calls });
   }, 60_000);
 
   it('a person sends it back: the next claim reads the reason; agent send-back to an earlier step', async () => {
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       // Work the draft step, complete to the gate, a person sends it back to draft.
       const { runId } = out(await call('claim', { itemId: 'i1' })) as { runId: string };
       await call('complete', { itemId: 'i1', runId });
@@ -667,12 +638,11 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       });
       await call('send_back', { itemId: 'i1', runId: again.runId, toStep: 'review', reason: 'x' });
     });
-    expect(r.go.calls).toEqual(r.ts.calls);
-    expect(r.go.docs).toEqual(r.ts.docs);
+    matchesGolden(r);
   }, 120_000);
 
   it('paths: shaping, skip, ask path change, propose step; a legacy item without paths', async () => {
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       await put({
         [I('u1')]: itemDoc({ stepId: 'intake', status: 'queued', shape: null, title: 'Fix typo' }),
         [I('old')]: itemDoc({ stepId: 'intake', status: 'queued', title: 'Old item' }),
@@ -728,8 +698,7 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       });
       await call('complete', { itemId: 'old', runId: old.runId });
     });
-    expect(r.go.calls).toEqual(r.ts.calls);
-    expect(r.go.docs).toEqual(r.ts.docs);
+    matchesGolden(r);
   }, 120_000);
 
   it('calendar sync (item fJnu6): a stub Google source creates, updates and deletes; busy blocks follow', async () => {
@@ -748,7 +717,7 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       ...over,
     });
     const win = { member: 'alice', from: '2030-01-06T00:00:00Z', to: '2030-02-05T00:00:00Z' };
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       await call('calendar_sync', {
         ...win,
         events: [
@@ -789,7 +758,7 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       });
       await call('calendar_sync', { ...win, to: '2030-06-01T00:00:00Z', events: [] });
     });
-    const outs = r.ts.calls.map((c) => (c as { out: Record<string, unknown> }).out);
+    const outs = r.calls.map((c) => (c as { out: Record<string, unknown> }).out);
     expect(outs.slice(0, 4).map((o) => [o.upserted, o.deleted, o.unchanged])).toEqual([
       [3, 0, 0],
       [0, 0, 3],
@@ -801,11 +770,11 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     // Only b is busy now (11:00 to 12:00 UTC): free before and after it.
     expect(outs[4]).toMatchObject({ busyBlocks: 1 });
     expect(JSON.stringify(outs[5])).toContain('62 days');
-    expect(r.go.calls).toEqual(r.ts.calls);
+    matchesGolden({ calls: r.calls });
   });
 
   it('calendar_mirror (item fJnu6): an approved booking becomes the Google event, once', async () => {
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       const owner = as('owner');
       const t = out(
         await call('inbox_add', {
@@ -854,7 +823,7 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       await call('calendar_mirror', { outcomeId: o, sourceEventId: ' ' });
       await call('outcome_done', { outcomeId: o, status: 'done' });
     });
-    const outs = r.ts.calls.map((c) => c as { ok: boolean; out: Record<string, unknown> });
+    const outs = r.calls.map((c) => c as { ok: boolean; out: Record<string, unknown> });
     expect(outs.map((c) => c.ok)).toEqual([
       true,
       true,
@@ -876,12 +845,11 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
     // the replaced id derives from the random outcome id
     const noReplaced = (cs: unknown[]) =>
       cs.map((c) => JSON.stringify(c).replace(/"replaced":"[^"]*"/g, '"replaced":"<id>"'));
-    expect(noReplaced(r.go.calls)).toEqual(noReplaced(r.ts.calls));
-    expect(r.go.docs).toEqual(r.ts.docs);
+    matchesGolden({ calls: noReplaced(r.calls), docs: r.docs });
   }, 120_000);
 
   it('calendar (item w9SAf): upsert, free across organizations, delete, errors', async () => {
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       await put({
         [paths.member(W, 'alice')]: {
           name: 'Alice',
@@ -990,7 +958,7 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       });
       await call('calendar_delete', {});
     });
-    const oks = r.ts.calls.map((c) => (c as { ok: boolean }).ok);
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
     expect(oks).toEqual([
       true,
       true,
@@ -1006,7 +974,7 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       false,
       false,
     ]);
-    expect(r.ts.calls[2]).toMatchObject({
+    expect(r.calls[2]).toMatchObject({
       out: {
         free: [
           { start: '<iso>', end: '<iso>' },
@@ -1016,14 +984,13 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
         busyBlocks: 3,
       },
     });
-    expect((r.ts.calls[3] as { out: { free: unknown[] } }).out.free).toHaveLength(1);
-    expect(r.ts.calls[6]).toMatchObject({ out: { busyBlocks: 1 } });
-    expect(r.go.calls).toEqual(r.ts.calls);
-    expect(r.go.docs).toEqual(r.ts.docs);
+    expect((r.calls[3] as { out: { free: unknown[] } }).out.free).toHaveLength(1);
+    expect(r.calls[6]).toMatchObject({ out: { busyBlocks: 1 } });
+    matchesGolden(r);
   }, 120_000);
 
   it('an Inbox and Calendar agent is refused item tools and uses the calendar (item fJnu6)', async () => {
-    const r = await both(
+    const r = await scenario(
       async (call) => {
         await call('list_work', {});
         await call('claim', { itemId: 'i1' });
@@ -1051,29 +1018,28 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       },
       { projectIds: [], scope: 'inbox' },
     );
-    expect(r.ts.calls.map((c) => (c as { ok: boolean }).ok)).toEqual([
+    expect(r.calls.map((c) => (c as { ok: boolean }).ok)).toEqual([
       false,
       false,
       false,
       true,
       true,
     ]);
-    expect(JSON.stringify(r.ts.calls[0])).toContain('limited to Inbox and Calendar');
-    expect(r.go.calls).toEqual(r.ts.calls);
-    expect(r.go.docs).toEqual(r.ts.docs);
+    expect(JSON.stringify(r.calls[0])).toContain('limited to Inbox and Calendar');
+    matchesGolden(r);
   }, 60_000);
 
   it('wait_for_work returns at once when work waits, and times out when none does', async () => {
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       await call('wait_for_work', { timeoutSeconds: 5 });
       await put({ [I('i1')]: itemDoc({ stepId: 'review', status: 'waiting' }) });
       await call('wait_for_work', { timeoutSeconds: 2 });
     });
-    expect(r.go.calls).toEqual(r.ts.calls);
+    matchesGolden({ calls: r.calls });
   }, 60_000);
 
   it('the 4th agent send-back holds the item for people', async () => {
-    const r = await both(async (call) => {
+    const r = await scenario(async (call) => {
       await put({ [I('i1')]: itemDoc({ stepId: 'draft', status: 'queued', agentSendBacks: 3 }) });
       const { runId } = out(await call('claim', { itemId: 'i1' })) as { runId: string };
       await call('send_back', {
@@ -1085,22 +1051,17 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       await call('list_work', {});
       await call('read_item', { itemId: 'i1' });
     });
-    expect(r.go.calls).toEqual(r.ts.calls);
-    expect(r.go.docs).toEqual(r.ts.docs);
+    matchesGolden(r);
   }, 60_000);
 
   it.each([
     ['a project agent', { guardrails: { maxFailedRuns: 5 } }],
     ['an Inbox and Calendar agent (item fJnu6)', { projectIds: [], scope: 'inbox' }],
   ])(
-    'hivenod whoami --json says the same as the TypeScript CLI: %s',
+    'hivenod whoami --json shows the agent and its settings: %s',
     async (_, extra) => {
       await reset();
-      const { token } = await newAgent(extra);
-      const c = await HiveClient.connect({ token, projectId: PROJECT, authEmulator: AUTH_HOST });
-      await c.refreshAgent();
-      const want = c.whoami();
-      await c.close();
+      const { uid, token } = await newAgent(extra);
       const home = mkdtempSync(join(tmpdir(), 'hivenod-home-'));
       const res = spawnSync(BIN, ['whoami', '--json'], {
         encoding: 'utf8',
@@ -1116,7 +1077,7 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
         },
       });
       expect(res.status, res.stderr).toBe(0);
-      expect(JSON.parse(res.stdout)).toEqual(JSON.parse(JSON.stringify(want)));
+      matchesGolden({ whoami: mask(JSON.parse(res.stdout), uid) });
       expect(res.stdout).not.toContain(token);
     },
     60_000,
@@ -1189,14 +1150,22 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       agentName: 'Writer (laptop)',
     });
     expect(statSync(join(home, 'agent.json')).mode & 0o777).toBe(0o600);
-    // The pairing request is gone, and the TypeScript CLI reads the saved file as its own.
+    // The pairing request is gone, and the saved file alone is enough for the next command.
     expect(await snap(pairingPath(code))).toEqual({});
-    process.env.HIVENOD_HOME = home;
-    try {
-      expect(readCredentials()).toMatchObject({ token, agentName: 'Writer (laptop)' });
-    } finally {
-      delete process.env.HIVENOD_HOME;
-    }
+    const who = spawnSync(BIN, ['whoami', '--json'], {
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH ?? '',
+        HOME: home,
+        HIVENOD_HOME: home,
+        HIVENOD_PROJECT_ID: PROJECT,
+        HIVENOD_FIREBASE_API_KEY: 'fake-api-key',
+        FIREBASE_AUTH_EMULATOR_HOST: AUTH_HOST,
+        FIRESTORE_EMULATOR_HOST: FS_HOST,
+      },
+    });
+    expect(who.status, who.stderr).toBe(0);
+    expect(JSON.parse(who.stdout)).toMatchObject({ agentUid: uid, name: 'Writer (laptop)' });
   }, 60_000);
   it('hivenod connect: a plain member confirms with one click, the token is saved, never shown', async () => {
     await reset();

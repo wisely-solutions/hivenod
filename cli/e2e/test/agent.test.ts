@@ -1,15 +1,29 @@
 /**
- * Build 07 acceptance, against the real Auth and Firestore emulators and the real rules:
+ * Build 07 acceptance, through the Go CLI (`hivenod mcp`, black box; Go-only since item
+ * MlWOc3O5NyfZcLgetrVo), against the real Auth and Firestore emulators and the real rules:
  * claim -> log -> attach HTML -> ask -> raise a finding -> end the run with cost -> complete ->
  * the item stops at the next human gate; every step left an event with the agent as actor.
  * Also: gates cannot be passed, send-back reasons reach the next agent, revoked agents are told.
+ * (A hand-built approval written with an agent's session is refused by the rules:
+ * packages/shared/rules/decisions.test.ts.)
  */
-import { createAgentIdentity } from '@hive/shared/agent-auth';
-import { answer, approve, paths, sendBack, stop, type ItemState } from '@hive/shared';
+import {
+  answer,
+  pairingPath,
+  paths,
+  sendBack,
+  stop,
+  stopWork,
+  type ItemState,
+  type ProjectState,
+} from '@hive/shared';
+import { Timestamp } from 'firebase/firestore';
+import { spawn } from 'node:child_process';
 import { mkdtemp, writeFile } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   as,
   getEnv,
@@ -20,70 +34,44 @@ import {
   P,
   projectDoc,
   put,
+  snap,
   useEmulator,
   W,
-} from '../../shared/rules/harness';
-import { HiveClient } from '../src/client';
-import { CreateLimiter } from '../src/ratelimit';
-import { main } from '../src/cli';
+} from '../../../packages/shared/rules/harness';
+import { docs, GoAgent, newAgent as makeAgent } from './agentcli';
+import { GO, goBinary, goEnv } from './gobin';
 
 useEmulator();
 
-const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1:9099';
-const options = { apiKey: 'fake-api-key', projectId: 'hive-rules-test' };
+const d = GO ? describe : describe.skip;
+beforeAll(() => {
+  if (GO) goBinary();
+}, 300_000);
 
-const clients: HiveClient[] = [];
+const clients: GoAgent[] = [];
 afterEach(async () => {
   await Promise.all(clients.splice(0).map((c) => c.close()));
 });
 
-async function newAgent(over: { revoked?: boolean; extra?: Record<string, unknown> } = {}) {
-  const { uid, token } = await createAgentIdentity(options, W, {
-    authEmulatorUrl: `http://${AUTH_HOST}`,
-  });
-  await put({
-    [paths.agent(W, uid)]: {
-      name: 'Research agent',
-      color: '#2F5FD0',
-      projectIds: ['p1'],
-      createdBy: 'owner',
-      createdAt: now(),
-      revokedAt: over.revoked ? now() : null,
-      lastSeenAt: null,
-      tokenHint: token.slice(-4),
-      previousAgentUid: null,
-      lastEventId: 'seed',
-      ...over.extra,
-    },
-  });
-  return { uid, token };
-}
+const newAgent = (over: { revoked?: boolean; extra?: Record<string, unknown> } = {}) =>
+  makeAgent(over);
 
-async function connect(token: string, heartbeatIntervalMs?: number) {
-  const c = await HiveClient.connect({
-    token,
-    projectId: 'hive-rules-test',
-    heartbeatIntervalMs,
-    authEmulator: AUTH_HOST,
-  });
+async function connect(
+  a: { uid: string; token: string },
+  env: Record<string, string> = {},
+  args?: string[],
+) {
+  const c = await GoAgent.start(a.uid, a.token, env, args);
   clients.push(c);
   return c;
 }
 
-async function docs(path: string) {
-  const out: Record<string, Record<string, unknown>> = {};
-  await getEnv().withSecurityRulesDisabled(async (c) => {
-    const snap = await c.firestore().collection(path).get();
-    snap.forEach((d) => (out[d.id] = d.data()));
-  });
-  return out;
-}
 const events = async () => Object.values(await docs(`workspaces/${W}/events`));
 
-describe('agent client against the emulators', () => {
+d('the Go CLI as an agent, against the emulators', () => {
   it('claim, log, attach, ask, finding, end run with cost, complete: stops at the gate, all tracked', async () => {
     const { uid, token } = await newAgent();
-    const c = await connect(token);
+    const c = await connect({ uid, token });
     expect(c.whoami()).toMatchObject({ agentUid: uid, name: 'Research agent', workspaceId: W });
 
     const work = await c.listWork();
@@ -161,8 +149,8 @@ describe('agent client against the emulators', () => {
   });
 
   it('raises a suggestion without holding the item; it is never listed as work or claimable', async () => {
-    const { token } = await newAgent();
-    const c = await connect(token);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
     const r = await c.raiseFinding('i1', 'Footer link is broken', 'The /pricing link 404s');
     expect(r).toMatchObject({ status: 'suggested' });
     const finding = (await docs(`workspaces/${W}/projects/p1/items`))[r.findingItemId]!;
@@ -176,8 +164,7 @@ describe('agent client against the emulators', () => {
   it('creates an item where the project allows it: work at the first step, by the agent (item DhsO9)', async () => {
     await put({ [P('p1')]: projectDoc({}, { agentsMayCreateItems: true }) });
     const { uid, token } = await newAgent();
-    const c = await connect(token);
-    c.creates = new CreateLimiter(null);
+    const c = await connect({ uid, token });
     const dir = await mkdtemp(join(tmpdir(), 'hive-'));
     const file = join(dir, 'notes.md');
     await writeFile(file, '# Steps to reproduce');
@@ -208,9 +195,8 @@ describe('agent client against the emulators', () => {
   });
 
   it('refuses a create where the setting is off or the project is not its own (item DhsO9)', async () => {
-    const { token } = await newAgent();
-    const c = await connect(token);
-    c.creates = new CreateLimiter(null);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
     await expect(c.createItem('p1', 'x')).rejects.toThrow(/does not let agents create items/);
     await put({ [P('p2')]: projectDoc({}, { agentsMayCreateItems: true }) });
     await expect(c.createItem('p2', 'x')).rejects.toThrow(/cannot use the project "p2"/);
@@ -218,17 +204,23 @@ describe('agent client against the emulators', () => {
 
   it('stops at the rate limit with a clear message (item DhsO9)', async () => {
     await put({ [P('p1')]: projectDoc({}, { agentsMayCreateItems: true }) });
-    const { token } = await newAgent();
-    const c = await connect(token);
-    c.creates = new CreateLimiter(null, Date.now, 2);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
+    // 28 creations in the last hour already (the limit file next to the token, shared by every
+    // hivenod process on the machine): two more fit, the 31st is refused.
+    const t = Date.now() - 60_000;
+    writeFileSync(
+      join(c.home, 'created-items.json'),
+      JSON.stringify({ [uid]: Array.from({ length: 28 }, (_, i) => t + i) }),
+    );
     await c.createItem('p1', 'One');
     await c.createItem('p1', 'Two');
-    await expect(c.createItem('p1', 'Three')).rejects.toThrow(/Rate limit.*at most 2 per hour/);
+    await expect(c.createItem('p1', 'Three')).rejects.toThrow(/Rate limit.*at most 30 per hour/);
   });
 
   it('completes an open run directly, ending it as done with the cost', async () => {
-    const { token } = await newAgent();
-    const c = await connect(token);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
     const { runId } = await c.claim('i1');
     await c.complete('i1', runId, { costEur: 0.1 });
     expect((await docs(`workspaces/${W}/runs`))[runId]).toMatchObject({
@@ -238,8 +230,8 @@ describe('agent client against the emulators', () => {
   });
 
   it('asking on an item it has not claimed says so, with the next step', async () => {
-    const { token } = await newAgent();
-    const c = await connect(token);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
     await expect(c.ask('i1', 'Tone?')).rejects.toThrow(
       /not claimed this item.*hivenod work claim i1/,
     );
@@ -247,34 +239,19 @@ describe('agent client against the emulators', () => {
 
   it('cannot claim, complete or approve past a human gate, with a clear message', async () => {
     const { uid, token } = await newAgent();
-    const c = await connect(token);
+    const c = await connect({ uid, token });
     const gateMsg = 'This item is at a human gate. Only people can move it.';
     await expect(c.claim('gated')).rejects.toThrow(gateMsg);
     await expect(c.complete('gated', 'whatever')).rejects.toThrow(gateMsg);
 
-    // Even a hand-built approval, written with the agent's own session, is refused by the rules.
-    const l = { projectId: 'p1', itemId: 'gated' };
-    const project = { steps: projectDoc().steps };
-    const forged = approve(
-      { workspaceId: W, actor: { type: 'human', id: uid, name: 'Research agent' } },
-      {
-        project,
-        ...l,
-        item: itemDoc({
-          stepId: 'review',
-          status: 'waiting',
-          gate: { stepId: 'review', approvals: {}, rejections: {} },
-        }) as never,
-      },
-    );
-    await expect(c.write(forged, l)).rejects.toThrow(gateMsg);
+    // A hand-built approval with the agent's session: refused by the rules (decisions.test.ts).
     const item = (await docs(`workspaces/${W}/projects/p1/items`)).gated!;
     expect(item).toMatchObject({ stepId: 'review', status: 'waiting' });
   });
 
   it('keeps the run alive with automatic heartbeats', async () => {
-    const { token } = await newAgent();
-    const c = await connect(token, 100);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token }, { HIVENOD_HEARTBEAT_MS: '100' });
     const { runId } = await c.claim('i1');
     const before = (await docs(`workspaces/${W}/runs`))[runId]!.heartbeatAt as {
       toMillis(): number;
@@ -284,12 +261,10 @@ describe('agent client against the emulators', () => {
       toMillis(): number;
     };
     expect(after.toMillis()).toBeGreaterThan(before.toMillis());
-    expect(c.autoHeartbeatError).toBeNull();
-    expect(await c.heartbeat(runId)).toMatchObject({ runId });
   });
 
   it('read_item returns send-back reasons, decisions, messages and attachments', async () => {
-    const { token } = await newAgent();
+    const { uid, token } = await newAgent();
     await put({
       [I('i1')]: itemDoc({ sendBackCount: 1, summary: 'Write about bees' }),
       [paths.decision(W, 'p1', 'd1')]: {
@@ -307,7 +282,7 @@ describe('agent client against the emulators', () => {
         lastEventId: 'd1',
       },
     });
-    const c = await connect(token);
+    const c = await connect({ uid, token });
     const { runId } = await c.claim('i1');
     await c.ask('i1', 'Tone?');
     const r = await c.readItem('i1');
@@ -322,8 +297,8 @@ describe('agent client against the emulators', () => {
     expect(r.claim).toEqual({ runId, mine: true });
   });
 
-  it('a human send back reaches the next agent through hivenod item read, and a stop closes the item', async () => {
-    const { token } = await newAgent();
+  it('a human send back reaches the next agent through read_item, and a stop closes the item', async () => {
+    const { uid, token } = await newAgent();
     await put({
       [I('gated2')]: itemDoc({
         stepId: 'review',
@@ -353,42 +328,20 @@ describe('agent client against the emulators', () => {
     });
     await alice.run(plan);
 
-    process.env.HIVENOD_TOKEN = token;
-    process.env.HIVENOD_PROJECT_ID = 'hive-rules-test';
-    process.env.FIREBASE_AUTH_EMULATOR_HOST ??= AUTH_HOST;
-    process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
-    const out: string[] = [];
-    const write = vi
-      .spyOn(process.stdout, 'write')
-      .mockImplementation((s) => (out.push(String(s)), true));
-    try {
-      expect(await main(['item', 'read', 'gated2'])).toBe(0);
-      const text = out.join('');
-      expect(text).toContain('Wrong audience: write for developers');
-      expect(text).toContain('[Wrong audience]');
-      out.length = 0;
-      expect(await main(['item', 'read', 'gated2', '--json'])).toBe(0);
-      const json = JSON.parse(out.join('')) as {
-        sendBackCount: number;
-        step: { id: string };
-        sendBackReasons: Array<{ reason: string; toStepId: string; tags: string[] }>;
-        messages: Array<{ kind: string; text: string }>;
-      };
-      expect(json.sendBackCount).toBe(1);
-      expect(json.step.id).toBe('draft');
-      expect(json.sendBackReasons[0]).toMatchObject({
-        reason: 'Wrong audience: write for developers',
-        toStepId: 'draft',
-        tags: ['Wrong audience'],
-      });
-      expect(json.messages.some((m) => m.kind === 'note' && m.text.includes('developers'))).toBe(
-        true,
-      );
-    } finally {
-      write.mockRestore();
-      delete process.env.HIVENOD_TOKEN;
-      delete process.env.HIVENOD_PROJECT_ID;
-    }
+    const c = await connect({ uid, token });
+    const json = await c.readItem('gated2');
+    expect(json.sendBackCount).toBe(1);
+    expect(json.step.id).toBe('draft');
+    expect(json.sendBackReasons[0]).toMatchObject({
+      reason: 'Wrong audience: write for developers',
+      toStepId: 'draft',
+      tags: ['Wrong audience'],
+    });
+    expect(
+      json.messages.some(
+        (m: { kind: string; text: string }) => m.kind === 'note' && m.text.includes('developers'),
+      ),
+    ).toBe(true);
 
     // A stopped item is closed: no agent can pick it up.
     await alice.run(
@@ -400,14 +353,13 @@ describe('agent client against the emulators', () => {
         rationale: 'Not worth doing any more',
       }),
     );
-    const c = await connect(token);
     expect((await c.listWork()).map((w) => w.itemId)).not.toContain('gated3');
     await expect(c.claim('gated3')).rejects.toThrow();
   });
 
   it('wait_for_work returns at once when work exists, and is released within seconds of a gate decision', async () => {
-    const a = await connect((await newAgent()).token);
-    const b = await connect((await newAgent()).token);
+    const a = await connect(await newAgent());
+    const b = await connect(await newAgent());
     const quick = await a.waitForWork({ timeoutMs: 5000 });
     expect(quick.timedOut).toBe(false);
     expect(quick.work.map((w) => w.itemId)).toContain('i1');
@@ -447,8 +399,8 @@ describe('agent client against the emulators', () => {
   });
 
   it('rejects oversized files with a hint to attach a URL', async () => {
-    const { token } = await newAgent();
-    const c = await connect(token);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
     const dir = await mkdtemp(join(tmpdir(), 'hive-'));
     const big = join(dir, 'big.html');
     await writeFile(big, 'x'.repeat(900 * 1024 + 1));
@@ -456,56 +408,28 @@ describe('agent client against the emulators', () => {
   });
 
   it('tells a revoked agent plainly', async () => {
-    const { token } = await newAgent({ revoked: true });
-    await expect(connect(token)).rejects.toThrow(/revoked/);
-  });
-
-  it('the hive command works end to end with --json', async () => {
-    const { token } = await newAgent();
-    process.env.HIVENOD_TOKEN = token;
-    process.env.HIVENOD_PROJECT_ID = 'hive-rules-test';
-    process.env.FIREBASE_AUTH_EMULATOR_HOST ??= AUTH_HOST;
-    process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
-    const out: string[] = [];
-    const write = vi
-      .spyOn(process.stdout, 'write')
-      .mockImplementation((s) => (out.push(String(s)), true));
-    try {
-      expect(await main(['whoami', '--json'])).toBe(0);
-      expect(JSON.parse(out.join(''))).toMatchObject({ name: 'Research agent' });
-      out.length = 0;
-      expect(await main(['work', 'claim', 'i1', '--json'])).toBe(0);
-      const { runId } = JSON.parse(out.join('')) as { runId: string };
-      out.length = 0;
-      expect(await main(['run', 'log', runId, 'hello', '--json'])).toBe(0);
-      expect(await main(['item', 'complete', 'i1', '--run', runId, '--cost', '0.3'])).toBe(0);
-    } finally {
-      write.mockRestore();
-      delete process.env.HIVENOD_TOKEN;
-      delete process.env.HIVENOD_PROJECT_ID;
-    }
-    expect((await docs(`workspaces/${W}/projects/p1/items`)).i1).toMatchObject({
-      stepId: 'review',
-    });
+    const c = await connect(await newAgent({ revoked: true }));
+    await expect(c.listWork()).rejects.toThrow(/revoked/);
+    expect(() => c.whoami()).toThrow(/revoked/);
   });
 });
 
-describe('agent settings and guardrails (card zSzW3LXy)', () => {
+d('agent settings and guardrails (card zSzW3LXy)', () => {
   it('a step limited to another agent is neither listed nor claimable; the listed agent gets it', async () => {
     const x = await newAgent();
     const y = await newAgent();
     await put({ [P('p1')]: projectDoc({}, { stepAgents: { draft: [x.uid] } }) });
-    const cy = await connect(y.token);
+    const cy = await connect(y);
     expect((await cy.listWork()).map((w) => w.itemId)).not.toContain('i1');
     await expect(cy.claim('i1')).rejects.toThrow(/limited to other agents/);
-    const cx = await connect(x.token);
+    const cx = await connect(x);
     expect((await cx.listWork()).map((w) => w.itemId)).toContain('i1');
     await cx.claim('i1');
   });
 
   it('pauses itself after 3 failed runs in a row; paused, it takes no work until resumed', async () => {
     const { uid, token } = await newAgent();
-    const c = await connect(token);
+    const c = await connect({ uid, token });
     let last: Record<string, unknown> = {};
     for (let n = 1; n <= 3; n++) {
       await put({ [I('i1')]: itemDoc() });
@@ -537,7 +461,7 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
 
   it('a done run resets the streak', async () => {
     const { uid, token } = await newAgent({ extra: { failStreak: 2 } });
-    const c = await connect(token);
+    const c = await connect({ uid, token });
     const { runId } = await c.claim('i1');
     await c.complete('i1', runId);
     expect((await docs(`workspaces/${W}/agents`))[uid]).toMatchObject({ failStreak: 0 });
@@ -548,7 +472,7 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
     const { uid, token } = await newAgent({
       extra: { guardrails: { maxFailedRuns: 3, maxTokensPerItem: 10_000 } },
     });
-    const c = await connect(token);
+    const c = await connect({ uid, token });
     const { runId } = await c.claim('i1');
     const first = await c.reportUsage(runId, {
       tokensIn: 50_000,
@@ -586,12 +510,20 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
       expect.anything(),
     );
 
-    // A question from the agent holds the item until people answer (unchanged).
-    await c.ask('i1', 'Go on, or stop here?');
-    const q0 = Object.entries(await docs(`workspaces/${W}/projects/p1/items/i1/messages`)).find(
-      ([, m]) => m.kind === 'question',
-    )!;
-    await c.releaseRun(runId, { status: 'released', holdFor: q0[0] });
+    // A question from the agent holds the item until people answer (unchanged). In the Go CLI
+    // the channel session holds it: the same agent, now as a channel session, gets i1 handed
+    // over and asks.
+    await c.release('i1');
+    await c.close();
+    const ch = await connect({ uid, token }, {}, ['mcp', '--channel']);
+    await expect
+      .poll(async () => (await docs(`workspaces/${W}/projects/p1/items`)).i1?.claim, {
+        timeout: 15_000,
+      })
+      .toMatchObject({ agentUid: uid });
+    await ch.ask('i1', 'Go on, or stop here?');
+    await ch.close();
+    const again = await connect({ uid, token });
     const msgs = await docs(`workspaces/${W}/projects/p1/items/i1/messages`);
     const [qid, q] = Object.entries(msgs).find(([, m]) => m.kind === 'question')!;
     expect(q.text).toBe('Go on, or stop here?');
@@ -607,9 +539,9 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
 
     // Waiting for the answer: not offered to agents, not even to others, and nobody can claim
     // it by id (client check here; the rules tests cover a client that skips it).
-    expect((await c.listWork()).map((w) => w.itemId)).not.toContain('i1');
-    await expect(c.claim('i1')).rejects.toThrow(/answer/);
-    const other = await connect((await newAgent()).token);
+    expect((await again.listWork()).map((w) => w.itemId)).not.toContain('i1');
+    await expect(again.claim('i1')).rejects.toThrow(/answer/);
+    const other = await connect(await newAgent());
     expect((await other.listWork()).map((w) => w.itemId)).not.toContain('i1');
     await expect(other.claim('i1')).rejects.toThrow(/answer/);
     expect(await other.waitForWork({ timeoutMs: 1500 })).toMatchObject({ timedOut: true });
@@ -630,7 +562,7 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
     expect((await docs(`workspaces/${W}/projects/p1/items`)).i1).toMatchObject({
       awaitingAnswer: null,
     });
-    expect((await c.listWork()).map((w) => w.itemId)).toContain('i1');
+    expect((await again.listWork()).map((w) => w.itemId)).toContain('i1');
     await other.claim('i1');
   });
 
@@ -644,8 +576,8 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
         awaitingAnswer: { questionId: 'q-old', agentUid: a.uid, at: minutesAgo(31) },
       }),
     });
-    const ca = await connect(a.token);
-    const cb = await connect(b.token);
+    const ca = await connect(a);
+    const cb = await connect(b);
     expect((await ca.listWork()).map((w) => w.itemId)).not.toContain('i1');
     expect((await cb.listWork()).map((w) => w.itemId)).not.toContain('i1');
     // Not even the agent whose (stale) claim it is gets it back as "resumed".
@@ -653,32 +585,9 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
     await expect(cb.claim('i1')).rejects.toThrow(/answer/);
   });
 
-  it('plain hivenod run end says when that run paused the agent', async () => {
-    const { token } = await newAgent({ extra: { failStreak: 2 } });
-    process.env.HIVENOD_TOKEN = token;
-    process.env.HIVENOD_PROJECT_ID = 'hive-rules-test';
-    process.env.FIREBASE_AUTH_EMULATOR_HOST ??= AUTH_HOST;
-    process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
-    const out: string[] = [];
-    const write = vi
-      .spyOn(process.stdout, 'write')
-      .mockImplementation((s) => (out.push(String(s)), true));
-    try {
-      expect(await main(['work', 'claim', 'i1', '--json'])).toBe(0);
-      const { runId } = JSON.parse(out.join('')) as { runId: string };
-      out.length = 0;
-      expect(await main(['run', 'end', runId, '--status', 'failed'])).toBe(0);
-    } finally {
-      write.mockRestore();
-      delete process.env.HIVENOD_TOKEN;
-      delete process.env.HIVENOD_PROJECT_ID;
-    }
-    expect(out.join('')).toMatch(/Run ended as failed\.\n.*now paused after 3 failed runs/);
-  });
-
   it('a failed run releases the item; run end done keeps the claim and a new claim starts a new run', async () => {
-    const { token } = await newAgent();
-    const c = await connect(token);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
     const items = async () => (await docs(`workspaces/${W}/projects/p1/items`)).i1;
     const first = await c.claim('i1');
     expect(await c.endRun(first.runId, 'failed')).toMatchObject({ released: true });
@@ -707,8 +616,8 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
   });
 
   it('an item released after a hold shows in list and wait even if its last run failed', async () => {
-    const { token } = await newAgent();
-    const c = await connect(token);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
     const { runId } = await c.claim('i1');
     await c.ask('i1', 'Which audience?');
     await c.endRun(runId, 'failed');
@@ -717,8 +626,8 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
   });
 
   it('an old question from a run that finished does not hold the item back', async () => {
-    const { token } = await newAgent();
-    const c = await connect(token);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
     const { runId } = await c.claim('i1');
     await c.ask('i1', 'Which audience?');
     await c.endRun(runId, 'done');
@@ -727,8 +636,8 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
   });
 
   it('whoami shows the settings with defaults for an agent that never had them', async () => {
-    const { token } = await newAgent();
-    const c = await connect(token);
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
     expect(c.whoami()).toMatchObject({
       paused: false,
       guardrails: { maxFailedRuns: 3 },
@@ -738,3 +647,71 @@ describe('agent settings and guardrails (card zSzW3LXy)', () => {
 });
 
 void P;
+
+// From the old `hivenod run` suite (TypeScript only; the Go CLI has no `run`): the parts that are
+// about claims, stopping and pairing, which the Go CLI does too.
+d('claims, Stop work and pairing (Go CLI)', () => {
+  it('Stop work while the agent is away ends the claim on the server; its next call says so (BrK0r2FE)', async () => {
+    const a = await newAgent();
+    const c = await connect(a);
+    const { runId } = await c.claim('i1');
+    const owner = as('owner');
+    const item = (await docs(`workspaces/${W}/projects/p1/items`)).i1 as unknown as ItemState;
+    await owner.run(
+      stopWork(owner.ctx, {
+        project: { steps: projectDoc().steps } as ProjectState,
+        projectId: 'p1',
+        itemId: 'i1',
+        item,
+        mode: 'cancel',
+        run: { costEur: 0, endedAt: null },
+      }),
+    );
+    expect((await docs(`workspaces/${W}/projects/p1/items`)).i1).toMatchObject({
+      status: 'stopped',
+      claim: null,
+    });
+    await expect(c.complete('i1', runId)).rejects.toThrow(/People stopped this work/);
+  });
+
+  it('taking over a stale claim ends the old agent run (it does not stay running)', async () => {
+    const a = await newAgent();
+    const b = await newAgent();
+    const ca = await connect(a);
+    const { runId: oldRun } = await ca.claim('i1');
+    // A's process died: no heartbeat for 11 minutes.
+    await ca.close();
+    const stale = Timestamp.fromMillis(Date.now() - 11 * 60_000);
+    const item = (await docs(`workspaces/${W}/projects/p1/items`)).i1!;
+    const run = (await docs(`workspaces/${W}/runs`))[oldRun]!;
+    await put({
+      [I('i1')]: { ...item, claim: { runId: oldRun, agentUid: a.uid, heartbeatAt: stale } },
+      [paths.run(W, oldRun)]: { ...run, heartbeatAt: stale, heartbeatEventAt: stale },
+    });
+    const cb = await connect(b);
+    const { runId } = await cb.claim('i1');
+    expect((await docs(`workspaces/${W}/runs`))[oldRun]).toMatchObject({ status: 'released' });
+    await cb.complete('i1', runId);
+    expect((await docs(`workspaces/${W}/projects/p1/items`)).i1).toMatchObject({
+      stepId: 'review',
+    });
+  });
+
+  it('cancelling hivenod pair (Ctrl+C) deletes its pending pairing doc (card PXOzcYeG)', async () => {
+    const child = spawn(goBinary(), ['pair'], { env: goEnv() });
+    let said = '';
+    child.stdout.on('data', (b: Buffer) => (said += b.toString()));
+    child.stderr.on('data', (b: Buffer) => (said += b.toString()));
+    const gone = new Promise((r) => child.once('exit', r));
+    try {
+      await expect.poll(() => said, { timeout: 15_000 }).toMatch(/confirm the code/);
+      const code = /code=([A-Z0-9]{4})-([A-Z0-9]{4})/.exec(said)!.slice(1).join('');
+      expect(Object.keys(await snap(pairingPath(code))).length).toBeGreaterThan(0);
+      child.kill('SIGINT');
+      await gone;
+      expect(await snap(pairingPath(code))).toEqual({});
+    } finally {
+      if (child.exitCode === null) child.kill('SIGKILL');
+    }
+  });
+});

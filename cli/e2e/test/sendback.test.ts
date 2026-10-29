@@ -1,12 +1,12 @@
 /**
- * Card KLCTVnX8, against the emulators and the real rules: an agent sends an item back to an
+ * Card KLCTVnX8, through the Go CLI (`hivenod mcp`), against the emulators and the real rules: an agent sends an item back to an
  * earlier agent step with send_back (the reason reaches the next agent in read_item), is refused
  * across a people step, and after 3 rounds holds the item for people instead; a person's answer
  * resets the rounds. add_note leaves a note on the item it holds.
  */
 import { createAgentIdentity } from '@hive/shared/agent-auth';
 import { answer, buildStepIndex, paths, type ItemState, type Step } from '@hive/shared';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   as,
   gate,
@@ -19,14 +19,19 @@ import {
   put,
   useEmulator,
   W,
-} from '../../shared/rules/harness';
-import { HiveClient } from '../src/client';
+} from '../../../packages/shared/rules/harness';
+import { GoAgent } from './agentcli';
+import { GO, goBinary } from './gobin';
 
 useEmulator();
 
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1:9099';
 const options = { apiKey: 'fake-api-key', projectId: 'hive-rules-test' };
-const clients: HiveClient[] = [];
+const d = GO ? describe : describe.skip;
+beforeAll(() => {
+  if (GO) goBinary();
+}, 300_000);
+const clients: GoAgent[] = [];
 afterEach(async () => {
   await Promise.all(clients.splice(0).map((c) => c.close()));
 });
@@ -58,11 +63,7 @@ async function agent() {
     },
     [P('p1')]: projectDoc({}, { steps: LIB, stepIndex: buildStepIndex(LIB) }),
   });
-  const c = await HiveClient.connect({
-    token,
-    projectId: 'hive-rules-test',
-    authEmulator: AUTH_HOST,
-  });
+  const c = await GoAgent.start(uid, token);
   clients.push(c);
   return c;
 }
@@ -75,7 +76,7 @@ async function item(path: string) {
   return d;
 }
 
-describe('send_back and add_note', () => {
+d('send_back and add_note', () => {
   it('sends back with a reason the next agent reads; refuses across people', async () => {
     const c = await agent();
     await put({ [I('i1')]: itemDoc({ stepId: 'test' }) });

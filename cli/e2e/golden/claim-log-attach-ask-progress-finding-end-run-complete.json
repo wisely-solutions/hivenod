@@ -1,0 +1,902 @@
+{
+  "calls": [
+    {
+      "tool": "list_work",
+      "ok": true,
+      "out": [
+        {
+          "claim": null,
+          "itemId": "i1",
+          "job": null,
+          "progress": null,
+          "project": "Blog",
+          "projectId": "p1",
+          "sendBackCount": 0,
+          "status": "queued",
+          "step": "Draft",
+          "stepId": "draft",
+          "title": "Post about bees",
+          "type": "idea"
+        }
+      ]
+    },
+    {
+      "tool": "claim",
+      "ok": true,
+      "out": {
+        "hint": "Call read_item / hivenod item read for the full brief, then log, attach and complete.",
+        "itemId": "i1",
+        "job": null,
+        "projectId": "p1",
+        "resumed": false,
+        "runId": "<id>",
+        "stepId": "draft",
+        "title": "Post about bees"
+      }
+    },
+    {
+      "tool": "read_item",
+      "ok": true,
+      "out": {
+        "agentSendBacks": {
+          "history": [],
+          "max": 3,
+          "rounds": 0,
+          "targets": [
+            {
+              "id": "intake",
+              "name": "Intake"
+            }
+          ]
+        },
+        "attachments": [],
+        "claim": {
+          "mine": true,
+          "runId": "<id>"
+        },
+        "costEur": 0,
+        "decisions": [],
+        "itemId": "i1",
+        "job": null,
+        "messages": [],
+        "path": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake",
+            "state": "done"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "kind": "agent",
+            "name": "Draft",
+            "state": "current"
+          },
+          {
+            "description": "Decide",
+            "id": "review",
+            "kind": "human",
+            "name": "Review",
+            "state": "ahead"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish",
+            "state": "ahead"
+          }
+        ],
+        "progress": null,
+        "project": "Blog",
+        "projectId": "p1",
+        "sendBackCount": 0,
+        "sendBackReasons": [],
+        "shape": null,
+        "status": "working",
+        "step": {
+          "description": "Write it",
+          "id": "draft",
+          "instructions": "Write",
+          "kind": "agent",
+          "name": "Draft",
+          "outputs": []
+        },
+        "summary": "",
+        "title": "Post about bees",
+        "type": "idea"
+      }
+    },
+    {
+      "tool": "log",
+      "ok": true,
+      "out": {
+        "line": 0,
+        "runId": "<id>"
+      }
+    },
+    {
+      "tool": "log",
+      "ok": true,
+      "out": {
+        "line": 1,
+        "runId": "<id>"
+      }
+    },
+    {
+      "tool": "attach",
+      "ok": true,
+      "out": {
+        "attachmentId": "<id>",
+        "kind": "html",
+        "name": "report.html"
+      }
+    },
+    {
+      "tool": "attach",
+      "ok": true,
+      "out": {
+        "attachmentId": "<id>",
+        "kind": "link",
+        "name": "Big"
+      }
+    },
+    {
+      "tool": "ask",
+      "ok": true,
+      "out": {
+        "messageId": "<id>",
+        "note": "The question now shows under \"Needs you\" in Hivenod."
+      }
+    },
+    {
+      "tool": "progress",
+      "ok": true,
+      "out": {
+        "itemId": "i1",
+        "progress": {
+          "done": 1,
+          "total": 3
+        }
+      }
+    },
+    {
+      "tool": "raise_finding",
+      "ok": true,
+      "out": {
+        "findingItemId": "<id>",
+        "note": "Suggested to people: it waits in the Intake suggestions until someone adds it or dismisses it. It is not work: it never shows in work list and cannot be claimed.",
+        "status": "suggested"
+      }
+    },
+    {
+      "tool": "add_note",
+      "ok": true,
+      "out": {
+        "messageId": "<id>"
+      }
+    },
+    {
+      "tool": "report_usage",
+      "ok": true,
+      "out": {
+        "newTokens": 600,
+        "runId": "<id>"
+      }
+    },
+    {
+      "tool": "end_run",
+      "ok": true,
+      "out": {
+        "costEur": 0.42,
+        "model": "m",
+        "runId": "<id>",
+        "status": "done",
+        "summary": "Drafted",
+        "tokensIn": 1000,
+        "tokensOut": 200
+      }
+    },
+    {
+      "tool": "complete",
+      "ok": true,
+      "out": {
+        "itemId": "i1",
+        "movedTo": {
+          "name": "Review",
+          "stepId": "review"
+        },
+        "runId": "<id>",
+        "status": "waiting",
+        "waitingForPeople": true
+      }
+    },
+    {
+      "tool": "read_item",
+      "ok": true,
+      "out": {
+        "agentSendBacks": {
+          "history": [],
+          "max": 3,
+          "rounds": 0,
+          "targets": [
+            {
+              "id": "draft",
+              "name": "Draft"
+            },
+            {
+              "id": "intake",
+              "name": "Intake"
+            }
+          ]
+        },
+        "attachments": [
+          {
+            "at": "<iso>",
+            "by": {
+              "id": "<agent>",
+              "type": "agent"
+            },
+            "bytes": 13,
+            "content": "<h1>Bees</h1>",
+            "id": "<id>",
+            "kind": "html",
+            "name": "report.html",
+            "url": null
+          },
+          {
+            "at": "<iso>",
+            "by": {
+              "id": "<agent>",
+              "type": "agent"
+            },
+            "bytes": 0,
+            "content": null,
+            "id": "<id>",
+            "kind": "link",
+            "name": "Big",
+            "url": "https://example.com/big.pdf"
+          }
+        ],
+        "claim": null,
+        "costEur": 0.42,
+        "decisions": [],
+        "itemId": "i1",
+        "job": null,
+        "messages": [
+          {
+            "answered": false,
+            "at": "<iso>",
+            "by": {
+              "id": "<agent>",
+              "type": "agent"
+            },
+            "id": "<id>",
+            "kind": "question",
+            "text": "Which audience?"
+          },
+          {
+            "answered": false,
+            "at": "<iso>",
+            "by": {
+              "id": "<agent>",
+              "type": "agent"
+            },
+            "id": "<id>",
+            "kind": "note",
+            "text": "Halfway there"
+          }
+        ],
+        "path": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake",
+            "state": "done"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "kind": "agent",
+            "name": "Draft",
+            "state": "done"
+          },
+          {
+            "description": "Decide",
+            "id": "review",
+            "kind": "human",
+            "name": "Review",
+            "state": "current"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish",
+            "state": "ahead"
+          }
+        ],
+        "progress": null,
+        "project": "Blog",
+        "projectId": "p1",
+        "sendBackCount": 0,
+        "sendBackReasons": [],
+        "shape": null,
+        "status": "waiting",
+        "step": {
+          "description": "Decide",
+          "id": "review",
+          "instructions": null,
+          "kind": "human",
+          "name": "Review",
+          "outputs": []
+        },
+        "summary": "",
+        "title": "Post about bees",
+        "type": "idea"
+      }
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "attachmentId": "<id>",
+          "kind": "html",
+          "name": "report.html"
+        },
+        "itemId": "i1",
+        "projectId": "p1",
+        "runId": "<id>",
+        "type": "attachment.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "attachmentId": "<id>",
+          "kind": "link",
+          "name": "Big"
+        },
+        "itemId": "i1",
+        "projectId": "p1",
+        "runId": "<id>",
+        "type": "attachment.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "fromStepId": "draft",
+          "status": "waiting",
+          "toStepId": "review"
+        },
+        "itemId": "i1",
+        "projectId": "p1",
+        "runId": "<id>",
+        "type": "item.completed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "kind": "note",
+          "messageId": "<id>"
+        },
+        "itemId": "i1",
+        "projectId": "p1",
+        "runId": "<id>",
+        "type": "message.posted"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "kind": "question",
+          "messageId": "<id>"
+        },
+        "itemId": "i1",
+        "projectId": "p1",
+        "runId": "<id>",
+        "type": "message.posted"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "parentItemId": "i1",
+          "title": "Typo"
+        },
+        "itemId": "<id>",
+        "projectId": "p1",
+        "runId": "<id>",
+        "type": "finding.raised"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "progress": {
+            "done": 1,
+            "total": 3
+          }
+        },
+        "itemId": "i1",
+        "projectId": "p1",
+        "runId": "<id>",
+        "type": "item.updated"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "status": "done"
+        },
+        "itemId": "i1",
+        "projectId": "p1",
+        "runId": "<id>",
+        "type": "run.ended"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "stepId": "draft",
+          "takeover": null
+        },
+        "itemId": "i1",
+        "projectId": "p1",
+        "runId": "<id>",
+        "type": "item.claimed"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      }
+    ],
+    "workspaces/w1/runs": [
+      {
+        "agentUid": "<agent>",
+        "costEur": 0.42,
+        "endedAt": "<ts>",
+        "heartbeatAt": "<ts>",
+        "heartbeatEventAt": "<ts>",
+        "itemId": "i1",
+        "lastEventId": "<id>",
+        "model": "m",
+        "projectId": "p1",
+        "startedAt": "<ts>",
+        "status": "done",
+        "stepId": "draft",
+        "summary": "Drafted",
+        "tokensIn": 1000,
+        "tokensOut": 200
+      }
+    ],
+    "workspaces/w1/runs/<id>/log": [
+      {
+        "at": "<ts>",
+        "level": "info",
+        "text": "Reading the brief"
+      },
+      {
+        "at": "<ts>",
+        "level": "warn",
+        "text": "Drafting"
+      }
+    ],
+    "workspaces/w1/projects": [
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      },
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      }
+    ],
+    "workspaces/w1/projects/p1/items": [
+      {
+        "attachmentCount": 0,
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "gate": null,
+        "lastEventId": "<id>",
+        "order": "<ms>",
+        "parentItemId": "i1",
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "finding",
+          "label": "Research agent on Post about bees"
+        },
+        "sourceRunId": "<id>",
+        "status": "suggested",
+        "stepId": "intake",
+        "summary": "In the hero",
+        "title": "Typo",
+        "triage": null,
+        "type": "finding",
+        "updatedAt": "<ts>"
+      },
+      {
+        "attachmentCount": 2,
+        "claim": null,
+        "costEur": 0.42,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": {
+          "approvals": {},
+          "rejections": {},
+          "stepId": "review"
+        },
+        "lastEventId": "<id>",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "waiting",
+        "stepAt": "<ts>",
+        "stepId": "review",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      },
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": {
+          "approvals": {},
+          "rejections": {},
+          "stepId": "review"
+        },
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "waiting",
+        "stepId": "review",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects/p1/items/i1/attachments": [
+      {
+        "at": "<ts>",
+        "by": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "bytes": 0,
+        "content": null,
+        "kind": "link",
+        "lastEventId": "<id>",
+        "name": "Big",
+        "runId": "<id>",
+        "url": "https://example.com/big.pdf"
+      },
+      {
+        "at": "<ts>",
+        "by": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "bytes": 13,
+        "content": "<h1>Bees</h1>",
+        "kind": "html",
+        "lastEventId": "<id>",
+        "name": "report.html",
+        "runId": "<id>",
+        "url": null
+      }
+    ],
+    "workspaces/w1/projects/p1/items/i1/messages": [
+      {
+        "answered": false,
+        "at": "<ts>",
+        "by": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "itemId": "i1",
+        "kind": "note",
+        "lastEventId": "<id>",
+        "projectId": "p1",
+        "replyTo": null,
+        "text": "Halfway there",
+        "workspaceId": "w1"
+      },
+      {
+        "answered": false,
+        "at": "<ts>",
+        "by": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "itemId": "i1",
+        "kind": "question",
+        "lastEventId": "<id>",
+        "projectId": "p1",
+        "replyTo": null,
+        "text": "Which audience?",
+        "workspaceId": "w1"
+      }
+    ],
+    "workspaces/w1/projects/p2/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ]
+  }
+}
