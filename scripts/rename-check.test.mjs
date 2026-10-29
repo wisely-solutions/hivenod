@@ -43,11 +43,17 @@ const ALLOW = {
   'cli/internal/hive/tools.go': ['hive: no Go handler for tool'],
   'cli/internal/hive/config.go': ['// Package hive is the agent client'],
   // The landing page names Hive, the agent that builds Hivenod (and the demo agent in its
-  // screenshots), not the product (item g17GWUkfKRFh4mgn0ciQ, Draft 2 approved by the owner).
+  // screenshots), not the product (item g17GWUkfKRFh4mgn0ciQ, Draft 2 approved by the owner; the
+  // two usages and the day timeline, item x38DsNLjyh1rBTlkwMr5).
   'apps/web/src/landing/LandingPage.tsx': [
     'Hive builds Hivenod on Hivenod',
     'the agent Hive is building',
     '<b>Hive</b> is building',
+    'with Hive and Tester at work',
+    'Hive shaped it',
+    'Hive shaped the pricing page rewrite',
+    'Hive built the page',
+    'Hive, our own agent, builds Hivenod',
   ],
 };
 

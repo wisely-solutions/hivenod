@@ -4,16 +4,20 @@ import { join } from 'node:path';
 import {
   adminPatch,
   adminSetAll,
+  freezeClock,
   projectFields,
   settle,
   signIn,
   uidOf,
   workspaceOf,
 } from './helpers';
+import { seedInbox } from './inboxSeed';
 
 // The real product screenshots on the landing page (item g17GWUkfKRFh4mgn0ciQ), from a clean demo
 // organization seeded on the emulators: made-up people, agents and work, never test or personal data.
 // Run with `pnpm shots:landing`; it rewrites apps/web/src/landing/shots/*.webp (commit them).
+// The Inbox and Calendar shots (item x38DsNLjyh1rBTlkwMr5) come from the shipped Today and thread
+// pages, with the Inbox e2e seed (inboxSeed.ts): made-up people and organizations only.
 // SHOTS_PREVIEW=<dir> also keeps the full-size PNGs there, to look at before committing.
 test.skip(!process.env.SHOTS_LANDING, 'pnpm shots:landing makes the landing screenshots');
 
@@ -292,4 +296,66 @@ test('landing screenshots from the demo organization', async ({ browser }, info)
   await save(browser, 'phone', await p2.screenshot(), [250, 500]);
   await phone.close();
   await ctx.close();
+});
+
+test('landing screenshots of Inbox and Calendar: Today and a thread', async ({ browser }, info) => {
+  test.skip(info.project.name !== 'desktop-1440', 'one run makes every shot');
+  test.setTimeout(150_000);
+  const ctx = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 2,
+    colorScheme: 'dark',
+  });
+  await ctx.addInitScript(() => localStorage.setItem('hive-theme', 'dark'));
+  const page = await ctx.newPage();
+  await freezeClock(page);
+  const s = await seedInbox(page);
+  try {
+    // Desktop: Today, the brief, the ranked decisions and the first decision card.
+    await page.goto('/');
+    await expect(page.locator('[data-decision-card]')).toBeVisible({ timeout: 20_000 });
+    await settle(page);
+    await page.waitForTimeout(400);
+    await save(
+      browser,
+      'today',
+      await page.screenshot({ clip: { x: 0, y: 0, width: 1440, height: 900 } }),
+      [930, 1860],
+    );
+
+    // Desktop: the payments review thread, a reply and a booking proposed with its checks (without
+    // the sidebar: the shot sits in a narrower frame on the landing page).
+    await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
+    await expect(page.getByText(/Tuesday works/).first()).toBeVisible({ timeout: 20_000 });
+    await settle(page);
+    await page.waitForTimeout(400);
+    await save(
+      browser,
+      'thread',
+      await page.screenshot({ clip: { x: 276, y: 30, width: 1112, height: 840 } }),
+      [640, 1280],
+    );
+
+    // Phone: Today at 390.
+    const phone = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+      colorScheme: 'dark',
+    });
+    await phone.addInitScript(() => localStorage.setItem('hive-theme', 'dark'));
+    const p2 = await phone.newPage();
+    await freezeClock(p2);
+    await p2.goto('/');
+    await signIn(p2, s.me);
+    await expect(p2.locator('[data-decision-card]')).toBeVisible({ timeout: 20_000 });
+    await settle(p2);
+    await p2.waitForTimeout(400);
+    await save(browser, 'today-phone', await p2.screenshot(), [250, 500]);
+    await phone.close();
+  } finally {
+    await s.stop();
+    await ctx.close();
+  }
 });
