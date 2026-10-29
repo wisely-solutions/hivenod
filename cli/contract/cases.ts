@@ -1610,6 +1610,12 @@ function build(): ContractCase[] {
   propose('ignore', AGENT, { type: 'ignore', fields: { reason: null } });
   propose('own id, from waiting', AGENT, { outcomeId: 'o9', thread: TH({ state: 'waiting' }) });
   propose('unknown type', AGENT, { type: 'launch' });
+  // Plan-only types (item qwFAWxZM5xkcE7PPjAzi): only as plan steps
+  propose('approval alone', AGENT, { type: 'approval', fields: { what: 'New prices' } });
+  propose('book alone', AGENT, {
+    type: 'book',
+    fields: { start: '2026-11-05T10:00:00Z', end: '2026-11-05T11:00:00Z', with: 'Sam' },
+  });
   propose('unknown field', AGENT, { fields: { text: 'x', bcc: 'all' } });
   propose('missing field', AGENT, {
     type: 'reply_book',

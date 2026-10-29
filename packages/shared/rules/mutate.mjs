@@ -370,6 +370,15 @@ const MUTATIONS = [
     ],
   ],
   [
+    'inbox: plan-only type proposed alone',
+    [
+      [
+        '&& request.resource.data.type in outcomeSingle()',
+        '&& request.resource.data.type in outcomeTypes()',
+      ],
+    ],
+  ],
+  [
     'inbox: forged executor',
     [['&& d.executor == (d.type in outcomeImmediate() ? null : t.fetchedBy);', ';']],
   ],
