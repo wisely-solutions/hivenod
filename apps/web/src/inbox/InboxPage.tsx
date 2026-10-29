@@ -1,7 +1,7 @@
 import { firstRunPath, firstRunSchema, nextOnPath } from '@hive/shared';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { doc, setDoc } from 'firebase/firestore';
-import { Inbox } from 'lucide-react';
+import { Inbox, SlidersHorizontal } from 'lucide-react';
 import {
   lazy,
   Suspense,
@@ -27,7 +27,14 @@ import { Eyebrow } from '../ui/badge';
 import { Button } from '../ui/button';
 import { EmptyState, Skeleton, WorkingDots } from '../ui/feedback';
 import { AnimatePresence, motion } from '../ui/motion';
-import { Sheet, useCountdowns } from '../ui/overlay';
+import { Popover, Sheet, useCountdowns } from '../ui/overlay';
+import { BriefCard } from '../today/BriefCard';
+import { DecisionCard, type DecisionCardHandle } from '../today/DecisionCard';
+import { DecisionRow, DoneRow } from '../today/DecisionRow';
+import { TidyUps } from '../today/TidyUps';
+import { TodayRail } from '../today/TodayRail';
+import { useToday } from '../today/useToday';
+import { Icon } from '../ui/icon';
 import { UndoButton } from '../ui/UndoButton';
 import { BAR_BUTTON, BAR_PRIMARY, BarUndo, SelectionBar } from '../board/SelectionBar';
 import { rangeKeys } from '../board/bulk';
@@ -42,12 +49,11 @@ import {
   countNeeds,
   filterKind,
   filterNeeds,
-  groupsOf,
+  orderToday,
   parseScope,
   type NeedsEntry,
   type Scope,
 } from '../needs/logic';
-import { ThreadRow } from '../needs/ThreadRow';
 import { useToast } from '../ui/overlay';
 import { useDecide } from './useDecide';
 import { FirstRun } from './FirstRun';
@@ -178,7 +184,23 @@ export function InboxPage() {
     return out;
   }, [scoped, held, heldAt, wid, all.orgs]);
   const filtered = filterKind(shown, filter);
-  const list = filtered.filter((e) => e.kind !== 'finding');
+  // Today (item kt3E7): one stack in rank order (design 2.1). Tidy-ups go to their own card
+  // unless kept for me; Skip moves a decision to the end for this visit.
+  const [kept, setKept] = useState<ReadonlySet<string>>(() => new Set());
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const [done, setDone] = useState<{ key: string; label: string; at: number }[]>([]);
+  const tidyAll = filtered.filter((e) => e.tidy);
+  const tidy = tidyAll.filter((e) => !kept.has(e.key));
+  const ordered = orderToday(
+    filtered
+      .filter((e) => e.kind !== 'finding')
+      .map((e) => (e.tidy && kept.has(e.key) ? { ...e, tidy: false } : e)),
+    now,
+  );
+  const list = [
+    ...ordered.filter((e) => !skipped.includes(e.key)),
+    ...skipped.flatMap((k) => ordered.filter((e) => e.key === k)),
+  ];
   const found = filtered.filter((e) => e.kind === 'finding');
   // Keyboard order and the focus view's position: the list, then the suggestions.
   const nav = [...list, ...found];
@@ -197,6 +219,13 @@ export function InboxPage() {
   const focused = focusedRow?.entry && focusedRow.wid === wid ? focusedRow.entry : null;
   const selectedRow = focusedRow ?? (desktop ? (nav[0] ?? null) : null);
   const selected = selectedRow?.entry ?? null;
+  // The thread drawn as the decision card: the focused one, or the first of the stack.
+  const cardEntry = (() => {
+    const r = selectedRow ?? nav[0];
+    return r?.thread ? r : null;
+  })();
+  const cardRef = useRef<DecisionCardHandle>(null);
+  const today = useToday(all, list, tidy, now, done.length);
 
   // Moving on: the held entry goes in the same render that shows the next selection.
   const heldLeaving = held?.leaving ? held.entry.key : null;
@@ -339,7 +368,11 @@ export function InboxPage() {
    */
   const openRow = (e: NeedsEntry) => {
     if (e.thread) {
-      void navigate({ to: '/inbox/$wid/t/$tid', params: { wid: e.wid, tid: e.thread.id } });
+      void navigate({
+        to: '/inbox/$wid/t/$tid',
+        params: { wid: e.wid, tid: e.thread.id },
+        search: { from: 'today' },
+      });
       return;
     }
     if (e.wid !== wid) {
@@ -353,10 +386,25 @@ export function InboxPage() {
   };
 
   // Undo runs up to 5 s after the decision: read where the person is now, not where they were.
-  const latest = useRef({ sel, desktop, go });
+  const latest = useRef({ sel, desktop, go, nav, list });
   useEffect(() => {
-    latest.current = { sel, desktop, go };
+    latest.current = { sel, desktop, go, nav, list };
   });
+  /** A decision card's plan was written: it collapses to its done row, the next one takes focus. */
+  const cardDone = (key: string, label: string) => {
+    const cur = latest.current;
+    const at = Math.max(
+      0,
+      cur.list.findIndex((e) => e.key === key),
+    );
+    setDone((d) => [...d, { key, label, at }]);
+    if (cur.sel === key) cur.go(nextKey(cur.nav, key));
+  };
+  const skip = (key: string) => {
+    setSkipped((cur) => [...cur.filter((k) => k !== key), key]);
+    const following = nextKey(nav, key);
+    if (following && following !== key) go(following);
+  };
 
   // The next item slides into focus when the current one leaves.
   const decideEntry = (e: InboxEntry, d: Parameters<typeof decide>[1]) => {
@@ -454,8 +502,27 @@ export function InboxPage() {
     label: 'Approve',
     group: 'Needs you',
     run: () => {
-      if (selected && canApprove)
+      if (cardEntry && (!selectedRow || selectedRow.key === cardEntry.key))
+        cardRef.current?.approve();
+      else if (selected && canApprove)
         decideEntry(selected, { kind: 'approve', rationale: rationales[selected.key] ?? '' });
+    },
+  });
+  useShortcut({
+    id: 'today:edit',
+    keys: ['e'],
+    label: 'Edit the proposal',
+    group: 'Needs you',
+    run: () => cardRef.current?.edit(),
+  });
+  useShortcut({
+    id: 'today:skip',
+    keys: ['s'],
+    label: 'Skip for now',
+    group: 'Needs you',
+    run: () => {
+      const r = selectedRow ?? nav[0];
+      if (r && !focused) skip(r.key);
     },
   });
   useShortcut({
@@ -464,7 +531,9 @@ export function InboxPage() {
     label: 'Send back or reject',
     group: 'Needs you',
     run: () => {
-      if (selected && canApprove) setDialog({ mode: 'iterate', key: selected.key });
+      if (cardEntry && (!selectedRow || selectedRow.key === cardEntry.key))
+        cardRef.current?.reject();
+      else if (selected && canApprove) setDialog({ mode: 'iterate', key: selected.key });
     },
   });
   useShortcut({
@@ -505,8 +574,10 @@ export function InboxPage() {
   // organizations are listed): one organization where everything is only yours keeps the old,
   // shorter header on a phone.
   const showWho = manyOrgs || scope !== 'all' || (whoCounts.onlyYou > 0 && whoCounts.shared > 0);
+  const activeFilters =
+    (filter !== 'all' ? 1 : 0) + (scope !== 'all' ? 1 : 0) + (orgFilter ? 1 : 0);
   const chips = (
-    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+    <div className="flex flex-col gap-3">
       <Segmented
         label="Filter"
         value={filter}
@@ -541,21 +612,46 @@ export function InboxPage() {
     </div>
   );
 
+  const agentNameOf = (w: string, id: string) =>
+    (w === wid ? shell.agents.find((a) => a.id === id)?.data.name : undefined) ?? 'Your agent';
+  const orgTag = (wid: string) => (manyOrgs ? today.orgOf(wid) : null);
   const renderRow = (r: NeedsEntry) => {
-    if (!r.entry)
+    if (!r.entry) {
+      if (cardEntry?.key === r.key)
+        return (
+          <motion.li key={r.key} layout={false} className="pb-3" data-card-row={r.key}>
+            <DecisionCard
+              ref={cardRef}
+              key={r.key}
+              entry={r}
+              org={today.orgOf(r.wid)}
+              area={today.areaOf(r)}
+              sender={today.senderOf(r)}
+              now={now}
+              busy={today.busy}
+              agentName={(id) => agentNameOf(r.wid, id)}
+              onOpen={() => openRow(r)}
+              onSkip={() => skip(r.key)}
+              onDone={(label) => cardDone(r.key, label)}
+            />
+          </motion.li>
+        );
       return (
-        <ThreadRow
+        <DecisionRow
           key={r.key}
           entry={r}
+          sender={today.senderOf(r)?.name ?? null}
+          org={orgTag(r.wid)}
           now={now}
-          selected={desktop && selectedRow?.key === r.key}
-          onOpen={() => openRow(r)}
+          onFocus={() => go(r.key, false)}
         />
       );
+    }
     const e = r.entry;
     return (
       <InboxRow
         key={r.key}
+        org={orgTag(r.wid)?.name}
         entry={e}
         selected={desktop && selectedRow?.key === r.key}
         now={now}
@@ -583,40 +679,23 @@ export function InboxPage() {
     );
   };
 
-  /**
-   * Rows under their headings: the organization (when there are several) and the project (or
-   * Inbox). One organization with one project needs no headings: each row names its project.
-   */
-  const grouped = (entries: NeedsEntry[], label: string) => {
-    const groups = groupsOf(entries);
-    const orgHeads = manyOrgs && !orgFilter;
-    const projectHeads = orgHeads || groups.length > 1;
+  /** The stack's rows, with the decisions made this visit collapsed where they were. */
+  const flat = (entries: NeedsEntry[], withDone: boolean) => {
     const out: ReactNode[] = [];
-    let lastOrg: string | null = null;
-    for (const g of groups) {
-      if (orgHeads && g.wid !== lastOrg) {
-        out.push(
-          <motion.li key={`org:${label}:${g.wid}`} layout={false} className="pb-1 pt-3 first:pt-0">
-            <h2 className="text-14 font-semibold text-ink">{g.org}</h2>
-          </motion.li>,
-        );
+    const doneRows = withDone ? [...done].sort((a, b) => a.at - b.at) : [];
+    let d = 0;
+    entries.forEach((r, i) => {
+      while (d < doneRows.length && doneRows[d]!.at <= i) {
+        const x = doneRows[d++]!;
+        if (!entries.some((e) => e.key === x.key))
+          out.push(<DoneRow key={`done:${x.key}:${d}`} label={x.label} />);
       }
-      lastOrg = g.wid;
-      if (projectHeads) {
-        const Head = orgHeads ? 'h3' : 'h2';
-        out.push(
-          <motion.li
-            key={`group:${label}:${g.wid}:${g.group}`}
-            layout={false}
-            className="pb-1 pt-2 first:pt-0"
-          >
-            <Head className="font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-2">
-              {g.project ? `${g.project.emoji} ${g.project.name}` : 'Inbox'}
-            </Head>
-          </motion.li>,
-        );
-      }
-      for (const r of g.entries) out.push(renderRow(r));
+      out.push(renderRow(r));
+    });
+    for (; d < doneRows.length; d++) {
+      const x = doneRows[d]!;
+      if (!entries.some((e) => e.key === x.key))
+        out.push(<DoneRow key={`done:${x.key}:${d}`} label={x.label} />);
     }
     return out;
   };
@@ -624,7 +703,7 @@ export function InboxPage() {
   const rows = (
     <ul aria-label="Needs you" className="flex flex-col">
       <AnimatePresence initial={false} mode="popLayout">
-        {grouped(allRows ? list : list.slice(0, FIRST_ROWS), 'todo')}
+        {flat(allRows ? list : list.slice(0, FIRST_ROWS), true)}
       </AnimatePresence>
     </ul>
   );
@@ -634,7 +713,7 @@ export function InboxPage() {
       <Eyebrow>New suggestions · add or dismiss</Eyebrow>
       <ul className="flex flex-col">
         <AnimatePresence initial={false} mode="popLayout">
-          {grouped(found, 'found')}
+          {flat(found, false)}
         </AnimatePresence>
       </ul>
     </section>
@@ -860,13 +939,48 @@ export function InboxPage() {
     </>
   );
 
+  const filtersButton = (
+    <Popover
+      label="Filters"
+      align="end"
+      contentClassName="w-[min(26rem,calc(100vw-24px))] p-4"
+      trigger={
+        <Button
+          variant="secondary"
+          className="min-h-9"
+          leading={<Icon icon={SlidersHorizontal} size={15} />}
+        >
+          Filters{activeFilters ? ` · ${activeFilters}` : ''}
+        </Button>
+      }
+    >
+      {chips}
+    </Popover>
+  );
+  const stackHead = (
+    <div className="mb-3 flex items-center gap-3">
+      <h2 className="font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3">
+        Needs you · {list.length}
+      </h2>
+      <span className="ml-auto hidden items-center gap-1 text-12 text-text-3 [@media(hover:hover)]:sm:inline-flex">
+        J/K move · A approve · E edit
+      </span>
+      <span className="max-sm:ml-auto">{filtersButton}</span>
+    </div>
+  );
+
   return (
     <>
-      <div className="mb-4">
-        <Eyebrow>{session.workspace.name}</Eyebrow>
-        <h1 className="mt-1 text-28 font-semibold">Hi {firstName(session.profile.name)}</h1>
-        <p aria-live="polite" className="mt-0.5 text-14 text-text-2">
-          {loading ? ' ' : summaryLine}
+      <div className="mb-5">
+        <BriefCard
+          brief={loading ? null : today.brief}
+          name={firstName(session.profile.name)}
+          now={now}
+          loading={loading}
+        />
+        {/* The count for screen readers (and the old summary line's place). */}
+        <p aria-live="polite" className="sr-only">
+          {loading || total === 0 ? '\u00a0' : summaryLine}
         </p>
       </div>
       {loading ? (
@@ -889,18 +1003,59 @@ export function InboxPage() {
           />
         </div>
       ) : null}
-      {loading ? null : chips}
-      {loading ? null : total === 0 && waiting.length === 0 ? (
-        <div className="mt-4">{empty}</div>
-      ) : (
-        <div className="mt-3 max-w-3xl">
-          {list.length === 0 && found.length === 0 ? (
-            <p className="py-4 text-14 text-text-2">Nothing in this filter.</p>
-          ) : list.length ? (
-            rows
-          ) : null}
-          {suggestionList}
-          {waitingList}
+      {loading ? null : (
+        <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start xl:gap-6">
+          <div className="min-w-0">
+            {total === 0 && waiting.length === 0 ? (
+              <>
+                {activeFilters ? stackHead : null}
+                <div className="mt-2">{empty}</div>
+              </>
+            ) : (
+              <>
+                {stackHead}
+                {list.length === 0 && found.length === 0 && tidyAll.length === 0 ? (
+                  <p className="py-4 text-14 text-text-2">Nothing in this filter.</p>
+                ) : list.length ? (
+                  rows
+                ) : null}
+                <TidyUps
+                  entries={tidyAll}
+                  kept={kept}
+                  onKeep={(key, on) =>
+                    setKept((cur) => {
+                      const next = new Set(cur);
+                      if (on) next.add(key);
+                      else next.delete(key);
+                      return next;
+                    })
+                  }
+                  onDone={(keys) => {
+                    if (keys.length)
+                      setDone((d) => [
+                        ...d,
+                        {
+                          key: `tidy:${keys.join(',')}`,
+                          label: `Approved ${keys.length} ${keys.length === 1 ? 'tidy-up' : 'tidy-ups'}`,
+                          at: list.length,
+                        },
+                      ]);
+                  }}
+                />
+                {suggestionList}
+                {waitingList}
+              </>
+            )}
+          </div>
+          <aside aria-label="Your day" className="mt-6 xl:mt-0">
+            <TodayRail
+              agenda={today.agenda}
+              freeMinutes={today.freeMinutes}
+              waiting={today.waiting}
+              working={today.working}
+              now={now}
+            />
+          </aside>
         </div>
       )}
       {detail}

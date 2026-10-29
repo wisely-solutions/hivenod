@@ -29,6 +29,13 @@ export interface Placed {
 
 const DAY_MS = 86_400_000;
 
+/**
+ * Working hours (item kt3E7u9EliL3q2veDDI0): Monday to Friday, 09:00-18:00 in the browser's zone.
+ * A constant: a setting is out of scope. Free time and the slot strip count only this time.
+ */
+export const WORK_HOURS = { days: [1, 2, 3, 4, 5], start: 9, end: 18 } as const;
+export const isWorkDay = (d: Date) => (WORK_HOURS.days as readonly number[]).includes(d.getDay());
+
 export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }

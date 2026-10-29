@@ -189,7 +189,7 @@ function Frame({ children }: { children?: ReactNode }) {
   }, [path, main]);
   useEffect(() => {
     if (/\/view\/[^/]+\/?$/.test(path)) return; // the viewer names its own tab
-    const base = path === '/' ? 'Needs you · Hivenod' : title ? `${title} · Hivenod` : 'Hivenod';
+    const base = path === '/' ? 'Today · Hivenod' : title ? `${title} · Hivenod` : 'Hivenod';
     // The count sits in front on every screen, so a background tab shows what waits.
     document.title = tabTitle(base, all.ready ? needs.total : null);
   }, [path, title, needs.total, all.ready]);

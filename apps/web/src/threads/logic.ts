@@ -52,6 +52,36 @@ export function waitingText(w: InboxThread['waiting']): string {
 }
 
 export const forMember = (s: ThreadState) => THREAD_FOR_MEMBER.includes(s);
+
+const DAY = 86_400_000;
+/** How pressing a thread is (design 3.5): 1 red, 2 amber, 3-4 grey. */
+export type Band = 1 | 2 | 3 | 4;
+type Rankable = Pick<InboxThread, 'state' | 'urgent' | 'due' | 'updatedAt'>;
+/** 1: urgent, or due within 24 h (or past); 2: due within 7 days; 3: a question; 4: proposals. */
+export function bandOf(t: Rankable, now: number): Band {
+  const due = t.due ? t.due.toMillis() : null;
+  if (t.urgent || (due !== null && due <= now + DAY)) return 1;
+  if (due !== null && due <= now + 7 * DAY) return 2;
+  return t.state === 'needsYou' ? 3 : 4;
+}
+/**
+ * Threads by band; in bands 1 and 2 the earlier due date first (urgent without one after them),
+ * in bands 3 and 4 the one waiting longest first. Stable for equal keys.
+ */
+export function rankThreads<T extends { id: string; data: Rankable }>(
+  rows: readonly T[],
+  now: number,
+): T[] {
+  const key = (r: T) => {
+    const band = bandOf(r.data, now);
+    const due = r.data.due ? r.data.due.toMillis() : Infinity;
+    return { band, k: band <= 2 ? due : ms(r.data.updatedAt) };
+  };
+  return rows
+    .map((r, i) => ({ r, i, ...key(r) }))
+    .sort((a, b) => a.band - b.band || a.k - b.k || a.i - b.i)
+    .map((x) => x.r);
+}
 export const isOpen = (s: ThreadState) => THREAD_OPEN.includes(s);
 
 export interface ThreadRow {

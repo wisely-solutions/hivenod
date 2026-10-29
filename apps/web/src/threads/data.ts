@@ -67,7 +67,7 @@ const subjectEventsQuery = (wid: string, uid: string, sid: string) =>
 type Part<T> = { state: 'loading' } | { state: 'ready'; rows: T[] } | { state: 'error' };
 
 /** One listener per workspace, merged; an error in one workspace keeps the others. */
-function useAcross<S extends z.ZodType, T>(
+export function useAcross<S extends z.ZodType, T>(
   name: string,
   wids: readonly string[],
   uid: string,

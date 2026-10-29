@@ -1,0 +1,158 @@
+/**
+ * The right rail of Today (item kt3E7u9EliL3q2veDDI0, design 2.1), beside the stack from 1280 px
+ * and under it below: today's agenda with proposed bookings dashed and the free time, the threads
+ * waiting on others, and what the agents are working on.
+ */
+import { Link } from '@tanstack/react-router';
+import { Bot } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { cn } from '../ui/cn';
+import { Icon } from '../ui/icon';
+import { WorkingDots } from '../ui/feedback';
+import { waitLabel } from '../inbox/logic';
+import { hhmm } from './logic';
+
+export interface AgendaRow {
+  id: string;
+  start: Date;
+  end: Date;
+  title: string;
+  /** A booking an agent proposed (dashed), a busy block without details, or an event. */
+  kind: 'event' | 'busy' | 'proposed';
+  color?: string;
+  sub?: string;
+}
+
+function Panel({
+  title,
+  aside,
+  children,
+  label,
+}: {
+  title: string;
+  aside?: ReactNode;
+  children: ReactNode;
+  label: string;
+}) {
+  return (
+    <section
+      aria-label={label}
+      className="rounded-panel border border-line bg-surface p-4 shadow-e1"
+    >
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <h2 className="text-16 font-semibold text-ink">{title}</h2>
+        {aside ? <span className="text-13 text-text-2">{aside}</span> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function TodayRail({
+  agenda,
+  freeMinutes,
+  waiting,
+  working,
+  now,
+}: {
+  agenda: AgendaRow[] | null;
+  freeMinutes: number | null;
+  waiting: Array<{ key: string; wid: string; tid: string; title: string; on: string; at: number }>;
+  working: Array<{ key: string; wid: string; tid: string; title: string; note: string }>;
+  now: number;
+}) {
+  const free =
+    freeMinutes === null
+      ? null
+      : freeMinutes >= 60
+        ? `${Math.floor(freeMinutes / 60)} h${freeMinutes % 60 ? ` ${freeMinutes % 60}` : ''} free`
+        : `${freeMinutes} min free`;
+  return (
+    <div className="flex flex-col gap-4" data-today-rail="">
+      <Panel title="Today" label="Today's agenda" aside={free}>
+        {agenda === null ? (
+          <p className="text-13 text-text-2">Loading your calendar…</p>
+        ) : agenda.length === 0 ? (
+          <p className="text-13 text-text-2">Nothing in your calendar today.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {agenda.map((a) => (
+              <li key={a.id} className="flex items-start gap-3" data-agenda={a.kind}>
+                <span className="w-11 shrink-0 pt-1.5 text-12 tabular-nums text-text-2">
+                  {hhmm(a.start)}
+                </span>
+                <span
+                  className={cn(
+                    'min-w-0 flex-1 rounded-btn border-l-[3px] px-2.5 py-1.5 text-13',
+                    a.kind === 'proposed'
+                      ? 'border border-dashed border-gate bg-gate-bg text-ink'
+                      : a.kind === 'busy'
+                        ? 'bg-canvas text-text-2'
+                        : 'bg-agent-soft text-ink',
+                  )}
+                  style={a.kind === 'event' && a.color ? { borderLeftColor: a.color } : undefined}
+                >
+                  <span className="block font-medium [overflow-wrap:anywhere]">
+                    {a.title || 'Busy'}
+                  </span>
+                  {a.sub ? <span className="block text-12 text-text-2">{a.sub}</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+      {waiting.length ? (
+        <Panel title="Waiting on others" label="Waiting on others" aside={String(waiting.length)}>
+          <ul className="flex flex-col divide-y divide-line">
+            {waiting.map((w) => (
+              <li key={w.key}>
+                <Link
+                  to="/inbox/$wid/t/$tid"
+                  params={{ wid: w.wid, tid: w.tid }}
+                  className="flex items-baseline gap-2 py-2 text-14 hov:underline foc:outline-2 foc:outline-focus"
+                >
+                  <span className="min-w-0 flex-1 truncate text-ink">{w.title}</span>
+                  <span className="shrink-0 text-12 text-text-2">
+                    {w.on} · {waitLabel(w.at, now)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
+      {working.length ? (
+        <Panel
+          title="Agents working"
+          label="Agents working"
+          aside={
+            <span className="inline-flex items-center gap-1.5">
+              <WorkingDots /> {working.length}
+            </span>
+          }
+        >
+          <ul className="flex flex-col gap-2.5">
+            {working.map((w) => (
+              <li key={w.key}>
+                <Link
+                  to="/inbox/$wid/t/$tid"
+                  params={{ wid: w.wid, tid: w.tid }}
+                  className="block rounded-btn foc:outline-2 foc:outline-focus"
+                >
+                  <span className="flex items-center gap-1.5 text-14 font-medium text-ink hov:underline">
+                    <Icon icon={Bot} size={14} className="text-agent" />
+                    <span className="truncate">{w.title}</span>
+                  </span>
+                  {w.note ? (
+                    <span className="mt-0.5 block truncate text-13 text-text-2">{w.note}</span>
+                  ) : null}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ) : null}
+    </div>
+  );
+}
