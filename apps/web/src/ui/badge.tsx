@@ -78,13 +78,16 @@ export function Pill({
   tone = 'neutral',
   children,
   className,
+  'data-testid': testId,
 }: {
   tone?: Tone;
   children: ReactNode;
   className?: string;
+  'data-testid'?: string;
 }) {
   return (
     <span
+      data-testid={testId}
       className={cn(
         'inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-13 font-medium',
         tones[tone],

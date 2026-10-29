@@ -50,6 +50,7 @@ describe('hivenod mcp', () => {
       'send_back',
       'shape_item',
       'skip_step',
+      'status',
       'subject_assign',
       'subject_list',
       'subject_relate',

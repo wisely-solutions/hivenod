@@ -137,6 +137,9 @@ var ToolRuns = map[string]Run{
 	"progress": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.Progress(ctx, a.S("itemId"), *a.F("done"), *a.F("total"), a.S("project"))
 	},
+	"status": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.Status(ctx, a.S("itemId"), a.S("text"), a.F("pct"), a.S("project"))
+	},
 	"raise_finding": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.RaiseFinding(ctx, a.S("itemId"), a.S("title"), a.S("details"), a.S("project"))
 	},

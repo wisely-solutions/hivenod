@@ -50,6 +50,7 @@ import { canEditItem, isItemLive, isNewAttachment, sinceText } from './logic';
 import { stepOfText } from './path';
 import { LiveRun } from './LiveRun';
 import { PathPanel } from './PathPanel';
+import { StatusCheck } from './StatusCheck';
 import { decisionText } from './sendback';
 
 const ts = (t: { toMillis: () => number }) => t.toMillis();
@@ -366,6 +367,7 @@ export function ItemDetail({
               ) : null}
             </div>
             <EditableTitle pid={pid} itemId={itemId} item={item} canEdit={canEdit} />
+            <StatusCheck pid={pid} itemId={itemId} item={item} />
             {agent && !showLive ? (
               <p className="mt-2 inline-flex items-center gap-2 text-13 text-text-2">
                 <AgentAvatar

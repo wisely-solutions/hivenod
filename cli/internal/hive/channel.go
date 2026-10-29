@@ -43,7 +43,14 @@ type ChannelOptions struct {
 	// Inbox events (item 4PEHr, inboxfeed.go): outside MaxItems. Inbox.MaxInbox -1 is the
 	// default (3); 0 turns them off.
 	Inbox InboxOptions
+	// StatusCheck: how often held items are checked for a due status event (item AzveC; default 60 s).
+	StatusCheck time.Duration
+	// StatusMinute: the length of a minute for the status interval (tests shorten it; default 60 s).
+	StatusMinute time.Duration
 }
+
+// StatusEveryRefresh: a project's status interval is read again after this long (item AzveC).
+const StatusEveryRefresh = 5 * time.Minute
 
 // ParkNote is what park adds to its result (item QjTTL; the same text as the TypeScript CLI).
 const ParkNote = `Parked: it stays yours but no longer counts toward max_items, so the next item may arrive. Any tool call on it, or a person's note, answer or Stop, makes it active again. After 24 h without activity it goes back to the queue.`
@@ -64,6 +71,17 @@ type heldItem struct {
 	parked *parkState
 	// wakeMu: one unpark write at a time.
 	wakeMu sync.Mutex
+	// Status checks (item AzveC), guarded by s.mu: the latest item snapshot, when the next periodic
+	// status event is due (zero: never), and the newest person's ask already pushed.
+	item      *model.Item
+	seen      bool
+	statusDue time.Time
+	askSeen   time.Time
+}
+
+type everyState struct {
+	min int64
+	at  time.Time
 }
 
 type parkState struct {
@@ -82,7 +100,8 @@ type Session struct {
 	current      []*heldItem // hand-over order
 	stoppedItems map[string]string
 	stoppedRuns  map[string]bool
-	givenBack    map[string]time.Time // items given back, with when (item QjTTL)
+	givenBack    map[string]time.Time  // items given back, with when (item QjTTL)
+	every        map[string]everyState // status interval per project (item AzveC)
 	closed       bool
 	looking      bool
 	waking       bool
@@ -119,8 +138,14 @@ func NewSession(c *Client, cfg Config, push func(Event), o ChannelOptions) *Sess
 	if o.ParkCheck == 0 {
 		o.ParkCheck = 60 * time.Second
 	}
+	if o.StatusCheck == 0 {
+		o.StatusCheck = 60 * time.Second
+	}
+	if o.StatusMinute == 0 {
+		o.StatusMinute = time.Minute
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Session{c: c, cfg: cfg, push: push, o: o, stoppedItems: map[string]string{}, stoppedRuns: map[string]bool{}, givenBack: map[string]time.Time{}, ctx: ctx, cancel: cancel}
+	return &Session{c: c, cfg: cfg, push: push, o: o, stoppedItems: map[string]string{}, stoppedRuns: map[string]bool{}, givenBack: map[string]time.Time{}, every: map[string]everyState{}, ctx: ctx, cancel: cancel}
 }
 
 // active is how many held items are being worked (not parked): what MaxItems counts. Call with
@@ -233,6 +258,139 @@ func (s *Session) ReturnStale(ctx context.Context) []string {
 			Content: fmt.Sprintf(`"%s" (item_id %s) was parked for 24 hours without activity (waiting: %s). It went back to the queue; stop any work on it.`, h.Title, h.ItemID, clip(reason, 200)),
 			Meta:    map[string]string{"kind": "info", "code": "returned", "item_id": h.ItemID, "project_id": h.ProjectID},
 		})
+	}
+	return out
+}
+
+// StatusText is the content of a status event (item AzveC); why is "interval" or "asked".
+func StatusText(itemID, title, why, by string, maxItems int) string {
+	head := fmt.Sprintf(`Status check on "%s" (item_id %s).`, clip(title, 200), itemID)
+	if why == "asked" {
+		if by == "" {
+			by = "A person"
+		}
+		head = fmt.Sprintf(`%s asked for a status on "%s" (item_id %s).`, by, clip(title, 200), itemID)
+	}
+	how := fmt.Sprintf(`answer with the status tool (itemId="%s", text: one line on where the work stands, pct: a percentage when known), then carry on.`, itemID)
+	if maxItems > 1 {
+		return head + " Pass it on to the sub-agent working on this item: it should " + how
+	}
+	return head + " Please " + how
+}
+
+// statusEvery is the project's status interval in minutes (0 = off), read again every few minutes.
+func (s *Session) statusEvery(ctx context.Context, projectID string) int64 {
+	s.mu.Lock()
+	hit, ok := s.every[projectID]
+	s.mu.Unlock()
+	if ok && s.o.Now().Sub(hit.at) < StatusEveryRefresh {
+		return hit.min
+	}
+	min := int64(model.DefaultStatusEvery)
+	if ok {
+		min = hit.min
+	}
+	if s.c != nil {
+		if v, err := s.c.StatusEvery(ctx, projectID); err == nil {
+			min = v
+		}
+	}
+	s.mu.Lock()
+	s.every[projectID] = everyState{min: min, at: s.o.Now()}
+	s.mu.Unlock()
+	return min
+}
+
+// worked: a held item being actively worked, not parked nor waiting (item AzveC). Call with s.mu held.
+func (s *Session) worked(h *heldItem) bool {
+	if h.parked != nil {
+		return false
+	}
+	return h.item == nil || actions.ActivelyWorked(*h.item)
+}
+
+// onStatusFields: an item snapshot (item AzveC). A status from the agent resets the clock; a
+// person's new "Ask for status" pushes a status event at once.
+func (s *Session) onStatusFields(h *heldItem, it *model.Item) {
+	s.mu.Lock()
+	first := !h.seen
+	h.seen = true
+	cp := *it
+	h.item = &cp
+	st := actions.StatusOf(*it)
+	if st != nil && !h.statusDue.IsZero() {
+		if e, ok := s.every[h.ProjectID]; ok && e.min > 0 {
+			if due := st.At.Add(time.Duration(e.min) * s.o.StatusMinute); due.After(h.statusDue) {
+				h.statusDue = due
+			}
+		}
+	}
+	ask := actions.StatusAskOf(*it)
+	if ask == nil || !ask.At.After(h.askSeen) {
+		s.mu.Unlock()
+		return
+	}
+	h.askSeen = ask.At
+	push := !first && (st == nil || st.At.Before(ask.At)) && s.worked(h)
+	s.mu.Unlock()
+	if push {
+		go s.pushStatus(h, "asked", it.LastEventID, ask.ByUID)
+	}
+}
+
+func (s *Session) pushStatus(h *heldItem, why, eventID, byUID string) {
+	if !s.isHeld(h) {
+		return
+	}
+	by := ""
+	if why == "asked" && s.c != nil {
+		by = s.c.AskedBy(s.ctx, eventID, byUID)
+	}
+	s.push(Event{
+		Content: StatusText(h.ItemID, h.Title, why, by, s.o.MaxItems),
+		Meta:    map[string]string{"kind": "status", "item_id": h.ItemID, "project_id": h.ProjectID, "run_id": h.RunID, "why": why},
+	})
+}
+
+// StatusChecks is the periodic status check (item AzveC): a status event for each held item being
+// actively worked whose interval has passed since its handover or its last status. Runs every
+// StatusCheck; tests call it with a fake clock. Returns the items asked.
+func (s *Session) StatusChecks(ctx context.Context) []string {
+	s.mu.Lock()
+	list := append([]*heldItem(nil), s.current...)
+	s.mu.Unlock()
+	out := []string{}
+	for _, h := range list {
+		min := s.statusEvery(ctx, h.ProjectID)
+		s.mu.Lock()
+		if min <= 0 {
+			h.statusDue = time.Time{}
+			s.mu.Unlock()
+			continue
+		}
+		every := time.Duration(min) * s.o.StatusMinute
+		now := s.o.Now()
+		if h.statusDue.IsZero() {
+			h.statusDue = now.Add(every)
+		}
+		if h.item != nil {
+			if st := actions.StatusOf(*h.item); st != nil && st.At.Add(every).After(h.statusDue) {
+				h.statusDue = st.At.Add(every)
+			}
+		}
+		if now.Before(h.statusDue) {
+			s.mu.Unlock()
+			continue
+		}
+		// Not while parked or waiting for people: the clock starts again when it is worked.
+		h.statusDue = now.Add(every)
+		ok := s.worked(h) && s.byRun(h.RunID) == h
+		s.mu.Unlock()
+		if !ok {
+			continue
+		}
+		out = append(out, h.ItemID)
+		s.pushStatus(h, "interval", "", "")
 	}
 	return out
 }
@@ -400,6 +558,18 @@ func (s *Session) Start(ctx context.Context) error {
 				return
 			case <-t.C:
 				s.ReturnStale(s.ctx)
+			}
+		}
+	}()
+	go func() {
+		t := time.NewTicker(s.o.StatusCheck)
+		defer t.Stop()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-t.C:
+				s.StatusChecks(s.ctx)
 			}
 		}
 	}()
@@ -592,6 +762,8 @@ func WorkText(row WorkRow, why Arrival, maxItems int) string {
 
 func (s *Session) handOver(row WorkRow) (bool, error) {
 	why := s.c.ArrivalOf(s.ctx, row.ItemID, row.ProjectID)
+	// The first status check is due one interval after the handover (item AzveC).
+	min := s.statusEvery(s.ctx, row.ProjectID)
 	claimed, err := s.c.Claim(s.ctx, row.ItemID, row.ProjectID)
 	if err != nil {
 		var he *Error
@@ -605,6 +777,9 @@ func (s *Session) handOver(row WorkRow) (bool, error) {
 	}
 	hctx, cancel := context.WithCancel(s.ctx)
 	h := &heldItem{Handover: Handover{ItemID: row.ItemID, ProjectID: row.ProjectID, RunID: claimed.RunID, Title: row.Title}, cancel: cancel}
+	if min > 0 {
+		h.statusDue = s.o.Now().Add(time.Duration(min) * s.o.StatusMinute)
+	}
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -655,6 +830,7 @@ func (s *Session) onItem(h *heldItem, it *model.Item) {
 		return
 	}
 	if it != nil && it.Claim != nil && it.Claim.RunID == h.RunID {
+		s.onStatusFields(h, it)
 		// Keep the park in step with the item (a resumed parked item, or another process of ours).
 		if h.wakeMu.TryLock() {
 			pk := actions.ParkOf(*it)

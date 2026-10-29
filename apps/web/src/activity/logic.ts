@@ -59,6 +59,13 @@ const PHRASES: Record<EventType, (d: Data, title: string | null) => string> = {
     return `sent ${quote(t)} back to ${to || 'an earlier step'}${short ? `: “${short}”` : ''}`;
   },
   'item.updated': (d, t) => {
+    // Status checks (item AzveC).
+    const st = d.status as { text?: unknown; pct?: unknown } | undefined;
+    if (st && text(st.text)) {
+      const line = typeof st.pct === 'number' ? `${text(st.text)} · ${st.pct}%` : text(st.text);
+      return `reported the status of ${quote(t)}: “${line}”`;
+    }
+    if (d.statusAsk === true) return `asked for a status on ${quote(t)}`;
     const said: string[] = [];
     const title = d.title as { from?: unknown; to?: unknown } | undefined;
     const type = d.type as { to?: unknown } | undefined;
@@ -543,6 +550,8 @@ const RUN_END_EVENTS: ReadonlySet<string> = new Set([
 export function isProgressEvent(e: HiveEvent): boolean {
   if (e.type !== 'item.updated' || !e.runId || e.actor?.type === 'human') return false;
   const d = e.data ?? {};
+  // The same status line again (item AzveC) folds like progress.
+  if (d.repeat === true && d.status) return true;
   const keys = Object.keys(d);
   return keys.length > 0 && keys.every((k) => k === 'progress' || k === 'costEur');
 }
@@ -607,9 +616,13 @@ export function eventDetail(event: Row<HiveEvent>, ctx: DetailContext): EventDet
 type Prog = { progress?: { done?: number; total?: number } | null; costEur?: number };
 /** "2 of 6" or "cost updated" for one progress call. */
 export function progressText(d: unknown): string {
-  const x = (d ?? {}) as Prog;
+  const x = (d ?? {}) as Prog & { status?: { text?: string; pct?: number | null } };
   const p = x.progress;
   const bits: string[] = [];
+  if (x.status?.text)
+    bits.push(
+      `status “${x.status.text}${typeof x.status.pct === 'number' ? ` · ${x.status.pct}%` : ''}”`,
+    );
   if (p && typeof p.done === 'number' && typeof p.total === 'number')
     bits.push(`step ${p.done} of ${p.total}`);
   if (typeof x.costEur === 'number') bits.push(`cost €${x.costEur.toFixed(2)}`);

@@ -121,11 +121,13 @@ type Project struct {
 	StepAgents    map[string][]string `firestore:"stepAgents" json:"stepAgents"`
 	ShapeNewItems *bool               `firestore:"shapeNewItems" json:"shapeNewItems"`
 	// AgentsMayCreateItems (item DhsO9): agents may create items here (absent = off).
-	AgentsMayCreateItems *bool      `firestore:"agentsMayCreateItems" json:"agentsMayCreateItems,omitempty"`
-	CreatedBy            string     `firestore:"createdBy" json:"createdBy"`
-	CreatedAt            time.Time  `firestore:"createdAt" json:"createdAt"`
-	ArchivedAt           *time.Time `firestore:"archivedAt" json:"archivedAt"`
-	LastEventID          string     `firestore:"lastEventId" json:"lastEventId"`
+	AgentsMayCreateItems *bool `firestore:"agentsMayCreateItems" json:"agentsMayCreateItems,omitempty"`
+	// StatusEvery (item AzveC): status checks every N minutes (15, 30, 60; 0 = off; absent = off).
+	StatusEvery *int64     `firestore:"statusEvery" json:"statusEvery,omitempty"`
+	CreatedBy   string     `firestore:"createdBy" json:"createdBy"`
+	CreatedAt   time.Time  `firestore:"createdAt" json:"createdAt"`
+	ArchivedAt  *time.Time `firestore:"archivedAt" json:"archivedAt"`
+	LastEventID string     `firestore:"lastEventId" json:"lastEventId"`
 }
 
 // DecisionMark is one approval or rejection at a gate.
@@ -171,6 +173,28 @@ type Park struct {
 	Reason string    `firestore:"reason" json:"reason"`
 	At     time.Time `firestore:"at" json:"at"`
 }
+
+// StatusUpdate is the holder's last status line (item AzveC); valid only while claim.runId is RunID.
+type StatusUpdate struct {
+	RunID string    `firestore:"runId" json:"runId"`
+	Text  string    `firestore:"text" json:"text"`
+	Pct   *int64    `firestore:"pct" json:"pct"`
+	At    time.Time `firestore:"at" json:"at"`
+	By    string    `firestore:"by" json:"by"`
+}
+
+// StatusAsk is a person's "Ask for status" (item AzveC); valid only while claim.runId is RunID.
+type StatusAsk struct {
+	RunID string    `firestore:"runId" json:"runId"`
+	ByUID string    `firestore:"byUid" json:"byUid"`
+	At    time.Time `firestore:"at" json:"at"`
+}
+
+// MaxStatusTextChars is the longest status line (item AzveC).
+const MaxStatusTextChars = 200
+
+// DefaultStatusEvery is the status interval in minutes when a project sets none.
+const DefaultStatusEvery = 0
 
 // MaxParkReasonChars is the longest park reason.
 const MaxParkReasonChars = 200
@@ -247,10 +271,13 @@ type Item struct {
 	PathRefused  []string               `firestore:"pathRefused" json:"pathRefused"`
 	PathRev      int64                  `firestore:"pathRev" json:"pathRev"`
 	// StepAt is when the item reached its step (item QjTTL); nil on items that have not moved since.
-	StepAt      *time.Time `firestore:"stepAt" json:"stepAt"`
-	Parked      *Park      `firestore:"parked" json:"parked"`
-	UpdatedAt   time.Time  `firestore:"updatedAt" json:"updatedAt"`
-	LastEventID string     `firestore:"lastEventId" json:"lastEventId"`
+	StepAt *time.Time `firestore:"stepAt" json:"stepAt"`
+	Parked *Park      `firestore:"parked" json:"parked"`
+	// Status checks (item AzveC): the holder's last status and a person's ask, per claim.
+	StatusUpdate *StatusUpdate `firestore:"statusUpdate" json:"statusUpdate"`
+	StatusAsk    *StatusAsk    `firestore:"statusAsk" json:"statusAsk"`
+	UpdatedAt    time.Time     `firestore:"updatedAt" json:"updatedAt"`
+	LastEventID  string        `firestore:"lastEventId" json:"lastEventId"`
 }
 
 // Unshaped returns a copy with shape: null (a new item waiting to be shaped).

@@ -10,11 +10,12 @@ import { IconButton } from '../ui/button';
 import { Icon } from '../ui/icon';
 import { ActionMenu, LongPressMenu, type MenuAction } from '../ui/menu';
 import { useItemActions } from './itemActions';
+import { useAskStatus } from './StatusCheck';
 import type { CardContext } from './logic';
 
 /**
  * Quick menu on a board card (card Tfvq6A6g): Stop work and Resume without opening the item, plus
- * Archive and Delete… (card rHjaDFEK, `useItemActions`).
+ * Archive and Delete… (card rHjaDFEK, `useItemActions`) and Ask for status (item AzveC).
  * A "..." button on desktop, a long press on phones (right-click too). Same rules as the item
  * panel: `stopGateFor` decides who may (admins, deciders of a gate), `isWorkStoppable` / `isOnHold`
  * what applies; nobody else sees a menu at all. The card itself stays a plain button, so drag and
@@ -41,9 +42,13 @@ export function CardMenu({
   const stoppable = gate !== null && isWorkStoppable(ctx.project, item);
   const resumable = gate !== null && isOnHold(item);
   const more = useItemActions({ pid, itemId: row.id, item });
-  if (!stoppable && !resumable && more.actions.length === 0) return <>{children('')}</>;
+  // Item AzveC: anyone on the project may ask the agent working it for a status.
+  const askStatus = useAskStatus(pid, row.id, item, ctx.now).menuAction;
+  if (!stoppable && !resumable && !askStatus && more.actions.length === 0)
+    return <>{children('')}</>;
 
   const actions: MenuAction[] = [
+    ...(askStatus ? [askStatus] : []),
     ...(stoppable
       ? [
           {

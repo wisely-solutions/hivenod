@@ -44,6 +44,8 @@ import {
   parkItem,
   releaseClaim,
   reportProgress,
+  reportStatus,
+  statusEveryOf,
   unparkItem,
   requireSendBackReason,
   shapeItem,
@@ -393,6 +395,57 @@ function build(): ContractCase[] {
   prog('nothing', AGENT, { ...W, item: item() });
   prog('not holding', AGENT, { ...W, item: item({ claim: null }), costEur: 1 });
   prog('person refused', HUMAN, { ...W, item: item(), costEur: 1 });
+
+  // ---------- reportStatus (item AzveC) ----------
+  const status = (name: string, actor: Actor, input: Parameters<typeof reportStatus>[1]) =>
+    act(`reportStatus/${name}`, 'reportStatus', actor, input, reportStatus);
+  const prev = (text: string, pct: number | null, agoMs: number, runId = 'run1') => ({
+    runId,
+    text,
+    pct,
+    at: ts(NOW_MS - agoMs),
+    by: AGENT.id,
+  });
+  status('reports', AGENT, { ...W, item: item(), text: '  Running   release checks ', pct: 70 });
+  status('no pct', AGENT, { ...W, item: item(), text: 'Reading the brief' });
+  status('pct null', AGENT, { ...W, item: item(), text: 'Reading', pct: null });
+  status('pct 0', AGENT, { ...W, item: item(), text: 'Start', pct: 0 });
+  status('pct 100', AGENT, { ...W, item: item(), text: 'Done', pct: 100 });
+  status('pct 101', AGENT, { ...W, item: item(), text: 'x', pct: 101 });
+  status('pct -1', AGENT, { ...W, item: item(), text: 'x', pct: -1 });
+  status('pct 1.5', AGENT, { ...W, item: item(), text: 'x', pct: 1.5 });
+  status('empty', AGENT, { ...W, item: item(), text: '  \n ' });
+  status('200 chars', AGENT, { ...W, item: item(), text: '😀'.repeat(100) });
+  status('long', AGENT, { ...W, item: item(), text: 'é'.repeat(201) });
+  status('repeat', AGENT, {
+    ...W,
+    item: item({ statusUpdate: prev('Tests', 50, 60_000) }),
+    text: 'Tests',
+    pct: 50,
+  });
+  status('changed', AGENT, {
+    ...W,
+    item: item({ statusUpdate: prev('Tests', 50, 60_000) }),
+    text: 'Tests',
+    pct: 60,
+  });
+  status('too soon', AGENT, {
+    ...W,
+    item: item({ statusUpdate: prev('Tests', 50, 29_000) }),
+    text: 'More tests',
+  });
+  status('old run too soon is fine', AGENT, {
+    ...W,
+    item: item({ statusUpdate: prev('Tests', 50, 1_000, 'runOld') }),
+    text: 'Tests',
+    pct: 50,
+  });
+  status('not holding', AGENT, { ...W, item: item({ claim: null }), text: 'x' });
+  status('person refused', HUMAN, { ...W, item: item(), text: 'x' });
+  for (const v of [undefined, 0, 15, 30, 60, 45])
+    pure(`statusEveryOf/${String(v)}`, 'statusEveryOf', { statusEvery: v }, (p) =>
+      statusEveryOf(p),
+    );
 
   // ---------- parkItem / unparkItem (item QjTTL) ----------
   const park = (name: string, actor: Actor, input: Parameters<typeof parkItem>[1]) =>

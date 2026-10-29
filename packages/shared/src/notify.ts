@@ -86,6 +86,8 @@ export const notifyPath = {
   config: 'config/notify',
   notified: (w: string, key: string) => `workspaces/${w}/notified/${key}`,
   notifiedGate: (itemId: string) => `g-${itemId}`,
+  /** The silence notices of an item (item AzveC). */
+  notifiedSilence: (itemId: string) => `n-${itemId}`,
 } as const;
 
 /** A short stable id for a subscription (its endpoint is too long and awkward for a doc id). */
@@ -225,6 +227,21 @@ export function inboxNotice(t: {
     title: `${t.urgent ? 'Urgent · ' : ''}${head}: ${clip(t.threadTitle || 'An Inbox thread', 80)}`,
     body: `${t.subjectName ? `${clip(t.subjectName, 60)} · ` : ''}${clip(t.text, 160)}`,
     url: threadLink(t.workspaceId, t.threadId),
+  };
+}
+/** An item whose agent has shown no activity for a while (item AzveC). */
+export function silenceNotice(a: {
+  projectName: string;
+  itemTitle: string;
+  agentName: string;
+  minutes: number;
+  projectId: string;
+  itemId: string;
+}): Notice {
+  return {
+    title: `No update: ${clip(a.itemTitle, 80)}`,
+    body: `${a.projectName} · ${a.agentName ? `${clip(a.agentName, 60)} · ` : ''}no activity for ${a.minutes} min`,
+    url: itemLink(a.projectId, a.itemId),
   };
 }
 

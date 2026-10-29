@@ -9,6 +9,7 @@ import {
   Bell,
   Check,
   CircleHelp,
+  Clock,
   Mail,
   MailQuestion,
   MessageSquare,
@@ -16,6 +17,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useReady } from '../auth/context';
+import { useNeedsAll } from '../needs/data';
 import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
 import { Popover } from '../ui/overlay';
@@ -29,6 +32,7 @@ const KIND: Record<BellKind, { icon: LucideIcon; tone: string }> = {
   sentBack: { icon: Undo2, tone: 'bg-sendback-bg text-sendback' },
   inboxAsk: { icon: MailQuestion, tone: 'bg-agent-soft text-agent' },
   inboxCall: { icon: Mail, tone: 'bg-gate-bg text-gate-text' },
+  silence: { icon: Clock, tone: 'bg-sendback-bg text-sendback' },
 };
 
 /** The unread count on the bell: 99+ past 99. */
@@ -94,7 +98,16 @@ export function BellLink({ className }: { className?: string }) {
   );
 }
 
-function Entry({ row, onOpen }: { row: BellRow; onOpen: (r: BellRow) => void }) {
+function Entry({
+  row,
+  org,
+  onOpen,
+}: {
+  row: BellRow;
+  /** The organization's name, for an entry of another one than on screen. */
+  org?: string;
+  onOpen: (r: BellRow) => void;
+}) {
   const e = row.data;
   const t = bellText(e);
   const k = KIND[e.kind];
@@ -124,6 +137,7 @@ function Entry({ row, onOpen }: { row: BellRow; onOpen: (r: BellRow) => void }) 
             {t.after}
           </span>
           <span className="mt-0.5 block text-13 text-text-2">
+            {org ? `${org} · ` : ''}
             {e.projectName} · {timeLabel(e.at)}
           </span>
         </span>
@@ -153,6 +167,10 @@ export function BellList({
   onDone?: () => void;
 }) {
   const { rows, unread, ready, markAllRead, open } = useBell();
+  const { session } = useReady();
+  const { orgs } = useNeedsAll();
+  const orgName = (w: string) =>
+    w === session.workspaceId ? undefined : orgs.find((o) => o.wid === w)?.name;
   const [filter, setFilter] = useState<BellFilter>('all');
   // "Today" is fixed when the list opens; a list left open past midnight is rare and harmless.
   const [now] = useState(() => Date.now());
@@ -230,6 +248,7 @@ export function BellList({
                   <Entry
                     key={r.id}
                     row={r}
+                    org={orgName(r.data.workspaceId)}
                     onOpen={(x) => {
                       onDone?.();
                       open(x);

@@ -15,6 +15,7 @@ import {
   answer,
   answerQuestion,
   approveOutcome,
+  askForStatus,
   buildStepIndex,
   inboxPaths,
   type OutcomeStateOf,
@@ -96,7 +97,12 @@ async function newAgent() {
 }
 
 /** A Claude Code stand-in: an MCP client on the channel server, collecting what is pushed. */
-async function session(token: string, maxItems?: number, maxInbox?: number) {
+async function session(
+  token: string,
+  maxItems?: number,
+  maxInbox?: number,
+  statusMinuteMs?: number,
+) {
   const events: Pushed[] = [];
   const client = new Client({ name: 'claude-code', version: '0' });
   client.fallbackNotificationHandler = async (n) => {
@@ -115,6 +121,7 @@ async function session(token: string, maxItems?: number, maxInbox?: number) {
           parkCheckMs: 500,
           inbox: { tickMs: 500, ...(maxInbox !== undefined ? { maxInbox } : {}) },
           ...(maxItems ? { maxItems } : {}),
+          ...(statusMinuteMs ? { statusMinuteMs, statusCheckMs: 200 } : {}),
         },
       },
     );
@@ -134,6 +141,9 @@ async function session(token: string, maxItems?: number, maxInbox?: number) {
         HIVENOD_PARK_CHECK_MS: '500',
         HIVENOD_INBOX_TICK_MS: '500',
         ...(maxInbox !== undefined ? { HIVENOD_MAX_INBOX: String(maxInbox) } : {}),
+        ...(statusMinuteMs
+          ? { HIVENOD_STATUS_MINUTE_MS: String(statusMinuteMs), HIVENOD_STATUS_CHECK_MS: '200' }
+          : {}),
       }),
       stderr: 'inherit',
     });
@@ -820,5 +830,82 @@ for (const impl of IMPLS)
       await s.call('inbox_add', msg());
       await pause(1500);
       expect(inbox(s)).toHaveLength(0);
+    });
+  });
+
+for (const impl of IMPLS)
+  describe(`hivenod mcp --channel status checks (item AzveC) [${impl}]`, () => {
+    beforeAll(() => {
+      IMPL = impl;
+    });
+    const statuses = (s: Awaited<ReturnType<typeof session>>) =>
+      s.events.filter((e) => e.meta.kind === 'status');
+
+    it('asks at the interval (a short minute), stores the answer, and not while parked', async () => {
+      const { uid, token } = await newAgent();
+      // statusEvery 15 "minutes" of 100 ms: a status event about 1.5 s after the handover.
+      await put({
+        [P('p1')]: projectDoc({}, { steps: LIB, stepIndex: buildStepIndex(LIB), statusEvery: 15 }),
+        [I('a')]: itemDoc({ stepId: 'build', title: 'Release checks' }),
+      });
+      const s = await session(token, 2, undefined, 100);
+      const w = await s.next('work');
+      const first = await s.next('status', 1, 6000);
+      expect(first.meta).toMatchObject({ item_id: 'a', run_id: w.meta.run_id, why: 'interval' });
+      expect(first.content).toContain('Status check on "Release checks" (item_id a)');
+      const out = await s.call('status', {
+        itemId: 'a',
+        text: 'Running e2e batch 2 of 3',
+        pct: 70,
+      });
+      expect(out).toEqual({ itemId: 'a', status: { text: 'Running e2e batch 2 of 3', pct: 70 } });
+      expect((await read(I('a'))).statusUpdate).toMatchObject({
+        runId: w.meta.run_id,
+        text: 'Running e2e batch 2 of 3',
+        pct: 70,
+        by: uid,
+      });
+      // Too soon after the last one: refused, the stored status stays.
+      await expect(s.call('status', { itemId: 'a', text: 'again' })).rejects.toThrow(
+        /less than 30 seconds ago/,
+      );
+      // Parked: no status events.
+      await s.call('park', { itemId: 'a', reason: 'release batch' });
+      const n = statuses(s).length;
+      await pause(2500);
+      expect(statuses(s).length).toBe(n);
+    });
+
+    it('off by default (no statusEvery): none; a person asking sends one at once', async () => {
+      const { token } = await newAgent();
+      await put({
+        [P('p1')]: projectDoc({}, { steps: LIB, stepIndex: buildStepIndex(LIB) }),
+        [I('a')]: itemDoc({ stepId: 'build', title: 'Docs' }),
+      });
+      const s = await session(token, 1, undefined, 100);
+      await s.next('work');
+      await pause(2000);
+      expect(statuses(s)).toHaveLength(0);
+      const alice = as('alice');
+      await alice.run(
+        askForStatus(alice.ctx, {
+          projectId: 'p1',
+          itemId: 'a',
+          item: (await read(I('a'))) as unknown as ItemState,
+          nowMs: Date.now(),
+        }),
+      );
+      const asked = await s.next('status');
+      expect(asked.meta).toMatchObject({ item_id: 'a', why: 'asked' });
+      expect(asked.content).toMatch(
+        /^Alice asked for a status on "Docs" \(item_id a\)\. Please answer/,
+      );
+      await s.call('status', { text: 'Writing the docs' });
+      expect((await read(I('a'))).statusUpdate).toMatchObject({
+        text: 'Writing the docs',
+        pct: null,
+      });
+      await pause(1000);
+      expect(statuses(s)).toHaveLength(1);
     });
   });

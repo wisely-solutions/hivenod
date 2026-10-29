@@ -22,12 +22,14 @@ import {
 } from './banners';
 import { useResumeOrgDeletes } from '../orgs/deleteJobs';
 import { ShellDataProvider, useShellData } from './data';
+import { NeedsAllProvider, useNeedsAll } from '../needs/data';
 import { ErrorBoundary } from './ErrorBoundary';
 import { UnreachableState } from './banners';
 import { ModalProvider } from './modals';
 import { ME, NAV, type NavEntry } from './nav';
 import { ShellPalette } from './palette';
 import { useAppBadge } from './pwa';
+import { useCleanStaleBusy } from './useCleanStaleBusy';
 import { useReplayPending } from './useReplayPending';
 import { ShortcutsProvider, useShortcut } from './shortcuts';
 import { useUndoLast } from '../ui/overlay';
@@ -43,13 +45,15 @@ export function Shell({ children }: { children?: ReactNode }) {
     <ShortcutsProvider>
       <ModalProvider>
         <ShellDataProvider>
-          <RemindersProvider>
-            <BellProvider>
-              <CaptureProvider>
-                <Frame>{children}</Frame>
-              </CaptureProvider>
-            </BellProvider>
-          </RemindersProvider>
+          <NeedsAllProvider>
+            <RemindersProvider>
+              <BellProvider>
+                <CaptureProvider>
+                  <Frame>{children}</Frame>
+                </CaptureProvider>
+              </BellProvider>
+            </RemindersProvider>
+          </NeedsAllProvider>
         </ShellDataProvider>
       </ModalProvider>
     </ShortcutsProvider>
@@ -134,11 +138,15 @@ function useCondensedTitle(path: string) {
 function Frame({ children }: { children?: ReactNode }) {
   const [palette, setPalette] = useState(false);
   useReplayPending();
-  const { needs, needsReady, unreachable, retry, retrying } = useShellData();
+  useCleanStaleBusy();
+  const { needsReady, unreachable, retry, retrying } = useShellData();
+  // Counts every organization (item 2YZRd): the app icon and the tab title too.
+  const all = useNeedsAll();
+  const needs = all.counts;
   const path = useRouterState({ select: (s) => s.location.pathname });
   const hidden = useScrollHidden();
   const { main, title, condensed } = useCondensedTitle(path);
-  useAppBadge(needsReady ? needs.total : null);
+  useAppBadge(all.ready ? needs.total : null);
   useResumeOrgDeletes();
   useKeyboardAvoidance();
 
@@ -183,8 +191,8 @@ function Frame({ children }: { children?: ReactNode }) {
     if (/\/view\/[^/]+\/?$/.test(path)) return; // the viewer names its own tab
     const base = path === '/' ? 'Needs you · Hivenod' : title ? `${title} · Hivenod` : 'Hivenod';
     // The count sits in front on every screen, so a background tab shows what waits.
-    document.title = tabTitle(base, needsReady ? needs.total : null);
-  }, [path, title, needs.total, needsReady]);
+    document.title = tabTitle(base, all.ready ? needs.total : null);
+  }, [path, title, needs.total, all.ready]);
 
   // The full-page viewer owns the whole screen (SPEC 9.6): no sidebar, tabs or page padding.
   if (/^\/p\/[^/]+\/i\/[^/]+\/view\/[^/]+\/?$/.test(path)) {

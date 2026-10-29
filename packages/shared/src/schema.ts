@@ -392,6 +392,18 @@ export const projectSchema = z
      * (create_item). Off when absent. Admins and the project's creator switch it.
      */
     agentsMayCreateItems: z.boolean().optional(),
+    /**
+     * Item AzveC: ask the holder of an actively worked item for a status every N minutes (15, 30
+     * or 60; 0 = off). Absent = DEFAULT_STATUS_EVERY (off). Admins and the project's creator change it.
+     */
+    statusEvery: z.union([z.literal(0), z.literal(15), z.literal(30), z.literal(60)]).optional(),
+    /**
+     * Item AzveC: an actively worked item with no activity from its agent for N minutes (20, 40,
+     * 60 or 120; 0 = never) is flagged and its deciders are told once. Absent = DEFAULT_SILENCE_AFTER.
+     */
+    silenceAfter: z
+      .union([z.literal(0), z.literal(20), z.literal(40), z.literal(60), z.literal(120)])
+      .optional(),
     createdBy: uid,
     createdAt: timestamp,
     archivedAt: timestamp.nullable(),
@@ -469,6 +481,42 @@ export const parkSchema = z.object({
 export type Park = z.infer<typeof parkSchema>;
 /** A parked item goes back to the queue after this long without activity (item QjTTL). */
 export const PARK_RETURN_MS = 24 * 60 * 60_000;
+
+/**
+ * Status checks (item AzveC). A project may ask the agent holding an item for a one-line status
+ * every `statusEvery` minutes while the item is actively worked (off by default). The holder
+ * answers with the `status` tool (statusUpdate); a person may ask at once (statusAsk). Silence is
+ * counted from the item's last activity (any agent log line, tool write or status): with none for
+ * `silenceAfter` minutes (or SILENCE_GRACE_MS after a person asked), the notifier flags the item
+ * (silence) and tells its deciders once.
+ */
+export const STATUS_EVERY_CHOICES = [0, 15, 30, 60] as const;
+export type StatusEvery = (typeof STATUS_EVERY_CHOICES)[number];
+export const DEFAULT_STATUS_EVERY: StatusEvery = 0;
+export const SILENCE_AFTER_CHOICES = [0, 20, 40, 60, 120] as const;
+export type SilenceAfter = (typeof SILENCE_AFTER_CHOICES)[number];
+export const DEFAULT_SILENCE_AFTER: SilenceAfter = 40;
+export const MAX_STATUS_TEXT_CHARS = 200;
+/** How long after a person asked for a status, without any activity, the item counts as silent. */
+export const SILENCE_GRACE_MS = 10 * 60_000;
+/** A person may ask for a status on one item at most this often. */
+export const STATUS_ASK_EVERY_MS = 2 * 60_000;
+export const statusUpdateSchema = z.object({
+  /** The claim it was written under: void once the claim moves on. */
+  runId: id,
+  text: z.string().min(1).max(MAX_STATUS_TEXT_CHARS),
+  /** Optional percentage done. */
+  pct: z.number().int().min(0).max(100).nullable(),
+  at: timestamp,
+  /** The agent that wrote it. */
+  by: uid,
+});
+export type StatusUpdate = z.infer<typeof statusUpdateSchema>;
+export const statusAskSchema = z.object({ runId: id, byUid: uid, at: timestamp });
+export type StatusAsk = z.infer<typeof statusAskSchema>;
+/** Written by the notifier only (admin SDK): no activity since `since` (ms) on this run. */
+export const silenceSchema = z.object({ runId: id, since: z.number(), at: z.number() });
+export type Silence = z.infer<typeof silenceSchema>;
 
 export const triageSchema = z.object({
   outcome: z.enum(['intake', 'addedToItem', 'dismissed']),
@@ -567,6 +615,12 @@ export const itemSchema = z.object({
   stepAt: timestamp.optional(),
   /** Parked by the agent holding it (item QjTTL); valid only while claim.runId is its runId. */
   parked: parkSchema.nullable().optional(),
+  /** The holder's last status line (item AzveC); valid only while claim.runId is its runId. */
+  statusUpdate: statusUpdateSchema.nullable().optional(),
+  /** A person's "Ask for status" (item AzveC); valid only while claim.runId is its runId. */
+  statusAsk: statusAskSchema.nullable().optional(),
+  /** The notifier's silence flag (item AzveC); valid only while claim.runId is its runId. */
+  silence: silenceSchema.nullable().optional(),
   updatedAt: timestamp,
   lastEventId: id,
 });

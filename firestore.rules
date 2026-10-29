@@ -1472,9 +1472,11 @@ service cloud.firestore {
           // shapeNewItems (card st5INNZj): new items wait to be shaped by an agent.
           && request.resource.data.keys().hasOnly(['name', 'emoji', 'color', 'templateId',
                'steps', 'stepIndex', 'memberUids', 'createdBy', 'createdAt', 'archivedAt',
-               'shapeNewItems', 'agentsMayCreateItems', 'lastEventId'])
+               'shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter', 'lastEventId'])
           && request.resource.data.get('shapeNewItems', false) is bool
           && request.resource.data.get('agentsMayCreateItems', false) is bool
+          && request.resource.data.get('statusEvery', 0) in [0, 15, 30, 60]
+          && request.resource.data.get('silenceAfter', 40) in [0, 20, 40, 60, 120]
           && validProject(request.resource.data)
           && (isAdmin(wid) || request.resource.data.memberUids == [me()])
           && request.resource.data.createdBy == me()
@@ -1485,16 +1487,18 @@ service cloud.firestore {
         allow update: if (canProject(wid, pid)
             && changed(['name', 'emoji', 'description', 'color', 'templateId', 'steps', 'stepIndex',
                         'archivedAt', 'memberUids', 'stepAgents', 'shapeNewItems',
-                        'agentsMayCreateItems', 'lastEventId'])
+                        'agentsMayCreateItems', 'statusEvery', 'silenceAfter', 'lastEventId'])
             && validProject(request.resource.data)
-            // Shaping new items (card st5INNZj) and "Agents may create items" (item DhsO9) are
-            // switched by admins and the project's creator. One check for both: long processes
-            // are close to the rules budget.
+            // Shaping new items (card st5INNZj), "Agents may create items" (item DhsO9), the status
+            // interval and the silence threshold (item AzveC) are switched by admins and the
+            // project's creator. One check for all: long processes are close to the rules budget.
             && (!request.resource.data.diff(resource.data).affectedKeys()
-                  .hasAny(['shapeNewItems', 'agentsMayCreateItems'])
+                  .hasAny(['shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter'])
                 || (canSetStepAgents(wid, resource.data)
                     && request.resource.data.get('shapeNewItems', false) is bool
-                    && request.resource.data.get('agentsMayCreateItems', false) is bool))
+                    && request.resource.data.get('agentsMayCreateItems', false) is bool
+                    && request.resource.data.get('statusEvery', 0) in [0, 15, 30, 60]
+                    && request.resource.data.get('silenceAfter', 40) in [0, 20, 40, 60, 120]))
             && gatesAllowed(wid, resource.data, request.resource.data)
             // Unchanged per-step agents cost little: long processes are close to the rules budget.
             && (request.resource.data.get('stepAgents', {}) == resource.data.get('stepAgents', {})
@@ -1789,7 +1793,8 @@ service cloud.firestore {
                   ? (request.resource.data.get('claim', null) == null
                     ? (releaseIt(wid, pid, iid, r) || attachCounted(wid, pid, iid, r))
                     : (claimIt(wid, pid, iid, r, p, true) || heartbeatIt(wid, r)
-                      || attachCounted(wid, pid, iid, r) || parkIt(wid, pid, iid, r)))
+                      || attachCounted(wid, pid, iid, r) || parkIt(wid, pid, iid, r)
+                      || statusIt(wid, pid, iid, r)))
                   : stepOf(p, r.stepId).kind == 'agent'
                   // Releasing and completing clear the claim; claiming, heartbeats and progress
                   // keep one (the expression budget, see humanUpdate). An attachment changes neither.
@@ -1801,7 +1806,7 @@ service cloud.firestore {
                         || attachCounted(wid, pid, iid, r)))
                     : (claimIt(wid, pid, iid, r, p, false) || heartbeatIt(wid, r)
                       || progressIt(wid, pid, iid, r) || attachCounted(wid, pid, iid, r)
-                      || parkIt(wid, pid, iid, r)))));
+                      || parkIt(wid, pid, iid, r) || statusIt(wid, pid, iid, r)))));
           }
           // Path writes by an agent (card st5INNZj): shaping the unshaped item it holds, or, on
           // the item it holds at an agent step, changing agent steps ahead, asking for a people
@@ -1907,6 +1912,19 @@ service cloud.firestore {
                   && d.parked.at == request.time))
               && trackedFor(wid, d.lastEventId, ['item.updated'], pid, iid);
           }
+          // Status (item AzveC): only the agent holding the item, under its current claim, at the
+          // server time; it replaces the previous status.
+          function statusIt(wid, pid, iid, r) {
+            let d = request.resource.data;
+            let s = d.statusUpdate;
+            return ownsClaim(r) && changed(['statusUpdate', 'updatedAt', 'lastEventId'])
+              && d.updatedAt == request.time
+              && exactKeys(s, ['runId', 'text', 'pct', 'at', 'by'])
+              && s.runId == r.claim.runId && s.by == me() && s.at == request.time
+              && str(s.text, 1, 200)
+              && (s.pct == null || (s.pct is int && s.pct >= 0 && s.pct <= 100))
+              && trackedFor(wid, d.lastEventId, ['item.updated'], pid, iid);
+          }
           // Exactly one step forward; arriving at a human step opens a fresh gate.
           function completeIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
@@ -1972,7 +1990,28 @@ service cloud.firestore {
                 // Only an item waiting at a gate can be decided on.
                 : r.status == 'waiting'
                   ? waitingUpdate(wid, pid, iid, r, p)
-                  : otherHumanUpdate(wid, pid, iid, r, p));
+                  // "Ask for status" (item AzveC) is the only write that changes statusAsk; only
+                  // a worked item can be asked, so gate writes never pay for this check.
+                  : request.resource.data.get('statusAsk', null) != r.get('statusAsk', null)
+                    ? askStatusIt(wid, pid, iid, r)
+                    : otherHumanUpdate(wid, pid, iid, r, p));
+          }
+          // Ask for status (item AzveC): anyone on the project, on an item an agent is actively
+          // working (claimed with a recent heartbeat, not parked, not waiting for an answer), at
+          // most once per 2 minutes. It names the claim's run, so it is void once the claim moves.
+          function askStatusIt(wid, pid, iid, r) {
+            let a = request.resource.data.statusAsk;
+            let prev = r.get('statusAsk', null);
+            return changed(['statusAsk', 'lastEventId'])
+              && r.status == 'working' && r.claim != null
+              && r.claim.heartbeatAt > request.time - duration.value(10, 'm')
+              && (r.get('parked', null) == null || r.parked.runId != r.claim.runId)
+              && r.get('awaitingAnswer', null) == null && r.get('workStopped', null) == null
+              && exactKeys(a, ['runId', 'byUid', 'at'])
+              && a.runId == r.claim.runId && a.byUid == me() && a.at == request.time
+              && (prev == null || prev.runId != r.claim.runId
+                  || prev.at < request.time - duration.value(2, 'm'))
+              && trackedFor(wid, request.resource.data.lastEventId, ['item.updated'], pid, iid);
           }
           // A gate decision is the only write whose event has an approved / sentBack / stopped
           // decision doc (same id: see the decisions rules); every other path needs an event of

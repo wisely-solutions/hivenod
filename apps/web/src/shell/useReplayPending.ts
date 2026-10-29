@@ -21,8 +21,11 @@ export function useReplayPending(): void {
     toastRef.current = toast;
   });
   const uid = session.me.uid;
-  const ws = session.workspaceId;
+  // Every organization: Needs you decides across all of them (item 2YZRd), so a decision stashed
+  // for another one is replayed too. The plans carry full paths.
+  const wsKey = [...new Set([session.workspaceId, ...session.profile.workspaceIds])].join('|');
   useEffect(() => {
+    const all = wsKey.split('|');
     let timer: ReturnType<typeof setTimeout> | undefined;
     let dead = false;
     const io = {
@@ -31,7 +34,7 @@ export function useReplayPending(): void {
         await applyPlan(db, { ops });
       },
     };
-    const replay = async (s: Stashed) => {
+    const replay = async (ws: string, s: Stashed) => {
       const r = await replayStashed(uid, ws, s, io);
       // Still unconfirmed (network, killed page): the entry stays and the next load tries again.
       if (r.kept > 0 && r.refused === 0 && r.saved === 0) return;
@@ -45,14 +48,18 @@ export function useReplayPending(): void {
     };
     const tick = () => {
       if (dead) return;
-      const { ready, again } = takeReplayable(uid, ws);
-      for (const s of ready) void replay(s);
-      if (again !== null) timer = setTimeout(tick, again + 50);
+      let next: number | null = null;
+      for (const ws of all) {
+        const { ready, again } = takeReplayable(uid, ws);
+        for (const s of ready) void replay(ws, s);
+        if (again !== null) next = next === null ? again : Math.min(next, again);
+      }
+      if (next !== null) timer = setTimeout(tick, next + 50);
     };
     tick();
     return () => {
       dead = true;
       clearTimeout(timer);
     };
-  }, [uid, ws]);
+  }, [uid, wsKey]);
 }

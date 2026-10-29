@@ -117,6 +117,7 @@ type eventDoc struct {
 	Type  string    `firestore:"type"`
 	At    time.Time `firestore:"at"`
 	Actor struct {
+		ID   string `firestore:"id"`
 		Name string `firestore:"name"`
 	} `firestore:"actor"`
 	Data map[string]any `firestore:"data"`
@@ -443,4 +444,53 @@ func (c *Client) Unpark(ctx context.Context, itemID, projectID string) error {
 		return wrap(err)
 	}
 	return c.Write(ctx, p, l.loc())
+}
+
+// StatusOut is what status returns (item AzveC).
+type StatusOut struct {
+	ItemID string         `json:"itemId"`
+	Status map[string]any `json:"status"`
+}
+
+// Status writes the one-line status of the item this agent holds (item AzveC), replacing the last.
+func (c *Client) Status(ctx context.Context, itemID, text string, pct *float64, projectID string) (StatusOut, error) {
+	l, err := c.load(ctx, itemID, projectID)
+	if err != nil {
+		return StatusOut{}, err
+	}
+	p, err := actions.ReportStatus(c.actx(), actions.ReportStatusInput{ProjectID: l.ProjectID, ItemID: itemID, Item: l.Item, Text: text, Pct: pct})
+	if err != nil {
+		return StatusOut{}, wrap(err)
+	}
+	if err := c.Write(ctx, p, l.loc()); err != nil {
+		return StatusOut{}, err
+	}
+	su, _ := p.Ops[0].Data["statusUpdate"].(map[string]any)
+	return StatusOut{ItemID: itemID, Status: map[string]any{"text": su["text"], "pct": su["pct"]}}, nil
+}
+
+// StatusEvery is how often the project asks for a status, in minutes (item AzveC; 0 = never).
+func (c *Client) StatusEvery(ctx context.Context, projectID string) (int64, error) {
+	p, err := c.getProject(ctx, projectID)
+	if err != nil {
+		return 0, err
+	}
+	return actions.StatusEveryOf(p), nil
+}
+
+// AskedBy is who asked for a status (item AzveC): the person named by the event the ask wrote,
+// when it is still the item's lastEventId. Best effort: "" when unreadable.
+func (c *Client) AskedBy(ctx context.Context, eventID, byUID string) string {
+	if eventID == "" {
+		return ""
+	}
+	snap, err := c.DB.Doc(model.Paths.Event(c.WorkspaceID, eventID)).Get(ctx)
+	if err != nil || !snap.Exists() {
+		return ""
+	}
+	var e eventDoc
+	if snap.DataTo(&e) != nil || e.Actor.ID != byUID {
+		return ""
+	}
+	return e.Actor.Name
 }

@@ -107,6 +107,14 @@ describe('event labels', () => {
       'Ana changed the description of “New”',
     );
     expect(upd({ fields: ['order'] })).toBe('Ana updated “New”');
+    // Status checks (item AzveC).
+    expect(upd({ statusAsk: true })).toBe('Ana asked for a status on “New”');
+    expect(upd({ status: { text: 'Running checks', pct: 70 } })).toBe(
+      'Ana reported the status of “New”: “Running checks · 70%”',
+    );
+    expect(upd({ status: { text: 'Reading', pct: null } })).toBe(
+      'Ana reported the status of “New”: “Reading”',
+    );
   });
   it('says who stopped work, how, and why (card BrK0r2FE)', () => {
     const human = (type: HiveEvent['type'], data: Record<string, unknown>) =>
@@ -614,6 +622,16 @@ describe('foldProgress', () => {
     ]);
     expect(f.byAnchor.get('stop')?.length).toBe(1);
     expect(f.byAnchor.get('c2')?.length).toBe(1);
+  });
+  it('folds a repeated status line like progress, and keeps a new one visible (item AzveC)', () => {
+    const rows = [
+      row('again', 'item.updated', 50, 'r1', { status: { text: 'x', pct: null }, repeat: true }),
+      row('new', 'item.updated', 40, 'r1', { status: { text: 'x', pct: null } }),
+      row('claim', 'item.claimed', 10, 'r1'),
+    ];
+    const f = foldProgress(rows);
+    expect(f.rows.map((r) => r.id)).toEqual(['new', 'claim']);
+    expect(f.byAnchor.get('claim')?.map((r) => r.id)).toEqual(['again']);
   });
   it('keeps real edits and progress without a run visible', () => {
     const edit = row('t', 'item.updated', 5, 'r1', { title: { from: 'a', to: 'b' } });

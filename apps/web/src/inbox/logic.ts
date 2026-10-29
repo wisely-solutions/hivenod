@@ -27,6 +27,8 @@ export interface InboxEntry {
    */
   key: string;
   kind: InboxKind;
+  /** The organization it belongs to, when the list spans several (needs/logic.ts). */
+  wid?: string;
   pid: string;
   itemId: string;
   project: Project;
@@ -58,6 +60,8 @@ export interface InboxInput {
   uid: string;
   /** Organization admin: may triage suggestions in every project. */
   isAdmin?: boolean;
+  /** Stamped on every entry, so a list across organizations knows where each one belongs. */
+  wid?: string;
 }
 
 const ms = (t: { toMillis: () => number }) => t.toMillis();
@@ -73,6 +77,7 @@ export function buildInbox({
   proposals = {},
   uid,
   isAdmin = false,
+  wid,
 }: InboxInput): Inbox {
   const todo: InboxEntry[] = [];
   const waiting: InboxEntry[] = [];
@@ -163,6 +168,7 @@ export function buildInbox({
     }
   }
   const oldest = (a: InboxEntry, b: InboxEntry) => a.since - b.since;
+  if (wid) for (const e of [...todo, ...waiting]) e.wid = wid;
   return { todo: todo.sort(oldest), waiting: waiting.sort(oldest) };
 }
 
@@ -245,7 +251,7 @@ export function waitLabel(since: number, now: number): string {
 }
 
 /** After the entry at `key` leaves the list, which key takes focus: the one below, else above. */
-export function nextKey(list: readonly InboxEntry[], key: string): string | null {
+export function nextKey(list: readonly { key: string }[], key: string): string | null {
   const i = list.findIndex((e) => e.key === key);
   if (i < 0) return list[0]?.key ?? null;
   return (list[i + 1] ?? list[i - 1])?.key ?? null;
