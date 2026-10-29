@@ -159,7 +159,9 @@ test('Me, Notifications: choices are saved, Telegram links, quiet hours, install
     username: 'joao',
     linkedAt: Date.now(),
   });
-  await expect(page.getByText('Connected as @joao')).toBeVisible();
+  // The link is written by another process (the notifier) and reaches the page through its live
+  // listener: allow that push more than 5 s on a loaded machine.
+  await expect(page.getByText('Connected as @joao')).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'Disconnect' }).click();
   await expect(page.getByRole('button', { name: 'Connect Telegram' })).toBeVisible();
 

@@ -7,6 +7,7 @@ import {
   fastTimers,
   person,
   projectFields,
+  settle,
   signIn,
   UNDO_WAIT,
   uidOf,
@@ -25,9 +26,9 @@ async function enter(page: Page, name: string) {
 }
 
 async function axe(page: Page) {
-  await page.waitForFunction(() =>
-    document.getAnimations().every((a) => a.playState !== 'running'),
-  );
+  // Not only "no animation running": a tab's data and its buttons (enabled once a live config
+  // arrives) still fade colours in under load, and axe then reads a half-way colour.
+  await settle(page);
   const { violations } = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'])
     .analyze();
