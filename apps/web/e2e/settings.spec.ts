@@ -39,44 +39,63 @@ async function axe(page: Page) {
 
 const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true });
 
-test('old Me addresses forward to the matching Settings tab', async ({ page }) => {
+test('old Me and Settings addresses forward to the matching Account or Organization tab', async ({
+  page,
+}) => {
   await enter(page, 'Rita Redirect');
-  for (const [from, to] of [
-    ['/me', 'profile'],
-    ['/me/members', 'members'],
-    ['/me/groups', 'groups'],
-    ['/me/notifications', 'notifications'],
-    ['/settings', 'profile'],
-    ['/settings/nonsense', 'profile'],
+  for (const [from, to, label] of [
+    ['/me', '/account/profile', 'Profile'],
+    ['/me/members', '/settings/members', 'Members'],
+    ['/me/groups', '/settings/groups', 'Groups'],
+    ['/me/notifications', '/account/notifications', 'Notifications'],
+    ['/settings', '/account/profile', 'Profile'],
+    ['/settings/profile', '/account/profile', 'Profile'],
+    ['/settings/notifications', '/account/notifications', 'Notifications'],
+    ['/settings/nonsense', '/account/profile', 'Profile'],
+    ['/account', '/account/profile', 'Profile'],
+    ['/account/members', '/settings/members', 'Members'],
   ] as const) {
     await page.goto(from);
-    await expect(page).toHaveURL(new RegExp(`/settings/${to}$`));
-    await expect(tab(page, to[0]!.toUpperCase() + to.slice(1))).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    await expect(page).toHaveURL(new RegExp(`${to}$`));
+    await expect(tab(page, label)).toHaveAttribute('aria-selected', 'true');
   }
 });
 
 test('every tab opens, is axe clean and fits the screen', async ({ page }) => {
   test.setTimeout(90_000);
-  await enter(page, 'Tabi Tabs');
-  await page.goto('/settings/profile');
-  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  await expect(page.getByRole('tablist', { name: 'Settings' }).getByRole('tab')).toHaveCount(7);
-  for (const [label, heading] of [
-    ['Profile', 'Profile'],
-    ['Organization', 'Organization'],
-    ['Members', 'Members'],
-    ['Groups', 'Groups'],
-    ['Projects', 'Projects'],
-    ['Inbox labels', 'Inbox labels'],
-    ['Notifications', 'Notifications'],
+  const { who } = await enter(page, 'Tabi Tabs');
+  // Account: yours, in every organization (item icVly).
+  await page.goto('/account/profile');
+  await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Account' }).getByRole('tab')).toHaveCount(2);
+  for (const label of ['Profile', 'Notifications'] as const) {
+    await tab(page, label).click();
+    await expect(page).toHaveURL(new RegExp(`/account/${label.toLowerCase()}$`));
+    await expect(
+      page.getByRole('heading', { name: label, level: 2, exact: true }).first(),
+    ).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await axe(page);
+  }
+  // Organization settings: the organization's name on the page and on its first tab.
+  await page.goto('/settings/organization');
+  await expect(
+    page.getByRole('heading', { name: 'Organization settings', level: 1 }),
+  ).toBeVisible();
+  const org = `${who.name.split(' ')[0]}’s organization`;
+  await expect(page.locator('[data-org-scope]')).toContainText(org);
+  const tabs = page.getByRole('tablist', { name: 'Organization settings' }).getByRole('tab');
+  await expect(tabs).toHaveCount(5);
+  await expect(tabs.first()).toHaveText(org);
+  for (const [label, path, heading] of [
+    [org, 'organization', 'Organization'],
+    ['Members', 'members', 'Members'],
+    ['Groups', 'groups', 'Groups'],
+    ['Projects', 'projects', 'Projects'],
+    ['Inbox labels', 'labels', 'Inbox labels'],
   ] as const) {
     await tab(page, label).click();
-    await expect(page).toHaveURL(
-      new RegExp(`/settings/${label === 'Inbox labels' ? 'labels' : label.toLowerCase()}$`),
-    );
+    await expect(page).toHaveURL(new RegExp(`/settings/${path}$`));
     await expect(
       page.getByRole('heading', { name: heading, level: 2, exact: true }).first(),
     ).toBeVisible();
@@ -151,11 +170,11 @@ test('Projects tab: edit, archive with Undo, restore; Open process; no delete', 
   await expect(page).toHaveURL(/\/p\/a1\/process$/);
 });
 
-test('phone and desktop: the Settings entry replaces Me', async ({ page }) => {
+test('phone and desktop: the avatar opens Account', async ({ page }) => {
   await enter(page, 'Nav Person');
-  const entry = page.getByRole('link', { name: /(^|, )Settings$/ }).first();
+  const entry = page.getByRole('link', { name: /(^|, )Account$/ }).first();
   await entry.click();
-  await expect(page).toHaveURL(/\/settings\/profile$/);
+  await expect(page).toHaveURL(/\/account\/profile$/);
   await expect(page.getByRole('link', { name: 'Me', exact: true })).toHaveCount(0);
 });
 
