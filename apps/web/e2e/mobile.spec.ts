@@ -439,7 +439,7 @@ test('a 320 px screen (small foldable) has no sideways scroll on the main screen
     '/activity',
     '/agents',
     '/insights',
-    '/settings/profile',
+    '/account/profile',
     `/p/${pid}`,
   ]) {
     await page.goto(url);
@@ -462,9 +462,7 @@ test('a 320 px screen (small foldable) has no sideways scroll on the main screen
   await expectNoHorizontalScroll(page);
 });
 
-test('landscape phone: side nav scrolls, Settings reachable, no overlap', async ({
-  page,
-}, info) => {
+test('landscape phone: side nav scrolls, Account reachable, no overlap', async ({ page }, info) => {
   test.skip(info.project.name !== 'iphone-se', 'viewport set explicitly');
   const { pid } = await seed(page);
   for (const [width, height] of [
@@ -475,13 +473,13 @@ test('landscape phone: side nav scrolls, Settings reachable, no overlap', async 
     await page.goto('/');
     const side = page.getByRole('complementary', { name: 'Main' });
     await expect(side).toBeVisible();
-    const me = side.getByRole('link', { name: /(^|, )Settings$/ });
+    const me = side.getByRole('link', { name: /(^|, )Account$/ });
     await me.scrollIntoViewIfNeeded();
     await expect(me).toBeInViewport({ ratio: 1 });
     const project = side.locator(`a[href="/p/${pid}"]`);
     await project.scrollIntoViewIfNeeded();
     await expect(project).toBeInViewport({ ratio: 1 });
-    // Nothing overlaps: the last project link ends above the footer's Settings link.
+    // Nothing overlaps: the last project link ends above the footer's Account link.
     const [pb, mb] = await Promise.all([project.boundingBox(), me.boundingBox()]);
     await me.scrollIntoViewIfNeeded();
     const pb2 = await project.boundingBox();
@@ -490,7 +488,7 @@ test('landscape phone: side nav scrolls, Settings reachable, no overlap', async 
     void pb;
     void mb;
     await me.click();
-    await expect(page).toHaveURL(/\/settings/);
+    await expect(page).toHaveURL(/\/account\/profile$/);
     await expectNoHorizontalScroll(page);
   }
 });

@@ -143,6 +143,7 @@ const switcher = (page: Page) => page.getByRole('button', { name: /, switch orga
 async function switchTo(page: Page, name: RegExp) {
   await switcher(page).first().click();
   await page
+    .getByRole('dialog', { name: 'Organizations' })
     .getByRole('list', { name: 'Your organizations' })
     .getByRole('button', { name })
     .click();
@@ -292,6 +293,73 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.getByText(/^Brightline Studio · 2 projects$/)).toBeVisible();
       await expectNoHorizontalScroll(page);
       await axe(page);
+    } finally {
+      await s.stop();
+    }
+  });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`Settings split: Account under the avatar, Organization settings named after the organization (${theme})`, async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    if (isPhone()) await page.setViewportSize({ width: 390, height: 844 });
+    await fastTimers(page);
+    await freezeClock(page);
+    await page.emulateMedia({ colorScheme: theme });
+    const s = await seedThreeOrgs(page);
+    const vw = isPhone() ? '390' : '1440';
+    try {
+      await page.goto('/');
+      // The avatar opens Account: yours, the same in every organization.
+      const avatar = page.getByRole('link', { name: /^Cara Lindqvist, Account$/ }).first();
+      await expect(avatar).toBeVisible({ timeout: 20_000 });
+      if (!isPhone()) await expect(avatar).toHaveAttribute('title', 'Account and notifications');
+      await avatar.click();
+      await expect(page).toHaveURL(/\/account\/profile$/);
+      await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
+      await expect(page.locator('main [data-scope-pill]')).toBeVisible();
+      const account = page.getByRole('tablist', { name: 'Account' }).getByRole('tab');
+      await expect(account).toHaveText(['Profile', 'Notifications']);
+      await expectNoHorizontalScroll(page);
+      await shot(page, `A-account-${vw}-${theme}`);
+      await axe(page);
+
+      // Organization settings: the organization's name on the page and on its first tab.
+      if (isPhone()) await page.goto('/settings/organization');
+      else
+        await page
+          .getByRole('complementary', { name: 'Main' })
+          .getByRole('link', { name: 'Organization settings' })
+          .click();
+      await expect(page).toHaveURL(/\/settings\/organization$/);
+      await expect(
+        page.getByRole('heading', { name: 'Organization settings', level: 1 }),
+      ).toBeVisible();
+      await expect(page.locator('[data-org-scope]')).toContainText('Brightline Studio · Admin');
+      const tabs = page.getByRole('tablist', { name: 'Organization settings' }).getByRole('tab');
+      await expect(tabs).toHaveText([
+        'Brightline Studio',
+        'Members',
+        'Groups',
+        'Projects',
+        'Inbox labels',
+      ]);
+      await expectNoHorizontalScroll(page);
+      await shot(page, `A-orgsettings-${vw}-${theme}`);
+      await axe(page);
+
+      // Switching follows: now Northwind's settings, where Cara is a member.
+      await switchTo(page, /Northwind/);
+      await expect(page.locator('[data-org-scope]')).toContainText('Northwind · Member');
+      await expect(tabs.first()).toHaveText('Northwind');
+
+      // Old links land on the right page.
+      await page.goto('/settings/notifications');
+      await expect(page).toHaveURL(/\/account\/notifications$/);
+      await page.goto('/me/members');
+      await expect(page).toHaveURL(/\/settings\/members$/);
     } finally {
       await s.stop();
     }

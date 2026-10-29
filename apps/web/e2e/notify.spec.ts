@@ -117,7 +117,7 @@ test('Me, Notifications: choices are saved, Telegram links, quiet hours, install
 }, info) => {
   const { uid } = await seed(page);
   await configOn();
-  await page.goto('/settings/profile');
+  await page.goto('/account/profile');
   await page.getByRole('tab', { name: 'Notifications' }).click();
   await expect(page.getByRole('heading', { name: 'Notifications', level: 2 })).toBeVisible();
   await expect(page.getByText('Add to Home Screen', { exact: false }).first()).toBeVisible();
@@ -247,7 +247,7 @@ test('screenshots', async ({ page }, info) => {
       await expect(page.getByText('Connected as @joao')).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(800);
       await page.screenshot({ path: `${dir}/notifications-${name}-${theme}.png`, fullPage: true });
-      await page.goto('/settings/profile');
+      await page.goto('/account/profile');
       await page.waitForTimeout(500);
       await page.screenshot({ path: `${dir}/me-${name}-${theme}.png` });
     }

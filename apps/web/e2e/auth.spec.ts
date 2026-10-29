@@ -186,9 +186,9 @@ test('profile: theme choice sticks across reloads, name and organization can be 
   await signIn(page, who, 'Continue with Google', { ui: true });
   // Signed in and the profile + workspace exist; navigating earlier drops the not-yet-persisted session.
   await expect(page.getByRole('heading', { name: /^Good \w+, Tess$/ })).toBeVisible();
-  await page.goto('/me'); // forwards to Settings > Profile
-  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  await expect(page).toHaveURL(/\/settings\/profile$/);
+  await page.goto('/me'); // forwards to Account > Profile
+  await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/account\/profile$/);
 
   await page.getByRole('button', { name: 'Dark' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -209,13 +209,14 @@ test('profile: theme choice sticks across reloads, name and organization can be 
     'true',
   );
 
-  await page.getByRole('tab', { name: 'Organization' }).click();
+  // The organization's own settings are a separate page (item icVly).
+  await page.goto('/settings/organization');
   await page.getByLabel('Organization name').fill('Bee team');
   await page.getByRole('button', { name: 'Rename' }).click();
   await expect(page.getByText('Organization renamed')).toBeVisible();
   await expectNoHorizontalScroll(page);
 
-  await page.getByRole('tab', { name: 'Profile' }).click();
+  await page.goto('/account/profile');
   await page.getByRole('button', { name: 'Sign out' }).click();
   // Signed out, "/" is the product page again.
   await expect(page.getByRole('link', { name: 'Get started' }).first()).toBeVisible();
