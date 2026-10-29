@@ -273,7 +273,7 @@ func StatusText(itemID, title, why, by string, maxItems int) string {
 	}
 	how := fmt.Sprintf(`answer with the status tool (itemId="%s", text: one line on where the work stands, pct: a percentage when known), then carry on.`, itemID)
 	if maxItems > 1 {
-		return head + " Pass it on to the sub-agent working on this item: it should " + how
+		return head + " Please " + how
 	}
 	return head + " Please " + how
 }
@@ -756,7 +756,7 @@ func WorkText(row WorkRow, why Arrival, maxItems int) string {
 	if row.Job != nil && *row.Job == "shape" {
 		finish = " (shape it with shape_item; do not do its work)"
 	}
-	lines = append(lines, fmt.Sprintf(`It is claimed for you (item_id %s). Run it in a new background sub-agent of its own, with this brief: "You work Hivenod item %s. Pass itemId="%s" to every hivenod tool. Start with read_item, do what the step needs%s, and report back in one line." Stay free for the next event.`, id, id, id, finish))
+	lines = append(lines, fmt.Sprintf(`It is claimed for you (item_id %s). Pass itemId="%s" to every hivenod tool for it. Start with read_item, do what the step needs%s.`, id, id, finish))
 	return strings.Join(lines, "\n")
 }
 
@@ -877,7 +877,7 @@ func (s *Session) reportStop(h *heldItem, by, reason string) {
 	}
 	others := ""
 	if s.o.MaxItems > 1 {
-		others = " (stop the sub-agent working on this item only; the others go on)"
+		others = " (this item only; the others go on)"
 	}
 	s.push(Event{
 		Content: fmt.Sprintf(`%s stopped your work on "%s" (item_id %s) in Hivenod%s. Stop working on it now%s and do not redo it; its run has ended.`, by, h.Title, h.ItemID, r, others),

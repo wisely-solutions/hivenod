@@ -315,8 +315,9 @@ const quit = async (name: string) => {
   tmux('send-keys', '-t', name, 'Enter');
 };
 
+// No word about sub-agents: the hint to use them comes only from the plugin's hivenod skill.
 const STANDING_MULTI =
-  'You are a Hivenod worker session that runs items through sub-agents, as the hivenod channel instructions say. For each hivenod channel event of kind work (also ones that arrived before this message), start one new background sub-agent (the Agent tool, subagent_type general-purpose, run_in_background true) with the brief in the event, and never do the item yourself. When a channel event of kind note arrives, pass the note text on to the sub-agent of that item_id (continue it with SendMessage; if that is not possible, start a new background sub-agent for that item with the note as its brief), then reply with ACKNOTE and the item_id. When a channel event of kind stop arrives, stop the sub-agent of that item if it still runs (TaskStop), then reply with ACKSTOP and the item_id, and nothing else. Meanwhile just say ready.';
+  'You are a Hivenod worker session. Handle every hivenod channel event (also ones that arrived before this message). When a channel event of kind note arrives, deal with it, then reply with ACKNOTE and the item_id. When a channel event of kind stop arrives, stop the work on that item, then reply with ACKSTOP and the item_id, and nothing else. Meanwhile just say ready.';
 
 /** The hivenod tool calls made for one item (by any agent of the session). */
 const callsFor = (calls: ToolCall[], tool: string, itemId: string) =>
@@ -811,7 +812,7 @@ describe.skipIf(!run)('hivenod plugin: real Claude Code sessions', () => {
       const uid = await smokeAgent('Channel smoke (inbox)');
       await start(
         'x',
-        `${STANDING_MULTI} For a hivenod channel event of kind inbox, do the same: one new background sub-agent with the brief in the event. This is a test organization: to carry out a reply outcome, just report it with outcome_done (status done, result text "smoke").`,
+        `${STANDING_MULTI} This is a test organization: to carry out a reply outcome, just report it with outcome_done (status done, result text "smoke").`,
         { tools: 'mcp__plugin_hivenod_hivenod,Agent,Task,SendMessage,TaskStop' },
       );
       out('inbox session up (max_items 1)');

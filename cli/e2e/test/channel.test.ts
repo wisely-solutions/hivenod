@@ -362,7 +362,7 @@ d('hivenod mcp --channel with max_items 3 (card cGSENsRF)', () => {
   const works = (s: Awaited<ReturnType<typeof session>>) =>
     s.events.filter((e) => e.meta.kind === 'work');
 
-  it('holds at most 3: a 4th waits and is pushed when one ends; each event asks for a sub-agent', async () => {
+  it('holds at most 3: a 4th waits and is pushed when one ends; events carry the contract, not a sub-agent hint', async () => {
     const { uid, token } = await newAgent();
     const s = await session(token, 3);
     await put({
@@ -387,7 +387,8 @@ d('hivenod mcp --channel with max_items 3 (card cGSENsRF)', () => {
     for (const e of w) {
       expect(e.meta).toMatchObject({ max_items: '3' });
       expect(e.content).toContain(`item_id ${e.meta.item_id}`);
-      expect(e.content).toMatch(/background sub-agent/);
+      expect(e.content).not.toMatch(/sub-agent/);
+      expect(e.content).toContain(`itemId="${e.meta.item_id}"`);
       expect(await read(I(e.meta.item_id!))).toMatchObject({
         claim: { agentUid: uid, runId: e.meta.run_id },
       });
@@ -667,13 +668,13 @@ d('hivenod mcp --channel inbox events (item 4PEHr)', () => {
       inbox_cap: '3',
       inbox_active: '1',
     });
-    expect(e1.content).toMatch(/background sub-agent/);
+    expect(e1.content).not.toMatch(/sub-agent/);
     expect(e1.content).toContain(`thread_read (threadId ${tid})`);
     // Items are handed out as before.
     await put({ [I('b')]: itemDoc({ stepId: 'build', title: 'Second', order: 2 }) });
     await s.call('complete', { itemId: w1.meta.item_id, runId: w1.meta.run_id });
     await s.next('work', 2);
-    // A second message on the thread, while it is in flight: passed on, not a new sub-agent.
+    // A second message on the thread, while it is in flight: an update, not a new start.
     await s.call('inbox_add', msg({ messageId: 'm-2', text: 'Or Friday?' }));
     const e2 = await s.next('inbox', 2);
     expect(e2.meta).toMatchObject({ thread_id: tid, reason: 'message', update: 'true' });

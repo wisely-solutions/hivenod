@@ -2,6 +2,7 @@ package hive
 
 import (
 	"bytes"
+	"strings"
 	"encoding/json"
 	"os"
 	"testing"
@@ -149,5 +150,22 @@ func TestChannelInstructionsMaxItems(t *testing.T) {
 	}
 	if !bytes.Contains([]byte(ChannelInstructions(7)), []byte("Up to 7 items at a time")) {
 		t.Fatal("max items missing")
+	}
+}
+
+// The channel protocol states the contract only; "one sub-agent per item" is the Claude Code
+// plugin's skill (item xkQd9).
+func TestChannelTextsHaveNoSubAgentHint(t *testing.T) {
+	data, err := os.ReadFile(textsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.ToLower(string(data)), "sub-agent") {
+		t.Fatal("a channel text mentions sub-agents")
+	}
+	for n := 0; n <= 10; n++ {
+		if strings.Contains(ChannelInstructions(n), "sub-agent") {
+			t.Fatalf("instructions for %d mention sub-agents", n)
+		}
 	}
 }

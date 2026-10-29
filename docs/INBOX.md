@@ -243,8 +243,8 @@ and the Go CLI agreed).
 
 A channel session (`hivenod mcp --channel`, `cli/internal/hive/inboxfeed.go`) pushes `<channel source="hivenod" kind="inbox">` events for
 the threads that need agent work. They don't count toward `max_items` and are never claimed:
-the session runs each in a background sub-agent of its own, with the brief in the event, and
-keeps development items first (the channel instructions say so).
+the event carries the thread to work, and the channel instructions say to keep development items
+first. (In Claude Code, the plugin's `hivenod` skill runs each thread in a background sub-agent of its own.)
 
 **Who gets what.** Each event goes to exactly one agent's session:
 
@@ -262,7 +262,7 @@ keeps development items first (the channel instructions say so).
   sends `woke`.
 
 Meta: `kind: inbox, thread_id, reason, member, inbox_cap, inbox_active`, plus `outcome_id` and
-`outcome_type` for `carry_out`. `update: true` means a sub-agent already works on that thread,
+`outcome_type` for `carry_out`. `update: true` means that thread is already being worked on,
 so the session passes the event on instead of starting another one.
 
 **Dedupe.** It's one event per thread state change. The session remembers, per thread, the
