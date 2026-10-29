@@ -24,6 +24,8 @@ const INLINE: ReadonlySet<InboxEventType> = new Set<InboxEventType>([
   'outcome.done',
   'outcome.failed',
   'thread.itemMade',
+  'thread.instructed',
+  'thread.instruction_answered',
 ]);
 
 const DAY = 86_400_000;
