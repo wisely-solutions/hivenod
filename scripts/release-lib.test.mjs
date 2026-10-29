@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import {
   previousTag,
   isRulesApi503,
+  isRules409,
+  rulesDeployDecision,
+  liveRulesMatch,
+  deployPlan,
   compareVersions,
   versionRegressions,
   authHeaderProblems,
@@ -242,5 +246,62 @@ describe('isRulesApi503', () => {
     );
     expect(isRulesApi503('')).toBe(false);
     expect(isRulesApi503(undefined)).toBe(false);
+  });
+});
+
+describe('rulesDeployDecision', () => {
+  const e503 = 'HTTP Error: 503, https://firebaserules.googleapis.com/v1/x';
+  const e409 = 'Error: Release projects/p/releases/cloud.firestore already exists';
+  it('retries a 503 up to twice, then fails', () => {
+    expect(rulesDeployDecision({ output: e503, retries503: 0, retries409: 0 })).toBe('retry');
+    expect(rulesDeployDecision({ output: e503, retries503: 1, retries409: 0 })).toBe('retry');
+    expect(rulesDeployDecision({ output: e503, retries503: 2, retries409: 0 })).toBe('fail');
+  });
+  it('treats a 409 with a matching live ruleset as success', () => {
+    expect(isRules409(e409)).toBe(true);
+    expect(
+      rulesDeployDecision({ output: e409, retries503: 0, retries409: 0, remoteMatches: true }),
+    ).toBe('success');
+  });
+  it('retries a 409 with a mismatch once, then fails', () => {
+    const s = { output: e409, retries503: 0, remoteMatches: false };
+    expect(rulesDeployDecision({ ...s, retries409: 0 })).toBe('retry');
+    expect(rulesDeployDecision({ ...s, retries409: 1 })).toBe('fail');
+  });
+  it('fails on any other error', () => {
+    expect(rulesDeployDecision({ output: 'Error: boom', retries503: 0, retries409: 0 })).toBe(
+      'fail',
+    );
+    expect(isRules409('')).toBe(false);
+  });
+});
+
+describe('liveRulesMatch', () => {
+  const local = 'rules_version = "2";\nservice cloud.firestore {}\n';
+  const mk = (content) => async (url) =>
+    url.endsWith('/releases/cloud.firestore')
+      ? { rulesetName: 'projects/p/rulesets/r1' }
+      : { source: { files: [{ name: 'firestore.rules', content }] } };
+  it('matches equal source (ignoring trailing whitespace)', async () => {
+    expect(
+      await liveRulesMatch({ project: 'p', localSource: local, getJson: mk(local.trim()) }),
+    ).toBe(true);
+  });
+  it('does not match different source or a failing GET', async () => {
+    expect(await liveRulesMatch({ project: 'p', localSource: local, getJson: mk('other') })).toBe(
+      false,
+    );
+    const boom = async () => {
+      throw new Error('403');
+    };
+    expect(await liveRulesMatch({ project: 'p', localSource: local, getJson: boom })).toBe(false);
+  });
+});
+
+describe('deployPlan', () => {
+  it('lists rules before hosting', () => {
+    const p = deployPlan('p', 'abcdef123');
+    expect(p[1]).toContain('--only firestore');
+    expect(p[2]).toContain('--only hosting');
   });
 });

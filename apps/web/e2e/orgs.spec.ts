@@ -13,6 +13,8 @@ import {
   uidOf,
   workspaceOf,
   settle,
+  expectCurrentOrg,
+  openSwitcher,
 } from './helpers';
 import { personalOrgPlan, SERVER_TIME } from '@hive/shared';
 
@@ -37,8 +39,6 @@ async function axe(page: Page) {
     violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
   ).toEqual([]);
 }
-
-const switcher = (page: Page) => page.getByRole('button', { name: /, switch organization$/ });
 
 test('an admin adds a member to a project; the member sees nothing until then', async ({
   page,
@@ -257,7 +257,7 @@ test('one person, several organizations: create, switch, and keep their projects
   await dialog.getByRole('button', { name: 'Create organization' }).click();
   await expect(page.getByText('Second Co is ready.')).toBeVisible();
   await expect.poll(() => workspaceOf(who.email)).not.toBe(first);
-  await expect(switcher(page)).toHaveAccessibleName('Second Co, switch organization');
+  await expectCurrentOrg(page, 'Second Co');
   // The link banner must not appear after creating an org (card fBvI3nno: it used to stick).
   await page.waitForTimeout(8000);
   await expect(page.getByTestId('reconnecting')).toHaveCount(0);
@@ -270,18 +270,20 @@ test('one person, several organizations: create, switch, and keep their projects
   await expect(page.getByText('Alpha project')).toHaveCount(0);
 
   // Switch back with the switcher: both are listed, the old data is back.
-  await switcher(page).click();
+  await openSwitcher(page);
   const list = page.getByRole('list', { name: 'Your organizations' });
   await expect(list.getByRole('button')).toHaveCount(2);
   await expectNoHorizontalScroll(page);
   await axe(page);
   await list.getByRole('button', { name: /Sam’s organization/ }).click();
-  await expect(switcher(page)).toHaveAccessibleName('Sam’s organization, switch organization');
+  await expectCurrentOrg(page, 'Sam’s organization');
+  // On a phone the switcher is in the organization tab (item icVly): back to the projects.
+  if ((page.viewportSize()?.width ?? 1440) < 640) await page.goto('/projects');
   await expect(page.getByRole('heading', { name: 'Alpha project' })).toBeVisible();
 
   // The choice sticks across a reload.
   await page.reload();
-  await expect(switcher(page)).toHaveAccessibleName('Sam’s organization, switch organization');
+  await expectCurrentOrg(page, 'Sam’s organization');
 });
 
 test('the chosen organization stays through reloads, a second tab and profile writes (card gypyWz1I)', async ({
@@ -305,24 +307,24 @@ test('the chosen organization stays through reloads, a second tab and profile wr
     .getByRole('dialog', { name: 'New organization' })
     .getByRole('button', { name: 'Create organization' })
     .click();
-  await expect(switcher(page)).toHaveAccessibleName('Chosen Co, switch organization');
+  await expectCurrentOrg(page, 'Chosen Co');
   await expect.poll(() => workspaceOf(who.email)).not.toBe(first);
   const chosen = await workspaceOf(who.email);
 
   // A second tab of the same browser opens, loads, and reloads: nothing moves.
   const tab2 = await context.newPage();
   await tab2.goto('/');
-  await expect(switcher(tab2)).toHaveAccessibleName('Chosen Co, switch organization');
+  await expectCurrentOrg(tab2, 'Chosen Co');
   await tab2.reload();
-  await expect(switcher(tab2)).toHaveAccessibleName('Chosen Co, switch organization');
+  await expectCurrentOrg(tab2, 'Chosen Co');
   await page.reload();
-  await expect(switcher(page)).toHaveAccessibleName('Chosen Co, switch organization');
+  await expectCurrentOrg(page, 'Chosen Co');
 
   // The other tab changes the theme (a profile write): the active organization is untouched.
   await tab2.goto('/me');
   await tab2.getByRole('button', { name: 'Dark' }).click();
   await expect.poll(() => userTheme(who.email)).toBe('dark');
-  await expect(switcher(page)).toHaveAccessibleName('Chosen Co, switch organization');
+  await expectCurrentOrg(page, 'Chosen Co');
   expect(await workspaceOf(who.email)).toBe(chosen);
   await tab2.close();
 });
@@ -362,8 +364,8 @@ test('a Personal organization made by the operator command shows in the switcher
   await page.reload();
   await settle(page);
   // Still in their own organization; Personal is one tap away in the switcher.
-  await expect(switcher(page)).not.toHaveAccessibleName('Personal, switch organization');
-  await switcher(page).click();
+  await expectCurrentOrg(page, 'Personal', { not: true });
+  await openSwitcher(page);
   const list = page.getByRole('list', { name: 'Your organizations' });
   await expect(list.getByRole('button', { name: /Personal/ })).toBeVisible();
   await expectNoHorizontalScroll(page);
@@ -372,5 +374,5 @@ test('a Personal organization made by the operator command shows in the switcher
       path: `${process.env.SHOTS_DIR}/${info.project.name}-personal-switcher.png`,
     });
   await list.getByRole('button', { name: /Personal/ }).click();
-  await expect(switcher(page)).toHaveAccessibleName('Personal, switch organization');
+  await expectCurrentOrg(page, 'Personal');
 });

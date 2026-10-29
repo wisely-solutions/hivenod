@@ -23,7 +23,11 @@ import {
   mainAuthProblems,
   aliasRedirectProblems,
   ALIAS_URL,
+  deployPlan,
+  isRules409,
   isRulesApi503,
+  liveRulesMatch,
+  rulesDeployDecision,
   nextReleaseTag,
   pendingIndexes,
   siteUrls,
@@ -125,31 +129,71 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
   const stars = await fetchStars({ token: process.env.GH_TOKEN_WISELY || process.env.GH_TOKEN });
   writeFileSync(join(cwd, 'apps/web/dist/stars.json'), starsJson(stars));
   console.log(`GitHub stars: ${stars ?? 'unknown (the page shows no count)'}`);
-  const deployArgs = [
-    'exec',
-    'firebase',
-    'deploy',
-    '--only',
-    'hosting,firestore',
-    '--message',
-    `commit ${commit.slice(0, 7)}`,
-    '--project',
-    project,
-    '--non-interactive',
-  ];
-  for (let attempt = 1; ; attempt++) {
-    const r = spawnSync('pnpm', deployArgs, { cwd, env: process.env, encoding: 'utf8' });
+  const fbDeploy = (only, extra = []) => {
+    const r = spawnSync(
+      'pnpm',
+      [
+        'exec',
+        'firebase',
+        'deploy',
+        '--only',
+        only,
+        ...extra,
+        '--project',
+        project,
+        '--non-interactive',
+      ],
+      { cwd, env: process.env, encoding: 'utf8' },
+    );
     process.stdout.write(r.stdout ?? '');
     process.stderr.write(r.stderr ?? '');
-    if (r.status === 0) break;
-    // Google's rules API sometimes answers 503; nothing is deployed then, so one retry is safe.
-    if (attempt === 1 && isRulesApi503(`${r.stdout}\n${r.stderr}`)) {
-      console.log('retrying after a Google 503 (waiting 60 s)');
+    return { status: r.status, output: `${r.stdout}\n${r.stderr}` };
+  };
+  const getJson = async (url) => {
+    const res = await fetch(url, { headers: { authorization: `Bearer ${await accessToken()}` } });
+    if (!res.ok) throw new Error(`GET ${url}: ${res.status}`);
+    return res.json();
+  };
+  // Step 1: rules + indexes alone, so a Google rules hiccup never blocks (or half-ships) the site.
+  console.log('Deploy step 1/2: Firestore rules and indexes');
+  let retries503 = 0;
+  let retries409 = 0;
+  for (;;) {
+    const r = fbDeploy('firestore');
+    if (r.status === 0) {
+      console.log('Deploy step 1/2: rules released');
+      break;
+    }
+    const remoteMatches = isRules409(r.output)
+      ? await liveRulesMatch({
+          project,
+          localSource: readFileSync(join(cwd, 'firestore.rules'), 'utf8'),
+          getJson,
+        })
+      : undefined;
+    const d = rulesDeployDecision({ output: r.output, retries503, retries409, remoteMatches });
+    if (d === 'success') {
+      console.log(
+        'Deploy step 1/2: 409 "already exists", live ruleset equals firestore.rules: already current',
+      );
+      break;
+    }
+    if (d === 'retry') {
+      if (isRulesApi503(r.output)) retries503++;
+      else retries409++;
+      console.log(
+        `Deploy step 1/2: retrying after ${isRulesApi503(r.output) ? 'a Google 503' : 'a 409 with a different live ruleset'} (waiting 60 s)`,
+      );
       await new Promise((res) => setTimeout(res, 60_000));
       continue;
     }
+    console.error('Deploy step 1/2 FAILED (rules/indexes); hosting was not deployed.');
     process.exit(r.status ?? 1);
   }
+  console.log('Deploy step 2/2: hosting');
+  const h = fbDeploy('hosting', ['--message', `commit ${commit.slice(0, 7)}`]);
+  if (h.status !== 0) process.exit(h.status ?? 1);
+  console.log('Deploy step 2/2: hosting deployed');
   return commit;
 }
 
@@ -444,6 +488,13 @@ async function deployRef(ref) {
   }
 }
 
+if (process.env.DEPLOY_DRY_RUN === '1' && (mode === 'prod' || mode === 'release')) {
+  console.log(`DRY RUN (${mode}, project ${project}): nothing is built or deployed.`);
+  deployPlan(project).forEach((l, i) => console.log(`  ${i + 1}. ${l}`));
+  if (mode === 'release')
+    console.log('  then: smoke test of /version.json, wait for indexes, tag release-<n>');
+  process.exit(0);
+}
 if (mode === 'preview') {
   if (!name || !/^[a-z0-9-]{1,40}$/.test(name)) {
     die('Usage: pnpm deploy:preview <name>  (lowercase letters, digits, dashes)');

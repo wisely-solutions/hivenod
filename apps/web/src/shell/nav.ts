@@ -57,11 +57,20 @@ export const ME: NavEntry = {
 };
 
 /**
- * The four phone tabs around the + (item kt3E7, design 2.7): Today · Inbox · + · Calendar ·
- * Projects. Settings sits under the avatar in the phone's top bar; Activity stays in the sidebar,
- * `g a` and the palette.
+ * The phone tabs around the + (items kt3E7, icVly): Today · Inbox · + · Calendar · <the
+ * organization>. The last one is drawn by the tab bar itself (the organization's mark and name)
+ * and opens the organization hub (/org). Your Account sits under the avatar in the top bar.
  */
-export const TABS: NavEntry[] = [NAV[0]!, NAV[1]!, NAV[2]!, NAV[3]!];
+export const TABS: NavEntry[] = [NAV[0]!, NAV[1]!, NAV[2]!];
+
+/** Paths that belong to the organization tab: the hub and every organization page. */
+export function isOrgPath(path: string): boolean {
+  return (
+    /^\/(org|projects|items|agents|activity|insights)(\/|$)/.test(path) ||
+    /^\/p\//.test(path) ||
+    /^\/settings\//.test(path)
+  );
+}
 
 export function isActivePath(current: string, to: NavPath): boolean {
   return to === '/' ? current === '/' : current === to || current.startsWith(`${to}/`);

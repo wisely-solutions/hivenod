@@ -210,9 +210,18 @@ const projectInsightsRoute = createRoute({
   validateSearch: rangeSearch,
   component: lazyRouteComponent(() => import('./insights/InsightsPage'), 'ProjectInsightsPage'),
 });
+// The organization hub (item icVly): the phone's fifth tab, the organization in the switcher.
+const orgHubRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/org',
+  component: lazyRouteComponent(() => import('./orgs/OrgHubPage'), 'OrgHubPage'),
+});
 const calendarRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/calendar',
+  // ?org=: the organization chips (item icVly), one organization's view.
+  validateSearch: (s: Record<string, unknown>): { org?: string } =>
+    typeof s.org === 'string' && s.org ? { org: s.org } : {},
   component: lazyRouteComponent(() => import('./calendar/CalendarPage'), 'CalendarPage'),
 });
 // Inbox (item 4PEHrOW5IfXBQWgOK9wo): the member's subjects and threads, all organizations or one.
@@ -343,6 +352,7 @@ export const router = createRouter({
     insightsRoute,
     projectInsightsRoute,
     calendarRoute,
+    orgHubRoute,
     inboxRoute,
     inboxSubjectRoute,
     inboxThreadRoute,

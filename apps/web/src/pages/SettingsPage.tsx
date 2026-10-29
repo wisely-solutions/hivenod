@@ -5,6 +5,7 @@ import { Tabs } from '../ui/form';
 import { PageHeader } from './Chrome';
 import { useReady } from '../auth/context';
 import { OrgMark, orgDetail } from '../orgs/OrgSwitcher';
+import { useOrgLooks } from '../orgs/look';
 import {
   ACCOUNT_TABS,
   isAccountTab,
@@ -98,13 +99,18 @@ export function OrgSettingsPage() {
   const { session } = useReady();
   const current: OrgTab = tab && isOrgTab(tab) ? tab : 'organization';
   const name = session.workspace.name;
-  const detail = orgDetail(session.role, Object.keys(session.workspace.memberRoles).length);
+  const look = useOrgLooks()(session.workspaceId);
+  const detail = orgDetail(
+    session.role,
+    Object.keys(session.workspace.memberRoles).length,
+    look.personal,
+  );
   return (
     <>
       <div className="mb-6">
         <h1 className="text-28 font-semibold">Organization settings</h1>
         <p data-org-scope="" className="mt-1.5 flex min-w-0 items-center gap-2 text-14 text-text-2">
-          <OrgMark name={name} className="size-6 text-12" />
+          <OrgMark name={name} {...look} className="size-6 text-12" />
           <span className="min-w-0 truncate">
             <span className="font-medium text-ink">{name}</span> · {detail}
           </span>

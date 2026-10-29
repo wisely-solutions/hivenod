@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, Info, Plus } from 'lucide-react';
+import { Check, ChevronsUpDown, Info, Plus, UserRound } from 'lucide-react';
 import { useState } from 'react';
 import { useReady } from '../auth/context';
 import { ResponsiveModal } from '../components/ResponsiveModal';
@@ -9,20 +9,40 @@ import { Icon } from '../ui/icon';
 import { Popover, useToast } from '../ui/overlay';
 import { useOrgs, type OrgRow } from './data';
 import { runOrgDelete, useDeleting } from './deleteJobs';
+import { useOrgLooks } from './look';
 
-/** The little square with an organization's initial. */
-export function OrgMark({ name, className }: { name: string; className?: string }) {
+/**
+ * The little square with an organization's initial, in its colour (the same as in Calendar and
+ * Today). The Personal organization gets a person instead of a letter (item icVly).
+ */
+export function OrgMark({
+  name,
+  color,
+  personal = false,
+  className,
+}: {
+  name: string;
+  color?: string;
+  personal?: boolean;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden
+      data-org-mark={personal ? 'personal' : ''}
       // The letter is drawn by CSS so it is not text in the button: the visible text of the
       // control is then the org name alone, which its accessible name must start with.
-      data-initial={name.trim().charAt(0).toUpperCase() || '?'}
+      data-initial={personal ? undefined : name.trim().charAt(0).toUpperCase() || '?'}
+      style={color ? { background: color } : undefined}
       className={cn(
-        'grid size-7 shrink-0 place-items-center rounded-btn bg-ink text-13 font-semibold text-surface before:content-[attr(data-initial)]',
+        'grid size-7 shrink-0 place-items-center rounded-btn text-13 font-semibold',
+        color ? 'text-white' : 'bg-ink text-surface',
+        !personal && 'before:content-[attr(data-initial)]',
         className,
       )}
-    />
+    >
+      {personal ? <Icon icon={UserRound} size={15} /> : null}
+    </span>
   );
 }
 
@@ -32,6 +52,7 @@ export function OrgList({ onDone }: { onDone?: () => void }) {
   const deletingNow = useDeleting();
   const toast = useToast();
   const orgs = useOrgs(session.me.uid, session.profile.workspaceIds);
+  const look = useOrgLooks();
   // The current one is always listed, even before the profile list has caught up.
   const rows: OrgRow[] = orgs.some((o) => o.id === session.workspaceId)
     ? orgs
@@ -41,6 +62,7 @@ export function OrgList({ onDone }: { onDone?: () => void }) {
           name: session.workspace.name,
           role: session.role,
           members: Object.keys(session.workspace.memberRoles).length,
+          ownerUid: session.workspace.ownerUid,
           deleting: false,
         },
         ...orgs,
@@ -53,7 +75,7 @@ export function OrgList({ onDone }: { onDone?: () => void }) {
           const busy = deletingNow.includes(o.id);
           return (
             <li key={o.id} className="flex min-h-11 items-center gap-3 px-2">
-              <OrgMark name={o.name} className="opacity-50" />
+              <OrgMark name={o.name} {...look(o.id)} className="opacity-50" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-14 font-medium text-text-2">{o.name}</span>
                 <span className="block text-13 text-text-2">
@@ -92,10 +114,12 @@ export function OrgList({ onDone }: { onDone?: () => void }) {
               }}
               className="flex min-h-11 w-full items-center gap-3 rounded-btn px-2 text-left hov:bg-canvas foc:outline-2 foc:outline-focus"
             >
-              <OrgMark name={o.name} />
+              <OrgMark name={o.name} {...look(o.id)} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-14 font-medium text-ink">{o.name}</span>
-                <span className="block text-13 text-text-2">{orgDetail(o.role, o.members)}</span>
+                <span className="block text-13 text-text-2">
+                  {orgDetail(o.role, o.members, look(o.id).personal)}
+                </span>
               </span>
               {current ? <Icon icon={Check} size={18} className="text-ink" /> : null}
             </button>
@@ -171,8 +195,9 @@ export function NewOrgModal({ open, onClose }: { open: boolean; onClose: () => v
   );
 }
 
-/** "Admin · 4 people": the line under an organization's name. */
-export function orgDetail(role: string | undefined, members: number): string {
+/** "Admin · 4 people" (or "Just you · your assistant" for Personal): the line under its name. */
+export function orgDetail(role: string | undefined, members: number, personal = false): string {
+  if (personal) return 'Just you · your assistant';
   return `${role === 'admin' ? 'Admin' : 'Member'} · ${members} ${members === 1 ? 'person' : 'people'}`;
 }
 
@@ -193,7 +218,12 @@ export function OrgSwitcher({
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState(false);
   const name = session.workspace.name;
-  const detail = orgDetail(session.role, Object.keys(session.workspace.memberRoles).length);
+  const look = useOrgLooks()(session.workspaceId);
+  const detail = orgDetail(
+    session.role,
+    Object.keys(session.workspace.memberRoles).length,
+    look.personal,
+  );
   return (
     <>
       <Popover
@@ -211,7 +241,7 @@ export function OrgSwitcher({
               className,
             )}
           >
-            <OrgMark name={name} />
+            <OrgMark name={name} {...look} />
             {compact ? null : (
               <>
                 <span className="min-w-0 flex-1">

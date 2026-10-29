@@ -9,7 +9,6 @@ import { CaptureProvider } from '../capture/CaptureProvider';
 import { Logo } from '../components/Logo';
 import { PersonAvatar } from '../components/PersonAvatar';
 import { useReady } from '../auth/context';
-import { OrgSwitcher } from '../orgs/OrgSwitcher';
 import { cn } from '../ui/cn';
 import { IconButton } from '../ui/button';
 import { Icon } from '../ui/icon';
@@ -241,7 +240,6 @@ function Frame({ children }: { children?: ReactNode }) {
             </p>
             <div className="flex items-center gap-1">
               <BellLink />
-              <OrgSwitcher compact className="w-11 border-transparent bg-transparent" />
               {/* Your Account lives under the avatar (items kt3E7, icVly); organization settings are the organization's. */}
               <Link
                 to="/account"

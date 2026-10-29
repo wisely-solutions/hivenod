@@ -31,8 +31,10 @@ test('the shell frames the app and has no accessibility violations', async ({ pa
       /^Inbox/,
       '',
       /^Calendar/,
-      /^Projects/,
+      // The fifth tab is the organization (item icVly): its mark and name.
+      /’s organization\s*$/,
     ]);
+    await expect(tabs.locator('[data-org-tab]')).toHaveAttribute('href', '/org');
     // Settings moved under the avatar in the top bar (item kt3E7).
     await expect(page.getByRole('banner').getByRole('link', { name: /, Account$/ })).toBeVisible();
     await expect(tabs.getByRole('link', { name: 'Activity' })).toHaveCount(0);

@@ -228,17 +228,17 @@ test('rows of all three organizations, tagged, grouped, filtered and counted', a
   await expect(page).not.toHaveURL(/who=/);
 
   // The workspace picker narrows to one organization.
-  await page
-    .getByRole('combobox', { name: 'Filter by organization' })
-    .selectOption({ label: 'Beta Co' });
+  // The organization chips (item icVly), on the page itself.
+  await page.keyboard.press('Escape');
+  const chips = page.getByRole('group', { name: 'Organization' });
+  await chips.getByRole('button', { name: 'Beta Co' }).click();
   await expect(page).toHaveURL(new RegExp(`org=${wb}`));
   await expect(row(page, 'Beta shared page')).toBeVisible();
   await expect(row(page, 'Invoice from')).toBeVisible();
   await expect(row(page, 'Alpha solo post')).toHaveCount(0);
   await expect(row(page, 'Gamma group runbook')).toHaveCount(0);
-  await page
-    .getByRole('combobox', { name: 'Filter by organization' })
-    .selectOption({ label: 'All organizations' });
+  await chips.getByRole('button', { name: /^All/ }).click();
+  await expect(page).not.toHaveURL(/org=/);
   await expect(row(page, 'Alpha solo post')).toBeVisible();
   await expectNoHorizontalScroll(page);
 });

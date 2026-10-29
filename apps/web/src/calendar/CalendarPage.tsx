@@ -1,5 +1,5 @@
 import { approveOutcome, memberProfileSchema, type ActionPlan } from '@hive/shared';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { Check, ChevronLeft, ChevronRight, Flag, Sparkles } from 'lucide-react';
 import {
   useCallback,
@@ -19,7 +19,8 @@ import { PageHeader } from '../pages/Chrome';
 import { errorText } from '../threads/parts';
 import { Button, IconButton } from '../ui/button';
 import { cn } from '../ui/cn';
-import { Select, Segmented } from '../ui/form';
+import { Segmented } from '../ui/form';
+import { OrgChips } from '../orgs/OrgChips';
 import { Icon } from '../ui/icon';
 import { useCountdown, useToast } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
@@ -94,7 +95,11 @@ export function CalendarPage() {
   const navigate = useNavigate();
   const phone = usePhone();
   const orgs = useOrgs(uid, session.profile.workspaceIds);
-  const [scope, setScope] = useState<Scope>('all');
+  // The organization chips (item icVly): one organization's view, kept in the URL.
+  const search = useSearch({ from: '/calendar' });
+  const scope: Scope = search.org && orgs.some((o) => o.id === search.org) ? search.org : 'all';
+  const setScope = (wid: string | null) =>
+    void navigate({ to: '/calendar', search: wid ? { org: wid } : {}, replace: true });
   const [view, setView] = useState<CalView>(() =>
     typeof window !== 'undefined' && window.matchMedia?.(PHONE).matches ? 'day' : 'week',
   );
@@ -153,10 +158,6 @@ export function CalendarPage() {
   ].join(' · ');
   const empty = cal.state === 'ready' && blocks.length === 0;
 
-  const scopeOptions = [
-    { value: 'all', label: 'All my calendars' },
-    ...orgs.map((o) => ({ value: o.id, label: o.name })),
-  ];
   const openProposal = (p: { wid: string; tid: string }) =>
     void navigate({
       to: '/inbox/$wid/t/$tid',
@@ -167,15 +168,14 @@ export function CalendarPage() {
   return (
     <div className="mx-auto w-full max-w-6xl">
       <PageHeader title="Calendar" subtitle={subtitle} allOrgs={mine && orgs.length > 1} />
+      <OrgChips
+        className="mb-3"
+        orgs={colorOrgs}
+        value={mine ? null : scope}
+        onChange={setScope}
+        hint="Tap an organization to see its calendar; others show as busy"
+      />
       <div className="mb-4 flex flex-wrap items-end gap-2">
-        <Select
-          label="Calendar"
-          hideLabel
-          inline
-          value={scope}
-          onValueChange={(v) => setScope(v)}
-          options={scopeOptions}
-        />
         <Segmented
           label="View"
           className="sm:w-auto"
