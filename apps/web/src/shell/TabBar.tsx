@@ -76,17 +76,17 @@ export function TabBar({ hidden }: { hidden: boolean }) {
                 activeOptions={{ exact: t.to === '/' }}
                 aria-label={
                   t.badge
-                    ? needsLabel(t.label, needs.total, needs.onlyYou)
+                    ? needsLabel(t.short ?? t.label, needs.total, needs.onlyYou)
                     : t.to === '/inbox' && waiting > 0
-                      ? `${t.label} ${waiting} waiting`
-                      : t.label
+                      ? `${t.short ?? t.label} ${waiting} waiting`
+                      : (t.short ?? t.label)
                 }
                 // The label comes first in the DOM (shown below the icon by flex-col-reverse), so
                 // the visible text reads "Needs you 5" like the start of the aria-label (axe
                 // label-content-name-mismatch at 390).
                 className="relative flex min-h-14 flex-col-reverse items-center justify-center gap-0.5 whitespace-nowrap text-12 font-medium text-text-2 transition-colors data-[status=active]:text-ink"
               >
-                <span>{t.label}</span>{' '}
+                <span>{t.short ?? t.label}</span>{' '}
                 <span className="relative">
                   <Icon icon={t.icon} size={22} />
                   {t.badge && needs.total > 0 ? (

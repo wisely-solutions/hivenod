@@ -1,5 +1,5 @@
 import { tabTitle } from '@hive/shared';
-import { Outlet, useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
 import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { RemindersProvider } from '../notify/reminders';
@@ -7,6 +7,8 @@ import { BellLink } from '../bell/Bell';
 import { BellProvider } from '../bell/data';
 import { CaptureProvider } from '../capture/CaptureProvider';
 import { Logo } from '../components/Logo';
+import { PersonAvatar } from '../components/PersonAvatar';
+import { useReady } from '../auth/context';
 import { OrgSwitcher } from '../orgs/OrgSwitcher';
 import { cn } from '../ui/cn';
 import { IconButton } from '../ui/button';
@@ -137,6 +139,7 @@ function useCondensedTitle(path: string) {
 
 function Frame({ children }: { children?: ReactNode }) {
   const [palette, setPalette] = useState(false);
+  const { session } = useReady();
   useReplayPending();
   useCleanStaleBusy();
   const { needsReady, unreachable, retry, retrying } = useShellData();
@@ -239,6 +242,19 @@ function Frame({ children }: { children?: ReactNode }) {
             <div className="flex items-center gap-1">
               <BellLink />
               <OrgSwitcher compact className="w-11 border-transparent bg-transparent" />
+              {/* Settings live under the avatar on a phone (item kt3E7): the tabs make room for Calendar. */}
+              <Link
+                to="/settings"
+                aria-label={`${session.profile.name}, Settings`}
+                className="grid size-11 place-items-center rounded-full foc:outline-2 foc:outline-focus"
+              >
+                <PersonAvatar
+                  name={session.profile.name}
+                  photoURL={session.profile.photoURL}
+                  color={session.profile.color}
+                  size="sm"
+                />
+              </Link>
               <IconButton label="Search" variant="ghost" onClick={() => setPalette(true)}>
                 <Icon icon={Search} size={20} />
               </IconButton>

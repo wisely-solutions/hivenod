@@ -280,4 +280,32 @@ test.describe('phone 390', () => {
       await s.stop();
     }
   });
+
+  test('the card swipes: left skips, right approves with Undo on the button', async ({ page }) => {
+    test.setTimeout(120_000);
+    const s = await open(page);
+    try {
+      const swipe = async (dx: number) => {
+        const box = (await card(page).boundingBox())!;
+        const y = box.y + 60;
+        const x = box.x + box.width / 2;
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        for (let i = 1; i <= 8; i++) await page.mouse.move(x + (dx * i) / 8, y);
+        await page.mouse.up();
+      };
+      await expect(card(page)).toHaveAttribute('aria-label', /Sign off the Q4 price list/);
+      await swipe(-180);
+      await expect(card(page)).toHaveAttribute('aria-label', /Move the payments review/);
+      await swipe(180);
+      await expect(card(page).locator('button[data-undo]')).toBeVisible();
+      await expect(page.locator('[data-toast-region] > *')).toHaveCount(0);
+      await expect(stack(page).locator('[data-done-row]')).toContainText('Sent · Reply and book', {
+        timeout: UNDO_WAIT + 5000,
+      });
+      expect(await outcomeState(s, s.outcomes.book)).toBe('approved');
+    } finally {
+      await s.stop();
+    }
+  });
 });

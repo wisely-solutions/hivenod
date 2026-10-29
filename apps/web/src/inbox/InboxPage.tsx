@@ -678,6 +678,7 @@ export function InboxPage() {
               onOpen={() => openRow(r)}
               onSkip={() => skip(r.key)}
               onDone={(label) => cardDone(r.key, label)}
+              swipe={!desktop}
             />
           </motion.li>
         );
