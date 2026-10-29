@@ -1,7 +1,7 @@
 package hive
 
-// Inbox tools (item 4PEHrOW5IfXBQWgOK9wo): the Go side of packages/agent/src/inbox.ts. The
-// results must equal the TypeScript ones (packages/agent/test/go.integration.test.ts).
+// Inbox tools (item 4PEHrOW5IfXBQWgOK9wo): ported from the former TypeScript
+// client; cli/e2e/test/go.test.ts checks the results against its golden files.
 //
 // Nothing here carries anything out by itself: an agent sends, books or hands over only for an
 // outcome its person approved (state approved, with the approved fields), then reports

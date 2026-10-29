@@ -2,7 +2,7 @@
  * Item QjTTL: an agent parks an item it holds (waiting on a release batch, a review). The board
  * card shows "Waiting: <reason> · since <time>" and the agent's presence reads
  * "working N · waiting M" (card footer, agents list, agent profile). At 1440 and 390, light and
- * dark, axe-clean. Parking itself is tested in packages/agent (channel integration, TS and Go).
+ * dark, axe-clean. Parking itself is tested in cli/e2e (channel suite, Go CLI).
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';

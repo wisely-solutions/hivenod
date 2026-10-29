@@ -44,8 +44,7 @@ several items are held); notes, answers and Stop work name the item they are abo
 Stop that item's tools refuse. Hivenod shows the agent as "working N items". (`hivenod mcp
 --channel --max-items N` does the same outside the plugin.)
 
-## `hivenod run` is not supported for now
+## No `hivenod run`
 
-`hivenod run claude|codex|copilot` (a fresh CLI per item) is paused: it is hidden from
-`hivenod --help` and prints where to go instead, unless `HIVENOD_ALLOW_RUN=1` is set. The channel
-plugin is the supported way in.
+`hivenod run claude|codex|copilot` (a fresh CLI per item) belonged to the old TypeScript CLI and
+was removed with it. The channel plugin is the way in.

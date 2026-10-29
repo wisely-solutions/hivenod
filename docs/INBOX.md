@@ -216,7 +216,7 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
 - **Tests:** `packages/shared/rules/inbox.test.ts` and `inboxrelations.test.ts`. The `inbox: …` mutations in
   `packages/shared/rules/mutate.mjs` are all caught.
 
-## Agent tools (MCP, Go CLI and TS agent)
+## Agent tools (MCP and Go CLI)
 
 | Tool              | CLI                          | What it does                                                                                                                |
 | ----------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -235,13 +235,13 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
 | `thread_flag`     | `hivenod thread flag ID`     | Marks a thread urgent (or not, `urgent: false` / `--off`): the notifier pings the member at once, whatever the quiet hours. |
 
 The contract tests cover the agent actions: `cli/contract/cases.ts` against the Go actions, and
-`packages/agent/test/go.integration.test.ts`, which runs the inbox scenario through both CLIs on
-the emulators and requires equal results and documents.
+`cli/e2e/test/go.test.ts`, which runs the inbox scenario through the Go CLI on the emulators and
+requires the results and documents of its golden files (first recorded while the TypeScript client
+and the Go CLI agreed).
 
 ## Channel events (part 2)
 
-A channel session (`hivenod mcp --channel`, TypeScript `packages/agent/src/inboxfeed.ts`, Go
-`cli/internal/hive/inboxfeed.go`) pushes `<channel source="hivenod" kind="inbox">` events for
+A channel session (`hivenod mcp --channel`, `cli/internal/hive/inboxfeed.go`) pushes `<channel source="hivenod" kind="inbox">` events for
 the threads that need agent work. They don't count toward `max_items` and are never claimed:
 the session runs each in a background sub-agent of its own, with the brief in the event, and
 keeps development items first (the channel instructions say so).

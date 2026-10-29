@@ -1,4 +1,4 @@
-// Package hive is the agent client of the Go CLI (packages/agent/src/client.ts): it signs in
+// Package hive is the agent client of the Go CLI (ported from the former TypeScript client.ts): it signs in
 // with the agent token and does every agent operation through the shared action plans, so each
 // write is one batch (domain change + event) and firestore.rules enforce the rest.
 package hive

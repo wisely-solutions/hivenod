@@ -1,7 +1,7 @@
 /**
- * The coding CLIs `hivenod run <cli>` can drive (cards MkUwvyWs, 3RiuFK00). Claude Code is verified;
- * Codex and GitHub Copilot CLI are experimental: built from their docs, help output and package
- * source, never run against a real account (see packages/agent/README.md, "Verified or not").
+ * The coding CLIs a pairing request may name (cards MkUwvyWs, 3RiuFK00). They were the CLIs the
+ * TypeScript `hivenod run <cli>` drove; that client was removed (item MlWOc3O5NyfZcLgetrVo) and the
+ * Go CLI pairs as `claude`, but the web app still reads the field of older requests.
  */
 export const RUN_CLIS = ['claude', 'codex', 'copilot'] as const;
 export type RunCli = (typeof RUN_CLIS)[number];

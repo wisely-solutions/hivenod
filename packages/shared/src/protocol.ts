@@ -1,7 +1,7 @@
 /**
  * What the hivenod CLI must understand to work with this release of Hivenod (card st5INNZj). The
- * deploy writes it into /version.json as `cliProtocol`; `hivenod run` compares it with the one it
- * was built with and asks to update when Hivenod is ahead. Bump it when older CLIs would break.
+ * deploy writes it into /version.json as `cliProtocol` and into /cli/bin/latest.json (the Go CLI
+ * reads it there). Bump it when older CLIs would break.
  *  1: everything before per-item paths (CLIs before this number existed)
  *  2: per-item paths: shaping jobs, skipped steps, path tools
  */

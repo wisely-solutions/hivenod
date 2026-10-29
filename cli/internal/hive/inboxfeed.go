@@ -1,8 +1,8 @@
 package hive
 
-// Inbox events of a channel session (item 4PEHrOW5IfXBQWgOK9wo, part 2): the Go port of
-// packages/agent/src/inboxfeed.ts. See that file and docs/INBOX.md ("Channel events") for who
-// gets what, the dedupe and the flow control; this file follows it line by line.
+// Inbox events of a channel session (item 4PEHrOW5IfXBQWgOK9wo, part 2), ported from the former
+// TypeScript inboxfeed.ts. See docs/INBOX.md ("Channel events") for who gets what, the dedupe and
+// the flow control.
 
 import (
 	"context"

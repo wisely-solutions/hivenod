@@ -18,7 +18,7 @@ func (e *Error) Error() string { return e.Msg }
 // Errf makes an Error.
 func Errf(msg string) error { return &Error{Msg: msg} }
 
-// Messages shared with the TypeScript CLI (packages/agent/src/errors.ts, client.ts).
+// Messages first written for the former TypeScript client; the Go CLI owns them now.
 const (
 	GateMessage        = "This item is at a human gate. Only people can move it."
 	RevokedMessage     = "This agent cannot use Hivenod: it was revoked, rotated, or is not allowed in this organization. Ask an admin for a new token."

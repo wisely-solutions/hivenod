@@ -16,7 +16,6 @@ const SCAN = [
   'apps/web/vite.config.ts',
   'apps/web/public',
   'packages/shared/src',
-  'packages/agent/src',
 ];
 
 const OLD_NAME = [
@@ -32,11 +31,6 @@ const OLD_NAME = [
 
 /** file -> substrings of lines that may mention the old name, and why. */
 const ALLOW = {
-  // Strips a token left over from the old CLI from the coding CLI's environment (never reads it).
-  'packages/agent/src/runner.ts': ['old `hive` CLI', 'delete env.HIVE_TOKEN'],
-  'packages/agent/src/interactive.ts': ['old `hive` CLI', 'delete out.HIVE_TOKEN'],
-  // Denies the old token folder to the model (never reads it).
-  'packages/agent/src/credentials.ts': ["The old `hive` CLI's folder", "join(homedir(), '.hive')"],
   // The landing page names Hive, the agent that builds Hivenod (and the demo agent in its
   // screenshots), not the product (item g17GWUkfKRFh4mgn0ciQ, Draft 2 approved by the owner).
   'apps/web/src/landing/LandingPage.tsx': [

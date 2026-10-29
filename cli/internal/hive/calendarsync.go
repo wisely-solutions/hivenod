@@ -1,6 +1,6 @@
 package hive
 
-// calendar sync (Inbox item fJnu6; packages/agent/src/calendar.ts syncEvents): a calendar the
+// calendar sync (Inbox item fJnu6; ported from the former TypeScript calendar.ts syncEvents): a calendar the
 // agent reads itself, synced into this organization.
 
 import (
