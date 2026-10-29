@@ -91,7 +91,7 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 		}
 		cs = &hive.ChannelServer{}
 		srv.Capabilities = sf.Channel.Capabilities
-		srv.Instructions = sf.ChannelInstructions[strconv.Itoa(maxItems)]
+		srv.Instructions = hive.ChannelInstructions(maxItems)
 		srv.Tools = hive.ChannelTools(lazy, cs)
 		push := func(e hive.Event) { _ = srv.Notify("notifications/claude/channel", e) }
 		opts := hive.ChannelOptions{ProjectID: o.project, StepID: o.step, MaxItems: maxItems,

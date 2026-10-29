@@ -1,7 +1,7 @@
 // Package mcpserver is a small MCP stdio server (JSON-RPC 2.0, one message per line) for
 // `hivenod mcp`. The tool names, descriptions and input schemas come from surface.json, which is
-// generated from the TypeScript CLI (packages/agent/src/surface.ts), so both offer the same
-// surface. It also sends custom notifications (notifications/claude/channel).
+// edited by hand (see cli/README.md). It also sends custom notifications
+// (notifications/claude/channel).
 package mcpserver
 
 import (
@@ -26,7 +26,10 @@ type ToolSpec struct {
 	Execution   json.RawMessage `json:"execution,omitempty"`
 }
 
-// Surface is the generated file.
+// Surface is surface.json: the server info and the tools (names, descriptions, input schemas)
+// in plain and channel mode. It is hand-edited and the source of truth for the tool list: the Go
+// CLI is the only agent client. surface_test.go checks it; hive's tests check every tool has a
+// handler.
 type Surface struct {
 	ServerInfo map[string]any `json:"serverInfo"`
 	Plain      struct {
@@ -37,50 +40,6 @@ type Surface struct {
 		Capabilities map[string]any `json:"capabilities"`
 		Tools        []ToolSpec     `json:"tools"`
 	} `json:"channel"`
-	ChannelInstructions map[string]string  `json:"channelInstructions"`
-	WorkText            []WorkTextSample   `json:"workText"`
-	InboxText           []InboxTextSample  `json:"inboxText"`
-	StatusText          []StatusTextSample `json:"statusText"`
-}
-
-// InboxTextSample is one TypeScript inboxText output (for the Go port's test); Info decodes
-// into hive.InboxEventInfo.
-type InboxTextSample struct {
-	Info json.RawMessage `json:"info"`
-	Text string          `json:"text"`
-}
-
-// StatusTextSample is one TypeScript statusText output (item AzveC; for the Go port's test).
-type StatusTextSample struct {
-	Item struct {
-		ItemID string `json:"itemId"`
-		Title  string `json:"title"`
-	} `json:"item"`
-	Why struct {
-		Why string `json:"why"`
-		By  string `json:"by"`
-	} `json:"why"`
-	MaxItems int    `json:"maxItems"`
-	Text     string `json:"text"`
-}
-
-// WorkTextSample is one TypeScript workText output (for the Go port's test).
-type WorkTextSample struct {
-	Row struct {
-		ItemID  string  `json:"itemId"`
-		Title   string  `json:"title"`
-		Project string  `json:"project"`
-		Step    string  `json:"step"`
-		Job     *string `json:"job"`
-	} `json:"row"`
-	Why struct {
-		Why      string  `json:"why"`
-		By       string  `json:"by"`
-		Text     string  `json:"text"`
-		Question *string `json:"question"`
-	} `json:"why"`
-	MaxItems int    `json:"maxItems"`
-	Text     string `json:"text"`
 }
 
 // LoadSurface parses the embedded surface.
