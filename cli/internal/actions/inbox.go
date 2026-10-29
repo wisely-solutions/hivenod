@@ -52,6 +52,12 @@ type OutcomeType struct {
 	// Batchable: a tidy-up type (sends nothing, takes effect on approval) the member may approve
 	// in one batch (item kt3E7u9EliL3q2veDDI0).
 	Batchable bool `json:"batchable"`
+	// Kind (item qwFAWxZM5xkcE7PPjAzi, plans): "agent" (an action, the default) or "human" (a
+	// person-approval gate only the member decides).
+	Kind string `json:"kind"`
+	// Plan: allowed as a plan step; PlanOnly: never proposed alone (outcome_propose).
+	Plan     bool `json:"plan"`
+	PlanOnly bool `json:"planOnly"`
 }
 
 // Outcomes is the registry, in its order.
@@ -90,6 +96,9 @@ func loadOutcomes() []OutcomeType {
 			panic(err)
 		}
 		t.ID = id
+		if t.Kind == "" {
+			t.Kind = "agent"
+		}
 		var parts struct {
 			Fields json.RawMessage `json:"fields"`
 		}
@@ -122,6 +131,28 @@ func outcomeIDs() string {
 		ids[i] = t.ID
 	}
 	return strings.Join(ids, ", ")
+}
+
+// SingleOutcomeTypes is SINGLE_TYPES: the types an agent may propose alone.
+func SingleOutcomeTypes() []string {
+	var ids []string
+	for _, t := range Outcomes {
+		if !t.PlanOnly {
+			ids = append(ids, t.ID)
+		}
+	}
+	return ids
+}
+
+// PlanOutcomeTypes is PLAN_TYPES: the types allowed as plan steps.
+func PlanOutcomeTypes() []string {
+	var ids []string
+	for _, t := range Outcomes {
+		if t.Plan {
+			ids = append(ids, t.ID)
+		}
+	}
+	return ids
 }
 
 var isoRE = regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$`)
@@ -989,7 +1020,10 @@ func ProposeOutcome(ctx Ctx, in ProposeInput) (ProposeResult, error) {
 	}
 	typ := OutcomeTypeOf(in.Type)
 	if typ == nil {
-		return ProposeResult{}, fail("Unknown outcome type " + in.Type + ". Types: " + outcomeIDs() + ".")
+		return ProposeResult{}, fail("Unknown outcome type " + in.Type + ". Types: " + strings.Join(SingleOutcomeTypes(), ", ") + ".")
+	}
+	if typ.PlanOnly {
+		return ProposeResult{}, fail(in.Type + " is only a step of a plan (plan_propose). Types alone: " + strings.Join(SingleOutcomeTypes(), ", ") + ".")
 	}
 	if in.Fields == nil {
 		in.Fields = map[string]any{}

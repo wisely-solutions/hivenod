@@ -20,6 +20,7 @@ export * from './sendback';
 export * from './discovery';
 export * from './inbox';
 export * from './outcomes';
+export * from './plans';
 export * from './calendar';
 export * from './personalOrg';
 export * from './calendarSync';

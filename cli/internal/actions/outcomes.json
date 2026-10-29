@@ -20,7 +20,8 @@
     "after": {
       "state": "waiting",
       "waitingOn": "them"
-    }
+    },
+    "plan": true
   },
   "reply_book": {
     "label": "Reply and book",
@@ -61,7 +62,45 @@
     "after": {
       "state": "waiting",
       "waitingOn": "them"
-    }
+    },
+    "plan": true
+  },
+  "book": {
+    "label": "Book",
+    "approve": "Book",
+    "description": "A plan step: book a meeting (pick the time with calendar_free); the reply is its own step. On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); when it is this step's turn you create it in the member's own calendar with your own access, call calendar_mirror with its id and report outcome_done.",
+    "fields": {
+      "start": {
+        "kind": "datetime",
+        "label": "Starts",
+        "required": true,
+        "help": "ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00"
+      },
+      "end": {
+        "kind": "datetime",
+        "label": "Ends",
+        "required": true,
+        "help": "ISO 8601 with its offset, after start"
+      },
+      "with": {
+        "kind": "line",
+        "label": "With",
+        "help": "Who is invited: names or emails, separated by commas",
+        "required": true
+      },
+      "title": {
+        "kind": "line",
+        "label": "Title",
+        "help": "What the calendar shows; by default \"Meeting with <with>\""
+      }
+    },
+    "executor": "agent",
+    "after": {
+      "state": "waiting",
+      "waitingOn": "them"
+    },
+    "plan": true,
+    "planOnly": true
   },
   "no_reply": {
     "label": "No reply needed",
@@ -106,7 +145,8 @@
     "after": {
       "state": "waiting",
       "waitingOn": "item"
-    }
+    },
+    "plan": true
   },
   "handover": {
     "label": "Hand over",
@@ -129,7 +169,8 @@
     "after": {
       "state": "waiting",
       "waitingOn": "thirdParty"
-    }
+    },
+    "plan": true
   },
   "snooze": {
     "label": "Snooze",
@@ -154,7 +195,8 @@
       "waitingOn": "date"
     },
     "untilField": "until",
-    "batchable": true
+    "batchable": true,
+    "plan": true
   },
   "nudge": {
     "label": "Nudge",
@@ -172,7 +214,8 @@
     "after": {
       "state": "waiting",
       "waitingOn": "them"
-    }
+    },
+    "plan": true
   },
   "ignore": {
     "label": "Ignore",
@@ -190,5 +233,35 @@
       "state": "ignored"
     },
     "batchable": true
+  },
+  "approval": {
+    "label": "Your approval",
+    "approve": "Approve",
+    "description": "A plan step for the member: a gate they decide before the next steps run. Put one before anything that changes money, prices, contracts or public content. Never carried out by an agent.",
+    "fields": {
+      "what": {
+        "kind": "line",
+        "label": "What you approve",
+        "help": "One line: what the member approves",
+        "required": true
+      },
+      "detail": {
+        "kind": "text",
+        "label": "Detail",
+        "help": "The change, e.g. old → new prices"
+      },
+      "link": {
+        "kind": "line",
+        "label": "Link",
+        "help": "Where to look, an http(s) link"
+      }
+    },
+    "executor": "none",
+    "after": {
+      "state": "done"
+    },
+    "kind": "human",
+    "plan": true,
+    "planOnly": true
   }
 }
