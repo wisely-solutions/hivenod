@@ -174,3 +174,13 @@ export function discoveryProblems(status, contentType, body, project) {
     bad.push(`/.well-known/hivenod.json names ${doc.firebase?.projectId}, not ${project}`);
   return bad;
 }
+
+/**
+ * Should `firebase deploy` be retried once? Only for an HTTP 503 from the Firestore rules API
+ * (firebaserules.googleapis.com): nothing is deployed when that fails. Any other error stops.
+ * @param {string} output combined stdout/stderr of the failed deploy
+ */
+export function isRulesApi503(output) {
+  const text = String(output ?? '');
+  return /firebaserules\.googleapis\.com/.test(text) && /\b503\b/.test(text);
+}
