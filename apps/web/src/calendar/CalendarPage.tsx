@@ -44,7 +44,7 @@ import {
 } from './logic';
 
 /** Pixels per hour in the time grid. */
-const HOUR = 52;
+const HOUR = 56;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const CONFIRM_KEY = 'calendar:confirm-bookings';
 
@@ -491,7 +491,7 @@ function Grid({
                 isToday ? 'text-ink' : 'text-text-2',
               )}
             >
-              <div className="flex items-baseline gap-1.5">
+              <div className="flex flex-wrap items-baseline gap-x-1.5">
                 <span className="text-[12px] font-medium uppercase">
                   {d.toLocaleDateString(undefined, { weekday: 'short' })}
                 </span>
@@ -504,7 +504,7 @@ function Grid({
                   {d.getDate()}
                 </span>
                 {showFree && free > 0 ? (
-                  <span className="ml-auto truncate text-[11px] text-text-3">
+                  <span className="basis-full truncate text-[11px] text-text-3">
                     {hoursText(Math.round(free / 60_000))} free
                   </span>
                 ) : null}
@@ -673,7 +673,8 @@ function Block({
   const busy = block.kind === 'busy';
   const proposed = block.kind === 'proposed';
   const cls = cn(
-    'block h-full min-h-5 w-full overflow-hidden rounded-[6px] border px-1.5 py-0.5 text-left leading-tight',
+    'block h-full min-h-5 w-full overflow-hidden rounded-[6px] border px-1.5 text-left',
+    tall ? 'py-0.5 leading-tight' : 'py-px',
     busy
       ? 'cal-busy border-line-strong text-text-2'
       : proposed
@@ -684,16 +685,16 @@ function Block({
     <>
       <span
         className={cn(
-          'block font-medium [overflow-wrap:anywhere]',
-          // Two lines, never cut to one word (design 2.6).
-          tall ? 'line-clamp-2' : 'line-clamp-1',
-          compact ? 'text-[12px]' : 'text-13',
+          'block line-clamp-2 font-medium [overflow-wrap:anywhere]',
+          // Two lines, never cut to one word (design 2.6); short blocks use a tighter line.
+          tall ? (compact ? 'text-[12px]' : 'text-13') : 'text-[11px] leading-[12px]',
         )}
       >
-        {busy ? 'Busy' : proposed ? `${block.title} · proposed` : block.title || '(no title)'}
+        {busy ? 'Busy' : block.title || (proposed ? 'Meeting' : '(no title)')}
       </span>
       {tall || !compact ? (
         <span className={cn('block truncate text-text-2', compact ? 'text-[11px]' : 'text-[12px]')}>
+          {proposed ? 'proposed · ' : ''}
           {timeRange(block)}
           {block.label && !compact ? ` · ${block.label}` : ''}
         </span>
