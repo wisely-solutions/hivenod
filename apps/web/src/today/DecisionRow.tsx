@@ -11,6 +11,7 @@ import { Icon } from '../ui/icon';
 import { motion, useReducedMotion } from '../ui/motion';
 import type { NeedsEntry } from '../needs/logic';
 import { bandOf } from '../threads/logic';
+import { LabelBadge } from '../threads/labels';
 import { proposalSentence } from './logic';
 import { bandEdge, ConfidenceMeter, RankChip, rankText, SenderAvatar } from './parts';
 
@@ -72,6 +73,13 @@ export function DecisionRow({
             <span className="truncate text-14 font-semibold text-ink">
               {t.title || 'Untitled thread'}
             </span>
+            {entry.label ? (
+              <LabelBadge
+                label={entry.label.label}
+                suggested={entry.label.suggested}
+                className="shrink-0"
+              />
+            ) : null}
           </span>
           <span className="truncate text-13 text-text-2">
             {org ? <span className="sr-only">{org.name} · </span> : null}

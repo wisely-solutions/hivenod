@@ -45,6 +45,7 @@ import { stash } from '../lib/pendingDecisions';
 import type { Row } from '../lib/live';
 import type { NeedsEntry } from '../needs/logic';
 import { editedFields, formValues, bandOf } from '../threads/logic';
+import { LabelBadge } from '../threads/labels';
 import { FieldView } from '../threads/OutcomeCard';
 import { errorText } from '../threads/parts';
 import { Button } from '../ui/button';
@@ -145,7 +146,11 @@ function CardHead({ props, label }: { props: DecisionCardProps; label?: string }
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {org ? <OrgChip name={org.name} color={org.color} /> : null}
-            {area ? <Chip>{area}</Chip> : null}
+            {entry.label ? (
+              <LabelBadge label={entry.label.label} suggested={entry.label.suggested} />
+            ) : area ? (
+              <Chip>{area}</Chip>
+            ) : null}
           </div>
         </div>
         {rank ? (

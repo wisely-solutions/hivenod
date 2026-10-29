@@ -20,8 +20,11 @@ member approves it.** Hivenod itself connects to no external inbox. Code lives i
 All of these live under `workspaces/{wid}`. They are separate from projects and items.
 
 ```
-inboxSubjects/{sid}   memberUid, name, area? (string|null, at most 60), createdBy{type,id}, createdAt,
-                      updatedAt, lastEventId
+inboxSubjects/{sid}   memberUid, name, area? (string|null, at most 60), label? (string|null, at most
+                      30), labelSuggested? (bool: still the agent's guess), labelBy? (agent|member),
+                      createdBy{type,id}, createdAt, updatedAt, lastEventId
+inboxConfig/labels    labels[] (1 to 12, each 1 to 30 characters, unique ignoring case), updatedBy,
+                      updatedAt. Written by admins only; absent: the defaults
 inboxThreads/{tid}    memberUid, subjectId|null, state, waiting{on, until|null}|null,
                       question{text, by, at, answer|null, answeredAt|null, options?[]}|null, title,
                       refs[], lastMessageAt, fetchedBy (the home agent), urgent? (bool, thread_flag),
@@ -148,6 +151,21 @@ counting the meeting twice. It is refused unless the outcome is an approved (or 
   (`setSubjectArea`, event `subject.area`). `subject_list` shows each subject's `area`, so
   agents reuse the existing areas. Rules: agents may change only `area` of a subject, in a
   filing batch; the member may also rename.
+- **Label:** the kind of request (Sales, Support, ...), not the topic: area says which client,
+  label says what sort of thing it is. Each organization has a short list (`inboxConfig/labels`,
+  edited by admins in Settings, Inbox labels; until then `DEFAULT_INBOX_LABELS`: Sales,
+  Support, Billing, Partnership, Internal, Other, mirrored by `DefaultInboxLabels` in Go).
+  `subject_list` returns the list as `labels`, and each subject's `label` and `labelSuggested`.
+  On every new subject the agent suggests exactly one label with `subject_assign` (`label`, CLI
+  `--label`; matched ignoring case; an unknown one is refused with the allowed values). It is
+  applied to a new subject, or to one with no label yet (event `thread.filed`, `data.label`),
+  stored as `label` + `labelSuggested: true` + `labelBy: 'agent'`; the app shows it as a dashed
+  "Sales?" chip. The member confirms (OK) or changes it (`setSubjectLabel`, event
+  `subject.label`): `labelSuggested: false`, `labelBy: 'member'`, and from then on the agent
+  never changes it. Labels are stored as text: renaming or removing one in the list leaves
+  existing subjects alone (they show a plain chip). Rules: agents may set the three label
+  fields only as a suggestion, only in a filing, never over a member's label; the member's value
+  must be in the list (or be what the subject already has); only admins write the list.
 - **Quiet:** derived, never stored. A subject is quiet when none of its threads had a message
   for N days (default 60; the list's "Quiet after" select offers 30, 60, 90, 180 or never, kept
   per browser) and no thread waits for the member. The list folds quiet subjects into a closed
@@ -324,7 +342,7 @@ last event id it handled (`lastEventId`):
   threads waiting for the member (Needs you, Your call) come first, then the rest by activity. Threads not filed yet gather under "Not filed yet". **Find** searches the
   subject names, thread titles, the people who wrote, the channels and the text of the
   messages; the filters are: organization, waiting for me, has open threads, active in the
-  last 7, 30 or 90 days. Find runs `searchSubjects` (see "Finding subjects") in the browser over
+  last 7, 30 or 90 days, and the label. Find runs `searchSubjects` (see "Finding subjects") in the browser over
   the member's own records, one call per organization, so it answers like `subject_search`.
 - **`/inbox/<org>/s/<subject>`**: the subject's threads (open and closed) and its timeline, with
   Rename, Merge (pick the target) and Split (pick the threads, name the new subject), and its

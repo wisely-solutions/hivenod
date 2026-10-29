@@ -1151,7 +1151,7 @@ service cloud.firestore {
                 && request.resource.data.memberUid == me()
                 && request.resource.data.type in ['thread.titled', 'thread.answered', 'thread.ignored',
                   'thread.closed', 'thread.restored', 'thread.moved', 'thread.itemMade', 'outcome.approved',
-                  'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area',
+                  'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area', 'subject.label',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged', 'thread.due'])
                 && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))
@@ -1383,39 +1383,87 @@ service cloud.firestore {
 
       // The optional area (a client, a product, "admin"): absent, null or 1 to 60 characters.
       function inboxAreaOk(d) { return !('area' in d) || d.area == null || str(d.area, 1, 60); }
+      // The optional label (the kind of request, from the workspace list), with who set it and
+      // whether it is still the agent's guess. The three keys come together.
+      function inboxNoLabel(d) { return !('label' in d) && !('labelSuggested' in d) && !('labelBy' in d); }
+      function inboxAgentLabel(d) {
+        return inboxNoLabel(d)
+          || (d.keys().hasAll(['label', 'labelSuggested', 'labelBy']) && str(d.label, 1, 30)
+              && d.labelSuggested == true && d.labelBy == 'agent');
+      }
+      function inboxLabelKeys() { return ['label', 'labelSuggested', 'labelBy']; }
+      // The list an admin keeps; until there is one, the defaults.
+      function inboxLabelList(wid) {
+        return exists(inboxDoc(wid, 'inboxConfig', 'labels'))
+          ? get(inboxDoc(wid, 'inboxConfig', 'labels')).data.labels
+          : ['Sales', 'Support', 'Billing', 'Partnership', 'Internal', 'Other'];
+      }
+      // A member's label change: confirmed by them, null or from the list (or the one it has).
+      function inboxMemberLabel(wid, d, r) {
+        return d.labelSuggested == false && d.labelBy == 'member'
+          && (d.label == null || (str(d.label, 1, 30)
+              && (d.label in inboxLabelList(wid) || ('label' in r && d.label == r.label))));
+      }
       match /inboxSubjects/{sid} {
         allow read: if inboxReader(wid, resource.data);
-        // An agent names a new subject while filing a thread; the member makes one by a split.
-        allow create: if (exactKeys(request.resource.data, ['memberUid', 'name', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
-            || exactKeys(request.resource.data, ['memberUid', 'name', 'area', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId']))
+        // An agent names a new subject while filing a thread (with a suggested label at most);
+        // the member makes one by a split.
+        allow create: if request.resource.data.keys().hasAll(['memberUid', 'name', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
+          && request.resource.data.keys().hasOnly(['memberUid', 'name', 'area', 'label', 'labelSuggested', 'labelBy', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
           && str(request.resource.data.name, 1, 120)
           && inboxAreaOk(request.resource.data)
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time
           && ((isActiveAgent(wid) && inboxMember(wid, request.resource.data.memberUid)
+                && inboxAgentLabel(request.resource.data)
                 && request.resource.data.createdBy == me_('agent')
                 && inboxTracked(wid, request.resource.data.lastEventId, ['thread.filed'], request.resource.data.memberUid)
                 && inboxEv(wid, request.resource.data.lastEventId).data.subjectId == sid)
             || (isMember(wid) && request.resource.data.memberUid == me()
+                && inboxNoLabel(request.resource.data)
                 && request.resource.data.createdBy == me_('human')
                 && inboxTracked(wid, request.resource.data.lastEventId, ['subject.split', 'subject.created'], me())));
-        // Only the member renames, sets the area (or touches it in a merge).
+        // Only the member renames, sets the area, confirms or changes the label (or touches
+        // them in a merge). A label change always comes with a subject.label event.
         allow update: if inboxOwner(wid, resource.data)
-          && changed(['name', 'area', 'updatedAt', 'lastEventId'])
+          && changed(['name', 'area', 'label', 'labelSuggested', 'labelBy', 'updatedAt', 'lastEventId'])
           && str(request.resource.data.name, 1, 120)
           && inboxAreaOk(request.resource.data)
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(inboxLabelKeys())
+              || (request.resource.data.keys().hasAll(inboxLabelKeys())
+                  && inboxMemberLabel(wid, request.resource.data, resource.data)
+                  && inboxEv(wid, request.resource.data.lastEventId).data.type == 'subject.label'))
           && request.resource.data.updatedAt == request.time
-          && inboxTracked(wid, request.resource.data.lastEventId, ['subject.renamed', 'subject.merged', 'subject.area'], me());
-        // An agent sets the area of the member's subject while filing a thread under it.
+          && inboxTracked(wid, request.resource.data.lastEventId, ['subject.renamed', 'subject.merged', 'subject.area', 'subject.label'], me());
+        // An agent sets the area of the member's subject while filing a thread under it, and
+        // suggests a label if the member has not decided one.
         allow update: if isActiveAgent(wid) && inboxMember(wid, resource.data.memberUid)
-          && changed(['area', 'updatedAt', 'lastEventId'])
+          && changed(['area', 'label', 'labelSuggested', 'labelBy', 'updatedAt', 'lastEventId'])
           && inboxAreaOk(request.resource.data)
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(inboxLabelKeys())
+              || (request.resource.data.keys().hasAll(inboxLabelKeys())
+                  && inboxAgentLabel(request.resource.data)
+                  && !(resource.data.get('labelBy', null) == 'member')))
           && request.resource.data.updatedAt == request.time
           && inboxTracked(wid, request.resource.data.lastEventId, ['thread.filed'], resource.data.memberUid)
           && inboxEv(wid, request.resource.data.lastEventId).data.subjectId == sid;
         // A merge deletes the subject it empties, with the tombstone event del-subject-<sid>.
         allow delete: if inboxOwner(wid, resource.data)
           && inboxTracked(wid, 'del-subject-' + sid, ['subject.merged'], me());
+      }
+
+      // The workspace's label list for subjects: one document, written by admins only, read by
+      // members and agents. Absent: the defaults (inboxLabelList). 1 to 12 labels; the action
+      // checks each one's length and that they are unique.
+      match /inboxConfig/{cid} {
+        allow read: if isMember(wid) || isActiveAgent(wid);
+        allow create, update: if cid == 'labels' && isAdmin(wid)
+          && exactKeys(request.resource.data, ['labels', 'updatedBy', 'updatedAt'])
+          && request.resource.data.labels is list
+          && request.resource.data.labels.size() >= 1 && request.resource.data.labels.size() <= 12
+          && request.resource.data.updatedBy == me()
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if cid == 'labels' && isAdmin(wid);
       }
 
       // Related subjects: one document per pair (a < b, id rel-<a>-<b>) of one member's

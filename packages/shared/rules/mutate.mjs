@@ -3,6 +3,7 @@
 // MUTATE_ONLY="name,name" limits the run. Run inside the emulator:  pnpm test:rules:mutate   (from the repo root)
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { assertWellFormed } from './mutate-lib.mjs';
 
 const RULES = new URL('../../../firestore.rules', import.meta.url);
 const original = readFileSync(RULES, 'utf8');
@@ -382,7 +383,12 @@ const MUTATIONS = [
   ],
   [
     'inbox: agent rewrites more than a subject area',
-    [["&& changed(['area', 'updatedAt', 'lastEventId'])", '']],
+    [
+      [
+        "&& changed(['area', 'label', 'labelSuggested', 'labelBy', 'updatedAt', 'lastEventId'])",
+        '',
+      ],
+    ],
   ],
   [
     'inbox: agent sets an area outside a filing',
@@ -401,6 +407,66 @@ const MUTATIONS = [
         'function inboxAreaOk(d) { return true; }',
       ],
     ],
+  ],
+  [
+    'inbox: agent confirms its own label',
+    [["&& d.labelSuggested == true && d.labelBy == 'agent');", '&& true);']],
+  ],
+  [
+    'inbox: agent overwrites a confirmed label',
+    [["&& !(resource.data.get('labelBy', null) == 'member')))", '&& true))']],
+  ],
+  [
+    'inbox: unbounded agent label',
+    [
+      [
+        "(d.keys().hasAll(['label', 'labelSuggested', 'labelBy']) && str(d.label, 1, 30)",
+        "(d.keys().hasAll(['label', 'labelSuggested', 'labelBy'])",
+      ],
+    ],
+  ],
+  [
+    'inbox: member label not marked confirmed',
+    [["return d.labelSuggested == false && d.labelBy == 'member'", 'return true']],
+  ],
+  [
+    'inbox: member label outside the list',
+    [["&& (d.label in inboxLabelList(wid) || ('label' in r && d.label == r.label))", '']],
+  ],
+  [
+    'inbox: label change without its event',
+    [["&& inboxEv(wid, request.resource.data.lastEventId).data.type == 'subject.label'))", '))']],
+  ],
+  [
+    'inbox: people create labelled subjects',
+    [
+      [
+        "&& inboxNoLabel(request.resource.data)\n                && request.resource.data.createdBy == me_('human')",
+        "&& request.resource.data.createdBy == me_('human')",
+      ],
+    ],
+  ],
+  [
+    'inbox: members edit the label list',
+    [
+      [
+        "allow create, update: if cid == 'labels' && isAdmin(wid)",
+        "allow create, update: if cid == 'labels' && isMember(wid)",
+      ],
+    ],
+  ],
+  [
+    'inbox: agents edit the label list',
+    [
+      [
+        "allow create, update: if cid == 'labels' && isAdmin(wid)",
+        "allow create, update: if cid == 'labels' && (isAdmin(wid) || isActiveAgent(wid))",
+      ],
+    ],
+  ],
+  [
+    'inbox: unbounded label list',
+    [['request.resource.data.labels.size() <= 12', 'request.resource.data.labels.size() <= 100']],
   ],
   [
     'inbox: people write agent events',
@@ -436,6 +502,8 @@ const MUTATIONS = [
   [
     "inbox: linking another member's thread",
     [["&& get(inboxDoc(wid, 'inboxThreads', e.threadId)).data.memberUid == me()", '']],
+  ],
+  [
     'inbox: agents decide relations',
     [
       [
@@ -559,6 +627,7 @@ const runSuite = (verbose = false) => {
     return false;
   }
 };
+assertWellFormed(MUTATIONS);
 // The suite must pass on the unmutated rules, or "a test failed" proves nothing.
 if (!runSuite(true)) {
   console.error('The rules suite fails on the unmutated rules: fix it before mutating.');

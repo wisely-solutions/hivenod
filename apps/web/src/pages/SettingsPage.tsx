@@ -15,6 +15,9 @@ const OrganizationTab = lazy(() =>
 const ProjectsTab = lazy(() =>
   import('./settings/ProjectsTab').then((m) => ({ default: m.ProjectsTab })),
 );
+const LabelsTab = lazy(() =>
+  import('./settings/LabelsTab').then((m) => ({ default: m.LabelsTab })),
+);
 const MembersPage = lazy(() => import('./MembersPage').then((m) => ({ default: m.MembersPage })));
 const GroupsPage = lazy(() => import('./GroupsPage').then((m) => ({ default: m.GroupsPage })));
 const NotificationsPage = lazy(() =>
@@ -27,6 +30,7 @@ const CONTENT: Record<SettingsTab, React.JSX.Element> = {
   members: <MembersPage />,
   groups: <GroupsPage />,
   projects: <ProjectsTab />,
+  labels: <LabelsTab />,
   notifications: <NotificationsPage />,
 };
 

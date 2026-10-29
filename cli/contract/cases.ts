@@ -1480,6 +1480,53 @@ function build(): ContractCase[] {
     newName: 'x',
     area: 'a'.repeat(61),
   });
+  file('new subject with a label', AGENT, {
+    threadId: 'it1',
+    thread: TH(),
+    newName: 'Acme renewal',
+    label: ' sales ',
+  });
+  file('new subject, area and label', AGENT, {
+    threadId: 'it1',
+    thread: TH(),
+    newName: 'Acme renewal',
+    area: 'Acme',
+    label: 'Support',
+  });
+  file('existing subject without a label gets one', AGENT, {
+    threadId: 'it1',
+    thread: TH({ subjectId: 's0' }),
+    subjectId: 's1',
+    label: 'Billing',
+    existing: { label: null },
+  });
+  file('existing subject keeps its label', AGENT, {
+    threadId: 'it1',
+    thread: TH({ subjectId: 's0' }),
+    subjectId: 's1',
+    label: 'Billing',
+    existing: { label: 'Sales', labelBy: 'member' },
+  });
+  file('label from the workspace list', AGENT, {
+    threadId: 'it1',
+    thread: TH(),
+    newName: 'x',
+    label: 'ops',
+    labels: ['Ops', 'Sales'],
+  });
+  file('label not in the list', AGENT, {
+    threadId: 'it1',
+    thread: TH(),
+    newName: 'x',
+    label: 'Foo',
+  });
+  file('label not in the workspace list', AGENT, {
+    threadId: 'it1',
+    thread: TH(),
+    newName: 'x',
+    label: 'Support',
+    labels: ['Ops'],
+  });
   file('both given', AGENT, { threadId: 'it1', thread: TH(), subjectId: 's1', newName: 'x' });
   file('neither given', AGENT, { threadId: 'it1', thread: TH() });
   file('blank name', AGENT, { threadId: 'it1', thread: TH(), newName: '   ' });

@@ -47,8 +47,10 @@ import { useNeedsAll } from '../needs/data';
 import {
   countKinds,
   countNeeds,
+  filterByLabel,
   filterKind,
   filterNeeds,
+  labelsOfNeeds,
   orderToday,
   parseScope,
   type NeedsEntry,
@@ -92,7 +94,14 @@ export function InboxPage() {
     f: rawFilter,
     who: rawWho,
     org: rawOrg,
-  } = useSearch({ strict: false }) as { sel?: string; f?: string; who?: string; org?: string };
+    label: rawLabel,
+  } = useSearch({ strict: false }) as {
+    sel?: string;
+    f?: string;
+    who?: string;
+    org?: string;
+    label?: string;
+  };
   const { session, switchOrg } = useReady();
   const toast = useToast();
   const all = useNeedsAll();
@@ -156,7 +165,11 @@ export function InboxPage() {
   const byKey = useMemo(() => new Map(everything.map((e) => [e.key, e])), [everything]);
   const visible = useMemo(() => everything.filter((e) => !hidden.has(e.key)), [everything, hidden]);
   // The org picker narrows everything; Only me · Shared · All counts within it.
-  const inOrg = useMemo(() => filterNeeds(visible, 'all', orgFilter), [visible, orgFilter]);
+  const inOrgAll = useMemo(() => filterNeeds(visible, 'all', orgFilter), [visible, orgFilter]);
+  // The label filter (Inbox threads only) combines with the organization and the rest.
+  const labelOptions = useMemo(() => labelsOfNeeds(inOrgAll), [inOrgAll]);
+  const labelFilter = rawLabel ? rawLabel.toLowerCase() : null;
+  const inOrg = useMemo(() => filterByLabel(inOrgAll, labelFilter), [inOrgAll, labelFilter]);
   const scoped = useMemo(() => filterNeeds(inOrg, scope), [inOrg, scope]);
   const counts = countKinds(scoped);
   const whoCounts = countNeeds(inOrg);
@@ -354,6 +367,7 @@ export function InboxPage() {
     ...(filter !== 'all' ? { f: filter } : {}),
     ...(scope !== 'all' ? { who: scope as Exclude<Scope, 'all'> } : {}),
     ...(orgFilter ? { org: orgFilter } : {}),
+    ...(labelFilter ? { label: labelFilter } : {}),
   };
   const go = (key: string | null, replace = true) =>
     void navigate({
@@ -571,7 +585,7 @@ export function InboxPage() {
   ];
 
   // From the search as it is now (not this render's copy): two quick changes must both stick.
-  const setSearch = (patch: Partial<{ f: string; who: string; org: string }>) =>
+  const setSearch = (patch: Partial<{ f: string; who: string; org: string; label: string }>) =>
     void navigate({
       to: '/',
       search: (prev: Record<string, unknown>) => {
@@ -587,7 +601,10 @@ export function InboxPage() {
   // shorter header on a phone.
   const showWho = manyOrgs || scope !== 'all' || (whoCounts.onlyYou > 0 && whoCounts.shared > 0);
   const activeFilters =
-    (filter !== 'all' ? 1 : 0) + (scope !== 'all' ? 1 : 0) + (orgFilter ? 1 : 0);
+    (filter !== 'all' ? 1 : 0) +
+    (scope !== 'all' ? 1 : 0) +
+    (orgFilter ? 1 : 0) +
+    (labelFilter ? 1 : 0);
   const chips = (
     <div className="flex flex-col gap-3">
       <Segmented
@@ -618,6 +635,22 @@ export function InboxPage() {
           options={[
             { value: 'all', label: 'All organizations' },
             ...all.orgs.map((o) => ({ value: o.wid, label: o.name })),
+          ]}
+        />
+      ) : null}
+      {labelOptions.length > 0 || labelFilter ? (
+        <Select
+          label="Filter by label"
+          hideLabel
+          inline
+          value={labelFilter ?? 'all'}
+          onValueChange={(v) => setSearch({ label: v })}
+          options={[
+            { value: 'all', label: 'All labels' },
+            ...labelOptions.map((o) => ({ value: o.key, label: `${o.label} (${o.count})` })),
+            ...(labelFilter && !labelOptions.some((o) => o.key === labelFilter)
+              ? [{ value: labelFilter, label: labelFilter }]
+              : []),
           ]}
         />
       ) : null}

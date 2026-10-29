@@ -5,7 +5,9 @@ import {
   buildNeeds,
   countKinds,
   countNeeds,
+  filterByLabel,
   filterKind,
+  labelsOfNeeds,
   filterNeeds,
   groupsOf,
   orderNeeds,
@@ -366,5 +368,32 @@ describe('Today (item kt3E7): proposals, tidy-ups and the stack order', () => {
       'project-old',
       'ask',
     ]);
+  });
+});
+
+describe('label filter (item YaOErIjeIFG8Y3EvZuIp)', () => {
+  const o = org('wb', {
+    projects: [row('pb', project('Site', { deciderUids: ['me'] }))],
+    items: { pb: [row('i2', item({ title: 'An item' } as Partial<Item>))] },
+    threads: [
+      row('t1', thread({ subjectId: 's1', state: 'needsYou' } as never)),
+      row('t2', thread({ subjectId: 's2', state: 'needsYou' } as never)),
+      row('t3', thread({ subjectId: 's3', state: 'needsYou' } as never)),
+    ],
+    subjectLabels: {
+      s1: { label: 'Sales', suggested: true },
+      s2: { label: 'sales', suggested: false },
+    },
+  });
+  const list = buildNeeds([o], 'me').todo;
+  it('puts the subject label on the thread rows', () => {
+    const t = list.filter((e) => e.thread);
+    expect(t.map((e) => e.label?.label ?? null).sort()).toEqual(['Sales', null, 'sales']);
+  });
+  it('lists the labels with counts, and narrows to the threads that carry one', () => {
+    expect(labelsOfNeeds(list)).toEqual([{ key: 'sales', label: 'Sales', count: 2 }]);
+    expect(filterByLabel(list, 'sales').every((e) => e.thread)).toBe(true);
+    expect(filterByLabel(list, 'sales').length).toBe(2);
+    expect(filterByLabel(list, null).length).toBe(list.length);
   });
 });

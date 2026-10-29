@@ -36,6 +36,8 @@ export interface OrgInput extends Omit<InboxInput, 'uid'> {
   threads: readonly Row<InboxThread>[];
   /** The member's open outcome proposals (inboxOutcomes at `proposed`), item kt3E7. */
   openOutcomes: readonly Row<InboxOutcome>[];
+  /** The labels of the member's subjects, by subject id (subjects without one are left out). */
+  subjectLabels?: Readonly<Record<string, { label: string; suggested: boolean }>>;
   /** Display names of the organization's members, by uid. */
   names: Readonly<Record<string, string>>;
 }
@@ -64,6 +66,8 @@ export interface NeedsEntry {
   proposals?: Row<InboxOutcome>[];
   /** A thread whose one proposal is a tidy-up: it goes to the tidy-ups card, not the stack. */
   tidy?: boolean;
+  /** The label of the thread's subject, if it has one (item YaOErIjeIFG8Y3EvZuIp). */
+  label?: { label: string; suggested: boolean };
 }
 
 export interface Needs {
@@ -209,6 +213,9 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.no
         thread: t,
         proposals,
         tidy,
+        ...(t.data.subjectId && o.subjectLabels?.[t.data.subjectId]
+          ? { label: o.subjectLabels[t.data.subjectId] }
+          : {}),
       });
     }
   }
@@ -265,6 +272,27 @@ export function filterNeeds(
     (e) =>
       (!org || e.wid === org) && (scope === 'all' || (scope === 'mine' ? e.who.only : !e.who.only)),
   );
+}
+
+/** The labels on the listed Inbox threads (case-blind), with how many threads carry each. */
+export function labelsOfNeeds(
+  list: readonly NeedsEntry[],
+): Array<{ key: string; label: string; count: number }> {
+  const by = new Map<string, { key: string; label: string; count: number }>();
+  for (const e of list) {
+    if (!e.label) continue;
+    const key = e.label.label.toLowerCase();
+    const cur = by.get(key);
+    if (cur) cur.count++;
+    else by.set(key, { key, label: e.label.label, count: 1 });
+  }
+  return [...by.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** One label (lowercased key) narrows the list to the Inbox threads that carry it. */
+export function filterByLabel(list: readonly NeedsEntry[], key: string | null): NeedsEntry[] {
+  if (!key) return [...list];
+  return list.filter((e) => e.label?.label.toLowerCase() === key);
 }
 
 export function countNeeds(list: readonly NeedsEntry[]): {
