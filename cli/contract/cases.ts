@@ -90,6 +90,7 @@ import {
 } from '../../packages/shared/src/index';
 
 import { calendarCases } from './calendarCases';
+import { summaryCases } from './summaryCases';
 
 export const NOW_MS = 1_800_000_000_000;
 export const WORKSPACE_ID = 'w1';
@@ -2514,6 +2515,7 @@ function build(): ContractCase[] {
   search('limit 0 is the default', { filters: { limit: 0 } });
   search('limit over the top', { filters: { limit: 500 } });
   calendarCases(act, pure, { agent: AGENT, human: HUMAN });
+  summaryCases(act, pure, { agent: AGENT, other: OTHER, human: HUMAN });
 
   return cases;
 }

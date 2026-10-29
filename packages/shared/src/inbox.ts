@@ -110,6 +110,8 @@ export const INBOX_EVENT_TYPES = [
   // Ask the agent (item w6O2KOw4ys70TQv9I1xD): the home agent answers, suggests chips
   'thread.instruction_answered',
   'thread.chips_suggested',
+  // Summaries (item OE8FmrTaIxFVGcaeGG3N, ./summary.ts): the home agent wrote a new version
+  'summary.written',
   // agents and the member
   'thread.titled',
   'thread.flagged',
@@ -371,6 +373,21 @@ export const inboxThreadSchema = z.object({
     .optional(),
   /** Chips the home agent suggests for this thread (thread_suggest_chips), at most 5. */
   suggestedChips: z.array(z.enum(INSTRUCT_CHIPS)).max(INBOX_LIMITS.suggestedChips).optional(),
+  /**
+   * The top line of the thread's summary (item OE8FmrTaIxFVGcaeGG3N, ./summary.ts), mirrored
+   * from inboxSummaries/{tid} by the same batch; absent until the home agent writes one.
+   */
+  summary: z
+    .object({
+      version: z.number().int().min(1),
+      at: timestamp,
+      headline: z.string(),
+      ask: z.string().nullable(),
+      answer: z.string().nullable(),
+      recAction: z.string().nullable(),
+      confidence: z.enum(OUTCOME_CONFIDENCE).nullable(),
+    })
+    .optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),

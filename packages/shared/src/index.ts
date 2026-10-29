@@ -28,3 +28,4 @@ export * from './status';
 export * from './cliversion';
 export * from './stale';
 export * from './chips';
+export * from './summary';
