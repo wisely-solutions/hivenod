@@ -42,7 +42,9 @@ and it holds up to that many: each work event carries its `item_id` and asks the
 the item in a background sub-agent of its own. Item tools then take `itemId` (required while
 several items are held); notes, answers and Stop work name the item they are about, and after a
 Stop that item's tools refuse. Hivenod shows the agent as "working N items". (`hivenod mcp
---channel --max-items N` does the same outside the plugin.)
+--channel --max-items N` does the same outside the plugin.) The limit is per session: it keeps one
+agent from taking more than it can do, and is not a total. To do more work at once, connect another
+machine with its own agent. See [Many agents, many machines](../../docs/SCALING.md).
 
 ## `hivenod run` is not supported for now
 

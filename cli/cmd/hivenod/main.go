@@ -56,7 +56,8 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod mcp --channel [--project P] [--step S] [--max-items N]
                            the same, as a Claude Code channel: a live session gets its work
                            pushed in, claimed, up to N items at a time (default 1, or
-                           HIVENOD_MAX_ITEMS); [--max-inbox N]: Inbox threads sent at once,
+                           HIVENOD_MAX_ITEMS; protects this agent from too much work, it is not
+                           a total: add machines, each with its own agent, for more); [--max-inbox N]: Inbox threads sent at once,
                            outside max_items (0-10, default 3, 0 is off; or HIVENOD_MAX_INBOX)
   hivenod update           installs the latest release (checks its SHA-256 checksum)
   hivenod version          the installed version (matches the Hivenod release)
