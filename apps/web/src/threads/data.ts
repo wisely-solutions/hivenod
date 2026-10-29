@@ -2,6 +2,9 @@
  * Inbox data (item 4PEHrOW5IfXBQWgOK9wo, part 3). Every query is the member's own: it filters on
  * memberUid == me, which is also all the rules let a member read (docs/INBOX.md, "Rules").
  */
+import { useMemo } from 'react';
+import { useReady } from '../auth/context';
+import { useOrgs } from '../orgs/data';
 import {
   inboxEventSchema,
   inboxMessageSchema,
@@ -16,11 +19,11 @@ import {
   type InboxThread,
 } from '@hive/shared';
 import { collection, onSnapshot, query, where, type Query } from 'firebase/firestore';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { z } from 'zod';
 import { db } from '../lib/db';
 import { useLiveDoc, useLiveQuery } from '../lib/live';
-import type { ThreadRow } from './logic';
+import { countWaitingThreads, subjectRows, type ThreadRow } from './logic';
 
 export const mySubjectsQuery = (wid: string, uid: string) =>
   query(collection(db, `workspaces/${wid}/inboxSubjects`), where('memberUid', '==', uid));
@@ -207,4 +210,21 @@ export function useSubject(wid: string, sid: string, uid: string) {
 /** The member's other subjects in a workspace (merge targets, move targets). */
 export function useMySubjects(wid: string, uid: string) {
   return useLiveQuery(`ms:${wid}/${uid}`, () => mySubjectsQuery(wid, uid), inboxSubjectSchema);
+}
+
+/**
+ * Threads waiting for the member across all their organizations, for the phone Inbox tab. Null
+ * until the feed is final (no climbing number). Same selector as the /inbox header line.
+ */
+export function useWaitingThreads(): number | null {
+  const { session } = useReady();
+  const uid = session.me.uid;
+  const orgs = useOrgs(uid, session.profile.workspaceIds);
+  const wids = useMemo(() => orgs.filter((o) => !o.deleting).map((o) => o.id), [orgs]);
+  const inbox = useInbox(uid, wids);
+  const n = useMemo(
+    () => countWaitingThreads(subjectRows(inbox.subjects, inbox.threads)),
+    [inbox.subjects, inbox.threads],
+  );
+  return inbox.state === 'ready' ? n : null;
 }

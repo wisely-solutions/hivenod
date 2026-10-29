@@ -136,6 +136,11 @@ export function subjectRows(
   );
 }
 
+/** Threads waiting for the member: the number behind "N threads wait for you" and the Inbox tab. */
+export function countWaitingThreads(rows: ReadonlyArray<Pick<SubjectRow, 'waiting'>>): number {
+  return rows.reduce((n, r) => n + r.waiting, 0);
+}
+
 export interface FindFilters {
   waitingForMe: boolean;
   /** Active in the last N days (0: any time). */

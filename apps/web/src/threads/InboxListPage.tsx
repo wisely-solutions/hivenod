@@ -14,7 +14,7 @@ import { cn } from '../ui/cn';
 import { EmptyState, Skeleton } from '../ui/feedback';
 import { Input, Select } from '../ui/form';
 import { useInbox, useMyMessages, useMyRelations } from './data';
-import { findSubjectRows, subjectRows, type SubjectRow } from './logic';
+import { countWaitingThreads, findSubjectRows, subjectRows, type SubjectRow } from './logic';
 import { StateChip, UrgentMark, when } from './parts';
 
 const DAYS = [
@@ -77,7 +77,7 @@ export function InboxListPage() {
     ],
   );
   const orgName = (wid: string) => orgs.find((o) => o.id === wid)?.name ?? '';
-  const waiting = rows.reduce((n, r) => n + r.waiting, 0);
+  const waiting = countWaitingThreads(rows);
 
   return (
     <div className="mx-auto w-full max-w-4xl">
