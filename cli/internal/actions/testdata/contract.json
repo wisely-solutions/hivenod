@@ -19416,6 +19416,710 @@
       "output": { "error": "Only agents can do this" }
     },
     {
+      "name": "reviseOutcome/first revision keeps v1",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "revising",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " },
+        "note": " Shorter ",
+        "confidence": "medium",
+        "checks": [" Thu 14:00 free "]
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "proposed",
+              "fields": { "text": "Thursday 10:00, or 14:00." },
+              "note": "Shorter",
+              "confidence": "medium",
+              "checks": ["Thu 14:00 free"],
+              "versions": [
+                {
+                  "n": 1,
+                  "fields": { "text": "Thursday works." },
+                  "note": "They asked to move it.",
+                  "confidence": "high",
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": null,
+                  "asked": null
+                },
+                {
+                  "n": 2,
+                  "fields": { "text": "Thursday 10:00, or 14:00." },
+                  "note": "Shorter",
+                  "confidence": "medium",
+                  "checks": ["Thu 14:00 free"],
+                  "by": "agentA",
+                  "eventId": "id01",
+                  "asked": { "instruction": "Mention 14:00", "chips": ["shorter"] }
+                }
+              ],
+              "revise": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.revised",
+              "data": {
+                "outcomeId": "o1",
+                "type": "reply",
+                "version": 2,
+                "fields": { "text": "Thursday 10:00, or 14:00." }
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "version": 2
+      }
+    },
+    {
+      "name": "reviseOutcome/third version",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "revising",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          },
+          "versions": [
+            {
+              "n": 1,
+              "fields": { "text": "a" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": null,
+              "asked": null
+            },
+            {
+              "n": 2,
+              "fields": { "text": "b" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": "ev2",
+              "asked": { "instruction": null, "chips": ["warmer"] }
+            }
+          ],
+          "checks": ["x"]
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " },
+        "type": "reply",
+        "threadId": "it1"
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "proposed",
+              "fields": { "text": "Thursday 10:00, or 14:00." },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "versions": [
+                {
+                  "n": 1,
+                  "fields": { "text": "a" },
+                  "note": "",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": null,
+                  "asked": null
+                },
+                {
+                  "n": 2,
+                  "fields": { "text": "b" },
+                  "note": "",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": "ev2",
+                  "asked": { "instruction": null, "chips": ["warmer"] }
+                },
+                {
+                  "n": 3,
+                  "fields": { "text": "Thursday 10:00, or 14:00." },
+                  "note": "",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": "id01",
+                  "asked": { "instruction": "Mention 14:00", "chips": ["shorter"] }
+                }
+              ],
+              "revise": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.revised",
+              "data": {
+                "outcomeId": "o1",
+                "type": "reply",
+                "version": 3,
+                "fields": { "text": "Thursday 10:00, or 14:00." }
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "version": 3
+      }
+    },
+    {
+      "name": "reviseOutcome/without a note or confidence",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "revising",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "proposed",
+              "fields": { "text": "Thursday 10:00, or 14:00." },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "versions": [
+                {
+                  "n": 1,
+                  "fields": { "text": "Thursday works." },
+                  "note": "They asked to move it.",
+                  "confidence": "high",
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": null,
+                  "asked": null
+                },
+                {
+                  "n": 2,
+                  "fields": { "text": "Thursday 10:00, or 14:00." },
+                  "note": "",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": "id01",
+                  "asked": null
+                }
+              ],
+              "revise": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.revised",
+              "data": {
+                "outcomeId": "o1",
+                "type": "reply",
+                "version": 2,
+                "fields": { "text": "Thursday 10:00, or 14:00." }
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "version": 2
+      }
+    },
+    {
+      "name": "reviseOutcome/nobody asked",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "proposed",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": {
+        "error": "Nobody asked for changes on this outcome (or the person cancelled the request)."
+      }
+    },
+    {
+      "name": "reviseOutcome/already approved",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "approved",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": {
+        "error": "This outcome was already decided (approved): your revision is not needed."
+      }
+    },
+    {
+      "name": "reviseOutcome/another agent",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "revising",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": { "error": "Only the agent that proposed this outcome revises it." }
+    },
+    {
+      "name": "reviseOutcome/another type",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "revising",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " },
+        "type": "nudge"
+      },
+      "output": {
+        "error": "Outcome o1 is a reply; a revision keeps the type: propose a new outcome instead."
+      }
+    },
+    {
+      "name": "reviseOutcome/another thread",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "revising",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " },
+        "threadId": "it2"
+      },
+      "output": { "error": "Outcome o1 is on thread it1, not it2: propose a new outcome instead." }
+    },
+    {
+      "name": "reviseOutcome/bad fields",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "revising",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "x", "bcc": "all" }
+      },
+      "output": { "error": "reply has no field bcc. Its fields: text, holding." }
+    },
+    {
+      "name": "reviseOutcome/ten versions",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "revising",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          },
+          "versions": [
+            {
+              "n": 1,
+              "fields": { "text": "v0" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": null,
+              "asked": null
+            },
+            {
+              "n": 2,
+              "fields": { "text": "v1" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": "ev2",
+              "asked": { "instruction": null, "chips": ["warmer"] }
+            },
+            {
+              "n": 3,
+              "fields": { "text": "v2" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": "ev3",
+              "asked": { "instruction": null, "chips": ["warmer"] }
+            },
+            {
+              "n": 4,
+              "fields": { "text": "v3" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": "ev4",
+              "asked": { "instruction": null, "chips": ["warmer"] }
+            },
+            {
+              "n": 5,
+              "fields": { "text": "v4" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": "ev5",
+              "asked": { "instruction": null, "chips": ["warmer"] }
+            },
+            {
+              "n": 6,
+              "fields": { "text": "v5" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": "ev6",
+              "asked": { "instruction": null, "chips": ["warmer"] }
+            },
+            {
+              "n": 7,
+              "fields": { "text": "v6" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": "ev7",
+              "asked": { "instruction": null, "chips": ["warmer"] }
+            },
+            {
+              "n": 8,
+              "fields": { "text": "v7" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": "ev8",
+              "asked": { "instruction": null, "chips": ["warmer"] }
+            },
+            {
+              "n": 9,
+              "fields": { "text": "v8" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": "ev9",
+              "asked": { "instruction": null, "chips": ["warmer"] }
+            },
+            {
+              "n": 10,
+              "fields": { "text": "v9" },
+              "note": "",
+              "confidence": null,
+              "checks": [],
+              "by": "agentA",
+              "eventId": "ev10",
+              "asked": { "instruction": null, "chips": ["warmer"] }
+            }
+          ]
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": { "error": "This proposal has 10 versions already." }
+    },
+    {
+      "name": "reviseOutcome/person refused",
+      "action": "reviseOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "Thursday works." },
+          "state": "revising",
+          "executor": "agentA",
+          "proposedBy": "agentA",
+          "note": "They asked to move it.",
+          "confidence": "high",
+          "revise": {
+            "instruction": "Mention 14:00",
+            "chips": ["shorter"],
+            "byUid": "joao",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "fields": { "text": "  Thursday 10:00, or 14:00. " }
+      },
+      "output": { "error": "Only agents can do this" }
+    },
+    {
       "name": "wakeThread/due",
       "action": "wakeThread",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
