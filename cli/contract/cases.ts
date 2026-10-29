@@ -68,6 +68,7 @@ import {
   relationId,
   searchSubjects,
   proposeOutcome,
+  reviseOutcome,
   retitleThread,
   threadAfter,
   titleFrom,
@@ -1675,6 +1676,59 @@ function build(): ContractCase[] {
   fin('no executor', AGENT, { outcome: OC({ executor: null }) });
   fin('bad link', AGENT, { result: { permalink: 'nope' } });
   fin('person refused', HUMAN, {});
+  // Ask for changes (item L7OzWKMYZ1O2dX33Xkrj): the proposing agent writes the next version.
+  const REV = OC({
+    state: 'revising',
+    proposedBy: 'agentA',
+    note: 'They asked to move it.',
+    confidence: 'high',
+    revise: { instruction: 'Mention 14:00', chips: ['shorter'], byUid: 'joao', at: ts(NOW_MS) },
+  });
+  const V = (n: number, text: string) => ({
+    n,
+    fields: { text },
+    note: '',
+    confidence: null,
+    checks: [],
+    by: 'agentA',
+    eventId: n === 1 ? null : `ev${n}`,
+    asked: n === 1 ? null : { instruction: null, chips: ['warmer' as const] },
+  });
+  const rev = (name: string, actor: Actor, input: Partial<Parameters<typeof reviseOutcome>[1]>) =>
+    act(
+      `reviseOutcome/${name}`,
+      'reviseOutcome',
+      actor,
+      {
+        outcomeId: 'o1',
+        outcome: REV,
+        thread: TH({ subjectId: 's1', state: 'yourCall' }),
+        fields: { text: '  Thursday 10:00, or 14:00. ' },
+        ...input,
+      },
+      reviseOutcome,
+    );
+  rev('first revision keeps v1', AGENT, {
+    note: ' Shorter ',
+    confidence: 'medium',
+    checks: [' Thu 14:00 free '],
+  });
+  rev('third version', AGENT, {
+    outcome: { ...REV, versions: [V(1, 'a'), V(2, 'b')], checks: ['x'] },
+    type: 'reply',
+    threadId: 'it1',
+  });
+  rev('without a note or confidence', AGENT, { outcome: { ...REV, revise: undefined } });
+  rev('nobody asked', AGENT, { outcome: { ...REV, state: 'proposed' } });
+  rev('already approved', AGENT, { outcome: { ...REV, state: 'approved' } });
+  rev('another agent', OTHER, {});
+  rev('another type', AGENT, { type: 'nudge' });
+  rev('another thread', AGENT, { threadId: 'it2' });
+  rev('bad fields', AGENT, { fields: { text: 'x', bcc: 'all' } });
+  rev('ten versions', AGENT, {
+    outcome: { ...REV, versions: Array.from({ length: 10 }, (_, i) => V(i + 1, `v${i}`)) },
+  });
+  rev('person refused', HUMAN, {});
   const wake = (name: string, input: Partial<Parameters<typeof wakeThread>[1]>) =>
     act(
       `wakeThread/${name}`,

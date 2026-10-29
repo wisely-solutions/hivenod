@@ -246,7 +246,13 @@ const (
 	InboxMaxCheck          = 200
 	InboxMaxOptions        = 4
 	InboxMaxOption         = 80
+	// Ask for changes (item L7OzWKMYZ1O2dX33Xkrj): the instruction, and the versions kept.
+	InboxMaxReviseInstruction = 500
+	InboxMaxVersions          = 10
 )
+
+// ReviseChips are REVISE_CHIPS, in order.
+var ReviseChips = []string{"shorter", "formal", "warmer", "availability"}
 
 // DefaultInboxLabels is DEFAULT_INBOX_LABELS: the labels a workspace offers until an admin edits
 // the list (the contract cases and the rules keep the copies equal).
@@ -306,6 +312,37 @@ type OutcomeState struct {
 	Fields    map[string]any `json:"fields"`
 	State     string         `json:"state"`
 	Executor  *string        `json:"executor"`
+	// What a revision needs (item L7OzWKMYZ1O2dX33Xkrj); absent on older outcomes.
+	ProposedBy *string          `json:"proposedBy,omitempty"`
+	Note       *string          `json:"note,omitempty"`
+	Confidence *string          `json:"confidence,omitempty"`
+	Checks     []string         `json:"checks,omitempty"`
+	Versions   []OutcomeVersion `json:"versions,omitempty"`
+	Revise     *ReviseRequest   `json:"revise,omitempty"`
+}
+
+// ReviseAsk, ReviseRequest and OutcomeVersion are the stored shapes (model).
+type (
+	ReviseAsk      = model.ReviseAsk
+	ReviseRequest  = model.ReviseRequest
+	OutcomeVersion = model.OutcomeVersion
+)
+
+func versionDoc(v OutcomeVersion) map[string]any {
+	checks := v.Checks
+	if checks == nil {
+		checks = []string{}
+	}
+	var asked any
+	if v.Asked != nil {
+		chips := v.Asked.Chips
+		if chips == nil {
+			chips = []string{}
+		}
+		asked = map[string]any{"instruction": strOrNil(v.Asked.Instruction), "chips": chips}
+	}
+	return map[string]any{"n": v.N, "fields": v.Fields, "note": v.Note, "confidence": strOrNil(v.Confidence),
+		"checks": checks, "by": v.By, "eventId": strOrNil(v.EventID), "asked": asked}
 }
 
 // ThreadStateFrom is the action state of a stored thread.
@@ -326,7 +363,9 @@ func OutcomeStateFrom(o model.InboxOutcome) OutcomeState {
 	if f == nil {
 		f = map[string]any{}
 	}
-	return OutcomeState{MemberUID: o.MemberUID, ThreadID: o.ThreadID, Type: o.Type, Fields: f, State: o.State, Executor: o.Executor}
+	s := OutcomeState{MemberUID: o.MemberUID, ThreadID: o.ThreadID, Type: o.Type, Fields: f, State: o.State, Executor: o.Executor,
+		ProposedBy: sp(o.ProposedBy), Note: sp(o.Note), Confidence: o.Confidence, Checks: o.Checks, Versions: o.Versions, Revise: o.Revise}
+	return s
 }
 
 // ---------- ids ----------
@@ -1011,6 +1050,103 @@ func ProposeOutcome(ctx Ctx, in ProposeInput) (ProposeResult, error) {
 		}
 	}, "")
 	return ProposeResult{Plan: p, OutcomeID: oid}, nil
+}
+
+// ReviseInput is reviseOutcome's input (outcome_propose with revises).
+type ReviseInput struct {
+	OutcomeID  string         `json:"outcomeId"`
+	Outcome    OutcomeState   `json:"outcome"`
+	Thread     ThreadState    `json:"thread"`
+	Type       *string        `json:"type"`
+	ThreadID   *string        `json:"threadId"`
+	Fields     map[string]any `json:"fields"`
+	Note       *string        `json:"note"`
+	Confidence *string        `json:"confidence"`
+	Checks     []string       `json:"checks"`
+}
+
+// ReviseResult is the plan plus the new version's number.
+type ReviseResult struct {
+	plan.Plan
+	Version int `json:"version"`
+}
+
+// ReviseOutcome is reviseOutcome: the proposing agent writes the next version of an outcome the
+// member asked changes for; it is proposed again in the same slot.
+func ReviseOutcome(ctx Ctx, in ReviseInput) (ReviseResult, error) {
+	if err := RequireAgent(ctx); err != nil {
+		return ReviseResult{}, err
+	}
+	o := in.Outcome
+	if in.ThreadID != nil && *in.ThreadID != o.ThreadID {
+		return ReviseResult{}, fail("Outcome " + in.OutcomeID + " is on thread " + o.ThreadID + ", not " + *in.ThreadID + ": propose a new outcome instead.")
+	}
+	if in.Type != nil && *in.Type != o.Type {
+		return ReviseResult{}, fail("Outcome " + in.OutcomeID + " is a " + o.Type + "; a revision keeps the type: propose a new outcome instead.")
+	}
+	if o.State != "revising" {
+		if o.State == "proposed" {
+			return ReviseResult{}, fail("Nobody asked for changes on this outcome (or the person cancelled the request).")
+		}
+		return ReviseResult{}, fail("This outcome was already decided (" + o.State + "): your revision is not needed.")
+	}
+	if o.ProposedBy == nil || *o.ProposedBy != ctx.Actor.ID {
+		return ReviseResult{}, fail("Only the agent that proposed this outcome revises it.")
+	}
+	if in.Fields == nil {
+		in.Fields = map[string]any{}
+	}
+	fields, err := CleanOutcomeFields(o.Type, in.Fields)
+	if err != nil {
+		return ReviseResult{}, err
+	}
+	note := ""
+	if in.Note != nil {
+		note = jsTrim(*in.Note)
+	}
+	if err := need(jsLen(note) <= InboxMaxOutcomeNote, tooLong("The note", InboxMaxOutcomeNote)); err != nil {
+		return ReviseResult{}, err
+	}
+	if err := need(in.Confidence == nil || inList(*in.Confidence, OutcomeConfidence...), "The confidence is high, medium or low."); err != nil {
+		return ReviseResult{}, err
+	}
+	checks, err := cleanLines("checks", in.Checks, InboxMaxChecks, InboxMaxCheck)
+	if err != nil {
+		return ReviseResult{}, err
+	}
+	prior := append([]OutcomeVersion{}, o.Versions...)
+	if len(prior) == 0 {
+		v1 := OutcomeVersion{N: 1, Fields: o.Fields, Checks: o.Checks, Confidence: o.Confidence, By: ctx.Actor.ID}
+		if o.Note != nil {
+			v1.Note = *o.Note
+		}
+		if o.ProposedBy != nil {
+			v1.By = *o.ProposedBy
+		}
+		prior = []OutcomeVersion{v1}
+	}
+	if len(prior) >= InboxMaxVersions {
+		return ReviseResult{}, fail("This proposal has " + strconv.Itoa(InboxMaxVersions) + " versions already.")
+	}
+	version := len(prior) + 1
+	var asked *ReviseAsk
+	if o.Revise != nil {
+		asked = &ReviseAsk{Instruction: o.Revise.Instruction, Chips: o.Revise.Chips}
+	}
+	p := InboxPlan(ctx, "outcome.revised", o.MemberUID, sp(o.ThreadID), in.Thread.SubjectID, map[string]any{"outcomeId": in.OutcomeID, "type": o.Type, "version": version, "fields": fields}, func(eventID string) []plan.Op {
+		list := make([]any, 0, version)
+		for _, v := range prior {
+			list = append(list, versionDoc(v))
+		}
+		list = append(list, versionDoc(OutcomeVersion{N: version, Fields: fields, Note: note, Confidence: in.Confidence, Checks: checks, By: ctx.Actor.ID, EventID: &eventID, Asked: asked}))
+		return []plan.Op{
+			upd(model.Paths.InboxOutcome(ctx.WorkspaceID, in.OutcomeID), map[string]any{
+				"state": "proposed", "fields": fields, "note": note, "confidence": strOrNil(in.Confidence),
+				"checks": checks, "versions": list, "revise": nil,
+			}, eventID),
+		}
+	}, "")
+	return ReviseResult{Plan: p, Version: version}, nil
 }
 
 // FinishInput is finishOutcome's input.

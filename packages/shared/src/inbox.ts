@@ -1471,7 +1471,16 @@ export function reviseOutcome(
           checks,
           versions: [
             ...prior,
-            { n: version, fields, note, confidence: conf, checks, by: ctx.actor.id, eventId, asked },
+            {
+              n: version,
+              fields,
+              note,
+              confidence: conf,
+              checks,
+              by: ctx.actor.id,
+              eventId,
+              asked,
+            },
           ],
           revise: null,
         },

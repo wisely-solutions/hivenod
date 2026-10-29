@@ -90,11 +90,14 @@ describe('requestRevision', () => {
   it('only the member, only on a proposed revisable outcome below 10 versions', () => {
     expect(() => requestRevision(agent, { ...base, chips: ['shorter'] })).toThrow();
     expect(() =>
-      requestRevision({ ...joao, actor: { ...joao.actor, id: 'bob' } }, { ...base, chips: ['warmer'] }),
+      requestRevision(
+        { ...joao, actor: { ...joao.actor, id: 'bob' } },
+        { ...base, chips: ['warmer'] },
+      ),
     ).toThrow(/Only the person/);
-    expect(() =>
-      requestRevision(joao, { ...base, outcome: revising, chips: ['warmer'] }),
-    ).toThrow(/already revising/);
+    expect(() => requestRevision(joao, { ...base, outcome: revising, chips: ['warmer'] })).toThrow(
+      /already revising/,
+    );
     expect(() =>
       requestRevision(joao, {
         ...base,
@@ -236,7 +239,9 @@ describe('approveOutcome with versions', () => {
     const d = approveOutcome(joao, base).ops[0]!.data as { decision: object };
     expect(d.decision).not.toHaveProperty('version');
     expect(() => approveOutcome(joao, { ...base, version: 1 })).toThrow(/no version 1/);
-    expect(() => approveOutcome(joao, { ...base, outcome: two, version: 3 })).toThrow(/no version 3/);
+    expect(() => approveOutcome(joao, { ...base, outcome: two, version: 3 })).toThrow(
+      /no version 3/,
+    );
   });
   it('approving while revising ends the request (the late revision is then refused)', () => {
     const p = approveOutcome(joao, { ...base, outcome: revising });

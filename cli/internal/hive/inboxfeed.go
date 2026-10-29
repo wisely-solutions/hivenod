@@ -51,6 +51,15 @@ type FeedOutcome struct {
 	CreatedAtMs                   int64
 }
 
+// FeedRevise is an outcome this agent proposed that the person asked changes for (revising).
+type FeedRevise struct {
+	ID, ThreadID, MemberUID, Type string
+	Instruction                   string
+	Chips                         []string
+	// AtMs is when they asked: a new request after a cancel is a new event.
+	AtMs int64
+}
+
 // FeedEvent is an inbox event (the timeline).
 type FeedEvent struct {
 	Type string
@@ -61,6 +70,7 @@ type FeedEvent struct {
 type InboxSource interface {
 	WatchThreads(ctx context.Context, on func([]FeedThread))
 	WatchOutcomes(ctx context.Context, on func([]FeedOutcome))
+	WatchRevising(ctx context.Context, on func([]FeedRevise))
 	EventOf(ctx context.Context, eventID string) (*FeedEvent, error)
 	Wake(ctx context.Context, threadID string) error
 }
@@ -86,7 +96,13 @@ type InboxEventInfo struct {
 	Why         string  `json:"why"`
 	NudgeDays   *int    `json:"nudgeDays"`
 	Update      bool    `json:"update"`
+	// Ask for changes (reason revise): what the person asked.
+	Instruction string   `json:"instruction"`
+	Chips       []string `json:"chips"`
 }
+
+// reviseChipText is how a chip reads in the event text.
+var reviseChipText = map[string]string{"shorter": "shorter", "formal": "more formal", "warmer": "warmer", "availability": "add my availability"}
 
 var inboxTriggers = map[string]string{
 	"inbox.added":      "message",
@@ -98,7 +114,7 @@ var inboxTriggers = map[string]string{
 }
 
 var inboxPriority = map[string]int{
-	"carry_out": 0, "answered": 1, "new": 2, "message": 2,
+	"carry_out": 0, "answered": 1, "revise": 1, "new": 2, "message": 2,
 	"woke": 3, "rejected": 3, "failed": 3, "restored": 3, "resume": 3, "nudge_due": 4,
 }
 
@@ -150,11 +166,22 @@ func InboxText(e InboxEventInfo) string {
 		lines = append(lines, fmt.Sprintf("%s has waited on them for %d days or more.", t, days))
 	case "carry_out":
 		lines = append(lines, fmt.Sprintf("The person approved a %s outcome (outcome %s) on thread %s.", or(e.OutcomeType, "?"), or(e.OutcomeID, "?"), e.ThreadID))
+	case "revise":
+		var asked []string
+		for _, c := range e.Chips {
+			asked = append(asked, or(reviseChipText[c], c))
+		}
+		if e.Instruction != "" {
+			asked = append(asked, `"`+clip(e.Instruction, 500)+`"`)
+		}
+		lines = append(lines, fmt.Sprintf("The person asked for changes to your %s proposal (outcome %s) on thread %s: %s.", or(e.OutcomeType, "?"), or(e.OutcomeID, "?"), e.ThreadID, strings.Join(asked, "; ")))
 	}
 	what := "investigate it (inbox_note for what you find, subject_assign if it is not filed, thread_due if a message states a deadline, inbox_ask only if you must), then propose what should come of it (outcome_propose, with your confidence and what you checked)"
 	switch e.Reason {
 	case "carry_out":
 		what = fmt.Sprintf("carry out outcome %s exactly as approved (its fields, as the person left them), then report it with outcome_done", or(e.OutcomeID, "?"))
+	case "revise":
+		what = fmt.Sprintf("revise it with outcome_propose revises=%s (same threadId and type): apply only what they asked and keep the rest; do not reject it or start a new outcome. If you cannot make the change, say why with inbox_ask on the thread", or(e.OutcomeID, "?"))
 	case "nudge_due":
 		what = "propose a nudge (outcome_propose, type nudge) if one makes sense, otherwise say why not with inbox_note"
 	}
@@ -171,6 +198,7 @@ type feedDue struct {
 	atMs                              int64
 	info                              InboxEventInfo
 	outcome                           *FeedOutcome
+	revise                            *FeedRevise
 	state                             string
 	updatedAtMs                       *int64
 }
@@ -178,6 +206,7 @@ type feedDue struct {
 type feedFlight struct {
 	at          int64
 	outcome     bool
+	revise      bool
 	state       string
 	updatedAtMs *int64
 }
@@ -197,6 +226,9 @@ type InboxFeed struct {
 	order    []string // thread ids in snapshot order
 	outcomes map[string]FeedOutcome
 	oorder   []string
+	revising map[string]FeedRevise
+	rorder   []string
+	revised  map[string]int64
 	handled  map[string]string
 	seen     map[string]bool
 	due      map[string]*feedDue
@@ -240,7 +272,7 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &InboxFeed{src: src, push: push, now: now, MaxInbox: o.MaxInbox, perMinute: o.PerMinute,
 		nudgeMs: o.NudgeAfter.Milliseconds(), leaseMs: o.Lease.Milliseconds(), tickMs: o.Tick.Milliseconds(),
-		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, handled: map[string]string{},
+		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, handled: map[string]string{},
 		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{},
 		inflight: map[string]*feedFlight{}, types: map[string]*FeedEvent{}, fetching: map[string]bool{},
 		wakes: map[string]string{}, ctx: ctx, cancel: cancel}
@@ -286,6 +318,7 @@ func (f *InboxFeed) Subscribe() {
 	f.mu.Unlock()
 	f.src.WatchThreads(sctx, f.OnThreads)
 	f.src.WatchOutcomes(sctx, f.OnOutcomes)
+	f.src.WatchRevising(sctx, f.OnRevising)
 }
 
 // Stop ends the feed.
@@ -322,6 +355,19 @@ func (f *InboxFeed) OnOutcomes(rows []FeedOutcome) {
 	f.Evaluate()
 }
 
+// OnRevising takes a snapshot of the outcomes this agent is asked to revise.
+func (f *InboxFeed) OnRevising(rows []FeedRevise) {
+	f.mu.Lock()
+	f.revising = map[string]FeedRevise{}
+	f.rorder = f.rorder[:0]
+	for _, r := range rows {
+		f.revising[r.ID] = r
+		f.rorder = append(f.rorder, r.ID)
+	}
+	f.mu.Unlock()
+	f.Evaluate()
+}
+
 // Evaluate works out what is due and sends what the cap and rate allow.
 func (f *InboxFeed) Evaluate() {
 	f.mu.Lock()
@@ -332,7 +378,10 @@ func (f *InboxFeed) Evaluate() {
 	now := f.nowMs()
 	for slot, fl := range f.inflight {
 		over := now-fl.at >= f.leaseMs
-		if fl.outcome {
+		if fl.revise {
+			_, ok := f.revising[slot[2:]]
+			over = over || !ok
+		} else if fl.outcome {
 			_, ok := f.outcomes[slot[2:]]
 			over = over || !ok
 		} else {
@@ -386,6 +435,24 @@ func (f *InboxFeed) Evaluate() {
 	for slot, d := range f.due {
 		if d.outcome != nil {
 			if _, ok := f.outcomes[d.outcome.ID]; !ok {
+				delete(f.due, slot)
+			}
+		}
+	}
+	// Ask for changes: one revise event per request (a new request after a cancel is new).
+	for _, id := range f.rorder {
+		rv := f.revising[id]
+		slot := "r:" + rv.ID
+		if v, ok := f.revised[rv.ID]; (ok && v == rv.AtMs) || f.due[slot] != nil {
+			continue
+		}
+		rc := rv
+		f.due[slot] = &feedDue{slot: slot, reason: "revise", threadID: rv.ThreadID, atMs: rv.AtMs, memberUID: rv.MemberUID, revise: &rc,
+			info: InboxEventInfo{Reason: "revise", ThreadID: rv.ThreadID, OutcomeID: rv.ID, OutcomeType: rv.Type, Instruction: rv.Instruction, Chips: rv.Chips}}
+	}
+	for slot, d := range f.due {
+		if d.revise != nil {
+			if cur, ok := f.revising[d.revise.ID]; !ok || cur.AtMs != d.revise.AtMs {
 				delete(f.due, slot)
 			}
 		}
@@ -534,11 +601,14 @@ func (f *InboxFeed) pump() []Event {
 		if d.outcome != nil {
 			f.carried[d.outcome.ID] = true
 		}
+		if d.revise != nil {
+			f.revised[d.revise.ID] = d.revise.AtMs
+		}
 		if d.reason == "nudge_due" {
 			f.nudged[d.threadID] = *d.updatedAtMs
 		}
 		if !update {
-			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, state: d.state, updatedAtMs: d.updatedAtMs}
+			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, revise: d.revise != nil, state: d.state, updatedAtMs: d.updatedAtMs}
 		}
 		f.sent = append(f.sent, f.nowMs())
 		meta := map[string]string{
@@ -547,6 +617,9 @@ func (f *InboxFeed) pump() []Event {
 		}
 		if d.outcome != nil {
 			meta["outcome_id"], meta["outcome_type"] = d.outcome.ID, d.outcome.Type
+		}
+		if d.revise != nil {
+			meta["outcome_id"], meta["outcome_type"] = d.revise.ID, d.revise.Type
 		}
 		info := d.info
 		if update {
@@ -655,6 +728,34 @@ func (s firestoreInbox) WatchOutcomes(ctx context.Context, on func([]FeedOutcome
 			m := d.Data()
 			str := func(k string) string { v, _ := m[k].(string); return v }
 			rows = append(rows, FeedOutcome{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), CreatedAtMs: feedMs(m["createdAt"])})
+		}
+		on(rows)
+	}, nil)
+}
+
+func (s firestoreInbox) WatchRevising(ctx context.Context, on func([]FeedRevise)) {
+	q := s.c.DB.Collection(model.Paths.InboxCollection(s.c.WorkspaceID, "inboxOutcomes")).
+		Where("proposedBy", "==", s.c.UID).Where("state", "==", "revising")
+	go listenQuery(ctx, s.c.recon, q, func(docs []*firestore.DocumentSnapshot) {
+		rows := make([]FeedRevise, 0, len(docs))
+		for _, d := range docs {
+			m := d.Data()
+			str := func(k string) string { v, _ := m[k].(string); return v }
+			r := FeedRevise{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), AtMs: feedMs(m["updatedAt"])}
+			if rv, ok := m["revise"].(map[string]any); ok {
+				r.Instruction, _ = rv["instruction"].(string)
+				if cs, ok := rv["chips"].([]any); ok {
+					for _, c := range cs {
+						if s, ok := c.(string); ok {
+							r.Chips = append(r.Chips, s)
+						}
+					}
+				}
+				if at := feedMs(rv["at"]); at != 0 {
+					r.AtMs = at
+				}
+			}
+			rows = append(rows, r)
 		}
 		on(rows)
 	}, nil)

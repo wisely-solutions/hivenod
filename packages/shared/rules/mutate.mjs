@@ -344,8 +344,8 @@ const MUTATIONS = [
     'inbox: agents decide outcomes',
     [
       [
-        '((inboxOwner(wid, resource.data) && inboxDecide(',
-        '(((inboxOwner(wid, resource.data) || isActiveAgent(wid)) && inboxDecide(',
+        '((inboxOwner(wid, resource.data)\n                && (inboxDecide(',
+        '(((inboxOwner(wid, resource.data) || isActiveAgent(wid))\n                && (inboxDecide(',
       ],
       [
         "'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed',",
@@ -596,6 +596,56 @@ const MUTATIONS = [
   [
     'inbox: the answer rewrites the question',
     [["&& d.question.diff(r.question).affectedKeys().hasOnly(['answer', 'answeredAt'])", '']],
+  ],
+  // Ask for changes (item L7OzWKMYZ1O2dX33Xkrj): one mutation per new invariant.
+  ['inbox: any agent revises', [['            && r.proposedBy == me()\n', '']]],
+  ['inbox: versions rewritten', [[': d.versions[0:prev.size()] == prev)', ': true)']]],
+  [
+    'inbox: v1 rewritten',
+    [
+      [
+        "? d.versions[0] == {'n': 1, 'fields': r.fields, 'note': r.note,",
+        "? d.versions[0].n == 1 || {'n': 1, 'fields': r.fields, 'note': r.note,",
+      ],
+    ],
+  ],
+  ['inbox: an 11th version', [[' && n <= 10\n', '\n']]],
+  ['inbox: ask past 10 versions', [["&& r.get('versions', []).size() < 10)", ')']]],
+  [
+    'inbox: unbounded revise instruction',
+    [['str(d.revise.instruction, 1, 500)', 'd.revise.instruction is string']],
+  ],
+  [
+    'inbox: any revise chips',
+    [["&& d.revise.chips.hasOnly(['shorter', 'formal', 'warmer', 'availability'])", '']],
+  ],
+  ['inbox: revision fields not the latest', [['&& last.fields == d.fields', '']]],
+  [
+    'inbox: revision with unknown fields',
+    [
+      [
+        '&& inboxFieldsOk(r.type, d.fields)\n            && str(d.note, 0, 2000)',
+        '&& str(d.note, 0, 2000)',
+      ],
+    ],
+  ],
+  ['inbox: approve keeps the revise request', [["&& d.get('revise', null) == null\n", '\n']]],
+  [
+    'inbox: approve any version',
+    [["&& d.decision.version <= r.get('versions', []).size())))", ')))']],
+  ],
+  [
+    'inbox: member rewrites fields while asking',
+    [["changed(['state', 'revise', 'updatedAt', 'lastEventId'])", 'true']],
+  ],
+  [
+    'inbox: reject while revising',
+    [
+      [
+        "&& r.state == 'proposed'\n                && exactKeys(d.decision",
+        '&& exactKeys(d.decision',
+      ],
+    ],
   ],
 ];
 

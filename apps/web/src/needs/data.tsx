@@ -116,7 +116,8 @@ function useExtras(wid: string, uid: string) {
         query(
           collection(db, `workspaces/${wid}/inboxOutcomes`),
           where('memberUid', '==', uid),
-          where('state', '==', 'proposed'),
+          // Revising (Ask for changes) keeps its slot: the card shows the agent at work.
+          where('state', 'in', ['proposed', 'revising']),
         ),
       inboxOutcomeSchema,
       { synced: true },

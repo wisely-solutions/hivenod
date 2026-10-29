@@ -48,9 +48,10 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome: a person's Hivenod 
                            asks the person (the thread waits in Needs you); up to 4
                            --option answer chips
   hivenod outcome propose THREAD --type T [--field name=value]... [--note N]
-                          [--confidence high|medium|low] [--check C]...
+                          [--confidence high|medium|low] [--check C]... [--revises OUTCOME]
                            proposes an outcome (types: ` + outcomeTypeList() + `);
-                           --check: what you verified, up to 6
+                           --check: what you verified, up to 6; --revises: the person
+                           asked for changes, so this is that outcome's next version
   hivenod outcome done OUTCOME --status done|failed [--text T] [--permalink URL] [--item-id I] [--error E]
                            after carrying out an outcome the person approved
 
@@ -73,7 +74,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
@@ -241,6 +242,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 		a["threadId"], a["type"], a["fields"] = id, *str["type"], f
 		opt(a, "note", "note")
 		opt(a, "confidence", "confidence")
+		opt(a, "revises", "revises")
 		if len(checks) > 0 {
 			a["checks"] = anyList(checks)
 		}

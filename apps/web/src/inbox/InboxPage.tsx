@@ -542,6 +542,27 @@ export function InboxPage() {
     run: () => cardRef.current?.edit(),
   });
   useShortcut({
+    id: 'today:ask',
+    keys: ['c'],
+    label: 'Ask the agent for changes',
+    group: 'Needs you',
+    run: () => cardRef.current?.ask?.(),
+  });
+  useShortcut({
+    id: 'today:prev-version',
+    keys: ['['],
+    label: 'Earlier version of the proposal',
+    group: 'Needs you',
+    run: () => cardRef.current?.version?.(-1),
+  });
+  useShortcut({
+    id: 'today:next-version',
+    keys: [']'],
+    label: 'Later version of the proposal',
+    group: 'Needs you',
+    run: () => cardRef.current?.version?.(1),
+  });
+  useShortcut({
     id: 'today:skip',
     keys: ['s'],
     label: 'Skip for now',

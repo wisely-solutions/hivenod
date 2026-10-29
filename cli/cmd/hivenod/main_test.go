@@ -124,6 +124,7 @@ func TestInboxCommands(t *testing.T) {
 		{"thread", "due", "it1", "--clear"},
 		{"inbox", "ask", "it1", "--text", "Thu or Fri?", "--option", "Thu", "--option", "Fri"},
 		{"outcome", "propose", "it1", "--type", "no_reply", "--confidence", "high", "--check", "An FYI"},
+		{"outcome", "propose", "it1", "--type", "reply", "--field", "text=Shorter", "--revises", "o1"},
 	} {
 		if code, _, errs := call(args...); code != 1 || !strings.Contains(errs, "hivenod:") {
 			t.Errorf("%v without a token: %d %q", args, code, errs)

@@ -435,11 +435,25 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 		if checks == nil {
 			checks = []string{}
 		}
-		outcomes = append(outcomes, map[string]any{
+		var revise any
+		if o.State == "revising" && o.Revise != nil {
+			chips := o.Revise.Chips
+			if chips == nil {
+				chips = []string{}
+			}
+			revise = map[string]any{"instruction": strOrNull(o.Revise.Instruction), "chips": chips}
+		}
+		row := map[string]any{
 			"outcomeId": d.ID, "type": o.Type, "state": o.State, "fields": fieldsOf(o.Fields), "note": o.Note,
 			"confidence": strOrNull(o.Confidence), "checks": checks,
 			"executor": strOrNull(o.Executor), "executorIsMe": mine, "decision": decision, "result": result,
-		})
+		}
+		// Ask for changes: how many versions, and what the person asks while revising.
+		if len(o.Versions) > 0 || revise != nil {
+			row["versions"] = max(len(o.Versions), 1)
+			row["revise"] = revise
+		}
+		outcomes = append(outcomes, row)
 	}
 	evs, err := listInbox[model.InboxEvent](ctx, c, "inboxEvents", "threadId", "==", id)
 	if err != nil {
@@ -687,14 +701,19 @@ func (c *Client) InboxAsk(ctx context.Context, id, question string, options []st
 	return map[string]any{"threadId": id, "state": "needsYou", "note": "Asked. The thread waits in Needs you; the answer shows in thread_read."}, nil
 }
 
-// ProposeExtra is outcome_propose's optional confidence and checks.
+// ProposeExtra is outcome_propose's optional confidence, checks and revises.
 type ProposeExtra struct {
 	Confidence *string
 	Checks     []string
+	// Revises is the outcome the person asked changes for: the proposal becomes its next version.
+	Revises *string
 }
 
-// OutcomePropose proposes an outcome (outcome_propose).
+// OutcomePropose proposes an outcome (outcome_propose), or with Revises the next version of one.
 func (c *Client) OutcomePropose(ctx context.Context, id, typ string, fields map[string]any, note *string, x ProposeExtra) (map[string]any, error) {
+	if x.Revises != nil && *x.Revises != "" {
+		return c.outcomeRevise(ctx, id, typ, fields, note, x)
+	}
 	t, err := c.thread(ctx, id)
 	if err != nil {
 		return nil, err
@@ -708,6 +727,36 @@ func (c *Client) OutcomePropose(ctx context.Context, id, typ string, fields map[
 	}
 	return map[string]any{"outcomeId": r.OutcomeID, "threadId": id, "type": typ, "state": "proposed",
 		"note": "Proposed. It waits for the person to approve, edit or reject it; nothing is carried out before."}, nil
+}
+
+// outcomeRevise writes the next version of an outcome the person asked changes for.
+func (c *Client) outcomeRevise(ctx context.Context, id, typ string, fields map[string]any, note *string, x ProposeExtra) (map[string]any, error) {
+	oid := *x.Revises
+	o, err := c.outcome(ctx, oid)
+	if err != nil {
+		return nil, err
+	}
+	t, err := c.thread(ctx, o.ThreadID)
+	if err != nil {
+		return nil, err
+	}
+	in := actions.ReviseInput{OutcomeID: oid, Outcome: actions.OutcomeStateFrom(o), Thread: actions.ThreadStateFrom(t),
+		Fields: fields, Note: note, Confidence: x.Confidence, Checks: x.Checks}
+	if id != "" {
+		in.ThreadID = &id
+	}
+	if typ != "" {
+		in.Type = &typ
+	}
+	r, err := actions.ReviseOutcome(c.actx(), in)
+	if err != nil {
+		return nil, wrap(err)
+	}
+	if err := c.inboxWrite(ctx, r.Plan); err != nil {
+		return nil, err
+	}
+	return map[string]any{"outcomeId": oid, "threadId": o.ThreadID, "type": o.Type, "version": r.Version, "state": "proposed",
+		"note": fmt.Sprintf("Version %d proposed in place of the earlier one. The person sees what changed and approves the version they want; nothing is carried out before.", r.Version)}, nil
 }
 
 // OutcomeResult is outcome_done's result.

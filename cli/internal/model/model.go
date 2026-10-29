@@ -457,6 +457,34 @@ type InboxDecision struct {
 	ByUID  string  `firestore:"byUid" json:"byUid"`
 	Edited bool    `firestore:"edited" json:"edited"`
 	Reason *string `firestore:"reason" json:"reason"`
+	// Version is the version approved (nil: never revised).
+	Version *int `firestore:"version" json:"version"`
+}
+
+// ReviseAsk is what the member asked for (a version's `asked`).
+type ReviseAsk struct {
+	Instruction *string  `json:"instruction" firestore:"instruction"`
+	Chips       []string `json:"chips" firestore:"chips"`
+}
+
+// ReviseRequest is an outcome's `revise` while the agent revises.
+type ReviseRequest struct {
+	Instruction *string    `json:"instruction" firestore:"instruction"`
+	Chips       []string   `json:"chips" firestore:"chips"`
+	ByUID       string     `json:"byUid" firestore:"byUid"`
+	At          *time.Time `json:"at" firestore:"at"`
+}
+
+// OutcomeVersion is one entry of an outcome's versions.
+type OutcomeVersion struct {
+	N          int            `json:"n" firestore:"n"`
+	Fields     map[string]any `json:"fields" firestore:"fields"`
+	Note       string         `json:"note" firestore:"note"`
+	Confidence *string        `json:"confidence" firestore:"confidence"`
+	Checks     []string       `json:"checks" firestore:"checks"`
+	By         string         `json:"by" firestore:"by"`
+	EventID    *string        `json:"eventId" firestore:"eventId"`
+	Asked      *ReviseAsk     `json:"asked" firestore:"asked"`
 }
 
 // InboxResult is what the executor reported.
@@ -483,6 +511,9 @@ type InboxOutcome struct {
 	Decision   *InboxDecision `firestore:"decision" json:"decision"`
 	Result     *InboxResult   `firestore:"result" json:"result"`
 	CreatedAt  time.Time      `firestore:"createdAt" json:"createdAt"`
+	// Versions and Revise: Ask for changes (item L7OzWKMYZ1O2dX33Xkrj).
+	Versions []OutcomeVersion `firestore:"versions" json:"versions"`
+	Revise   *ReviseRequest   `firestore:"revise" json:"revise"`
 }
 
 // InboxRelation is workspaces/{w}/inboxRelations/{rid}: two related subjects (a < b).
