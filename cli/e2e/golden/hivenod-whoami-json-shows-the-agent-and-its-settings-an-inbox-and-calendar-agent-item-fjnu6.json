@@ -1,0 +1,14 @@
+{
+  "whoami": {
+    "agentUid": "<agent>",
+    "guardrails": {
+      "maxFailedRuns": 3
+    },
+    "name": "Research agent",
+    "paused": false,
+    "pausedReason": null,
+    "projectIds": [],
+    "scope": "inbox",
+    "workspaceId": "w1"
+  }
+}

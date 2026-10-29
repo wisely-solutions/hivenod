@@ -1,0 +1,19 @@
+{
+  "name": "@hive/cli-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test:integration": "vitest run -c vitest.config.ts"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "@hive/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@types/node": "^22.0.0",
+    "firebase": "^13.1.0",
+    "vitest": "5.0.5"
+  }
+}

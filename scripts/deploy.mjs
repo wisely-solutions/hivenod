@@ -76,19 +76,9 @@ function cliProtocolOf(cwd) {
 async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
   const commit = out('git', ['rev-parse', 'HEAD'], cwd);
   run('pnpm', ['build'], cwd);
-  // The Hivenod CLI as an npm tarball under /cli (card rifzGl8M). Older commits (rollbacks) have no
-  // pack script and ship no CLI of their own.
+  // The npm tarball of the TypeScript CLI (card rifzGl8M) is no longer built (item
+  // MlWOc3O5NyfZcLgetrVo): the Go CLI below is the only agent client.
   const { main: prodUrl } = urlsFor(cwd);
-  let cli;
-  if (existsSync(join(cwd, 'scripts/pack-cli.mjs'))) {
-    const packed = execFileSync(
-      'node',
-      ['scripts/pack-cli.mjs', commit, 'apps/web/dist/cli', prodUrl],
-      { cwd, encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'] },
-    );
-    process.stdout.write(packed);
-    cli = packed.trim().split('\n').at(-1);
-  }
   // The Go CLI (item zLwtX2WEEg3mER4CR74g): five binaries + checksums + /cli/bin/latest.json, and
   // /install.sh, /install.ps1. Older commits (rollbacks) have no build script.
   let cliBin;
@@ -115,7 +105,7 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
     } catch {
       /* offline or first deploy: nothing to compare with */
     }
-    const bad = versionRegressions({ cli, cliBin }, live);
+    const bad = versionRegressions({ cliBin }, live);
     if (bad.length)
       die(`Refusing to release: ${bad.join('; ')} (installed CLIs would not update).`);
   }
@@ -123,7 +113,6 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
     join(cwd, 'apps/web/dist/version.json'),
     JSON.stringify({
       commit,
-      ...(cli ? { cli } : {}),
       ...(cliBin ? { cliBin } : {}),
       // What the CLI must understand (card st5INNZj): hivenod run asks to update when it is older.
       ...cliProtocolOf(cwd),
@@ -141,7 +130,8 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
 
 /**
  * The live site must serve this commit's /version.json and the app's index page, and every CLI
- * tarball the build in `cwd` made (an older commit, on rollback, made only hive-latest.tgz).
+ * tarball the build in `cwd` made (only older commits, on rollback, make npm tarballs; since item
+ * MlWOc3O5NyfZcLgetrVo a release ships the Go binaries only).
  */
 async function smoke(commit, checkAuthHeaders = true, cwd = process.cwd()) {
   const { main: prodUrl, legacy } = urlsFor(cwd);

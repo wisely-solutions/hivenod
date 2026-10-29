@@ -65,15 +65,9 @@ action URL for this project; see the card vyH5uux3 findings). The smoke test che
    when `firestore.indexes.json` cannot serve it. Queries built at run time must be listed in
    `scripts/firestore-index-allowlist.mjs` with the test that covers them.
 
-   `pnpm release` also publishes the Hivenod CLI: `scripts/pack-cli.mjs` bundles `packages/agent` into
-   an npm tarball under `apps/web/dist/cli/` (`hivenod-latest.tgz`, `hivenod-<version>.tgz` with the
-   last 5 versions kept from the live `cli/versions.json`, and `versions.json`), plus the old address
-   `hive-latest.tgz` as the final `hive` stub (package `hive-cli`, bin `hive`: it only prints "Hive is
-   now Hivenod: install with npm install -g …/cli/hivenod-latest.tgz, then hivenod pair and follow https://hivenod.com/agents
-   (card Ul32d6Ee)" and exits 1; card wQ7ZfmYr). `version.json` gets `"cli": "<version>"` (`0.1.<commit count>`)
-   and the smoke test fetches both tarballs (on a rollback, only the ones that build made). Users install
-   with `npm install -g https://hivenod.com/cli/hivenod-latest.tgz`; `hivenod --version`
-   shows the same version and the commit.
+   The npm tarball of the old TypeScript CLI (`/cli/hivenod-latest.tgz`, `hive-latest.tgz`) is no
+   longer built or served (item MlWOc3O5NyfZcLgetrVo): the Go CLI below is the only agent client.
+   The smoke test still checks npm tarballs when a rollback deploys an older commit that made them.
 
    The Go CLI (item zLwtX2WEEg3mER4CR74g, `cli/`): `scripts/build-cli-bin.mjs` cross-compiles five
    binaries into `apps/web/dist/cli/bin/` (`hivenod-linux-x64`, `-linux-arm64`, `-darwin-x64`,

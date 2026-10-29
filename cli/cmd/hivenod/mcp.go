@@ -70,6 +70,10 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 			return err
 		}
 	}
+	// Tests only: a short heartbeat interval (black-box suite in cli/e2e).
+	if d := msEnv("HIVENOD_HEARTBEAT_MS"); d > 0 {
+		hive.HeartbeatInterval = d
+	}
 	lazy := &hive.Lazy{Connect: func(ctx context.Context) (*hive.Client, error) { return hive.Connect(ctx, cfg, "") }}
 	sf := mcpserver.LoadSurface()
 	srv := &mcpserver.Server{Info: sf.ServerInfo}

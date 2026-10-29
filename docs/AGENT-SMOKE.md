@@ -6,7 +6,7 @@ Claude Code sessions** (model: haiku, a few cents) against the Firebase emulator
 **Manual only. Never in CI, never in `pnpm e2e` / `test:rules`.** It needs a signed-in `claude` on the
 machine, spends model usage, drives a terminal UI through tmux (slow, timing dependent) and keeps its
 own emulators busy for several minutes. The vitest file
-(`packages/agent/test/claude.channel.smoke.test.ts`) skips itself unless the wrapper set its
+(`cli/e2e/test/claude.channel.smoke.test.ts`) skips itself unless the wrapper set its
 environment, so `pnpm test:rules` never runs it.
 
 ## Run
@@ -69,10 +69,9 @@ Then (item QjTTL) one session with max_items 1: the model parks its item with th
 batch"; it stays claimed and parked, the next item is handed over and finished meanwhile, and a
 person's note on the parked item reaches the session (`ACKNOTE`) and wakes it (`parked` cleared).
 
-`HIVENOD_SMOKE_GO=1 pnpm smoke:claude` runs the same smoke with the Go CLI binary (`cli/`, built
-with Go) as `hivenod` instead of the TypeScript one.
+`hivenod` is the Go CLI binary (`cli/`, built with Go once per run), the only agent client.
 
-With `HIVENOD_SMOKE_GO=1` it first runs the connect flow (item EJ2Cxq4k): `hivenod connect --no-start`
+It first runs the connect flow (item EJ2Cxq4k): `hivenod connect --no-start`
 with no token and no browser shows a code; a plain member confirms it (what the /connect page does);
 connect saves the token and installs the plugin into the private config itself (marketplace: this
 repo, through `HIVENOD_PLUGIN_MARKETPLACE`); then `hivenod claude` starts the session, which gets an
