@@ -38,13 +38,19 @@ per agent: a second session as the same agent gets no handovers.
 
 By default a session holds one item at a time. Start it with `HIVENOD_MAX_ITEMS=3` (1 to 10) in
 its environment, for example `HIVENOD_MAX_ITEMS=3 claude --dangerously-load-development-channels plugin:hivenod@hivenod`,
-and it holds up to that many: each work event carries its `item_id` and asks the session to run
-the item in a background sub-agent of its own. Item tools then take `itemId` (required while
+and it holds up to that many: each work event carries its `item_id`. Item tools then take `itemId` (required while
 several items are held); notes, answers and Stop work name the item they are about, and after a
 Stop that item's tools refuse. Hivenod shows the agent as "working N items". (`hivenod mcp
 --channel --max-items N` does the same outside the plugin.) The limit is per session: it keeps one
 agent from taking more than it can do, and is not a total. To do more work at once, connect another
 machine with its own agent. See [Many agents, many machines](../../docs/SCALING.md).
+
+The channel protocol only states the contract. How the session organises the work is the plugin's
+`hivenod` skill (`skills/hivenod/SKILL.md`, new in 0.2.0): the main session stays a thin
+orchestrator and runs each item (and each inbox thread) in a background sub-agent of its own,
+routes notes, answers and status checks to it, stops only that one on Stop, and gives back items
+nobody is working. Other agent hosts get the contract only. Update the plugin
+(`claude plugin update hivenod@hivenod`) to get the skill.
 
 ## No `hivenod run`
 

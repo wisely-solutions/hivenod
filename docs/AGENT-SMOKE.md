@@ -54,7 +54,7 @@ One real session (`s1`), then more, each printed as `[smoke] CHECK ... PASS`:
 | A second session is told busy        | a second `claude` as the same agent shows "already running in another terminal"                                                                  |
 | Quit, then restart                   | `/exit` the first session, add a waiting item (nobody online: unclaimed), start a new session: the item is handed over on reconnect and finished |
 
-Then (card cGSENsRF) one session with `HIVENOD_MAX_ITEMS=3` and four items (two finish at once, two
+Then (card cGSENsRF; item xkQd9: the standing prompt never mentions sub-agents, the hint comes only from the plugin's `hivenod` skill) one session with `HIVENOD_MAX_ITEMS=3` and four items (two finish at once, two
 hold with a note until a person says to finish):
 
 | Check                 | How                                                                                                                                                      |
@@ -78,7 +78,7 @@ repo, through `HIVENOD_PLUGIN_MARKETPLACE`); then `hivenod claude` starts the se
 item and finishes it. The later parts reuse that plugin install.
 
 Then (item 4PEHr) one session with max_items 1 holding an item: an Inbox thread the agent brought
-in arrives as an `inbox` event although max_items is full, a sub-agent investigates it and
+in arrives as an `inbox` event although max_items is full, a sub-agent (from the skill) investigates it and
 proposes an outcome (the item stays held), and once the person approves it the carry-out event
 reaches the session and a sub-agent reports it with `outcome_done`.
 
