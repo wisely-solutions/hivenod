@@ -97,6 +97,8 @@ describe('tidy-ups (design 3.4)', () => {
     expect(isTidyUp(outcome(), thread({ due: ts(NOW + 6 * 24 * H) as never }), 1, NOW)).toBe(false);
     expect(isTidyUp(outcome(), thread({ due: ts(NOW + 8 * 24 * H) as never }), 1, NOW)).toBe(true);
     expect(isTidyUp(outcome(), thread(), 2, NOW)).toBe(false);
+    // A plan's step (item qwFAW) is decided in its plan.
+    expect(isTidyUp({ ...outcome(), planId: 'p1' }, thread(), 1, NOW)).toBe(false);
   });
   it('sums them up in one line', () => {
     const t = (title: string) => thread({ title });

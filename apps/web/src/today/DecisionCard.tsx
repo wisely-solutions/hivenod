@@ -22,6 +22,7 @@ import {
   type ActionPlan,
   type InboxOutcome,
   type InboxThread,
+  type PlanInput,
 } from '@hive/shared';
 import {
   ArrowRight,
@@ -158,8 +159,35 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
       ask: () => inner.current?.ask?.() ?? false,
       version: (step) => inner.current?.version?.(step),
     }));
-    const card =
-      t.state === 'needsYou'
+    // A plan's step (item qwFAWxZM5xkcE7PPjAzi) is decided on the thread page, where the plan is.
+    const planStep = (entry.proposals ?? []).find((p) => p.data.planId);
+    const card = planStep
+      ? shell(
+          band,
+          <>
+            <CardHead props={props} />
+            <div
+              data-plan-card=""
+              className="mt-3 rounded-card border border-agent/25 bg-agent-soft p-3.5 sm:p-4"
+            >
+              <p className="text-14 text-ink">
+                {props.agentName(planStep.data.proposedBy)} proposes a plan: steps that run in
+                order, each after your approval.
+              </p>
+              <div className="mt-3">
+                <Button
+                  variant="approve"
+                  onClick={props.onOpen}
+                  leading={<Icon icon={ListChecks} size={16} />}
+                >
+                  Open plan
+                </Button>
+              </div>
+            </div>
+          </>,
+          t.title,
+        )
+      : t.state === 'needsYou'
         ? shell(
             band,
             <>
@@ -371,6 +399,12 @@ export interface ProposalPanelProps {
   narrow?: boolean;
   /** Which proposal is on show (the panel's checks and confidence follow it). */
   onShown?: (id: string) => void;
+  /**
+   * A step of a plan (item qwFAWxZM5xkcE7PPjAzi): approving it needs the plan, Approve reads
+   * "Approve step", and Reject becomes Remove step (onRemove); thread actions live on the plan.
+   */
+  plan?: PlanInput;
+  onRemove?: () => void;
 }
 
 /**
@@ -380,7 +414,7 @@ export interface ProposalPanelProps {
 export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
   function ProposalPanel(props, ref) {
     const { wid, thread, proposals, now, busy, agentName, onSkip, onDone, onOpen, sender } = props;
-    const { after, compact, onShown, narrow } = props;
+    const { after, compact, onShown, narrow, plan: inPlan, onRemove } = props;
     const { session, actionContext, run } = useReady();
     const toast = useToast();
     const t = thread.data;
@@ -506,6 +540,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
           thread: { ...t },
           ...(versions.length ? { version: viewN } : {}),
           ...(dirty ? { fields: edited } : {}),
+          ...(inPlan ? { plan: inPlan } : {}),
         });
       } catch (e) {
         setError(errorText(e));
@@ -616,7 +651,10 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
         if (!pending && shown) setEditing((v) => !v);
       },
       reject: () => {
-        if (!pending && shown && !revising) setRejecting(true);
+        if (!pending && shown && !revising) {
+          if (inPlan) onRemove?.();
+          else setRejecting(true);
+        }
       },
       ask: () => {
         if (pending || !shown || !revisable || revising || full) return false;
@@ -660,43 +698,58 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
     const confidence = view ? view.confidence : shown.data.confidence;
     const prevFields = viewN > 1 ? versions[viewN - 2]?.fields : undefined;
     const asked = view?.asked && viewN > 1 ? view.asked : null;
-    const approveLabel = `${type?.approve ?? 'Approve'}${nv > 1 || revising ? ` v${viewN}` : ''}`;
+    const approveLabel = `${inPlan ? 'Approve step' : (type?.approve ?? 'Approve')}${nv > 1 || revising ? ` v${viewN}` : ''}`;
     const longReason = reasonText.length > 180;
     const TypeIcon = TYPE_ICON[shown.data.type] ?? ListChecks;
     const band = bandOf(t, now);
-    const menu = [
-      ...others.map((p) => ({
-        id: `show-${p.id}`,
-        label: `Show: ${outcomeType(p.data.type)?.label ?? p.data.type}`,
-        icon: ArrowRight,
-        onSelect: () => setShownId(p.id),
-      })),
-      // While the agent revises, Cancel the request first (a rejection would race its v2).
-      ...(revising
-        ? []
-        : [
+    const planMenu = [
+      ...(onRemove && !revising
+        ? [
             {
-              id: 'reject',
-              label: 'Reject proposal',
+              id: 'remove',
+              label: 'Remove step',
               icon: X,
               tone: 'danger' as const,
-              onSelect: () => setRejecting(true),
+              onSelect: onRemove,
             },
-          ]),
-      { id: 'ignore', label: 'Ignore thread', icon: Ban, onSelect: () => threadAct('ignore') },
-      {
-        id: 'close',
-        label: 'Mark done',
-        icon: CircleCheck,
-        onSelect: () => threadAct('close'),
-      },
-      ...(onOpen
-        ? [{ id: 'open', label: 'Open thread', icon: ExternalLink, onSelect: onOpen }]
-        : []),
-      ...(onSkip
-        ? [{ id: 'skip', label: 'Skip for now', icon: SkipForward, onSelect: onSkip }]
+          ]
         : []),
     ];
+    const menu = inPlan
+      ? planMenu
+      : [
+          ...others.map((p) => ({
+            id: `show-${p.id}`,
+            label: `Show: ${outcomeType(p.data.type)?.label ?? p.data.type}`,
+            icon: ArrowRight,
+            onSelect: () => setShownId(p.id),
+          })),
+          // While the agent revises, Cancel the request first (a rejection would race its v2).
+          ...(revising
+            ? []
+            : [
+                {
+                  id: 'reject',
+                  label: 'Reject proposal',
+                  icon: X,
+                  tone: 'danger' as const,
+                  onSelect: () => setRejecting(true),
+                },
+              ]),
+          { id: 'ignore', label: 'Ignore thread', icon: Ban, onSelect: () => threadAct('ignore') },
+          {
+            id: 'close',
+            label: 'Mark done',
+            icon: CircleCheck,
+            onSelect: () => threadAct('close'),
+          },
+          ...(onOpen
+            ? [{ id: 'open', label: 'Open thread', icon: ExternalLink, onSelect: onOpen }]
+            : []),
+          ...(onSkip
+            ? [{ id: 'skip', label: 'Skip for now', icon: SkipForward, onSelect: onSkip }]
+            : []),
+        ];
     void band;
 
     return (
@@ -887,23 +940,25 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
               <Key>C</Key>
             </Button>
           ) : null}
-          <ActionMenu
-            label="Other actions"
-            actions={menu}
-            trigger={
-              <Button variant="ghost" disabled={!!pending} aria-label="Other actions">
-                <span className="inline-flex items-center gap-1">
-                  <span className={narrow ? 'hidden' : 'max-sm:hidden'}>Other</span>
-                  <Icon
-                    icon={ChevronDown}
-                    size={15}
-                    className={narrow ? 'hidden' : 'max-sm:hidden'}
-                  />
-                  <Icon icon={MoreHorizontal} size={18} className={narrow ? '' : 'sm:hidden'} />
-                </span>
-              </Button>
-            }
-          />
+          {menu.length ? (
+            <ActionMenu
+              label="Other actions"
+              actions={menu}
+              trigger={
+                <Button variant="ghost" disabled={!!pending} aria-label="Other actions">
+                  <span className="inline-flex items-center gap-1">
+                    <span className={narrow ? 'hidden' : 'max-sm:hidden'}>Other</span>
+                    <Icon
+                      icon={ChevronDown}
+                      size={15}
+                      className={narrow ? 'hidden' : 'max-sm:hidden'}
+                    />
+                    <Icon icon={MoreHorizontal} size={18} className={narrow ? '' : 'sm:hidden'} />
+                  </span>
+                </Button>
+              }
+            />
+          ) : null}
           {onSkip ? (
             <Button
               variant="ghost"

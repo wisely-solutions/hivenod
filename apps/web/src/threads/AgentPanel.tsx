@@ -5,7 +5,7 @@
  * decided, and the related subjects. On a phone it is a bottom sheet: collapsed it shows the
  * proposal and Approve; its handle opens the rest.
  */
-import type { InboxEvent, InboxMessage, InboxOutcome, InboxThread } from '@hive/shared';
+import type { InboxEvent, InboxMessage, InboxOutcome, InboxPlan, InboxThread } from '@hive/shared';
 import { Bot, Check, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
 import { forwardRef, useState, type ReactNode } from 'react';
 import type { Row } from '../lib/live';
@@ -15,6 +15,8 @@ import { Icon } from '../ui/icon';
 import { ProposalPanel, QuestionPanel, type DecisionCardHandle } from '../today/DecisionCard';
 import { ConfidenceMeter } from '../today/parts';
 import { OutcomeCard } from './OutcomeCard';
+import { PlanPanel } from './PlanPanel';
+import { planInputOf, planLive, planWaits } from './plan';
 import { RelatedSubjects } from './RelatedSubjects';
 
 export interface AgentPanelProps {
@@ -23,6 +25,9 @@ export interface AgentPanelProps {
   thread: Row<InboxThread>;
   proposals: Row<InboxOutcome>[];
   decided: Row<InboxOutcome>[];
+  /** The thread's plans, newest first (item qwFAWxZM5xkcE7PPjAzi), and all its outcomes. */
+  plans?: Row<InboxPlan>[];
+  outcomes?: Row<InboxOutcome>[];
   notes: Array<{ id: string; event: InboxEvent }>;
   messages: InboxMessage[];
   now: number;
@@ -56,6 +61,11 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
   function AgentPanel(props, ref) {
     const { wid, uid, thread, proposals, decided, notes, messages, now, busy, agentName } = props;
     const { onDone, sheet } = props;
+    const plans = props.plans ?? [];
+    const allOutcomes = props.outcomes ?? [];
+    const livePlans = plans.filter((p) => planLive(p.data.state));
+    const pastPlans = plans.filter((p) => !planLive(p.data.state));
+    const planWaiting = livePlans.some((p) => planWaits(planInputOf(p, allOutcomes)));
     const t = thread.data;
     const [open, setOpen] = useState(false);
     const [notesOpen, setNotesOpen] = useState(false);
@@ -189,6 +199,23 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
       </Block>
     ) : null;
 
+    const planBlock = (list: Row<InboxPlan>[]) =>
+      list.map((p) => (
+        <div key={p.id} className="border-t border-line first:border-t-0">
+          <PlanPanel
+            wid={wid}
+            thread={thread}
+            plan={p}
+            outcomes={allOutcomes}
+            sender={sender}
+            now={now}
+            busy={busy}
+            agentName={agentName}
+            sheet={sheet}
+          />
+        </div>
+      ));
+
     const question = asks ? (
       <Block title="Agent asks" label="Agent asks">
         <div className="-mt-3">
@@ -226,7 +253,7 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
 
     // A bottom sheet only while there is something to decide; otherwise the panel follows the
     // conversation on the page.
-    if (!sheet || (!shown && !asks))
+    if (!sheet || (!shown && !asks && !planWaiting))
       return (
         <aside
           aria-label="Agent panel"
@@ -238,9 +265,15 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
         >
           {head}
           <div className="mt-3">
+            {livePlans.length ? (
+              <div className="border-b border-line">{planBlock(livePlans)}</div>
+            ) : null}
             {read}
             {proposal}
             {question}
+            {pastPlans.length ? (
+              <div className="border-t border-line">{planBlock(pastPlans)}</div>
+            ) : null}
             {outcomesAndRelated}
           </div>
         </aside>
@@ -271,6 +304,7 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
         </button>
         <div className="min-h-0 overflow-y-auto pb-2">
           {open ? head : null}
+          {planBlock(livePlans)}
           {proposal}
           {question}
           {open ? (
