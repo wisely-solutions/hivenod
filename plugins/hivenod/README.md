@@ -9,6 +9,11 @@ person's notes and answers on the current item and Stop work. All the Hivenod to
 
 1. Install the CLI (one binary, no Node): `curl -fsSL https://hivenod.com/install.sh | sh`
    (Windows, PowerShell: `irm https://hivenod.com/install.ps1 | iex`). `hivenod update` updates it.
+   Keep it current: a CLI older than an event kind silently misses those events (for example a
+   person's request to revise a proposal). A running session writes its version to the agent
+   (shown on the agent's page, with "Update available" when a newer one is published) and tells you
+   once a day, as an info event, when a newer hivenod exists: run `hivenod update`, then restart
+   the session. `HIVENOD_NO_UPDATE_CHECK=1` turns the daily check off.
 2. Pair this machine as an agent: `hivenod pair`, then confirm the code in Hivenod (Agents).
    The token is saved in `~/.hivenod/agent.json` (or set `HIVENOD_TOKEN`); it never enters the
    session.

@@ -8,6 +8,7 @@ import {
   tokenTotals,
   type Decision,
   type Run,
+  isOlder,
 } from '@hive/shared';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import { collection, collectionGroup, orderBy, query, Timestamp, where } from 'firebase/firestore';
@@ -17,6 +18,7 @@ import { AgentSettings, PausedBanner } from '../agents/AgentSettings';
 import { RemoveAgentDialog } from '../agents/RemoveAgentDialog';
 import { RenameAgentDialog } from '../agents/RenameAgentDialog';
 import { agentStatus, colorIndex, presenceText, scopeText } from '../agents/logic';
+import { useLatestCli } from '../agents/latestCli';
 import { useReady } from '../auth/context';
 import { db } from '../lib/db';
 import { useLiveCollection, useLiveDoc, type Row } from '../lib/live';
@@ -203,6 +205,7 @@ function Profile({
   const projectById = new Map(projects.map((p) => [p.id, p.data] as const));
   const pausedShown = Boolean(agent.data.pausedAt) && !live;
   const [win, setWin] = useState<WindowId>('today');
+  const latestCli = useLatestCli();
 
   return (
     <>
@@ -284,6 +287,20 @@ function Profile({
             )}
           </p>
           <p className="text-13 text-text-2">{scopeText(agent.data, projects)}</p>
+          {agent.data.cliVersion && status.kind !== 'revoked' ? (
+            <p className="text-13 text-text-2" data-testid="cli-version">
+              Hivenod CLI {agent.data.cliVersion}
+              {isOlder(agent.data.cliVersion, latestCli) ? (
+                <>
+                  {' · '}
+                  <span className="font-medium text-gate-text" data-update-available="">
+                    Update available: {agent.data.cliVersion} → {latestCli}
+                  </span>{' '}
+                  (run <code>hivenod update</code>, then restart the session)
+                </>
+              ) : null}
+            </p>
+          ) : null}
         </div>
         {isAdmin && status.kind === 'revoked' ? (
           <Button variant="sendback" className="ml-auto shrink-0" onClick={() => setRemoving(true)}>

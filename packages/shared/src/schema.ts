@@ -301,6 +301,8 @@ export const agentSchema = z.object({
   signedOutAt: timestamp.nullable().optional(),
   /** Host name of the terminal that last stamped presence (shown when a second terminal is refused). */
   seenHost: z.string().max(80).optional(),
+  /** `hivenod --version` of the CLI that last stamped presence (item N9EEn); absent on older CLIs. */
+  cliVersion: z.string().max(40).optional(),
   tokenHint: z.string().max(8),
   previousAgentUid: uid.nullable(),
   /** Optional (card zSzW3LXy); absent means the defaults. */

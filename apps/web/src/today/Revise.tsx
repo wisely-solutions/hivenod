@@ -3,9 +3,19 @@
  * an instruction of up to 500 characters, Ask agent), the "<agent> is revising" strip, the
  * version switcher ("‹ v2 of 3 ›") and the inline word diff between a version and the one before.
  */
-import { INBOX_LIMITS, REVISE_CHIP_LABELS, REVISE_CHIPS, type ReviseChip } from '@hive/shared';
-import { Check, ChevronLeft, ChevronRight, Loader2, Sparkles } from 'lucide-react';
+import {
+  agentSchema,
+  cliSupports,
+  INBOX_LIMITS,
+  minVersionFor,
+  paths,
+  REVISE_CHIP_LABELS,
+  REVISE_CHIPS,
+  type ReviseChip,
+} from '@hive/shared';
+import { Check, ChevronLeft, ChevronRight, Loader2, Sparkles, TriangleAlert } from 'lucide-react';
 import { useId } from 'react';
+import { useLiveDoc } from '../lib/live';
 import { Key } from '../components/DecisionBar';
 import type { DiffPart } from '../threads/logic';
 import { Button } from '../ui/button';
@@ -140,23 +150,47 @@ export function AskBox({
 export function RevisingStrip({
   agent,
   asked,
+  wid,
+  agentId,
 }: {
   agent: string;
   asked: { chips: readonly string[]; instruction: string | null };
+  /** With these, the strip checks that the agent's CLI is new enough to get the request. */
+  wid?: string;
+  agentId?: string;
 }) {
   const what = askedText(asked);
+  const doc = useLiveDoc(wid && agentId ? paths.agent(wid, agentId) : null, agentSchema);
+  const have = doc.state === 'ready' ? doc.data?.cliVersion : undefined;
+  // A CLI that reports no version may predate reporting: only a reported old version is certain.
+  const old = doc.state === 'ready' && doc.data && cliSupports('revise', have) === 'old';
   return (
-    <p
-      data-revising=""
-      role="status"
-      className="mt-3 flex items-start gap-2 rounded-btn border border-dashed border-agent/50 bg-surface px-3 py-2 text-13 text-agent [overflow-wrap:anywhere]"
-    >
-      <Icon icon={Loader2} size={15} className="mt-0.5 shrink-0 motion-safe:animate-spin" />
-      <span className="min-w-0">
-        <span className="font-semibold">{agent} is revising</span>
-        {what ? <span> · {what}</span> : null}
-      </span>
-    </p>
+    <div className="mt-3">
+      <p
+        data-revising=""
+        role="status"
+        className="flex items-start gap-2 rounded-btn border border-dashed border-agent/50 bg-surface px-3 py-2 text-13 text-agent [overflow-wrap:anywhere]"
+      >
+        <Icon icon={Loader2} size={15} className="mt-0.5 shrink-0 motion-safe:animate-spin" />
+        <span className="min-w-0">
+          <span className="font-semibold">{agent} is revising</span>
+          {what ? <span> · {what}</span> : null}
+        </span>
+      </p>
+      {old ? (
+        <p
+          data-cli-old=""
+          className="mt-2 flex items-start gap-2 rounded-btn border border-gate bg-gate-bg px-3 py-2 text-13 text-gate-text [overflow-wrap:anywhere]"
+        >
+          <Icon icon={TriangleAlert} size={15} className="mt-0.5 shrink-0" />
+          <span className="min-w-0">
+            {agent} needs a Hivenod update to do this (it runs {have}; this needs{' '}
+            {minVersionFor('revise')}). Ask its owner to run <code>hivenod update</code> and restart
+            the session, or Cancel the request.
+          </span>
+        </p>
+      ) : null}
+    </div>
   );
 }
 
