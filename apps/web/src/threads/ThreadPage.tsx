@@ -272,7 +272,7 @@ export function ThreadPage() {
         <div className="min-w-0 max-lg:pb-[45dvh]">
           <header>
             <div className="flex items-start gap-2">
-              <h1 className="min-w-0 flex-1 text-24 font-semibold leading-tight text-ink [overflow-wrap:anywhere]">
+              <h1 className="min-w-0 flex-1 text-20 font-semibold leading-tight text-ink [overflow-wrap:anywhere] sm:text-24">
                 {t.title || 'Untitled thread'}
               </h1>
               <ActionMenu

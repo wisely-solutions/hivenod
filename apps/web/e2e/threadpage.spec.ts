@@ -119,6 +119,10 @@ test.describe('desktop 1440', () => {
       await expect(page.locator('[data-decision-card]')).toBeVisible({ timeout: 20_000 });
       await page.locator('body').click({ position: { x: 5, y: 5 } });
       await page.keyboard.press('j');
+      await expect(page.locator('[data-decision-card]')).toHaveAttribute(
+        'aria-label',
+        /Move the payments review/,
+      );
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(
         new RegExp(`/inbox/${s.wid}/t/${s.threads.review}\\?from=today`),

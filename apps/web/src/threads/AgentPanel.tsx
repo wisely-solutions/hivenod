@@ -182,6 +182,7 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
             onDone={onDone}
             after={effect}
             compact={collapsed}
+            narrow
             onShown={setShownId}
           />
         </div>

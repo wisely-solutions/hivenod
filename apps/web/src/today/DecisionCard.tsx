@@ -244,6 +244,8 @@ export interface ProposalPanelProps {
   after?: (shown: Row<InboxOutcome>) => ReactNode;
   /** Phone bottom sheet, collapsed: no reason, no slot strip. */
   compact?: boolean;
+  /** A narrow column (the thread page's panel): Other is an icon. */
+  narrow?: boolean;
   /** Which proposal is on show (the panel's checks and confidence follow it). */
   onShown?: (id: string) => void;
 }
@@ -255,7 +257,7 @@ export interface ProposalPanelProps {
 export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
   function ProposalPanel(props, ref) {
     const { wid, thread, proposals, now, busy, agentName, onSkip, onDone, onOpen, sender } = props;
-    const { after, compact, onShown } = props;
+    const { after, compact, onShown, narrow } = props;
     const { session, actionContext, run } = useReady();
     const toast = useToast();
     const t = thread.data;
@@ -589,9 +591,13 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
             trigger={
               <Button variant="ghost" disabled={!!pending} aria-label="Other actions">
                 <span className="inline-flex items-center gap-1">
-                  <span className="max-sm:hidden">Other</span>
-                  <Icon icon={ChevronDown} size={15} className="max-sm:hidden" />
-                  <Icon icon={MoreHorizontal} size={18} className="sm:hidden" />
+                  <span className={narrow ? 'hidden' : 'max-sm:hidden'}>Other</span>
+                  <Icon
+                    icon={ChevronDown}
+                    size={15}
+                    className={narrow ? 'hidden' : 'max-sm:hidden'}
+                  />
+                  <Icon icon={MoreHorizontal} size={18} className={narrow ? '' : 'sm:hidden'} />
                 </span>
               </Button>
             }
@@ -700,7 +706,7 @@ function SlotStrip({
                   : 'border-line bg-surface text-ink hov:bg-canvas',
               )}
             >
-              <span className="text-14 font-semibold tabular-nums">
+              <span className="whitespace-nowrap text-13 font-semibold tabular-nums sm:text-14">
                 {hhmm(s.start)}–{hhmm(s.end)}
               </span>
               <span className="text-12 text-text-2">
