@@ -95,6 +95,7 @@ export const INBOX_EVENT_TYPES = [
   'subject.merged',
   'subject.split',
   'subject.area',
+  'subject.label',
   // related subjects: an agent proposes, the member decides
   'relation.proposed',
   'relation.created',
@@ -120,6 +121,9 @@ export const INBOX_LIMITS = {
   attachmentName: 200,
   subjectName: 120,
   area: 60,
+  /** A subject label (Sales, Support, ...): characters each, and how many a workspace lists. */
+  label: 30,
+  labels: 12,
   title: 200,
   note: 8000,
   question: 4000,
@@ -148,12 +152,35 @@ export const inboxSubjectSchema = z.object({
   name: z.string().min(1).max(INBOX_LIMITS.subjectName),
   /** Optional area or tag (a client, a product, "admin"): the Inbox groups subjects by it. */
   area: z.string().min(1).max(INBOX_LIMITS.area).nullable().optional(),
+  /** Optional label (the kind of request) from the workspace's list; null: none (item YaOErIjeIFG8Y3EvZuIp). */
+  label: z.string().min(1).max(INBOX_LIMITS.label).nullable().optional(),
+  /** true: the agent's guess, not confirmed by the member yet. */
+  labelSuggested: z.boolean().optional(),
+  labelBy: z.enum(['agent', 'member']).optional(),
   createdBy: by,
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
 });
 export type InboxSubject = z.infer<typeof inboxSubjectSchema>;
+
+/** The labels a workspace offers until an admin edits the list (mirrored in Go and the rules). */
+export const DEFAULT_INBOX_LABELS: readonly string[] = [
+  'Sales',
+  'Support',
+  'Billing',
+  'Partnership',
+  'Internal',
+  'Other',
+];
+
+/** workspaces/{wid}/inboxConfig/labels: absent means the defaults. Written by admins only. */
+export const inboxLabelsSchema = z.object({
+  labels: z.array(z.string().min(1).max(INBOX_LIMITS.label)).min(1).max(INBOX_LIMITS.labels),
+  updatedBy: z.string(),
+  updatedAt: timestamp,
+});
+export type InboxLabels = z.infer<typeof inboxLabelsSchema>;
 
 export const inboxThreadSchema = z.object({
   memberUid: z.string(),
@@ -266,6 +293,8 @@ export const inboxPaths = {
   outcome: (w: string, o: string) => `workspaces/${w}/inboxOutcomes/${o}`,
   event: (w: string, e: string) => `workspaces/${w}/inboxEvents/${e}`,
   relation: (w: string, r: string) => `workspaces/${w}/inboxRelations/${r}`,
+  /** The workspace's label list (absent: the defaults). */
+  labels: (w: string) => `workspaces/${w}/inboxConfig/labels`,
   /** Tombstone event id of a subject deleted by a merge. */
   deleteEventId: (subjectId: string) => `del-subject-${subjectId}`,
 } as const;
@@ -359,6 +388,29 @@ export function cleanArea(area: string): string | null {
   const n = area.trim().replace(/\s+/g, ' ');
   need(n.length <= INBOX_LIMITS.area, tooLong('An area', INBOX_LIMITS.area));
   return n === '' ? null : n;
+}
+/** A label from input: collapsed spaces, 1 to 30 characters. */
+export function cleanLabel(label: string): string {
+  const n = label.trim().replace(/\s+/g, ' ');
+  need(n.length > 0, 'A label needs a name.');
+  need(n.length <= INBOX_LIMITS.label, tooLong('A label', INBOX_LIMITS.label));
+  return n;
+}
+/** The label list from input: 1 to 12 labels, unique ignoring case. */
+export function cleanLabelList(labels: readonly string[]): string[] {
+  need(Array.isArray(labels), 'The labels are a list of texts.');
+  need(
+    labels.length >= 1 && labels.length <= INBOX_LIMITS.labels,
+    `Give 1 to ${INBOX_LIMITS.labels} labels.`,
+  );
+  const out = labels.map((l) => cleanLabel(String(l)));
+  need(new Set(out.map((l) => l.toLowerCase())).size === out.length, 'Each label is listed once.');
+  return out;
+}
+/** The listed spelling of a label (matched ignoring case), or null when it is not listed. */
+export function matchLabel(label: string, list: readonly string[]): string | null {
+  const w = label.trim().replace(/\s+/g, ' ').toLowerCase();
+  return list.find((l) => l.toLowerCase() === w) ?? null;
 }
 /** A thread's title from its first message: the first non-empty line, at most 120 characters. */
 export function titleFrom(text: string): string {
@@ -563,8 +615,15 @@ export function assignSubject(
     newName?: string;
     /** Sets the subject's area (new or existing); empty clears it. Left out: unchanged. */
     area?: string;
+    /**
+     * The agent's suggested label, from `labels` (the workspace's list). Applied to a new subject,
+     * or to one that has none yet; a label the member confirmed is never touched.
+     */
+    label?: string;
+    labels?: readonly string[];
+    existing?: Pick<InboxSubject, 'label' | 'labelBy'> | null;
   },
-): ActionPlan & { subjectId: string; created: boolean } {
+): ActionPlan & { subjectId: string; created: boolean; labelApplied: boolean } {
   requireAgent(ctx);
   const t = input.thread;
   need(
@@ -575,6 +634,14 @@ export function assignSubject(
   const name = created ? cleanSubjectName(input.newName!) : null;
   const area = input.area === undefined ? undefined : cleanArea(input.area);
   const subjectId = input.subjectId ?? nid(ctx);
+  let label: string | null = null;
+  if (input.label !== undefined) {
+    const list = input.labels ?? DEFAULT_INBOX_LABELS;
+    label = matchLabel(input.label, list);
+    need(label !== null, `Unknown label. Use one of: ${list.join(', ')}.`);
+    if (!created && input.existing?.label) label = null;
+  }
+  const labelFields = label ? { label, labelSuggested: true, labelBy: 'agent' as const } : null;
   const p = inboxPlan(
     ctx,
     'thread.filed',
@@ -583,6 +650,7 @@ export function assignSubject(
       ...(created ? { name, created: true } : { created: false }),
       from: t.subjectId,
       ...(area !== undefined ? { area } : {}),
+      ...(label ? { label } : {}),
     },
     (eventId) => [
       ...(created
@@ -594,6 +662,7 @@ export function assignSubject(
                 memberUid: t.memberUid,
                 name,
                 ...(area ? { area } : {}),
+                ...(labelFields ?? {}),
                 createdBy: { type: ctx.actor.type, id: ctx.actor.id },
                 createdAt: SERVER_TIME,
                 updatedAt: SERVER_TIME,
@@ -601,13 +670,19 @@ export function assignSubject(
               },
             },
           ]
-        : area !== undefined
-          ? [upd(inboxPaths.subject(ctx.workspaceId, subjectId), { area }, eventId)]
+        : area !== undefined || labelFields
+          ? [
+              upd(
+                inboxPaths.subject(ctx.workspaceId, subjectId),
+                { ...(area !== undefined ? { area } : {}), ...(labelFields ?? {}) },
+                eventId,
+              ),
+            ]
           : []),
       upd(inboxPaths.thread(ctx.workspaceId, input.threadId), { subjectId }, eventId),
     ],
   );
-  return { ...p, subjectId, created };
+  return { ...p, subjectId, created, labelApplied: label !== null };
 }
 
 /** An investigation note on the thread's timeline (inbox_note). Changes nothing else. */
@@ -1220,6 +1295,60 @@ export function setSubjectArea(
     { area },
     (eventId) => [upd(inboxPaths.subject(ctx.workspaceId, input.subjectId), { area }, eventId)],
   );
+}
+
+/**
+ * Confirms or changes the label of one of the member's subjects (empty: no label). The label
+ * must be in the workspace's list, unless it is the one the subject already has.
+ */
+export function setSubjectLabel(
+  ctx: ActionContext,
+  input: {
+    subjectId: string;
+    subject: Pick<InboxSubject, 'memberUid' | 'name' | 'label'>;
+    label: string;
+    labels?: readonly string[];
+  },
+): ActionPlan {
+  owner(ctx, input.subject.memberUid);
+  const list = input.labels ?? DEFAULT_INBOX_LABELS;
+  let label: string | null = null;
+  if (input.label.trim() !== '') {
+    label = input.subject.label === input.label ? input.label : matchLabel(input.label, list);
+    need(label !== null, `Unknown label. Use one of: ${list.join(', ')}.`);
+  }
+  return inboxPlan(
+    ctx,
+    'subject.label',
+    { memberUid: ctx.actor.id, subjectId: input.subjectId },
+    { label, from: input.subject.label ?? null },
+    (eventId) => [
+      upd(
+        inboxPaths.subject(ctx.workspaceId, input.subjectId),
+        { label, labelSuggested: false, labelBy: 'member' },
+        eventId,
+      ),
+    ],
+  );
+}
+
+/** Sets the workspace's label list (admins only: the rules check the role). */
+export function setInboxLabels(
+  ctx: ActionContext,
+  input: { labels: readonly string[] },
+): ActionPlan {
+  requireHuman(ctx);
+  const labels = cleanLabelList(input.labels);
+  return {
+    eventId: '',
+    ops: [
+      {
+        kind: 'set',
+        path: inboxPaths.labels(ctx.workspaceId),
+        data: { labels, updatedBy: ctx.actor.id, updatedAt: SERVER_TIME },
+      },
+    ],
+  };
 }
 
 /** At most this many threads move in one merge or split (one batch). */

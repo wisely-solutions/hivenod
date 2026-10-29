@@ -26,6 +26,8 @@ import {
   rejectOutcome,
   renameSubject,
   setSubjectArea,
+  setSubjectLabel,
+  setInboxLabels,
   restoreThread,
   retitleThread,
   splitSubject,
@@ -1054,6 +1056,237 @@ describe('subjects: rename, merge, split, move (the member)', () => {
           }),
         ),
       );
+  });
+
+  it('labels: an agent suggests one while filing; the member confirms or changes; the admin keeps the list', async () => {
+    const a = await started();
+    const f = assignSubject(a.ctx, {
+      threadId: 'itr1',
+      thread: await thread(),
+      newName: 'Acme',
+      label: 'sales',
+    });
+    await ok(a.run(f));
+    const sid = f.subjectId;
+    expect(await snap(S(sid))).toMatchObject({
+      label: 'Sales',
+      labelSuggested: true,
+      labelBy: 'agent',
+    });
+    let n = 0;
+    const edit = (who: As, data: Record<string, unknown>, type: string, evSubject = sid) =>
+      who.run(raw(who, S(sid), data, type, {}, 'alice', 'itr1', evSubject, `ev-label-${++n}`));
+    const guess = { label: 'Support', labelSuggested: true, labelBy: 'agent' };
+    // The agent may change its own guess in a filing; nothing else.
+    await ok(edit(a, guess, 'thread.filed'));
+    await denied(edit(a, guess, 'thread.note')); // not a filing
+    await denied(edit(a, { ...guess, labelSuggested: false }, 'thread.filed')); // cannot confirm
+    await denied(edit(a, { ...guess, labelBy: 'member' }, 'thread.filed'));
+    await denied(edit(a, { ...guess, label: null as never }, 'thread.filed')); // cannot clear
+    await denied(edit(a, { ...guess, label: 'x'.repeat(31) }, 'thread.filed'));
+    await denied(edit(a, { ...guess, label: '' }, 'thread.filed'));
+    // The member confirms (same value) and changes; the value is on the list.
+    const alice = as('alice');
+    const mine = { memberUid: 'alice', name: 'Acme', label: 'Support' };
+    await ok(
+      alice.run(setSubjectLabel(alice.ctx, { subjectId: sid, subject: mine, label: 'Support' })),
+    );
+    expect(await snap(S(sid))).toMatchObject({
+      label: 'Support',
+      labelSuggested: false,
+      labelBy: 'member',
+    });
+    await ok(
+      alice.run(setSubjectLabel(alice.ctx, { subjectId: sid, subject: mine, label: 'Billing' })),
+    );
+    const raws = (data: Record<string, unknown>, type = 'subject.label') =>
+      alice.run(raw(alice, S(sid), data, type, {}, 'alice', null, sid, `ev-label-${++n}`));
+    const member = { labelSuggested: false, labelBy: 'member' };
+    await denied(raws({ ...member, label: 'Nonsense' })); // not on the list
+    await denied(raws({ ...member, label: 'x'.repeat(31) }));
+    await denied(raws({ label: 'Sales', labelSuggested: true, labelBy: 'member' })); // still "suggested"
+    await denied(raws({ label: 'Sales', labelSuggested: false, labelBy: 'agent' }));
+    await denied(raws({ ...member, label: 'Sales' }, 'subject.renamed')); // wrong event
+    await ok(raws({ ...member, label: 'Sales' }));
+    // A label the member decided is never overwritten by the agent.
+    await denied(edit(a, guess, 'thread.filed'));
+    const g = assignSubject(a.ctx, {
+      threadId: 'itr1',
+      thread: await thread(),
+      subjectId: sid,
+      label: 'Other',
+      existing: { label: null },
+    });
+    await denied(a.run(g));
+    // The member can clear it.
+    await ok(
+      alice.run(
+        setSubjectLabel(alice.ctx, {
+          subjectId: sid,
+          subject: { ...mine, label: 'Sales' },
+          label: '',
+        }),
+      ),
+    );
+    expect((await snap(S(sid)))!.label).toBeNull();
+    // No one else sets one: not another member, not an admin who is not the person.
+    for (const uid of ['bob', 'owner'])
+      await denied(
+        as(uid).run(
+          setSubjectLabel(as(uid).ctx, {
+            subjectId: sid,
+            subject: { memberUid: uid, name: 'x' },
+            label: 'Sales',
+          }),
+        ),
+      );
+    // A new subject may carry only an agent's suggestion.
+    const a2 = as(AGENTS.a);
+    const bad = (data: Record<string, unknown>) => {
+      const id = `bad-${++n}`;
+      return a2.run([
+        {
+          kind: 'set',
+          path: S(id),
+          data: {
+            memberUid: 'alice',
+            name: 'X',
+            createdBy: { type: 'agent', id: AGENTS.a },
+            createdAt: SERVER_TIME,
+            updatedAt: SERVER_TIME,
+            lastEventId: `ev-new-${n}`,
+            ...data,
+          },
+        },
+        {
+          kind: 'set',
+          path: inboxPaths.event(W, `ev-new-${n}`),
+          data: {
+            actor: { type: 'agent', id: AGENTS.a, name: 'Agent' },
+            memberUid: 'alice',
+            threadId: 'itr1',
+            subjectId: id,
+            type: 'thread.filed',
+            data: {},
+            at: SERVER_TIME,
+          },
+        },
+      ]);
+    };
+    await ok(bad({ label: 'Sales', labelSuggested: true, labelBy: 'agent' }));
+    await denied(bad({ label: 'Sales', labelSuggested: false, labelBy: 'agent' }));
+    await denied(bad({ label: 'Sales', labelSuggested: true, labelBy: 'member' }));
+    await denied(bad({ label: 'Sales' }));
+    // A person's new subject (split, create) carries no label.
+    const alice2 = as('alice');
+    const human = (data: Record<string, unknown>) => {
+      const id = `hum-${++n}`;
+      return alice2.run([
+        {
+          kind: 'set',
+          path: S(id),
+          data: {
+            memberUid: 'alice',
+            name: 'H',
+            createdBy: { type: 'human', id: 'alice' },
+            createdAt: SERVER_TIME,
+            updatedAt: SERVER_TIME,
+            lastEventId: `ev-hum-${n}`,
+            ...data,
+          },
+        },
+        {
+          kind: 'set',
+          path: inboxPaths.event(W, `ev-hum-${n}`),
+          data: {
+            actor: { type: 'human', id: 'alice', name: 'Alice' },
+            memberUid: 'alice',
+            threadId: null,
+            subjectId: id,
+            type: 'subject.created',
+            data: {},
+            at: SERVER_TIME,
+          },
+        },
+      ]);
+    };
+    await ok(human({}));
+    await denied(human({ label: 'Sales', labelSuggested: false, labelBy: 'member' }));
+  });
+
+  it('labels: the list is written by admins only, read by members and agents', async () => {
+    const owner = as('owner');
+    await ok(owner.run(setInboxLabels(owner.ctx, { labels: ['Ops', 'Sales'] })));
+    expect(await snap(inboxPaths.labels(W))).toMatchObject({ labels: ['Ops', 'Sales'] });
+    for (const uid of ['alice', 'bob'])
+      await denied(as(uid).run(setInboxLabels(as(uid).ctx, { labels: ['Mine'] })));
+    const a = as(AGENTS.a);
+    await denied(
+      a.run([
+        {
+          kind: 'set',
+          path: inboxPaths.labels(W),
+          data: { labels: ['Evil'], updatedBy: AGENTS.a, updatedAt: SERVER_TIME },
+        },
+      ]),
+    );
+    // Bounded: 13 labels, none, forged author, extra keys, another document.
+    const raw1 = (data: Record<string, unknown>, path = inboxPaths.labels(W)) =>
+      owner.run([
+        {
+          kind: 'set',
+          path,
+          data: { updatedBy: 'owner', updatedAt: SERVER_TIME, labels: ['A'], ...data },
+        },
+      ]);
+    await ok(raw1({}));
+    await denied(raw1({ labels: Array.from({ length: 13 }, (_, i) => `L${i}`) }));
+    await denied(raw1({ labels: [] }));
+    await denied(raw1({ labels: 'Sales' }));
+    await denied(raw1({ updatedBy: 'alice' }));
+    await denied(raw1({ extra: 1 }));
+    await denied(raw1({}, `workspaces/${W}/inboxConfig/other`));
+    // Reads: a member and an agent can; an outsider cannot.
+    await ok(getDoc(doc(as('alice').db, inboxPaths.labels(W))));
+    await ok(getDoc(doc(a.db, inboxPaths.labels(W))));
+    await denied(getDoc(doc(as('eve').db, inboxPaths.labels(W))));
+    // The member's choice follows the admin's list, and the agent's filing too.
+    const s = await started();
+    const f = assignSubject(s.ctx, {
+      threadId: 'itr1',
+      thread: await thread(),
+      newName: 'Z',
+      label: 'Ops',
+      labels: ['Ops'],
+    });
+    await ok(s.run(f));
+    const alice = as('alice');
+    const mine = { memberUid: 'alice', name: 'Z' };
+    await denied(
+      alice.run(
+        raw(
+          alice,
+          S(f.subjectId),
+          { label: 'Support', labelSuggested: false, labelBy: 'member' },
+          'subject.label',
+          {},
+          'alice',
+          null,
+          f.subjectId,
+          'ev-cfg-1',
+        ),
+      ),
+    );
+    await ok(
+      alice.run(
+        setSubjectLabel(alice.ctx, {
+          subjectId: f.subjectId,
+          subject: mine,
+          label: 'Ops',
+          labels: ['Ops'],
+        }),
+      ),
+    );
   });
 
   it('merge moves the threads and deletes the emptied subject; split and move', async () => {
