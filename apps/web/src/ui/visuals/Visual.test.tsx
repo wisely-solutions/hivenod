@@ -39,7 +39,10 @@ describe('charts', () => {
     expect(rows).toHaveLength(7);
     expect(within(rows[6]!).getByRole('rowheader')).toHaveTextContent('175');
     expect(within(rows[6]!).getByRole('cell')).toHaveTextContent('10.8 min');
-    expect(screen.getByRole('button', { name: 'Hide data' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Hide data' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
   });
   it('lines break at a gap; stacked bars stack; legends name series', () => {
     const line = v({
@@ -118,7 +121,9 @@ describe('diagrams', () => {
     expect(img).toHaveTextContent('Build');
     expect(img).toHaveTextContent('now');
     fireEvent.click(screen.getByRole('button', { name: 'Show data' }));
-    expect(screen.getAllByRole('listitem').map((l) => l.textContent)).toContain('Ship it? (person, now)');
+    expect(screen.getAllByRole('listitem').map((l) => l.textContent)).toContain(
+      'Ship it? (person, now)',
+    );
   });
   it('before/after marks removed and added lines by sign and words, not colour alone', () => {
     const { container } = render(
@@ -132,7 +137,9 @@ describe('diagrams', () => {
         })}
       />,
     );
-    expect(container.querySelector('[data-changed="before"]')).toHaveTextContent('Removed: Agent panel');
+    expect(container.querySelector('[data-changed="before"]')).toHaveTextContent(
+      'Removed: Agent panel',
+    );
     expect(container.querySelector('[data-changed="after"]')).toHaveTextContent('Added: Top card');
   });
   it('a timeline in date order', () => {
@@ -158,8 +165,12 @@ describe('diagrams', () => {
 describe('safety', () => {
   it('labels with tags show as plain text, never as markup', () => {
     // The tool refuses tags in titles; the page must still never render one.
-    const raw = { ...bar, title: '<b>bold</b>', x: ['<script>x</script>', 'ok'] };
-    raw.series = [{ name: '<img src=x>', values: [1, 2] }];
+    const raw = {
+      ...bar,
+      title: '<b>bold</b>',
+      x: ['<script>x</script>', 'ok'],
+      series: [{ name: '<img src=x>', values: [1, 2] }],
+    };
     const { container } = render(<VisualView v={raw as Visual} />);
     expect(container.querySelector('b')).toBeNull();
     expect(container.querySelector('script')).toBeNull();

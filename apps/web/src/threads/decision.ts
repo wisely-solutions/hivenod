@@ -42,7 +42,10 @@ export function parseVisual(v: unknown): ShownVisual {
  * visual is checked on its own (an unknown kind from a newer agent shows as "not shown").
  */
 export const looseSummarySchema = inboxSummarySchema.extend({
-  visuals: z.array(z.unknown()).max(SUMMARY_LIMITS.visuals).transform((l) => l.map(parseVisual)),
+  visuals: z
+    .array(z.unknown())
+    .max(SUMMARY_LIMITS.visuals)
+    .transform((l) => l.map(parseVisual)),
 });
 export type ShownSummary = z.infer<typeof looseSummarySchema>;
 
@@ -102,7 +105,8 @@ export function topState(i: TopInput): TopState {
   const { thread: t, plan, agent } = i;
   const v = plan?.view;
   if (v && (v.state === 'blocked' || plan.main?.kind === 'retry')) {
-    const n = plan.main?.kind === 'retry' ? plan.main.index + 1 : (v.current?.number ?? v.cursor + 1);
+    const n =
+      plan.main?.kind === 'retry' ? plan.main.index + 1 : (v.current?.number ?? v.cursor + 1);
     return {
       kind: 'blocked',
       tone: 'sendback',
@@ -144,7 +148,8 @@ export function topState(i: TopInput): TopState {
     };
   if (t.state === 'investigating')
     return { kind: 'working', tone: 'agent', kicker: `${agent} is working on it` };
-  if (t.state === 'waiting') return { kind: 'waiting', tone: 'neutral', kicker: waitingText(t.waiting) };
+  if (t.state === 'waiting')
+    return { kind: 'waiting', tone: 'neutral', kicker: waitingText(t.waiting) };
   if (t.state === 'ignored') return { kind: 'done', tone: 'neutral', kicker: 'Ignored' };
   if (v?.state === 'done' || t.state === 'done')
     return { kind: 'done', tone: 'approve', kicker: `Done · ${dayMonth(t.updatedAt)}` };
@@ -199,7 +204,10 @@ export function freshness(i: FreshnessInput): Freshness {
     kind,
     updated: i.summary ? `updated ${timeAgo(new Date(i.summary.at), i.now)}` : null,
     version: i.summary ? `v${i.summary.version}` : null,
-    stale: kind === 'stale' ? `May be out of date: changed since ${sinceText(i.updatedAt, i.now)}` : null,
+    stale:
+      kind === 'stale'
+        ? `May be out of date: changed since ${sinceText(i.updatedAt, i.now)}`
+        : null,
     why,
   };
 }
@@ -235,7 +243,8 @@ export function planFoldParts(v: PlanView): Array<{ text: string; tone: TopTone 
   const c = v.current;
   if (v.state === 'blocked') parts.push({ text: 'blocked', tone: 'sendback' });
   else if (v.waitingForYou) parts.push({ text: 'you', tone: 'gate' });
-  else if (c && (c.ui === 'running' || c.ui === 'approved')) parts.push({ text: 'running', tone: 'agent' });
+  else if (c && (c.ui === 'running' || c.ui === 'approved'))
+    parts.push({ text: 'running', tone: 'agent' });
   const next = c
     ? v.steps.filter((s) => s.index > c.index && s.ui !== 'done' && s.ui !== 'skipped').length
     : 0;
@@ -247,7 +256,12 @@ export function planFoldParts(v: PlanView): Array<{ text: string; tone: TopTone 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** Everything's fold label: "23 messages · 2 notes · 3 links · log". */
-export function everythingHint(c: { messages: number; notes: number; outcomes: number; links: number }) {
+export function everythingHint(c: {
+  messages: number;
+  notes: number;
+  outcomes: number;
+  links: number;
+}) {
   const parts = [count(c.messages, 'message')];
   if (c.notes) parts.push(count(c.notes, 'note'));
   if (c.outcomes) parts.push(count(c.outcomes, 'outcome'));

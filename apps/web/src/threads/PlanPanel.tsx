@@ -76,10 +76,12 @@ export interface PlanPanelProps {
   agentName: (id: string) => string;
   /** Phone: the panel is in the bottom sheet, with one main button at its foot. */
   sheet?: boolean;
+  /** The decision page's right rail (item OE8FmrTaIxFVGcaeGG3N): "Plan · Step 4 of 6" on top. */
+  rail?: boolean;
 }
 
 export function PlanPanel(props: PlanPanelProps) {
-  const { wid, thread, plan, outcomes, agentName, sheet } = props;
+  const { wid, thread, plan, outcomes, agentName, sheet, rail } = props;
   const pl = planInputOf(plan, outcomes);
   const view = planView(pl.plan, pl.outcomes);
   const live = planLive(plan.data.state);
@@ -339,10 +341,24 @@ export function PlanPanel(props: PlanPanelProps) {
       data-plan-state={plan.data.state}
       className="px-4 py-4 sm:px-5"
     >
-      <div className="flex items-start gap-2">
-        <h2 className="min-w-0 flex-1 text-15 font-semibold text-ink">
-          {plan.data.state === 'proposed' ? `${agent} proposes a plan` : `${agent}’s plan`}
+      {rail ? (
+        <h2
+          data-rail-head=""
+          className="mb-1 font-mono text-12 font-semibold uppercase tracking-[0.08em] text-text-2"
+        >
+          Plan · {view.progress}
         </h2>
+      ) : null}
+      <div className="flex items-start gap-2">
+        {rail ? (
+          <p className="min-w-0 flex-1 text-15 font-semibold text-ink">
+            {plan.data.state === 'proposed' ? `${agent} proposes a plan` : `${agent}’s plan`}
+          </p>
+        ) : (
+          <h2 className="min-w-0 flex-1 text-15 font-semibold text-ink">
+            {plan.data.state === 'proposed' ? `${agent} proposes a plan` : `${agent}’s plan`}
+          </h2>
+        )}
         {sheet ? (
           <span className="text-13 text-text-2">
             {view.through} of {view.total} done

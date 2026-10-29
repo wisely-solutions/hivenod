@@ -13,7 +13,12 @@ import {
   type TopInput,
 } from './decision';
 
-const ts = (ms: number) => ({ seconds: ms / 1000, nanoseconds: 0, toMillis: () => ms, toDate: () => new Date(ms) });
+const ts = (ms: number) => ({
+  seconds: ms / 1000,
+  nanoseconds: 0,
+  toMillis: () => ms,
+  toDate: () => new Date(ms),
+});
 const NOW = Date.UTC(2026, 9, 29, 14, 30);
 const MIN = 60_000;
 
@@ -22,7 +27,10 @@ function plan(states: string[], cursor: number, state = 'active', types?: string
   const outcomes = Object.fromEntries(
     states.map((s, i) => [
       `o${i}`,
-      { type: types?.[i] ?? (s === 'gate' ? 'approval' : 'reply'), state: s === 'gate' ? 'proposed' : s },
+      {
+        type: types?.[i] ?? (s === 'gate' ? 'approval' : 'reply'),
+        state: s === 'gate' ? 'proposed' : s,
+      },
     ]),
   );
   return planView(
@@ -44,7 +52,12 @@ describe('topState', () => {
     const view = plan(['done', 'done', 'done', 'gate', 'approved', 'gate'], 3);
     const s = topState(
       base({
-        plan: { view, main: { kind: 'step', index: 3, outcomeId: 'o3', gate: true }, label: 'Ship it?', error: null },
+        plan: {
+          view,
+          main: { kind: 'step', index: 3, outcomeId: 'o3', gate: true },
+          label: 'Ship it?',
+          error: null,
+        },
       }),
     );
     expect(s.kind).toBe('person');
@@ -53,7 +66,9 @@ describe('topState', () => {
   });
   it('a proposed plan asks for the whole plan', () => {
     const view = plan(['proposed', 'proposed'], 0, 'proposed');
-    const s = topState(base({ plan: { view, main: { kind: 'approvePlan' }, label: null, error: null } }));
+    const s = topState(
+      base({ plan: { view, main: { kind: 'approvePlan' }, label: null, error: null } }),
+    );
     expect(s.kicker).toBe('Your approval · plan of 2 steps');
   });
   it('a single proposal', () => {
@@ -78,7 +93,12 @@ describe('topState', () => {
     const s = topState(
       base({
         proposals: 1,
-        plan: { view, main: { kind: 'retry', index: 1 }, label: null, error: 'The live check failed: Today shows no top line' },
+        plan: {
+          view,
+          main: { kind: 'retry', index: 1 },
+          label: null,
+          error: 'The live check failed: Today shows no top line',
+        },
       }),
     );
     expect(s.kind).toBe('blocked');
@@ -93,29 +113,52 @@ describe('topState', () => {
       kicker: 'Hive is working · step 2 of 3',
     });
     expect(
-      topState(base({ thread: { state: 'investigating', question: null, waiting: null, updatedAt: NOW } }))
-        .kicker,
+      topState(
+        base({ thread: { state: 'investigating', question: null, waiting: null, updatedAt: NOW } }),
+      ).kicker,
     ).toBe('Hive is working on it');
   });
   it('waiting, done and ignored', () => {
     expect(
       topState(
-        base({ thread: { state: 'waiting', question: null, waiting: { on: 'them', until: null }, updatedAt: NOW } }),
+        base({
+          thread: {
+            state: 'waiting',
+            question: null,
+            waiting: { on: 'them', until: null },
+            updatedAt: NOW,
+          },
+        }),
       ),
     ).toMatchObject({ kind: 'waiting', kicker: 'Waiting on them', tone: 'neutral' });
     const done = topState(
-      base({ thread: { state: 'done', question: null, waiting: null, updatedAt: Date.UTC(2026, 9, 29, 9) } }),
+      base({
+        thread: {
+          state: 'done',
+          question: null,
+          waiting: null,
+          updatedAt: Date.UTC(2026, 9, 29, 9),
+        },
+      }),
     );
     expect(done).toMatchObject({ kind: 'done', tone: 'approve' });
     expect(done.kicker).toMatch(/^Done · 29 Oct$/);
     const pv = plan(['done', 'done'], 2, 'done');
-    expect(topState(base({ plan: { view: pv, main: null, label: null, error: null } })).kind).toBe('done');
+    expect(topState(base({ plan: { view: pv, main: null, label: null, error: null } })).kind).toBe(
+      'done',
+    );
     expect(
-      topState(base({ thread: { state: 'ignored', question: null, waiting: null, updatedAt: NOW } })).kicker,
+      topState(
+        base({ thread: { state: 'ignored', question: null, waiting: null, updatedAt: NOW } }),
+      ).kicker,
     ).toBe('Ignored');
   });
   it('nothing to decide: the thread state', () => {
-    expect(topState(base({ thread: { state: 'yourCall', question: null, waiting: null, updatedAt: NOW } }))).toMatchObject({
+    expect(
+      topState(
+        base({ thread: { state: 'yourCall', question: null, waiting: null, updatedAt: NOW } }),
+      ),
+    ).toMatchObject({
       kind: 'idle',
       kicker: 'Your call',
     });
@@ -125,8 +168,19 @@ describe('topState', () => {
 describe('freshness', () => {
   const agent = { name: 'Hive', online: true, lastSeen: NOW, cliVersion: '0.2.200' };
   it('fresh: when it was written and the version', () => {
-    const f = freshness({ summary: { version: 7, at: NOW - 3 * MIN }, updatedAt: NOW - 3 * MIN, now: NOW, agent });
-    expect(f).toMatchObject({ kind: 'fresh', updated: 'updated 3 min ago', version: 'v7', stale: null, why: null });
+    const f = freshness({
+      summary: { version: 7, at: NOW - 3 * MIN },
+      updatedAt: NOW - 3 * MIN,
+      now: NOW,
+      agent,
+    });
+    expect(f).toMatchObject({
+      kind: 'fresh',
+      updated: 'updated 3 min ago',
+      version: 'v7',
+      stale: null,
+      why: null,
+    });
   });
   it('stale: changed since, and why when the agent cannot write it', () => {
     const at = new Date(2026, 9, 29, 14, 2).getTime();
@@ -150,7 +204,12 @@ describe('freshness', () => {
     expect(f.kind).toBe('none');
     expect(f.why).toBe("Hive's CLI 0.2.188 can't write summaries: update to 0.2.191 or later");
     expect(
-      freshness({ summary: null, updatedAt: NOW, now: NOW, agent: { ...agent, online: false, lastSeen: null } }).why,
+      freshness({
+        summary: null,
+        updatedAt: NOW,
+        now: NOW,
+        agent: { ...agent, online: false, lastSeen: null },
+      }).why,
     ).toBe('Hive has not been online yet');
   });
   it('a day before: the day too', () => {

@@ -385,16 +385,19 @@ type NumberVisual = Extract<Visual, { kind: 'number' }>;
 function NumberView({ v }: { v: NumberVisual }) {
   const delta = v.delta;
   const good =
-    delta === null || delta === 0 || v.better === null
-      ? null
-      : (delta > 0) === (v.better === 'up');
+    delta === null || delta === 0 || v.better === null ? null : delta > 0 === (v.better === 'up');
   const trend = v.trend;
   let spark: ReactNode = null;
   if (trend && trend.length >= 2) {
     const w = 120;
     const h = 32;
     const d = chartDomain('line', [trend]);
-    const segs = lineSegments(trend, d.min === d.max ? { min: d.min - 1, max: d.max + 1 } : d, w, h);
+    const segs = lineSegments(
+      trend,
+      d.min === d.max ? { min: d.min - 1, max: d.max + 1 } : d,
+      w,
+      h,
+    );
     spark = (
       <svg aria-hidden width={w} height={h} className="block overflow-visible">
         {segs.map((seg, i) => (
@@ -413,7 +416,9 @@ function NumberView({ v }: { v: NumberVisual }) {
   return (
     <div role="img" aria-label={v.caption} className="flex flex-wrap items-end gap-x-4 gap-y-2">
       <div>
-        <p className="text-28 font-semibold tabular-nums text-ink">{formatValue(v.value, v.unit)}</p>
+        <p className="text-28 font-semibold tabular-nums text-ink">
+          {formatValue(v.value, v.unit)}
+        </p>
         {delta !== null ? (
           <p
             className={cn(

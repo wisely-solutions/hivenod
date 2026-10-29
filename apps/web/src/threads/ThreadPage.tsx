@@ -1,13 +1,14 @@
 /**
- * One Inbox thread (item 4PEHrOW5IfXBQWgOK9wo; redesigned in item kt3E7u9EliL3q2veDDI0, design
- * 2.3): the conversation on the left (messages as bubbles, agent notes and decisions inline, the
- * full timeline in a disclosure) and the agent panel on the right (what it checked, the proposal
- * with what happens on approval, its question, the outcomes, related subjects). On a phone the
- * panel is a bottom sheet. Opened from Today (?from=today) it adds the briefing bar and moves on
- * to the next decision once one is made. The member's other actions sit in the ⋯ menu.
+ * One Inbox thread as a decision page (item OE8FmrTaIxFVGcaeGG3N, slice 2; design 3): the header,
+ * the top card (ask, answer, recommendation, buttons, freshness), the short version (bullets and
+ * visuals), then More detail and Everything folded (D and E toggle them). A plan is a sticky right
+ * rail from 1024 px and a fold on a phone. Opened from Today (?from=today) it adds the briefing
+ * bar and moves on to the next decision once one is made. The member's other actions sit in ⋯.
  */
 import {
   agentSchema,
+  planView,
+  summaryPaths,
   closeThread,
   createItem,
   dueThread,
@@ -33,9 +34,12 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { isOnline } from '../agents/logic';
 import { useReady } from '../auth/context';
 import { db } from '../lib/db';
-import { useLiveCollection, useLiveQuery } from '../lib/live';
+import { useLiveCollection, useLiveDoc, useLiveQuery } from '../lib/live';
+import { useShortcut } from '../shell/shortcuts';
+import type { DecisionCardHandle } from '../today/DecisionCard';
 import { useNeedsAll } from '../needs/data';
 import { orgColor } from '../orgs/color';
 import { useBriefing, type BriefingFrom } from '../today/briefing';
@@ -50,11 +54,21 @@ import { Input, Select, Textarea } from '../ui/form';
 import { Icon } from '../ui/icon';
 import { ActionMenu } from '../ui/menu';
 import { Dialog, useToast } from '../ui/overlay';
-import { AgentPanel } from './AgentPanel';
 import { BriefingBar } from './BriefingBar';
-import { Conversation } from './Conversation';
 import { useMySubjects, useThread } from './data';
-import { planInputOf, planWaits } from './plan';
+import { freshness, looseSummarySchema, planFoldParts, everythingHint, topState } from './decision';
+import {
+  detailHint,
+  Everything,
+  everythingLinks,
+  Fold,
+  HintPills,
+  MoreDetail,
+  ShortVersion,
+} from './DecisionLayers';
+import { DecisionTop } from './DecisionTop';
+import { planInputOf, planLive, planMain } from './plan';
+import { PlanPanel } from './PlanPanel';
 import { LabelChip } from './labels';
 import { timeline } from './logic';
 import { BackLink, errorText, StateChip } from './parts';
@@ -98,6 +112,46 @@ export function ThreadPage() {
   const [makeOpen, setMakeOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [dueOpen, setDueOpen] = useState(false);
+  // The folds (design 3.1): More detail and Everything start folded; D and E toggle them.
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [allOpen, setAllOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const topRef = useRef<DecisionCardHandle>(null);
+  // The summary (item OE8FmrTaIxFVGcaeGG3N): read only once the thread says one exists.
+  const hasSummary = thread.state === 'ready' && !!thread.data?.summary;
+  const summaryDoc = useLiveDoc(
+    hasSummary ? summaryPaths.summary(wid, tid) : null,
+    looseSummarySchema,
+  );
+  useShortcut({
+    id: 'thread-detail',
+    keys: ['d'],
+    label: 'Show or hide More detail',
+    group: 'Thread',
+    run: () => setDetailOpen((v) => !v),
+  });
+  useShortcut({
+    id: 'thread-everything',
+    keys: ['e'],
+    label: 'Show or hide Everything',
+    group: 'Thread',
+    run: () => setAllOpen((v) => !v),
+  });
+  useShortcut({
+    id: 'thread-approve',
+    keys: ['a'],
+    label: 'Approve',
+    group: 'Thread',
+    run: () => topRef.current?.approve(),
+  });
+  useShortcut({
+    id: 'thread-ask',
+    keys: ['c'],
+    label: 'Ask for changes',
+    group: 'Thread',
+    priority: 1,
+    run: () => void topRef.current?.ask?.(),
+  });
 
   // Briefing mode: where this thread is in Today's order, and the one after it.
   const key = `t:${wid}:${tid}`;
@@ -153,6 +207,7 @@ export function ThreadPage() {
       </div>
     );
   const t = thread.data;
+  const row = { id: tid, data: t };
   const allOutcomes = (outcomes.state === 'ready' ? outcomes.data : []).sort(
     (a, b) => a.data.createdAt.toMillis() - b.data.createdAt.toMillis(),
   );
@@ -165,23 +220,63 @@ export function ThreadPage() {
   const planRows = (plans.state === 'ready' ? plans.data : []).sort(
     (a, b) => b.data.createdAt.toMillis() - a.data.createdAt.toMillis(),
   );
-  const planDecides = planRows.some((p) => planWaits(planInputOf(p, allOutcomes)));
+  // The plan on show: the live one, else the latest; older plans go to Everything.
+  const shownPlan = planRows.find((p) => planLive(p.data.state)) ?? planRows[0] ?? null;
+  const pastPlans = planRows.filter((p) => p !== shownPlan);
   const subjectName = subject.state === 'ready' ? (subject.data?.name ?? '') : '';
   const closed = t.state === 'done' || t.state === 'ignored';
   const urgent = t.urgent === true;
   const msgs = messages.state === 'ready' ? messages.data.map((m) => m.data) : [];
   const people = [...new Set(msgs.filter((m) => m.direction === 'in').map((m) => m.sender.name))];
   const channels = [...new Set(msgs.map((m) => m.source))];
-  const notes = (events.state === 'ready' ? events.data : [])
-    .filter((e) => e.data.type === 'thread.note')
-    .sort((a, b) => a.data.at.toMillis() - b.data.at.toMillis())
-    .map((e) => ({ id: e.id, event: e.data }));
+  const notes = (events.state === 'ready' ? events.data : []).filter(
+    (e) => e.data.type === 'thread.note',
+  );
   const org = all.orgs.find((o) => o.wid === wid);
   const due = t.due ? t.due.toMillis() : null;
-  const deciding =
-    proposed.length > 0 ||
-    planDecides ||
-    (t.state === 'needsYou' && !!t.question && !t.question.answer);
+
+  // The summary as read (a doc that fails the schema shows as none: the fallback top).
+  const summary =
+    hasSummary && summaryDoc.state === 'ready' && summaryDoc.data ? summaryDoc.data : null;
+  const home = agents.state === 'ready' ? agents.data.find((a) => a.id === t.fetchedBy) : undefined;
+  const agentInfo = {
+    name: agentName(t.fetchedBy),
+    online: home ? isOnline(home.data, [], home.id, now) : false,
+    lastSeen: home?.data.lastSeenAt?.toMillis() ?? null,
+    cliVersion: home?.data.cliVersion ?? null,
+  };
+  const pl = shownPlan ? planInputOf(shownPlan, allOutcomes) : null;
+  const view = pl ? planView(pl.plan, pl.outcomes) : null;
+  const main = pl && shownPlan && planLive(shownPlan.data.state) ? planMain(pl) : null;
+  const top = topState({
+    thread: {
+      state: t.state,
+      question: t.question ? { text: t.question.text, answer: t.question.answer } : null,
+      waiting: t.waiting,
+      updatedAt: t.updatedAt.toMillis(),
+    },
+    plan: view ? { view, main, label: null, error: null } : null,
+    proposals: main ? 0 : proposed.length,
+    agent: agentInfo.name,
+  });
+  const fresh = freshness({
+    summary: summary ? { version: summary.version, at: summary.at.toMillis() } : null,
+    updatedAt: t.updatedAt.toMillis(),
+    now,
+    agent: agentInfo,
+  });
+  // What the agent checked: the open proposal's checks, else the waiting step's.
+  const checkRow =
+    proposed[0] ??
+    (main?.kind === 'step' ? allOutcomes.find((o) => o.id === main.outcomeId) : undefined);
+  const checks = checkRow?.data.checks ?? [];
+  const links = everythingLinks(summary?.refs ?? [], msgs);
+  const openEverything = () => {
+    setAllOpen(true);
+    requestAnimationFrame(() =>
+      document.getElementById('everything-h')?.scrollIntoView({ block: 'start' }),
+    );
+  };
 
   async function act(make: () => Pick<ActionPlan, 'ops'>) {
     setError(null);
@@ -256,27 +351,30 @@ export function ThreadPage() {
         ]),
   ];
 
-  const panel = (
-    <AgentPanel
+  const sender = (() => {
+    const last = [...msgs].reverse().find((m) => m.direction === 'in');
+    return last
+      ? { name: last.sender.name, source: last.source, at: last.receivedAt.toMillis() }
+      : null;
+  })();
+  const planPanel = (p: (typeof planRows)[number], rail: boolean) => (
+    <PlanPanel
+      key={p.id}
       wid={wid}
-      uid={uid}
-      thread={{ id: tid, data: t }}
-      proposals={proposed}
-      decided={decided}
-      plans={planRows}
+      thread={row}
+      plan={p}
       outcomes={allOutcomes}
-      notes={notes}
-      messages={msgs}
+      sender={sender}
       now={now}
       busy={calendarBusy}
       agentName={agentName}
-      onDone={() => (from ? goNext() : undefined)}
-      sheet={!wide}
+      rail={rail}
     />
   );
+  const rail = wide && shownPlan;
 
   return (
-    <div className="mx-auto w-full">
+    <div className={cn('mx-auto w-full', !rail && 'max-w-3xl')}>
       {from && briefing ? (
         <BriefingBar from={from} list={briefing.list} index={briefing.index} />
       ) : t.subjectId ? (
@@ -284,8 +382,10 @@ export function ThreadPage() {
       ) : (
         <BackLink>Inbox</BackLink>
       )}
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_25rem] lg:items-start lg:gap-6">
-        <div className={cn('min-w-0', !wide && deciding && 'pb-[45dvh]')}>
+      <div
+        className={cn(rail && 'lg:grid lg:grid-cols-[minmax(0,1fr)_25rem] lg:items-start lg:gap-6')}
+      >
+        <div className="min-w-0" data-decision-page="">
           <header>
             <div className="flex items-start gap-2">
               <h1 className="min-w-0 flex-1 text-20 font-semibold leading-tight text-ink [overflow-wrap:anywhere] sm:text-24">
@@ -332,9 +432,92 @@ export function ThreadPage() {
               {error}
             </p>
           ) : null}
-          <Conversation entries={entries} now={now} />
+          <DecisionTop
+            ref={topRef}
+            wid={wid}
+            uid={uid}
+            thread={row}
+            summary={summary}
+            proposals={proposed}
+            plan={shownPlan}
+            outcomes={allOutcomes}
+            messages={msgs}
+            now={now}
+            busy={calendarBusy}
+            agentName={agentName}
+            agent={agentInfo}
+            onDone={() => (from ? goNext() : undefined)}
+          />
+          <ShortVersion
+            summary={summary}
+            asks={top.kind === 'person' || top.kind === 'question'}
+            firstMessage={msgs[0]?.text ?? ''}
+            why={fresh.kind === 'none' ? fresh.why : null}
+            onOpenEverything={openEverything}
+          />
+          {!rail && shownPlan && view ? (
+            <Fold
+              id="plan"
+              title="Plan"
+              hint={<HintPills parts={planFoldParts(view)} />}
+              open={planOpen}
+              onToggle={() => setPlanOpen((v) => !v)}
+            >
+              <div className="-mx-4 -my-3 sm:-mx-5">{planPanel(shownPlan, false)}</div>
+            </Fold>
+          ) : null}
+          <Fold
+            id="detail"
+            title="More detail"
+            hint={detailHint(summary?.details ?? null, checks.length)}
+            open={detailOpen}
+            onToggle={() => setDetailOpen((v) => !v)}
+          >
+            <MoreDetail details={summary?.details ?? null} checks={checks} agent={agentInfo.name} />
+          </Fold>
+          <Fold
+            id="everything"
+            title="Everything"
+            hint={everythingHint({
+              messages: msgs.length,
+              notes: notes.length,
+              outcomes: decided.length,
+              links: links.length,
+            })}
+            open={allOpen}
+            onToggle={() => setAllOpen((v) => !v)}
+          >
+            <Everything
+              wid={wid}
+              uid={uid}
+              thread={row}
+              entries={entries}
+              messages={msgs}
+              decided={decided}
+              plans={planRows}
+              outcomes={allOutcomes}
+              refs={summary?.refs ?? []}
+              now={now}
+              agentName={agentName}
+              pastPlans={
+                pastPlans.length ? (
+                  <div className="overflow-hidden rounded-card border border-line">
+                    {pastPlans.map((p) => planPanel(p, false))}
+                  </div>
+                ) : null
+              }
+            />
+          </Fold>
         </div>
-        {wide ? <div className="lg:sticky lg:top-4">{panel}</div> : panel}
+        {rail ? (
+          <aside
+            aria-label="Plan rail"
+            data-plan-rail=""
+            className="mt-6 overflow-hidden rounded-panel border border-line bg-surface shadow-e1 lg:sticky lg:top-4 lg:mt-0"
+          >
+            {planPanel(shownPlan, true)}
+          </aside>
+        ) : null}
       </div>
 
       <MoveDialog

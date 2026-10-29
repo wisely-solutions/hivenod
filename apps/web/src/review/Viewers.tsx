@@ -1,7 +1,7 @@
 import type { Attachment } from '@hive/shared';
 import { ExternalLink, Minus, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Markdown } from '../process/markdown';
+import { Markdown } from '../ui/markdown';
 import { IconButton } from '../ui/button';
 import { Icon } from '../ui/icon';
 import { clampZoom, dataUrlToBlobUrl, hostOf } from './logic';
