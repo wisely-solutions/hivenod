@@ -24,3 +24,14 @@ export function assertWellFormed(mutations) {
   if (problems.length)
     throw new Error(`Malformed mutations in mutate.mjs:\n  ${problems.join('\n  ')}`);
 }
+
+/** Every mutation edit carries this tag, so a leftover in a tracked file is detectable. */
+export const MUTATED_TAG = '/*MUTATED*/';
+
+/** Applies the edits to the rules text; each replacement is followed by the MUTATED tag. */
+export function applyEdits(source, edits) {
+  return edits.reduce((src, [find, rep]) => src.split(find).join(rep + MUTATED_TAG), source);
+}
+
+/** True when the text carries a mutation leftover. */
+export const hasMutationLeftover = (source) => source.includes(MUTATED_TAG);

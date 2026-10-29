@@ -56,8 +56,11 @@ export function steps(g: Partial<Gate> = {}): Step[] {
 let env: RulesTestEnvironment;
 export const getEnv = () => env;
 
-/** The rules under test, as deployed. */
-export const RULES = readFileSync(new URL('../../../firestore.rules', import.meta.url), 'utf8');
+/** The rules under test, as deployed (the mutation runner points HIVE_RULES_FILE at a temp copy). */
+export const RULES = readFileSync(
+  process.env.HIVE_RULES_FILE ?? new URL('../../../firestore.rules', import.meta.url),
+  'utf8',
+);
 
 export function useEmulator() {
   beforeAll(async () => {
