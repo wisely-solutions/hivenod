@@ -13,6 +13,7 @@ import {
   digest24,
   finishOutcome,
   flagThread,
+  dueThread,
   inboxMessageKey,
   inboxPaths,
   inboxThreadKey,
@@ -124,13 +125,20 @@ async function agentOf(wid: string, ownerUid: string, name: string) {
     async ask(tid: string, question: string) {
       await run(askMember(ctx, { threadId: tid, thread: await thread(tid), question }));
     },
-    async propose(tid: string, type: string, fields: Record<string, unknown>, note = '') {
+    async propose(
+      tid: string,
+      type: string,
+      fields: Record<string, unknown>,
+      note = '',
+      extra: { confidence?: string; checks?: string[] } = {},
+    ) {
       const p = proposeOutcome(ctx, {
         threadId: tid,
         thread: await thread(tid),
         type,
         fields,
         note,
+        ...extra,
       });
       await run(p);
       return p.outcomeId;
@@ -161,6 +169,9 @@ async function agentOf(wid: string, ownerUid: string, name: string) {
           note,
         }),
       );
+    },
+    async due(tid: string, due: string | null, reason?: string) {
+      await run(dueThread(ctx, { threadId: tid, thread: await thread(tid), due, reason }));
     },
     async flag(tid: string, urgent: boolean) {
       await run(flagThread(ctx, { threadId: tid, thread: await thread(tid), urgent }));
@@ -252,15 +263,25 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await expect(chip(page, 'investigating')).toBeVisible();
 
     // A reply proposed: Your call. Edit, Send, Undo, Send again.
+    // With its confidence and checks (item kt3E7), and a stated deadline on the timeline.
+    await agent.due(t1, '2026-10-30T12:00:00Z', 'Sam: before Friday noon');
+    await expect(
+      page.getByText(/Payments agent set it due .+: .Sam: before Friday noon/),
+    ).toBeVisible();
     const o1 = await agent.propose(
       t1,
       'reply',
       { text: 'Thursday 10:00 works for me.' },
       'They asked for a new date.',
+      { confidence: 'high', checks: ['Your calendar: Thu 10:00-11:00 free', 'Your answer: 10:00'] },
     );
     await expect(chip(page, 'yourCall')).toBeVisible();
     const out = page.locator(`[data-outcome="${o1}"]`);
     await expect(out.getByText('Thursday 10:00 works for me.')).toBeVisible();
+    await expect(out.locator('[data-confidence="high"]')).toHaveText('Sure');
+    await expect(
+      out.getByRole('list', { name: 'What the agent checked' }).getByRole('listitem'),
+    ).toHaveText(['✓Your calendar: Thu 10:00-11:00 free', '✓Your answer: 10:00']);
     await look(page, 'thread', info.project.name);
     await out.getByRole('button', { name: 'Edit' }).click();
     await out.getByLabel('Reply', { exact: true }).fill('Thursday 10:00 works. See you then, Sam.');

@@ -47,7 +47,7 @@
             "threadRef": "price-1"
           }
         ],
-        "next": "Investigate: read the messages and the subject's other threads, note what you find (inbox_note), ask the person if you must (inbox_ask), then propose what should come of it (outcome_propose).",
+        "next": "Investigate: read the messages and the subject's other threads, note what you find (inbox_note), set the deadline a message states (thread_due), ask the person if you must (inbox_ask), then propose what should come of it (outcome_propose, with your confidence and what you checked).",
         "outcomes": [],
         "question": null,
         "state": "investigating",
