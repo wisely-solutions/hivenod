@@ -4,8 +4,8 @@
  * (Claude Code is interactive only on a TTY: run vitest in a pty with --pool=threads, so the
  * session inherits it), a folder Claude already trusts (HIVE_SMOKE_REPO), and spends a few cents
  * (haiku). Remote Control starts if the account has it. Run, in a terminal:
- *   HIVE_SMOKE_CLAUDE_INTERACTIVE=1 HIVE_SMOKE_REPO=/a/trusted/folder node scripts/with-lock.mjs \
- *     firebase emulators:exec --only firestore,auth "cd packages/agent && npx vitest run \
+ *   HIVE_SMOKE_CLAUDE_INTERACTIVE=1 HIVE_SMOKE_REPO=/a/trusted/folder node scripts/emu-exec.mjs \
+ *     "cd packages/agent && npx vitest run \
  *     -c vitest.integration.config.ts --pool=threads test/claude.interactive.smoke.test.ts"
  * Nobody answers the permission prompt for the shell command in the item: Hivenod denies it after
  * the (shortened) timeout and the item still finishes.

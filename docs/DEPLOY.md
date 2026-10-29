@@ -132,11 +132,14 @@ Time limit: the whole `pnpm e2e:emu` must finish in 5 minutes on the 8-CPU VM. P
 fast: no fixed sleeps (wait for the condition, or `settle(page)` before axe or a screenshot), and seed
 data through the emulator (`adminSet`, `adminSetAll`) rather than through the UI.
 
-`pnpm test:rules` still takes the machine-wide lock (`/tmp/hive-emulators.lock`, see
-`scripts/with-lock.mjs`) because its emulators use the fixed ports 9099 and 8080. A second run prints
-"Waiting for the emulator lock" and starts when the first finishes (a crashed holder is detected and
-taken over; wait limit `HIVE_LOCK_TIMEOUT_MIN`, default 40). Do not start emulators by hand on those
-ports while another worker may be testing.
+`pnpm test:rules` (and `test:rules:core`, `:headroom`, `:mutate`, `pnpm smoke:claude`) start their
+emulators through `scripts/emu-exec.mjs`, the same way as the e2e: every port is picked for the run
+(ports 5-9 of the worktree's block when free, so they never clash with that worktree's e2e on ports 0-4;
+otherwise any free ones), written into a generated firebase.json, and handed to the tests through
+`FIRESTORE_EMULATOR_HOST` / `FIREBASE_AUTH_EMULATOR_HOST`. Each run also has its own TMPDIR (the emulator
+hub's locator file). So worktrees and a release on main run side by side: there is no machine-wide
+emulator lock any more. Only one run of `test:rules:mutate` per worktree at a time: it rewrites that
+worktree's `firestore.rules` while it runs.
 
 `pnpm install` prints an EBADENGINE warning: the Firebase web SDK 13 declares Node >=24.12, the VM runs
 Node 22. It is harmless for the build, tests and deploy (checked); the repo's own `engines` stays `>=22`.
