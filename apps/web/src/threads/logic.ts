@@ -551,3 +551,99 @@ export function filterByLabels<T extends { label: string | null }>(
     ? [...rows]
     : rows.filter((r) => r.label && keys.has(r.label.toLowerCase()));
 }
+
+/** The Inbox list's groups (item kt3E7u9EliL3q2veDDI0, design 2.4). */
+export interface StateGroups {
+  /** A thread in needsYou or yourCall, by that thread's rank (design 3.5). */
+  needs: SubjectRow[];
+  /** A thread an agent is investigating. */
+  working: SubjectRow[];
+  /** A thread waiting on others. */
+  waiting: SubjectRow[];
+  /** Everything else, by latest activity. */
+  recent: SubjectRow[];
+  /** Threads not filed under a subject yet (one row per organization). */
+  unfiled: SubjectRow[];
+  /** No message for `quietDays` days and nothing waiting for the member: folded. */
+  quiet: SubjectRow[];
+}
+
+/** The state that puts a subject in its group: its most pressing thread. */
+export function subjectState(row: SubjectRow): 'needs' | 'working' | 'waiting' | 'recent' {
+  const states = row.threads.map((t) => t.data.state);
+  if (states.some((s) => forMember(s))) return 'needs';
+  if (states.includes('investigating')) return 'working';
+  if (states.includes('waiting')) return 'waiting';
+  return 'recent';
+}
+
+/**
+ * Subjects grouped by their most pressing thread: Needs you (ranked), Agents working, Waiting on
+ * others, Recent, then Not filed yet and Quiet. The area is a chip and a filter, not a group.
+ */
+export function groupByState(
+  rows: readonly SubjectRow[],
+  quietDays: number,
+  nowMs: number,
+): StateGroups {
+  const g: StateGroups = {
+    needs: [],
+    working: [],
+    waiting: [],
+    recent: [],
+    unfiled: [],
+    quiet: [],
+  };
+  for (const r of rows) {
+    if (r.id === null) g.unfiled.push(r);
+    else if (isQuiet(r, quietDays, nowMs)) g.quiet.push(r);
+    else g[subjectState(r)].push(r);
+  }
+  // Needs you: by the rank of each subject's most pressing thread.
+  const best = new Map(
+    g.needs.map((r) => {
+      const top = rankThreads(
+        r.threads.filter((t) => forMember(t.data.state)),
+        nowMs,
+      )[0]!;
+      return [`${r.wid}/${r.id}`, top] as const;
+    }),
+  );
+  const ranked = rankThreads(
+    g.needs.map((r) => ({ id: `${r.wid}/${r.id}`, data: best.get(`${r.wid}/${r.id}`)!.data })),
+    nowMs,
+  ).map((x) => x.id);
+  g.needs.sort((a, b) => ranked.indexOf(`${a.wid}/${a.id}`) - ranked.indexOf(`${b.wid}/${b.id}`));
+  const latest = (a: SubjectRow, b: SubjectRow) =>
+    b.activityAt - a.activityAt || a.name.localeCompare(b.name);
+  g.working.sort(latest);
+  g.waiting.sort(latest);
+  g.recent.sort((a, b) => b.activityAt - a.activityAt || a.name.localeCompare(b.name));
+  return g;
+}
+
+/** The areas on the listed subjects (case-blind), with how many subjects carry each. */
+export function areaCounts(
+  rows: readonly SubjectRow[],
+): Array<{ key: string; label: string; count: number }> {
+  const by = new Map<string, { key: string; label: string; count: number }>();
+  for (const r of rows) {
+    if (!r.area) continue;
+    const key = r.area.toLowerCase();
+    const cur = by.get(key);
+    if (cur) {
+      cur.count++;
+      if (r.area < cur.label) cur.label = r.area;
+    } else by.set(key, { key, label: r.area, count: 1 });
+  }
+  return [...by.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Subjects in any of the chosen areas (lowercased keys); none chosen keeps all. */
+export function filterByAreas(
+  rows: readonly SubjectRow[],
+  keys: ReadonlySet<string>,
+): SubjectRow[] {
+  if (keys.size === 0) return [...rows];
+  return rows.filter((r) => r.area && keys.has(r.area.toLowerCase()));
+}

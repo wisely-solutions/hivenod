@@ -9,13 +9,18 @@ import {
   findSubjectRows,
   formValues,
   countWaitingThreads,
+  areaCounts,
+  filterByAreas,
   groupByArea,
+  groupByState,
   filterByLabels,
+  subjectState,
   isQuiet,
   labelCounts,
   subjectRows,
   timeline,
   waitingText,
+  type SubjectRow,
   type ThreadRow,
 } from './logic';
 
@@ -308,5 +313,55 @@ describe('labels (item YaOErIjeIFG8Y3EvZuIp)', () => {
         data: { label: 'Sales' },
       } as never),
     ).toBe('You set the label to “Sales”');
+  });
+});
+
+describe('Inbox list groups (item kt3E7, design 2.4)', () => {
+  const NOW = 100 * 86_400_000;
+  const T = (id: string, over: Partial<InboxThread> & { at?: number } = {}) => thread(id, over);
+  const S = (id: string, threads: ReturnType<typeof T>[], area: string | null = null) =>
+    ({
+      wid: 'w',
+      id,
+      name: id,
+      area,
+      label: null,
+      labelSuggested: false,
+      activityAt: Math.max(...threads.map((t) => t.data.lastMessageAt.toMillis()), 0),
+      waiting: threads.filter((t) => ['needsYou', 'yourCall'].includes(t.data.state)).length,
+      open: threads.length,
+      lastAt: Math.max(...threads.map((t) => t.data.updatedAt.toMillis()), 0),
+      threads,
+    }) as SubjectRow;
+  it('groups by the most pressing thread and ranks Needs you', () => {
+    const rows = [
+      S('call', [T('a', { state: 'yourCall', at: NOW - 1000 })]),
+      S('urgent', [
+        T('b', { state: 'yourCall', urgent: true, at: NOW - 500 }),
+        T('c', { state: 'waiting' }),
+      ]),
+      S('working', [T('d', { state: 'investigating', at: NOW - 100 })]),
+      S('waiting', [T('e', { state: 'waiting', at: NOW - 100 })]),
+      S('done', [T('f', { state: 'done', at: NOW - 200 })]),
+      S('old', [T('g', { state: 'done', at: NOW - 90 * 86_400_000 })]),
+      { ...S('x', [T('h', { state: 'investigating', at: NOW })]), id: null, name: 'Not filed yet' },
+    ];
+    const g = groupByState(rows, 60, NOW);
+    expect(g.needs.map((r) => r.id)).toEqual(['urgent', 'call']);
+    expect(g.working.map((r) => r.id)).toEqual(['working']);
+    expect(g.waiting.map((r) => r.id)).toEqual(['waiting']);
+    expect(g.recent.map((r) => r.id)).toEqual(['done']);
+    expect(g.quiet.map((r) => r.id)).toEqual(['old']);
+    expect(g.unfiled).toHaveLength(1);
+    expect(subjectState(rows[1]!)).toBe('needs');
+  });
+  it('areas are a filter with counts, case-blind', () => {
+    const rows = [S('a', [], 'Payments'), S('b', [], 'payments'), S('c', [], 'Admin'), S('d', [])];
+    expect(areaCounts(rows)).toEqual([
+      { key: 'admin', label: 'Admin', count: 1 },
+      { key: 'payments', label: 'Payments', count: 2 },
+    ]);
+    expect(filterByAreas(rows, new Set(['payments'])).map((r) => r.id)).toEqual(['a', 'b']);
+    expect(filterByAreas(rows, new Set())).toHaveLength(4);
   });
 });
