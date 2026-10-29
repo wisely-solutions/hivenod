@@ -13,8 +13,15 @@
  */
 import { z } from 'zod';
 import { timestamp } from './schema';
-import { OUTCOME_CONFIDENCE, threadAfter, type InboxOutcome, type ThreadState } from './inbox';
-import { outcomeKind, outcomeType, type OutcomeKind, type WaitingOn } from './outcomes';
+import type { InboxOutcome, ThreadState } from './inbox';
+import {
+  OUTCOME_CONFIDENCE,
+  outcomeKind,
+  outcomeType,
+  threadAfter,
+  type OutcomeKind,
+  type WaitingOn,
+} from './outcomes';
 
 export const PLAN_STATES = ['proposed', 'active', 'blocked', 'done', 'stopped'] as const;
 export type PlanState = (typeof PLAN_STATES)[number];
@@ -104,6 +111,8 @@ export interface PlanView {
 
 function stepUi(o: PlanOutcomeOf | null, atCursor: boolean, planState: PlanState): PlanStepUi {
   if (!o) return 'proposed';
+  // A stopped plan: what had not run stopped with it (Not approved on a gate, Stop plan).
+  if (planState === 'stopped' && o.state !== 'done' && o.state !== 'failed') return 'stopped';
   switch (o.state) {
     case 'done':
       return 'done';
@@ -202,7 +211,8 @@ const YOUR_CALL: ThreadStateAfter = { state: 'yourCall', waiting: null };
  * - another approved agent step at the cursor → the previous agent step's after-state (yourCall
  *   for the first one, like an approved single outcome);
  * - every step through → the last agent step's after-state (done if there is none).
- * Person steps and skipped steps have no after-state of their own: the one before them holds.
+ * Only steps an agent carries out have an after-state: after a person step, a skipped step or
+ * a wait-until step, the one before them holds.
  */
 export function planThreadState(
   plan: PlanStateOf,
@@ -213,7 +223,7 @@ export function planThreadState(
   const before = (end: number): ThreadStateAfter | null => {
     for (let i = Math.min(end, plan.steps.length) - 1; i >= 0; i--) {
       const o = at(i);
-      if (o && o.state === 'done' && outcomeKind(o.type) === 'agent')
+      if (o && o.state === 'done' && outcomeType(o.type)?.executor === 'agent')
         return threadAfter(o.type, o.fields);
     }
     return null;

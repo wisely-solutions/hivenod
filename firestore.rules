@@ -1133,6 +1133,148 @@ service cloud.firestore {
       function outcomeRequired() { return {'reply': ['text'], 'reply_book': ['text', 'start', 'end', 'with'], 'book': ['start', 'end', 'with'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'approval': ['what']}; }
       // END outcome registry
 
+      // ---------- plans (item qwFAWxZM5xkcE7PPjAzi, packages/shared/src/plans.ts) ----------
+      // A plan orders outcomes (its steps) of one thread; `cursor` is the step whose turn it is.
+      // Steps run strictly in order: a step is carried out (or, for a person step, decided) only
+      // at the cursor, and finishing it moves the cursor by exactly one. Person steps (approval)
+      // are decided by the member alone. Agents propose plans and report their own steps; only
+      // the member approves, reorders, removes, adds approval steps, retries, skips or stops.
+      function inboxPlanDoc(wid, pid) { return inboxDoc(wid, 'inboxPlans', pid); }
+      function inboxAtCursor(p, oid) { return p.cursor < p.steps.size() && p.steps[p.cursor] == oid; }
+      // The list `l` without its element `i` (a slice is never empty).
+      function inboxWithout(l, i) {
+        return i == 0 ? (l.size() <= 1 ? [] : l[1:l.size()])
+          : i + 1 >= l.size() ? l[0:i] : l[0:i].concat(l[i + 1:l.size()]);
+      }
+      function inboxPlanLive(p) { return p.state in ['proposed', 'active', 'blocked']; }
+      // A thread state of the right shape (the plan's thread state, set by the plan actions).
+      function inboxThreadShapeOk(d) {
+        return d.state == 'waiting'
+          ? exactKeys(d.waiting, ['on', 'until']) && d.waiting.on in ['them', 'thirdParty', 'date', 'item']
+            && (d.waiting.on == 'date' ? d.waiting.until is timestamp : d.waiting.until == null)
+          : d.waiting == null;
+      }
+      // After a step is through: a next step that needs the member keeps the thread in Your call.
+      function inboxPlanNextOk(wid, d, p) {
+        return p.cursor < p.steps.size()
+            && (getAfter(inboxDoc(wid, 'inboxOutcomes', p.steps[p.cursor])).data.state != 'approved'
+              || getAfter(inboxDoc(wid, 'inboxOutcomes', p.steps[p.cursor])).data.type in outcomeHuman())
+          ? d.state == 'yourCall' && d.waiting == null
+          : d.state in ['yourCall', 'waiting', 'done'] && inboxThreadShapeOk(d);
+      }
+      // The step `i` of a new plan is created in the same batch, as a step of that plan.
+      function inboxStepMade(wid, pid, s, i) {
+        return i >= s.size() || getAfter(inboxDoc(wid, 'inboxOutcomes', s[i])).data.planId == pid;
+      }
+      function inboxStepsMade(wid, pid, s) {
+        return inboxStepMade(wid, pid, s, 0) && inboxStepMade(wid, pid, s, 1)
+          && inboxStepMade(wid, pid, s, 2) && inboxStepMade(wid, pid, s, 3)
+          && inboxStepMade(wid, pid, s, 4) && inboxStepMade(wid, pid, s, 5)
+          && inboxStepMade(wid, pid, s, 6) && inboxStepMade(wid, pid, s, 7);
+      }
+      // The first step that may still move: after the cursor's step once it has started.
+      function inboxPlanFirstFree(wid, p) {
+        return p.cursor < p.steps.size()
+            && get(inboxDoc(wid, 'inboxOutcomes', p.steps[p.cursor])).data.state in ['approved', 'running', 'failed']
+          ? p.cursor + 1 : p.cursor;
+      }
+
+      match /inboxPlans/{pid} {
+        allow read: if inboxReader(wid, resource.data);
+        // An agent proposes: cursor 0, 1-8 distinct steps, each created in the same batch as a
+        // step of this plan, with one plan.proposed event that lists them.
+        allow create: if isActiveAgent(wid)
+          && request.resource.data.keys().hasAll(['memberUid', 'threadId', 'proposedBy', 'steps', 'cursor',
+               'state', 'note', 'createdAt', 'updatedAt', 'lastEventId'])
+          && request.resource.data.keys().hasOnly(['memberUid', 'threadId', 'proposedBy', 'steps', 'cursor',
+               'state', 'note', 'createdAt', 'updatedAt', 'lastEventId', 'confidence'])
+          && (!('confidence' in request.resource.data) || request.resource.data.confidence in ['high', 'medium', 'low'])
+          && request.resource.data.proposedBy == me()
+          && request.resource.data.state == 'proposed' && request.resource.data.cursor == 0
+          && request.resource.data.steps is list && request.resource.data.steps.size() >= 1
+          && request.resource.data.steps.size() <= 8
+          && request.resource.data.steps.toSet().size() == request.resource.data.steps.size()
+          && str(request.resource.data.note, 0, 2000)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && get(inboxDoc(wid, 'inboxThreads', request.resource.data.threadId)).data.memberUid == request.resource.data.memberUid
+          && inboxTrackedThread(wid, request.resource.data.lastEventId, ['plan.proposed'],
+               request.resource.data.memberUid, request.resource.data.threadId)
+          && inboxEv(wid, request.resource.data.lastEventId).data.data.planId == pid
+          && inboxEv(wid, request.resource.data.lastEventId).data.data.steps == request.resource.data.steps
+          && inboxStepsMade(wid, pid, request.resource.data.steps);
+        allow update: if request.resource.data.updatedAt == request.time
+          && changed(['steps', 'cursor', 'state', 'updatedAt', 'lastEventId'])
+          && request.resource.data.steps is list && request.resource.data.steps.size() >= 1
+          && request.resource.data.steps.size() <= 8
+          && request.resource.data.cursor is int && request.resource.data.cursor >= 0
+          && request.resource.data.cursor <= request.resource.data.steps.size()
+          && inboxTrackedThread(wid, request.resource.data.lastEventId,
+               ['outcome.approved', 'outcome.rejected', 'plan.approved', 'plan.rejected', 'plan.edited',
+                'plan.retried', 'plan.skipped', 'plan.stopped', 'outcome.done', 'outcome.failed', 'thread.woke'],
+               resource.data.memberUid, resource.data.threadId)
+          && inboxEv(wid, request.resource.data.lastEventId).data.data.planId == pid
+          && inboxPlanMoved(wid, pid, request.resource.data, resource.data,
+               inboxEv(wid, request.resource.data.lastEventId).data);
+        allow delete: if false;
+
+        // What each event may change: `e` is the event, `d` and `r` the plan after and before.
+        function inboxPlanMoved(wid, pid, d, r, e) {
+          let same = d.steps == r.steps;
+          let next = d.cursor == r.cursor + 1 && same
+            && d.state == (d.cursor == d.steps.size() ? 'done' : 'active');
+          let o = e.data.get('outcomeId', null) == null ? null
+            : getAfter(inboxDoc(wid, 'inboxOutcomes', e.data.outcomeId)).data;
+          let atCursor = o != null && inboxAtCursor(r, e.data.outcomeId) && o.planId == pid;
+          return (inboxOwner(wid, r)
+              && ((e.type == 'outcome.approved' && r.state in ['proposed', 'active'] && atCursor
+                  && o.type in outcomeHuman() && o.state == 'done' && next)
+                || (e.type == 'outcome.rejected' && inboxPlanLive(r) && atCursor
+                  && o.type in outcomeHuman() && o.state == 'rejected'
+                  && same && d.cursor == r.cursor && d.state == 'stopped')
+                || (e.type == 'plan.approved' && same && d.cursor == r.cursor
+                  && r.state == 'proposed' && d.state == 'active')
+                || (e.type in ['plan.rejected', 'plan.stopped'] && inboxPlanLive(r)
+                  && same && d.cursor == r.cursor && d.state == 'stopped')
+                || (e.type == 'plan.retried' && r.state == 'blocked' && atCursor && o.state == 'approved'
+                  && same && d.cursor == r.cursor && d.state == 'active')
+                || (e.type == 'plan.skipped' && r.state == 'blocked' && atCursor && o.state == 'rejected'
+                  && next)
+                || (e.type == 'plan.edited' && inboxPlanLive(r) && d.cursor == r.cursor
+                  && inboxPlanEdited(wid, pid, d, r, e, inboxPlanFirstFree(wid, r)))))
+            || (isActiveAgent(wid) && r.state in ['proposed', 'active'] && atCursor
+              && ((e.type == 'outcome.done' && o.executor == me() && o.state == 'done' && next)
+                || (e.type == 'outcome.failed' && o.executor == me() && o.state == 'failed'
+                  && same && d.cursor == r.cursor && d.state == 'blocked')
+                || (e.type == 'thread.woke' && o.type == 'snooze' && o.state == 'done' && next)));
+        }
+        // Edit plan: move, remove or add one step, never before `first`; the steps before it
+        // stay as they are.
+        function inboxPlanEdited(wid, pid, d, r, e, first) {
+          let n = r.steps.size();
+          return (first == 0 || d.steps[0:first] == r.steps[0:first])
+            && ((e.data.op == 'move' && d.steps.size() == n
+                && e.data.from is int && e.data.to is int
+                && e.data.from >= first && e.data.from < n && e.data.to >= first && e.data.to < n
+                && e.data.from != e.data.to
+                && d.steps[e.data.to] == r.steps[e.data.from]
+                && inboxWithout(r.steps, e.data.from) == inboxWithout(d.steps, e.data.to)
+                && d.state == r.state)
+              || (e.data.op == 'remove' && d.steps.size() == n - 1
+                && e.data.index is int && e.data.index >= first && e.data.index < n
+                && e.data.outcomeId == r.steps[e.data.index]
+                && inboxWithout(r.steps, e.data.index) == d.steps
+                && getAfter(inboxDoc(wid, 'inboxOutcomes', e.data.outcomeId)).data.state == 'rejected'
+                && d.state == (d.cursor == d.steps.size() ? 'done' : r.state))
+              || (e.data.op == 'add' && d.steps.size() == n + 1 && n < 8
+                && e.data.index is int && e.data.index >= first && e.data.index <= n
+                && d.steps[e.data.index] == e.data.outcomeId && !(e.data.outcomeId in r.steps)
+                && inboxWithout(d.steps, e.data.index) == r.steps
+                && getAfter(inboxDoc(wid, 'inboxOutcomes', e.data.outcomeId)).data.planId == pid
+                && d.state == r.state));
+        }
+      }
+
       // The member's own "Make it work": the item is created in the same batch, by them, and the
       // thread is theirs.
       function inboxItemMade(wid, e) {
@@ -1158,13 +1300,15 @@ service cloud.firestore {
                   'thread.closed', 'thread.restored', 'thread.moved', 'thread.itemMade', 'outcome.approved',
                   'outcome.rejected', 'outcome.revise_requested', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area', 'subject.label',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
-                  'thread.flagged', 'thread.due'])
+                  'thread.flagged', 'thread.due', 'plan.approved', 'plan.rejected', 'plan.edited',
+                  'plan.retried', 'plan.skipped', 'plan.stopped'])
                 && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))
             || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(wid, request.resource.data.memberUid)
                 && request.resource.data.type in ['inbox.added', 'thread.filed', 'thread.note',
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.revised',
-                  'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due']));
+                  'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
+                  'plan.proposed', 'outcome.started']));
         allow update, delete: if false;
       }
 
@@ -1268,8 +1412,12 @@ service cloud.firestore {
         // Proposing (Your call), reporting an outcome it carried out, waking a snoozed thread.
         function inboxThreadAgentState(wid, tid, d, r) {
           let e = inboxEv(wid, d.lastEventId);
-          return inboxTrackedThread(wid, d.lastEventId, ['outcome.proposed', 'outcome.done', 'outcome.failed', 'thread.woke'], r.memberUid, tid)
-            && (e.data.type == 'outcome.proposed'
+          return inboxTrackedThread(wid, d.lastEventId, ['outcome.proposed', 'outcome.done', 'outcome.failed', 'thread.woke',
+                   'plan.proposed', 'outcome.started'], r.memberUid, tid)
+            && (e.data.data.get('planId', null) != null
+              ? inboxThreadPlanAgent(wid, tid, d, r, e.data)
+              : e.data.type == 'outcome.started' || e.data.type == 'plan.proposed' ? false
+              : e.data.type == 'outcome.proposed'
               ? r.state != 'ignored' && d.state == 'yourCall' && d.waiting == null
                 && inboxOutcomeOf(wid, d.lastEventId).threadId == tid
                 && inboxOutcomeOf(wid, d.lastEventId).state == 'proposed'
@@ -1283,6 +1431,29 @@ service cloud.firestore {
                       && inboxAfterOk(d, inboxOutcomeOf(wid, d.lastEventId).type)
                     : inboxOutcomeOf(wid, d.lastEventId).state == 'failed'
                       && d.state == 'investigating' && d.waiting == null));
+        }
+        // A plan proposed (Your call), or a step of it carried out by its executor (or a wait-until
+        // step done on waking): written in the same batch, the thread follows the plan.
+        function inboxThreadPlanAgent(wid, tid, d, r, e) {
+          let p = getAfter(inboxPlanDoc(wid, e.data.planId)).data;
+          let o = e.type == 'plan.proposed' ? null
+            : getAfter(inboxDoc(wid, 'inboxOutcomes', e.data.outcomeId)).data;
+          return p.threadId == tid
+            && (e.type == 'plan.proposed'
+              ? r.state != 'ignored' && d.state == 'yourCall' && d.waiting == null
+                && p.state == 'proposed' && p.proposedBy == me() && p.lastEventId == d.lastEventId
+              : o.planId == e.data.planId && o.lastEventId == d.lastEventId
+                && (e.type == 'thread.woke'
+                  ? o.type == 'snooze' && o.state == 'done'
+                    && r.state == 'waiting' && r.waiting.until != null && r.waiting.until <= request.time
+                    && inboxPlanNextOk(wid, d, p)
+                  : o.executor == me()
+                    && (e.type == 'outcome.started'
+                      ? o.state == 'running' && d.state == 'waiting'
+                        && exactKeys(d.waiting, ['on', 'until']) && d.waiting.on == 'item' && d.waiting.until == null
+                      : e.type == 'outcome.failed'
+                        ? o.state == 'failed' && p.state == 'blocked' && d.state == 'yourCall' && d.waiting == null
+                        : o.state == 'done' && inboxPlanNextOk(wid, d, p))));
         }
         function inboxThreadOwner(wid, tid, d, r) {
           return (changed(['state', 'question', 'updatedAt', 'lastEventId'])
@@ -1300,8 +1471,16 @@ service cloud.firestore {
         // closing, bringing back.
         function inboxThreadOwnerState(wid, tid, d, r) {
           let e = inboxEv(wid, d.lastEventId);
-          return inboxTrackedThread(wid, d.lastEventId, ['outcome.approved', 'outcome.rejected', 'thread.ignored', 'thread.closed', 'thread.restored'], me(), tid)
-            && (e.data.type == 'outcome.approved'
+          return inboxTrackedThread(wid, d.lastEventId, ['outcome.approved', 'outcome.rejected', 'thread.ignored', 'thread.closed', 'thread.restored',
+                   'plan.approved', 'plan.rejected', 'plan.edited', 'plan.retried', 'plan.skipped', 'plan.stopped'], me(), tid)
+            && (e.data.data.get('planId', null) != null
+              // A plan decision: the thread follows the plan (stopped: back to the agent).
+              ? getAfter(inboxPlanDoc(wid, e.data.data.planId)).data.threadId == tid
+                && (e.data.type in ['plan.rejected', 'plan.stopped', 'outcome.rejected']
+                  ? d.state == 'investigating' && d.waiting == null
+                  : d.state in ['yourCall', 'waiting', 'done'] && inboxThreadShapeOk(d))
+              : e.data.type.matches('plan[.].*') ? false
+              : e.data.type == 'outcome.approved'
               ? inboxOutcomeOf(wid, d.lastEventId).threadId == tid
                 && inboxOutcomeOf(wid, d.lastEventId).type in outcomeImmediate()
                 && inboxOutcomeOf(wid, d.lastEventId).state == 'done'
@@ -1323,7 +1502,7 @@ service cloud.firestore {
         allow read: if inboxReader(wid, resource.data);
         // An agent proposes; who carries it out is fixed here: the thread's home agent, or nobody
         // for the types that take effect on approval.
-        allow create: if isActiveAgent(wid)
+        allow create: if (isActiveAgent(wid)
           && request.resource.data.keys().hasAll(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
                'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId'])
           && request.resource.data.keys().hasOnly(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
@@ -1344,9 +1523,17 @@ service cloud.firestore {
           && inboxProposalOk(wid, request.resource.data, get(inboxDoc(wid, 'inboxThreads', request.resource.data.threadId)).data)
           && inboxTrackedThread(wid, request.resource.data.lastEventId, ['outcome.proposed'],
                request.resource.data.memberUid, request.resource.data.threadId)
-          && inboxEv(wid, request.resource.data.lastEventId).data.data.outcomeId == oid;
+          && inboxEv(wid, request.resource.data.lastEventId).data.data.outcomeId == oid)
+          || inboxStepCreate(wid, oid, request.resource.data);
         allow update: if request.resource.data.updatedAt == request.time
-          && inboxTrackedThread(wid, request.resource.data.lastEventId,
+          && (resource.data.get('planId', null) != null
+            ? request.resource.data.get('planId', null) == resource.data.planId
+              && inboxStepUpdate(wid, oid, request.resource.data, resource.data)
+            : inboxSingleUpdate(wid, oid));
+        allow delete: if false;
+
+        function inboxSingleUpdate(wid, oid) {
+          return inboxTrackedThread(wid, request.resource.data.lastEventId,
                ['outcome.approved', 'outcome.rejected', 'outcome.done', 'outcome.failed',
                 'outcome.revise_requested', 'outcome.revised'],
                resource.data.memberUid, resource.data.threadId)
@@ -1361,7 +1548,125 @@ service cloud.firestore {
                       inboxEv(wid, request.resource.data.lastEventId).data.type)
                   || inboxRevised(request.resource.data, resource.data,
                       inboxEv(wid, request.resource.data.lastEventId).data.type))));
-        allow delete: if false;
+        }
+
+        // A plan step (item qwFAWxZM5xkcE7PPjAzi): proposed by an agent with its plan (one
+        // plan.proposed batch), or an approval step the member adds (plan.edited). Its plan is on
+        // the same thread and lists it.
+        function inboxStepCreate(wid, oid, d) {
+          let p = getAfter(inboxPlanDoc(wid, d.planId)).data;
+          let e = inboxEv(wid, d.lastEventId).data;
+          return d.keys().hasAll(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
+                 'proposedBy', 'executor', 'decision', 'result', 'planId', 'createdAt', 'updatedAt', 'lastEventId'])
+            && d.keys().hasOnly(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
+                 'proposedBy', 'executor', 'decision', 'result', 'planId', 'createdAt', 'updatedAt', 'lastEventId',
+                 'confidence', 'checks'])
+            && (!('confidence' in d) || d.confidence in ['high', 'medium', 'low'])
+            && (!('checks' in d) || (d.checks is list && d.checks.size() <= 6))
+            && d.planId is string && p.threadId == d.threadId && p.memberUid == d.memberUid && oid in p.steps
+            && d.type in outcomePlanTypes()
+            && inboxFieldsOk(d.type, d.fields)
+            && d.state == 'proposed' && str(d.note, 0, 2000) && d.proposedBy == me()
+            && d.decision == null && d.result == null
+            && d.createdAt == request.time && d.updatedAt == request.time
+            && e.data.planId == d.planId
+            && ((isActiveAgent(wid) && p.proposedBy == me()
+                && inboxProposalOk(wid, d, get(inboxDoc(wid, 'inboxThreads', d.threadId)).data)
+                && inboxTrackedThread(wid, d.lastEventId, ['plan.proposed'], d.memberUid, d.threadId))
+              || (inboxOwner(wid, d) && d.type == 'approval' && d.executor == null
+                && inboxTrackedThread(wid, d.lastEventId, ['plan.edited'], d.memberUid, d.threadId)
+                && e.data.op == 'add' && e.data.outcomeId == oid));
+        }
+        // A plan step changes only through its own event (or the plan's), and never out of turn.
+        function inboxStepUpdate(wid, oid, d, r) {
+          let e = inboxEv(wid, d.lastEventId).data;
+          return inboxTrackedThread(wid, d.lastEventId,
+                 ['outcome.approved', 'outcome.rejected', 'outcome.done', 'outcome.failed', 'outcome.started',
+                  'outcome.revise_requested', 'outcome.revised', 'plan.approved', 'plan.rejected', 'plan.edited',
+                  'plan.retried', 'plan.skipped', 'thread.woke'],
+                 r.memberUid, r.threadId)
+            && (e.type in ['outcome.revise_requested', 'outcome.revised']
+              // Ask for changes works on a step as on a single outcome.
+              ? e.data.outcomeId == oid
+                && ((inboxOwner(wid, r) && inboxReviseAsk(d, r, e.type))
+                  || (isActiveAgent(wid) && inboxRevised(d, r, e.type)))
+              : e.data.planId == r.planId
+                && (e.type == 'plan.approved' ? oid in e.data.approved
+                  : e.type == 'plan.rejected' ? oid in e.data.rejected
+                  : e.data.outcomeId == oid)
+                && inboxStepMove(wid, oid, d, r, e,
+                     get(inboxPlanDoc(wid, r.planId)).data, getAfter(inboxPlanDoc(wid, r.planId)).data));
+        }
+        function inboxStepDecision(d) {
+          return d.decision.keys().hasAll(['byUid', 'at', 'edited', 'reason'])
+            && d.decision.byUid == me() && d.decision.at == request.time && d.decision.edited is bool;
+        }
+        function inboxStepResult(d) {
+          return exactKeys(d.result, ['text', 'permalink', 'itemId', 'error', 'by', 'at'])
+            && strOrNull(d.result.text, 20000) && strOrNull(d.result.permalink, 2048)
+            && strOrNull(d.result.itemId, 128) && strOrNull(d.result.error, 1000)
+            && d.result.by == me() && d.result.at == request.time;
+        }
+        // `p`, `pa`: the plan before and after the batch. The member approves an agent step any
+        // time before it runs; a person step only at its turn (passing it moves the cursor) and
+        // only the member; Reject plan / remove set aside what has not started; Retry and Skip
+        // take a failed step at the cursor. The executor reports only the step at the cursor.
+        function inboxStepMove(wid, oid, d, r, e, p, pa) {
+          let human = r.type in outcomeHuman();
+          let turn = inboxAtCursor(p, oid);
+          return (inboxOwner(wid, r) && inboxPlanLive(p)
+              && ((e.type == 'outcome.approved' && r.state in ['proposed', 'revising']
+                  && changed(['state', 'fields', 'decision', 'revise', 'updatedAt', 'lastEventId'])
+                  && d.get('revise', null) == null && inboxFieldsOk(r.type, d.fields)
+                  && inboxStepDecision(d) && d.decision.reason == null
+                  && d.decision.keys().hasOnly(['byUid', 'at', 'edited', 'reason', 'version'])
+                  && (d.decision.get('version', null) == null
+                    || (d.decision.version is int && d.decision.version >= 1
+                      && d.decision.version <= r.get('versions', []).size()))
+                  && (human
+                    ? turn && r.state == 'proposed' && d.state == 'done' && pa.cursor == p.cursor + 1
+                    : d.state == 'approved'))
+                || (e.type == 'outcome.rejected' && human && turn && r.state == 'proposed'
+                  && changed(['state', 'decision', 'updatedAt', 'lastEventId'])
+                  && d.state == 'rejected' && exactKeys(d.decision, ['byUid', 'at', 'edited', 'reason'])
+                  && inboxStepDecision(d) && d.decision.edited == false && strOrNull(d.decision.reason, 1000)
+                  && pa.state == 'stopped')
+                || (e.type == 'plan.approved' && !human && r.state == 'proposed'
+                  && changed(['state', 'decision', 'updatedAt', 'lastEventId']) && d.state == 'approved'
+                  && inboxStepDecision(d) && d.decision.edited == false && d.decision.reason == null
+                  && d.decision.keys().hasOnly(['byUid', 'at', 'edited', 'reason', 'version'])
+                  && d.decision.get('version', null)
+                    == (r.get('versions', []).size() == 0 ? null : r.versions.size()))
+                || (e.type in ['plan.rejected', 'plan.edited']
+                  && (e.type == 'plan.rejected' ? pa.state == 'stopped'
+                    : e.data.op == 'remove' && oid in p.steps && !(oid in pa.steps))
+                  && r.state in ['proposed', 'revising', 'approved'] && !(turn && r.state == 'approved')
+                  && changed(['state', 'decision', 'revise', 'updatedAt', 'lastEventId'])
+                  && d.state == 'rejected' && d.get('revise', null) == null
+                  && exactKeys(d.decision, ['byUid', 'at', 'edited', 'reason'])
+                  && inboxStepDecision(d) && d.decision.edited == false
+                  && (e.type == 'plan.edited' ? d.decision.reason == 'removed' : strOrNull(d.decision.reason, 1000)))
+                || (e.type == 'plan.retried' && turn && p.state == 'blocked' && r.state == 'failed'
+                  && changed(['state', 'result', 'updatedAt', 'lastEventId'])
+                  && d.state == 'approved' && d.result == null)
+                || (e.type == 'plan.skipped' && turn && p.state == 'blocked' && r.state == 'failed'
+                  && changed(['state', 'updatedAt', 'lastEventId'])
+                  && d.state == 'rejected' && pa.cursor == p.cursor + 1)))
+            || (isActiveAgent(wid) && turn && p.state in ['proposed', 'active']
+              && changed(['state', 'result', 'updatedAt', 'lastEventId']) && inboxStepResult(d)
+              && ((e.type in ['outcome.done', 'outcome.failed', 'outcome.started'] && r.executor == me()
+                  && (e.type == 'outcome.started'
+                    ? r.state == 'approved' && d.state == 'running'
+                      && outcomeWaitingOn()[r.type] == 'item' && d.result.itemId is string
+                    : r.state in ['approved', 'running']
+                      && (e.type == 'outcome.done'
+                        ? d.state == 'done' && pa.cursor == p.cursor + 1
+                        : d.state == 'failed' && pa.state == 'blocked')))
+                || (e.type == 'thread.woke' && r.type == 'snooze' && r.state == 'approved'
+                  && d.state == 'done' && pa.cursor == p.cursor + 1
+                  && get(inboxDoc(wid, 'inboxThreads', r.threadId)).data.state == 'waiting'
+                  && get(inboxDoc(wid, 'inboxThreads', r.threadId)).data.waiting.until <= request.time)));
+        }
 
         function inboxProposalOk(wid, d, t) {
           return t.memberUid == d.memberUid

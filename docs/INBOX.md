@@ -35,7 +35,12 @@ inboxMessages/{mid}   memberUid, threadId, direction in|out, source, sender{name
 inboxOutcomes/{oid}   memberUid, threadId, type, fields{}, state, note, confidence? (high|medium|low),
                       checks?[] (at most 6), proposedBy, executor|null,
                       decision{byUid, at, edited, reason}|null,
-                      result{text, permalink, itemId, error, by, at}|null, createdAt, updatedAt, lastEventId
+                      result{text, permalink, itemId, error, by, at}|null, planId? (absent: a single
+                      outcome), createdAt, updatedAt, lastEventId
+inboxPlans/{pid}      memberUid, threadId, proposedBy, steps[] (outcome ids in order, 1 to 8), cursor
+                      (the step whose turn it is; steps.length once through), state
+                      proposed|active|blocked|done|stopped, note, confidence?, createdAt, updatedAt,
+                      lastEventId
 inboxEvents/{eid}     actor{type,id,name}, memberUid, threadId|null, subjectId|null, type, data{}, at
                       (create-only; the timeline)
 inboxRelations/{rid}  memberUid, a, b (a < b), note, state, proposedBy{type,id},
@@ -180,6 +185,49 @@ counting the meeting twice. It is refused unless the outcome is an approved (or 
 4. Send the reply (`text`) on the thread's channel, as the member.
 5. `outcome_done` with the reply's permalink.
 
+### Plans (item qwFAWxZM5xkcE7PPjAzi)
+
+An agent may propose a **plan** instead of one outcome: an ordered list of 1-8 steps for a
+thread. Each step is an `inboxOutcomes` doc with `planId`, so it keeps everything an outcome
+has (fields, note, confidence, checks, versions, Ask for changes, Edit on approve). The plan doc
+holds the order (`steps`) and whose turn it is (`cursor`). The pure model is
+`packages/shared/src/plans.ts` (`planView`, `singlePlanView`, `planThreadState`); the actions are
+in `inbox.ts`.
+
+- **Step types.** A plan may hold reply, reply_book, book, nudge, handover, make_it_work, snooze
+  (as "wait until") and approval, never no_reply or ignore. `approval` (kind `human`: what,
+  detail?, link?) is a gate the member decides; `book` (start, end, with, title?) books without a
+  reply. Both are plan-only: `outcome_propose` refuses them alone.
+- **Proposing** (`proposePlan`, agent): the plan, its steps and one `plan.proposed` event in one
+  batch, so the member never sees half a plan. The thread goes to Your call.
+- **Approving.** `approvePlan` (`plan.approved`): every proposed agent step is approved at the
+  version on show, unedited; gates and steps being revised are left as they are; booking steps
+  book on approval, as `reply_book`. `approveOutcome` approves one agent step any time before it
+  runs (with Edit and a chosen version). Approving early never runs a step early.
+- **Order.** A step is carried out only at the cursor (the rules refuse any other), and
+  reporting it done moves the cursor by exactly one. A gate is decided only at its
+  turn and only by the member: Approve marks it done and moves the cursor; Not approved
+  (`rejectOutcome`) stops the plan and the thread goes back to investigating.
+- **Build it.** `finishOutcome` with status `started` and the item id puts a `make_it_work` step
+  in `running` (the thread waits on the item); `done` later moves the plan on.
+- **Wait until.** An approved snooze at the cursor makes the thread wait until its date;
+  `wakeThread` then marks it done and moves the plan on.
+- **Failures.** A failed step blocks the plan (thread: Your call); the member retries
+  (`retryPlanStep`: approved again), skips (`skipPlanStep`: set aside, cursor +1) or stops
+  (`stopPlan`).
+- **Edit plan** (`editPlan`, `plan.edited`): move or remove a step that has not started, or add
+  an approval step from the first step not started on. The steps already through, and the one
+  being carried out, never move. A removed step is rejected with the reason "removed".
+- **Reject plan** (`rejectPlan`): every step not started is rejected, the plan stops, the thread
+  goes back to investigating.
+- **Thread state.** Every plan batch sets the thread from the plan (`planThreadState`): a step at
+  the cursor that needs the member → Your call; Build it running → waiting on the item; a wait
+  until → waiting until its date; an approved agent step → the last agent step's after-state
+  (Your call for the first); all through → the last agent step's after-state; stopped →
+  investigating.
+- **Batch size.** Approve plan and Reject plan with 8 steps (all bookings) fit in one batch: the
+  rules tests run the worst case on the emulator (within Firestore's 20 reads per batch).
+
 ## Areas and quiet subjects
 
 - **Area:** an optional tag on a subject (a client, a product, "admin"; at most 60 characters,
@@ -275,13 +323,17 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
   - ignore, close and bring back threads;
   - move threads between subjects;
   - rename, merge and split subjects.
+- **Plans:** agents propose plans (cursor 0, 1-8 steps created in the same batch, each on the
+  plan's thread) and report only their own step at the cursor; the cursor moves by one. Only the
+  member approves steps or the plan, decides gates (at their turn), edits, retries, skips, stops
+  or rejects a plan. Single outcomes (no `planId`) keep the rules above.
 - **Related subjects:** agents of the organization propose links between two subjects of the
   same member; only that member relates, accepts, turns down and removes them.
 - **Approval:** agents never write `approved` or a decision, so nothing is carried out without
   the member's OK.
 - **Tracking:** every inbox write is tracked in `inboxEvents`, never in the organization-wide
   `events`, which every member can read.
-- **Tests:** `packages/shared/rules/inbox.test.ts`, `inboxrevise.test.ts` and `inboxrelations.test.ts`. The `inbox: …` mutations in
+- **Tests:** `packages/shared/rules/inbox.test.ts`, `inboxrevise.test.ts`, `inboxrelations.test.ts` and `plans.test.ts`. The `inbox: …` and `plans: …` mutations in
   `packages/shared/rules/mutate.mjs` are all caught.
 
 ## Agent tools (MCP and Go CLI)
