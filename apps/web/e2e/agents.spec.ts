@@ -554,7 +554,8 @@ for (const theme of ['light', 'dark'] as const) {
     await axe();
     await snap('2-pair-empty');
     await page.goto(`/agents/connect?code=${formatPairingCode(term.code)}`);
-    await expect(page.getByLabel('Terminal waiting')).toBeVisible();
+    // A full page load that then looks the pairing code up on the server: more than 5 s when loaded.
+    await expect(page.getByLabel('Terminal waiting')).toBeVisible({ timeout: 20_000 });
     await page.getByRole('checkbox', { name: 'Blog' }).check();
     await axe();
     await snap('2-pair-found');
