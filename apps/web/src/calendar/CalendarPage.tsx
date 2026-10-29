@@ -747,16 +747,24 @@ function WeekStrip({
         const on = sameDay(d, anchor);
         const busy = blocks.some((b) => sameDay(b.start, d)) || due.some((x) => sameDay(x.due, d));
         const proposal = blocks.some((b) => b.kind === 'proposed' && sameDay(b.start, d));
+        const events = blocks.filter((b) => b.kind !== 'proposed' && sameDay(b.start, d)).length;
+        const proposed = blocks.filter((b) => b.kind === 'proposed' && sameDay(b.start, d)).length;
+        // Starts with the visible text ("M 15") so voice control and axe's
+        // label-content-name-mismatch agree with what is on screen.
+        const label = [
+          `${d.toLocaleDateString('en-GB', { weekday: 'narrow' })} ${d.getDate()}`,
+          d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }),
+          events ? `${events} ${events === 1 ? 'event' : 'events'}` : '',
+          proposed ? `${proposed} proposed` : '',
+        ]
+          .filter(Boolean)
+          .join(', ');
         return (
           <button
             key={d.getTime()}
             type="button"
             aria-pressed={on}
-            aria-label={d.toLocaleDateString('en-GB', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-            })}
+            aria-label={label}
             onClick={() => onPick(d)}
             className={cn(
               'flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-btn text-ink transition-colors foc:outline-2 foc:outline-focus',
@@ -765,7 +773,7 @@ function WeekStrip({
           >
             <span className={cn('text-[12px]', on ? 'text-surface' : 'text-text-2')}>
               {d.toLocaleDateString('en-GB', { weekday: 'narrow' })}
-            </span>
+            </span>{' '}
             <span
               className={cn(
                 'text-16 font-semibold tabular-nums',
