@@ -16,8 +16,10 @@ dispatch, route and give back; the sub-agents do the work.
    release), report back in one line". Never put two items in one sub-agent. Never do an item's
    work in the main session; stay free for the next event.
 2. **Route follow-ups by item_id.** `note`, `answer` and `status` events name an item: pass the
-   text on to that item's sub-agent (SendMessage). If it has already finished, handle what the
-   event needs on that item yourself with `itemId` set.
+   text on to that item's sub-agent by continuing it with SendMessage, even if it has reported
+   back and is idle: it keeps its context. Only if it cannot be continued, start a new background
+   sub-agent for that item with the event text as its brief. Never do the item's work (complete,
+   add_note and the like) in the main session.
 3. **Stop stops one.** A `stop` event ends the sub-agent of that item only (TaskStop). Do not
    redo the item; the others go on.
 4. **Give back idle items.** An item you hold but no sub-agent is actively working (it waits on a
