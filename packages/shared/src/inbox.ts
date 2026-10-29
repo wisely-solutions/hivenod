@@ -2279,10 +2279,7 @@ export function requestRecheck(
     t.state === 'yourCall' || t.state === 'waiting',
     'Only a thread with a proposal or a plan can be re-checked.',
   );
-  need(
-    !recheckPending(t, input.nowMs ?? Date.now()),
-    'The agent is already checking it again.',
-  );
+  need(!recheckPending(t, input.nowMs ?? Date.now()), 'The agent is already checking it again.');
   return inboxPlan(
     ctx,
     'thread.recheck_requested',

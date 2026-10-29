@@ -96,9 +96,7 @@ describe('requestRecheck', () => {
         nowMs: NOW + RECHECK_RETRY_MS + 1,
       }),
     ).not.toThrow();
-    expect(
-      recheckPending({ recheck: { state: 'done', requestedAt: at(NOW) } }, NOW),
-    ).toBe(false);
+    expect(recheckPending({ recheck: { state: 'done', requestedAt: at(NOW) } }, NOW)).toBe(false);
   });
 });
 
@@ -165,7 +163,12 @@ describe('recheckDone', () => {
   });
   it('revised and asked stamp nothing', () => {
     for (const result of ['revised', 'asked']) {
-      const p = recheckDone(agent, { threadId: 't1', thread: PENDING, result, outcomes: { o1: O } });
+      const p = recheckDone(agent, {
+        threadId: 't1',
+        thread: PENDING,
+        result,
+        outcomes: { o1: O },
+      });
       expect(p.checked).toEqual([]);
       expect(p.ops).toHaveLength(2);
     }
@@ -213,7 +216,12 @@ describe('reviseOutcome on a re-check', () => {
       }),
     ).toThrow(/started/);
     expect(() =>
-      reviseOutcome(agent, { outcomeId: 's3', outcome: pl.outcomes.s3!, thread: PENDING, fields: f }),
+      reviseOutcome(agent, {
+        outcomeId: 's3',
+        outcome: pl.outcomes.s3!,
+        thread: PENDING,
+        fields: f,
+      }),
     ).toThrow(/give its plan/);
   });
   it('refused without a pending re-check, or for another agent', () => {
@@ -241,9 +249,9 @@ describe('staleReason', () => {
     ).toBeNull();
   });
   it('slot passed, newer message, older than 24 h (in that order)', () => {
-    expect(
-      staleReason({ ...fresh, fields: { start: '2026-10-29T11:00:00Z' } }, thread, NOW),
-    ).toBe('slot');
+    expect(staleReason({ ...fresh, fields: { start: '2026-10-29T11:00:00Z' } }, thread, NOW)).toBe(
+      'slot',
+    );
     expect(staleReason(fresh, { lastMessageAt: at(NOW - 1000) }, NOW)).toBe('message');
     const old = { ...fresh, createdAt: at(NOW - STALE_AFTER_MS - 1) };
     expect(staleReason(old, { lastMessageAt: at(NOW - STALE_AFTER_MS - 5000) }, NOW)).toBe('old');
@@ -263,8 +271,6 @@ describe('staleReason', () => {
     // A Cancel of an ask (updatedAt bumped, one version) does not count.
     expect(staleReason({ ...old, updatedAt: at(NOW - 1000) }, thread, NOW)).toBe('message');
     expect(staleReason({ ...old, state: 'done' }, thread, NOW)).toBeNull();
-    expect(
-      freshAt({ ...old, state: 'approved', decision: { at: at(NOW - 10) } }),
-    ).toBe(NOW - 10);
+    expect(freshAt({ ...old, state: 'approved', decision: { at: at(NOW - 10) } })).toBe(NOW - 10);
   });
 });
