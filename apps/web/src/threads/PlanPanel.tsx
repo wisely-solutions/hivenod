@@ -286,6 +286,7 @@ export function PlanPanel(props: PlanPanelProps) {
         <Button
           variant="approve"
           data-approve-plan=""
+          className={sheet ? 'w-full' : undefined}
           onClick={approveAll}
           leading={<Icon icon={Check} size={16} />}
         >
@@ -519,6 +520,7 @@ export function PlanPanel(props: PlanPanelProps) {
                   type="button"
                   aria-expanded={open}
                   aria-label={`Step ${s.number}: ${title}, ${s.kind === 'human' ? 'your approval' : 'agent action'}, ${STEP_UI_TEXT[s.ui]}`}
+                  title={title}
                   onClick={() => setOpenId(open ? '' : s.outcomeId)}
                   className="min-w-0 flex-1 truncate text-left text-14 font-semibold text-ink hov:underline foc:outline-2 foc:outline-focus"
                 >
