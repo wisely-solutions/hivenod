@@ -20,3 +20,14 @@ export function orgColorIndex(
 export function orgColor(wid: string, orgs: ReadonlyArray<{ wid: string; name: string }>): string {
   return `var(--agent-${orgColorIndex(wid, orgs)})`;
 }
+
+/**
+ * The member's own Personal organization (item icVly): named "Personal", made by them, and only
+ * them in it. It gets a person mark and the line "Just you · your assistant".
+ */
+export function isPersonalOrg(
+  org: { name: string; ownerUid: string; members: number },
+  uid: string,
+): boolean {
+  return org.ownerUid === uid && org.members === 1 && org.name.trim().toLowerCase() === 'personal';
+}

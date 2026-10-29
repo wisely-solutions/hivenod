@@ -9,6 +9,7 @@ import {
   person,
   signIn,
   settle,
+  expectCurrentOrg,
 } from './helpers';
 
 async function axe(page: Page) {
@@ -59,9 +60,7 @@ test('sign in, get an organization, invite someone, they join and land in a grou
   await page.goto('/');
   await signIn(page, olivia, 'Continue with Google', { ui: true });
   await expect(page.getByRole('heading', { name: /^Good \w+, Olivia$/ })).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Olivia’s organization, switch organization' }),
-  ).toBeVisible();
+  await expectCurrentOrg(page, 'Olivia’s organization');
 
   // 2. The owner invites Max.
   await page.goto('/me/members');

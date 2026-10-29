@@ -13,12 +13,13 @@ import { useReady } from '../auth/context';
 import { orgColor } from '../orgs/color';
 import { useOrgs } from '../orgs/data';
 import { PageHeader } from '../pages/Chrome';
+import { OrgChips } from '../orgs/OrgChips';
 import { useThreadMessages } from '../today/data';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 import { EmptyState, Skeleton } from '../ui/feedback';
-import { Input, Segmented, Select } from '../ui/form';
+import { Input, Select } from '../ui/form';
 import { Icon } from '../ui/icon';
 import { Popover, Sheet } from '../ui/overlay';
 import { waitLabel } from '../inbox/logic';
@@ -177,8 +178,7 @@ export function InboxListPage() {
     (hasOpen ? 1 : 0) +
     (days > 0 ? 1 : 0) +
     labelKeys.size +
-    areaKeys.size +
-    (scope && orgs.length > 3 ? 1 : 0);
+    areaKeys.size;
 
   // Who asked what last, for the rows above Recent.
   const leads = useMemo(() => {
@@ -208,17 +208,6 @@ export function InboxListPage() {
     void navigate({ to: '/inbox', search: v === 'all' ? {} : { org: v }, replace: true });
   const filterPanel = (
     <div className="flex flex-col gap-4">
-      {orgs.length > 1 ? (
-        <Select
-          label="Organization"
-          value={scope || 'all'}
-          onValueChange={setScope}
-          options={[
-            { value: 'all', label: 'All my organizations' },
-            ...orgs.map((o) => ({ value: o.id, label: o.name })),
-          ]}
-        />
-      ) : null}
       <div role="group" aria-label="Filters" className="flex flex-wrap items-center gap-2">
         <FilterChip pressed={waitingForMe} onClick={() => setWaitingForMe((v) => !v)}>
           Waiting for me
@@ -339,18 +328,14 @@ export function InboxListPage() {
         }
         reserveSubtitle
       />
-      {orgs.length >= 2 && orgs.length <= 3 ? (
-        <Segmented
-          label="Organization"
-          className="mb-3"
-          value={scope || 'all'}
-          onValueChange={setScope}
-          options={[
-            { value: 'all', label: 'All' },
-            ...orgs.map((o) => ({ value: o.id, label: o.name })),
-          ]}
-        />
-      ) : null}
+      {/* The organization chips (item icVly): a filter of this page only, kept in the URL. */}
+      <OrgChips
+        className="mb-3"
+        orgs={colorOrgs}
+        value={scope || null}
+        onChange={(w) => setScope(w ?? 'all')}
+        hint="Tap an organization to see only its threads"
+      />
       <div className="mb-4 flex items-end gap-2">
         <div className="min-w-0 flex-1">
           <Input

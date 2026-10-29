@@ -156,8 +156,11 @@ test('agents fill the calendar; another organization shows only as busy', async 
     await expect(grid.getByText('Dentist')).toHaveCount(0);
 
     // This organization: its events, the client's time only as busy, no title anywhere.
-    const select = page.getByRole('combobox', { name: 'Calendar' });
-    await select.selectOption({ value: wid });
+    // The organization chips (item icVly): one organization's view, kept in the URL.
+    const chips = page.getByRole('group', { name: 'Organization' });
+    const pick = (w: string) => chips.locator(`[data-org-chip="${w}"]`).click();
+    await pick(wid);
+    await expect(page).toHaveURL(new RegExp(`org=${wid}`));
     await expect(grid.getByRole('group', { name: /^Team standup, / })).toBeVisible();
     await expect(grid.getByRole('group', { name: /^Busy, .*Another organization$/ })).toBeVisible();
     await expect(page.getByText('Client workshop')).toHaveCount(0);
@@ -176,11 +179,11 @@ test('agents fill the calendar; another organization shows only as busy', async 
     await expect(grid.getByRole('group', { name: /^Team standup \(moved\), / })).toBeVisible();
 
     // The client organization's own view shows its event with details.
-    await select.selectOption({ value: client });
+    await pick(client);
     await expect(grid.getByRole('group', { name: /^Client workshop, / })).toBeVisible();
     await expect(page.getByText('Team standup')).toHaveCount(0);
 
-    await select.selectOption({ value: wid });
+    await pick(wid);
     await page.getByRole('button', { name: 'Week', exact: true }).click();
     await expect(grid.getByRole('group', { name: /^Team standup \(moved\), / })).toBeVisible();
     await expectNoHorizontalScroll(page);

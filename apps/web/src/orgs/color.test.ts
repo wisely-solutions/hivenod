@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { orgColor, orgColorIndex } from './color';
+import { isPersonalOrg, orgColor, orgColorIndex } from './color';
 
 describe('organization colours (design 3.6)', () => {
   it('by name, then id, whatever order the member’s list is in', () => {
@@ -18,5 +18,15 @@ describe('organization colours (design 3.6)', () => {
     const idx = orgs.map((o) => orgColorIndex(o.wid, orgs));
     expect(new Set(idx.slice(0, 8)).size).toBe(8);
     expect(idx[8]).toBe(idx[0]);
+  });
+});
+
+describe('the Personal organization (item icVly)', () => {
+  it('is the member’s own, named Personal, with only them in it', () => {
+    expect(isPersonalOrg({ name: 'Personal', ownerUid: 'u1', members: 1 }, 'u1')).toBe(true);
+    expect(isPersonalOrg({ name: ' personal ', ownerUid: 'u1', members: 1 }, 'u1')).toBe(true);
+    expect(isPersonalOrg({ name: 'Personal', ownerUid: 'u2', members: 1 }, 'u1')).toBe(false);
+    expect(isPersonalOrg({ name: 'Personal', ownerUid: 'u1', members: 3 }, 'u1')).toBe(false);
+    expect(isPersonalOrg({ name: 'Northwind', ownerUid: 'u1', members: 1 }, 'u1')).toBe(false);
   });
 });

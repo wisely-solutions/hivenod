@@ -8,6 +8,8 @@ export interface OrgRow {
   name: string;
   role: Role;
   members: number;
+  /** Who created it (the Personal organization is the member's own). */
+  ownerUid: string;
   /** An admin has started deleting it (card 9jpb1Q4a). */
   deleting: boolean;
 }
@@ -36,6 +38,7 @@ export function useOrgs(uid: string, ids: readonly string[]): OrgRow[] {
                     name: r.data.name,
                     role,
                     members: Object.keys(r.data.memberRoles).length,
+                    ownerUid: r.data.ownerUid,
                     deleting: Boolean(r.data.deletingAt),
                   }
                 : null,

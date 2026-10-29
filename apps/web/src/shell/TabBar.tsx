@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router';
+import { Link, useRouterState } from '@tanstack/react-router';
 import { Fragment, useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useCapture } from '../capture/CaptureProvider';
@@ -7,7 +7,11 @@ import { useNeedsAll } from '../needs/data';
 import { NeedsBadge, needsLabel } from '../needs/NeedsBadge';
 import { Badge } from '../ui/badge';
 import { useWaitingThreads } from '../threads/data';
-import { TABS } from './nav';
+import { isOrgPath, TABS } from './nav';
+import { useReady } from '../auth/context';
+import { OrgMark } from '../orgs/OrgSwitcher';
+import { useOrgLooks } from '../orgs/look';
+import { useShellData } from './data';
 
 /** Hides while scrolling down, comes back on any scroll up (or near the top). */
 export function useScrollHidden(): boolean {
@@ -33,6 +37,41 @@ export function useScrollHidden(): boolean {
     };
   }, []);
   return hidden;
+}
+
+/**
+ * The fifth tab (item icVly, model A): the organization picked in the switcher, as its mark and
+ * name. It opens the organization hub (projects, agents, settings, switch) and is lit on every
+ * organization page. A dot when something in its projects needs you.
+ */
+function OrgTab() {
+  const { session } = useReady();
+  const look = useOrgLooks()(session.workspaceId);
+  const { needs, needsReady } = useShellData();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const active = isOrgPath(path);
+  const name = session.workspace.name;
+  const waiting = needsReady && needs.total > 0;
+  return (
+    <Link
+      to="/org"
+      aria-label={`${name}, organization${waiting ? `, ${needs.total} waiting in its projects` : ''}`}
+      data-org-tab=""
+      data-status={active ? 'active' : undefined}
+      className="relative flex min-h-14 min-w-0 flex-col-reverse items-center justify-center gap-0.5 px-1 text-12 font-medium text-text-2 transition-colors data-[status=active]:text-ink"
+    >
+      <span className="block w-full truncate text-center">{name}</span>{' '}
+      <span className="relative">
+        <OrgMark name={name} {...look} className="size-[22px] text-12" />
+        {waiting ? (
+          <span
+            aria-hidden
+            className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-surface bg-gate"
+          />
+        ) : null}
+      </span>
+    </Link>
+  );
 }
 
 /** Phone bottom tabs (SPEC section 8). Targets are 56 px tall, inset by the home indicator. */
@@ -106,6 +145,9 @@ export function TabBar({ hidden }: { hidden: boolean }) {
             </li>
           </Fragment>
         ))}
+        <li className="min-w-0">
+          <OrgTab />
+        </li>
       </ul>
     </nav>
   );
