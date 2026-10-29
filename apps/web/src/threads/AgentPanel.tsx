@@ -18,6 +18,7 @@ import { OutcomeCard } from './OutcomeCard';
 import { PlanPanel } from './PlanPanel';
 import { planInputOf, planLive, planWaits } from './plan';
 import { RelatedSubjects } from './RelatedSubjects';
+import { RecheckButton, useRecheck } from './Recheck';
 
 export interface AgentPanelProps {
   wid: string;
@@ -80,6 +81,9 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
     const asks = t.state === 'needsYou' && t.question && !t.question.answer;
     // The phone sheet, collapsed: only the decision itself.
     const collapsed = sheet && !open;
+    // Re-check (item bmNoIvvqKCdAorLSShE9): with an open proposal (a live plan has its own).
+    const rc = useRecheck(wid, thread, now);
+    const recheck = !!shown && !livePlans.length && (rc.can || rc.counting?.tag === 'panel');
 
     const head = (
       <div className="flex items-center gap-3 px-4 pt-4 sm:px-5">
@@ -96,6 +100,9 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
           </p>
         </div>
         {shown ? <ConfidenceMeter value={shown.data.confidence ?? undefined} /> : null}
+        {recheck ? (
+          <RecheckButton rc={rc} tag="panel" variant="ghost" className="min-h-9 shrink-0 px-2" />
+        ) : null}
       </div>
     );
 
