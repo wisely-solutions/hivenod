@@ -180,6 +180,13 @@ var ToolRuns = map[string]Run{
 		}
 		return c.ThreadFlag(ctx, a.S("threadId"), urgent, a.SP("reason"))
 	},
+	"thread_due": func(ctx context.Context, c *Client, a Args) (any, error) {
+		due := a.SP("due")
+		if due == nil && a["due"] != nil {
+			return nil, Errf("due is an ISO 8601 time with its offset, or null to clear it.")
+		}
+		return c.ThreadDue(ctx, a.S("threadId"), due, a.SP("reason"))
+	},
 	"subject_relate": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.SubjectRelate(ctx, a.S("a"), a.S("b"), a.SP("note"))
 	},
@@ -187,10 +194,10 @@ var ToolRuns = map[string]Run{
 		return c.InboxNote(ctx, a.S("threadId"), a.S("text"))
 	},
 	"inbox_ask": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.InboxAsk(ctx, a.S("threadId"), a.S("question"))
+		return c.InboxAsk(ctx, a.S("threadId"), a.S("question"), a.Strings("options"))
 	},
 	"outcome_propose": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.OutcomePropose(ctx, a.S("threadId"), a.S("type"), asMap(a["fields"]), a.SP("note"))
+		return c.OutcomePropose(ctx, a.S("threadId"), a.S("type"), asMap(a["fields"]), a.SP("note"), ProposeExtra{Confidence: a.SP("confidence"), Checks: a.Strings("checks")})
 	},
 	"outcome_done": func(ctx context.Context, c *Client, a Args) (any, error) {
 		r := Args(asMap(a["result"]))

@@ -30,7 +30,7 @@ const CarryOut = "Carry out the approved outcome exactly as approved (its fields
 
 // InboxNext is NEXT in inbox.ts.
 var InboxNext = map[string]string{
-	"investigating": "Investigate: read the messages and the subject's other threads, note what you find (inbox_note), ask the person if you must (inbox_ask), then propose what should come of it (outcome_propose).",
+	"investigating": "Investigate: read the messages and the subject's other threads, note what you find (inbox_note), set the deadline a message states (thread_due), ask the person if you must (inbox_ask), then propose what should come of it (outcome_propose, with your confidence and what you checked).",
 	"needsYou":      "Waiting for the person's answer to your question.",
 	"yourCall":      "Waiting for the person to approve, edit or reject the proposed outcomes.",
 	"waiting":       "Waiting. A new message from them reopens it.",
@@ -431,8 +431,13 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 		if o.Result != nil {
 			result = map[string]any{"text": strOrNull(o.Result.Text), "permalink": strOrNull(o.Result.Permalink), "itemId": strOrNull(o.Result.ItemID), "error": strOrNull(o.Result.Error)}
 		}
+		checks := o.Checks
+		if checks == nil {
+			checks = []string{}
+		}
 		outcomes = append(outcomes, map[string]any{
 			"outcomeId": d.ID, "type": o.Type, "state": o.State, "fields": fieldsOf(o.Fields), "note": o.Note,
+			"confidence": strOrNull(o.Confidence), "checks": checks,
 			"executor": strOrNull(o.Executor), "executorIsMe": mine, "decision": decision, "result": result,
 		})
 	}
@@ -467,7 +472,11 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 		waiting = map[string]any{"on": t.Waiting.On, "until": isoPtr(t.Waiting.Until)}
 	}
 	if t.Question != nil {
-		question = map[string]any{"text": t.Question.Text, "answer": strOrNull(t.Question.Answer)}
+		opts := t.Question.Options
+		if opts == nil {
+			opts = []string{}
+		}
+		question = map[string]any{"text": t.Question.Text, "options": opts, "answer": strOrNull(t.Question.Answer)}
 	}
 	next := InboxNext[t.State]
 	if carry {
@@ -475,7 +484,7 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 	}
 	return map[string]any{
 		"threadId": id, "member": t.MemberUID, "state": t.State, "waiting": waiting, "question": question,
-		"title": t.Title, "subject": subject, "fetchedBy": t.FetchedBy, "fetchedByMe": t.FetchedBy == c.UID, "urgent": t.Urgent,
+		"title": t.Title, "subject": subject, "fetchedBy": t.FetchedBy, "fetchedByMe": t.FetchedBy == c.UID, "urgent": t.Urgent, "due": isoPtr(t.Due),
 		"messages": messages, "outcomes": outcomes, "timeline": timeline, "next": next,
 	}, nil
 }
@@ -631,10 +640,10 @@ func (c *Client) InboxNote(ctx context.Context, id, text string) (map[string]any
 	return map[string]any{"threadId": id, "note": "Noted on the timeline."}, nil
 }
 
-// InboxAsk asks the person (inbox_ask).
-func (c *Client) InboxAsk(ctx context.Context, id, question string) (map[string]any, error) {
+// InboxAsk asks the person (inbox_ask), with up to 4 answer chips.
+func (c *Client) InboxAsk(ctx context.Context, id, question string, options []string) (map[string]any, error) {
 	err := c.threadAction(ctx, id, func(t actions.ThreadState) (plan.Plan, error) {
-		return actions.AskMember(c.actx(), actions.ThreadTextInput{ThreadID: id, Thread: t, Question: question})
+		return actions.AskMember(c.actx(), actions.AskInput{ThreadID: id, Thread: t, Question: question, Options: options})
 	})
 	if err != nil {
 		return nil, err
@@ -642,13 +651,19 @@ func (c *Client) InboxAsk(ctx context.Context, id, question string) (map[string]
 	return map[string]any{"threadId": id, "state": "needsYou", "note": "Asked. The thread waits in Needs you; the answer shows in thread_read."}, nil
 }
 
+// ProposeExtra is outcome_propose's optional confidence and checks.
+type ProposeExtra struct {
+	Confidence *string
+	Checks     []string
+}
+
 // OutcomePropose proposes an outcome (outcome_propose).
-func (c *Client) OutcomePropose(ctx context.Context, id, typ string, fields map[string]any, note *string) (map[string]any, error) {
+func (c *Client) OutcomePropose(ctx context.Context, id, typ string, fields map[string]any, note *string, x ProposeExtra) (map[string]any, error) {
 	t, err := c.thread(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	r, err := actions.ProposeOutcome(c.actx(), actions.ProposeInput{ThreadID: id, Thread: actions.ThreadStateFrom(t), Type: typ, Fields: fields, Note: note})
+	r, err := actions.ProposeOutcome(c.actx(), actions.ProposeInput{ThreadID: id, Thread: actions.ThreadStateFrom(t), Type: typ, Fields: fields, Note: note, Confidence: x.Confidence, Checks: x.Checks})
 	if err != nil {
 		return nil, wrap(err)
 	}
@@ -800,6 +815,28 @@ func (c *Client) SubjectRelate(ctx context.Context, a, b string, note *string) (
 	}
 	return map[string]any{"relationId": res.RelationID, "a": res.A, "b": res.B, "state": "proposed",
 		"note": "Proposed. The person OKs or turns it down; until then it shows as a suggestion."}, nil
+}
+
+// ThreadDue sets or clears a thread's deadline (thread_due; due nil clears it).
+func (c *Client) ThreadDue(ctx context.Context, id string, due, reason *string) (map[string]any, error) {
+	var at *string
+	err := c.threadAction(ctx, id, func(t actions.ThreadState) (plan.Plan, error) {
+		p, err := actions.DueThread(c.actx(), actions.DueInput{ThreadID: id, Thread: t, Due: due, Reason: reason})
+		if err == nil && due != nil {
+			if s, ok := p.Ops[len(p.Ops)-1].Data["data"].(map[string]any)["due"].(string); ok {
+				at = &s
+			}
+		}
+		return p, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	note := "No due date any more."
+	if due != nil {
+		note = "Due date set: the person sees it ranked by it in Today."
+	}
+	return map[string]any{"threadId": id, "due": strOrNull(at), "note": note}, nil
 }
 
 // ThreadFlag marks a thread urgent or not (thread_flag).

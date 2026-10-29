@@ -49,6 +49,9 @@ type OutcomeType struct {
 		WaitingOn string `json:"waitingOn"`
 	} `json:"after"`
 	UntilField string `json:"untilField"`
+	// Batchable: a tidy-up type (sends nothing, takes effect on approval) the member may approve
+	// in one batch (item kt3E7u9EliL3q2veDDI0).
+	Batchable bool `json:"batchable"`
 }
 
 // Outcomes is the registry, in its order.
@@ -237,7 +240,30 @@ const (
 	InboxMaxReason         = 1000
 	InboxMaxResultText     = 20000
 	InboxMaxRefs           = 50
+	InboxMaxChecks         = 6
+	InboxMaxCheck          = 200
+	InboxMaxOptions        = 4
+	InboxMaxOption         = 80
 )
+
+// OutcomeConfidence lists how sure an agent may be of an outcome (OUTCOME_CONFIDENCE).
+var OutcomeConfidence = []string{"high", "medium", "low"}
+
+// cleanLines is cleanLines: short lines trimmed, each 1..each characters, at most max of them.
+func cleanLines(what string, v []string, max, each int) ([]string, error) {
+	if len(v) > max {
+		return nil, fail("At most " + strconv.Itoa(max) + " " + what + ".")
+	}
+	out := make([]string, 0, len(v))
+	for _, e := range v {
+		t := jsTrim(e)
+		if jsLen(t) == 0 || jsLen(t) > each {
+			return nil, fail("Each of the " + what + " is 1-" + strconv.Itoa(each) + " characters.")
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
 
 var sourceRE = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,39}$`)
 
@@ -705,12 +731,11 @@ func AssignSubject(ctx Ctx, in AssignSubjectInput) (AssignResult, error) {
 	return AssignResult{Plan: p, SubjectID: subjectID, Created: created}, nil
 }
 
-// ThreadTextInput is the input of addThreadNote (Text), askMember (Question) and retitleThread (Title).
+// ThreadTextInput is the input of addThreadNote (Text) and retitleThread (Title).
 type ThreadTextInput struct {
 	ThreadID string      `json:"threadId"`
 	Thread   ThreadState `json:"thread"`
 	Text     string      `json:"text"`
-	Question string      `json:"question"`
 	Title    string      `json:"title"`
 }
 
@@ -727,8 +752,16 @@ func AddThreadNote(ctx Ctx, in ThreadTextInput) (plan.Plan, error) {
 		func(string) []plan.Op { return nil }, ""), nil
 }
 
+// AskInput is askMember's input: the question plus up to 4 answer chips.
+type AskInput struct {
+	ThreadID string      `json:"threadId"`
+	Thread   ThreadState `json:"thread"`
+	Question string      `json:"question"`
+	Options  []string    `json:"options"`
+}
+
 // AskMember is askMember: the thread goes to Needs you.
-func AskMember(ctx Ctx, in ThreadTextInput) (plan.Plan, error) {
+func AskMember(ctx Ctx, in AskInput) (plan.Plan, error) {
 	if err := RequireAgent(ctx); err != nil {
 		return plan.Plan{}, err
 	}
@@ -740,10 +773,19 @@ func AskMember(ctx Ctx, in ThreadTextInput) (plan.Plan, error) {
 	if err != nil {
 		return plan.Plan{}, err
 	}
-	return InboxPlan(ctx, "thread.asked", t.MemberUID, sp(in.ThreadID), t.SubjectID, map[string]any{"text": text}, func(eventID string) []plan.Op {
+	options, err := cleanLines("options", in.Options, InboxMaxOptions, InboxMaxOption)
+	if err != nil {
+		return plan.Plan{}, err
+	}
+	data := map[string]any{"text": text}
+	question := map[string]any{"text": text, "by": ctx.Actor.ID, "at": ServerTime(), "answer": nil, "answeredAt": nil}
+	if len(options) > 0 {
+		data["options"], question["options"] = options, options
+	}
+	return InboxPlan(ctx, "thread.asked", t.MemberUID, sp(in.ThreadID), t.SubjectID, data, func(eventID string) []plan.Op {
 		return []plan.Op{upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{
 			"state":    "needsYou",
-			"question": map[string]any{"text": text, "by": ctx.Actor.ID, "at": ServerTime(), "answer": nil, "answeredAt": nil},
+			"question": question,
 		}, eventID)}
 	}, ""), nil
 }
@@ -784,6 +826,38 @@ func FlagThread(ctx Ctx, in FlagInput) (plan.Plan, error) {
 	}, ""), nil
 }
 
+// DueInput is dueThread's input: Due is an ISO 8601 time with its offset, or nil to clear.
+type DueInput struct {
+	ThreadID string      `json:"threadId"`
+	Thread   ThreadState `json:"thread"`
+	Due      *string     `json:"due"`
+	Reason   *string     `json:"reason"`
+}
+
+// DueThread is dueThread: an agent sets or clears a thread's deadline (thread_due).
+func DueThread(ctx Ctx, in DueInput) (plan.Plan, error) {
+	if err := RequireAgent(ctx); err != nil {
+		return plan.Plan{}, err
+	}
+	var due, dueISO any
+	if in.Due != nil {
+		s := jsTrim(*in.Due)
+		at, err := time.Parse(time.RFC3339Nano, s)
+		if err != nil || !isoRE.MatchString(s) {
+			return plan.Plan{}, fail("The due date is an ISO 8601 time with its offset, e.g. 2026-11-03T12:00:00Z.")
+		}
+		due = map[string]any{"__hive": "timestamp", "ms": at.UnixMilli()}
+		dueISO = ISOms(time.UnixMilli(at.UnixMilli()))
+	}
+	reason := trimOrNil(in.Reason)
+	if err := need(reason == nil || jsLen(*reason) <= InboxMaxReason, tooLong("The reason", InboxMaxReason)); err != nil {
+		return plan.Plan{}, err
+	}
+	return InboxPlan(ctx, "thread.due", in.Thread.MemberUID, sp(in.ThreadID), in.Thread.SubjectID, map[string]any{"due": dueISO, "reason": strOrNil(reason)}, func(eventID string) []plan.Op {
+		return []plan.Op{upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{"due": due}, eventID)}
+	}, ""), nil
+}
+
 // ProposeInput is proposeOutcome's input.
 type ProposeInput struct {
 	ThreadID  string         `json:"threadId"`
@@ -792,6 +866,9 @@ type ProposeInput struct {
 	Fields    map[string]any `json:"fields"`
 	Note      *string        `json:"note"`
 	OutcomeID *string        `json:"outcomeId"`
+	// Confidence is high, medium or low (nil: no meter); Checks what the agent verified.
+	Confidence *string  `json:"confidence"`
+	Checks     []string `json:"checks"`
 }
 
 // ProposeResult is the plan plus the new outcome's id.
@@ -827,6 +904,13 @@ func ProposeOutcome(ctx Ctx, in ProposeInput) (ProposeResult, error) {
 	if err := need(jsLen(note) <= InboxMaxOutcomeNote, tooLong("The note", InboxMaxOutcomeNote)); err != nil {
 		return ProposeResult{}, err
 	}
+	if err := need(in.Confidence == nil || inList(*in.Confidence, OutcomeConfidence...), "The confidence is high, medium or low."); err != nil {
+		return ProposeResult{}, err
+	}
+	checks, err := cleanLines("checks", in.Checks, InboxMaxChecks, InboxMaxCheck)
+	if err != nil {
+		return ProposeResult{}, err
+	}
 	oid := ""
 	if in.OutcomeID != nil {
 		oid = *in.OutcomeID
@@ -838,22 +922,29 @@ func ProposeOutcome(ctx Ctx, in ProposeInput) (ProposeResult, error) {
 		executor = t.FetchedBy
 	}
 	p := InboxPlan(ctx, "outcome.proposed", t.MemberUID, sp(in.ThreadID), t.SubjectID, map[string]any{"outcomeId": oid, "type": in.Type, "fields": fields}, func(eventID string) []plan.Op {
+		doc := map[string]any{
+			"memberUid":   t.MemberUID,
+			"threadId":    in.ThreadID,
+			"type":        in.Type,
+			"fields":      fields,
+			"state":       "proposed",
+			"note":        note,
+			"proposedBy":  ctx.Actor.ID,
+			"executor":    executor,
+			"decision":    nil,
+			"result":      nil,
+			"createdAt":   ServerTime(),
+			"updatedAt":   ServerTime(),
+			"lastEventId": eventID,
+		}
+		if in.Confidence != nil {
+			doc["confidence"] = *in.Confidence
+		}
+		if len(checks) > 0 {
+			doc["checks"] = checks
+		}
 		return []plan.Op{
-			{Kind: "set", Path: model.Paths.InboxOutcome(ctx.WorkspaceID, oid), Data: map[string]any{
-				"memberUid":   t.MemberUID,
-				"threadId":    in.ThreadID,
-				"type":        in.Type,
-				"fields":      fields,
-				"state":       "proposed",
-				"note":        note,
-				"proposedBy":  ctx.Actor.ID,
-				"executor":    executor,
-				"decision":    nil,
-				"result":      nil,
-				"createdAt":   ServerTime(),
-				"updatedAt":   ServerTime(),
-				"lastEventId": eventID,
-			}},
+			{Kind: "set", Path: model.Paths.InboxOutcome(ctx.WorkspaceID, oid), Data: doc},
 			upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{"state": "yourCall", "waiting": nil}, eventID),
 		}
 	}, "")

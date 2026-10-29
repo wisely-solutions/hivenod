@@ -27,7 +27,10 @@ dispatch, route and give back; the sub-agents do the work.
    channel hands over the next one.
 5. **Inbox threads.** Each `kind="inbox"` event gets its own sub-agent too (brief: the thread id,
    the event text, "start with thread_read"). For `update="true"` the thread already has one:
-   pass the event on to it. Inbox work never holds up an item.
+   pass the event on to it. Inbox work never holds up an item. The thread's sub-agent sets a
+   deadline a message states (`thread_due`), offers answer chips when it asks (`inbox_ask`
+   `options`), and proposes with its `confidence` and `checks`: the person's Today ranks and
+   shows them.
 6. **Keep the main context small.** Sub-agents report in one line and report their own run cost
    with complete, send_back or end_run. Keep a short table item_id -> sub-agent in your head or
    notes, nothing more.

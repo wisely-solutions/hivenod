@@ -38,6 +38,12 @@ export interface OutcomeType {
   after: { state: 'waiting' | 'done' | 'ignored'; waitingOn?: WaitingOn };
   /** For waitingOn 'date': the datetime field the thread waits until. */
   untilField?: string;
+  /**
+   * A tidy-up type (item kt3E7u9EliL3q2veDDI0): it takes effect on approval and sends nothing,
+   * so the member may approve it in one batch with others (the web app's tidy-ups card, when
+   * proposed with high confidence). Never on a type that sends or books.
+   */
+  batchable?: boolean;
 }
 
 const text = (label: string, help: string, required = true): OutcomeField => ({
@@ -103,6 +109,7 @@ export const OUTCOMES = {
     fields: { reason: line('Why', 'One line on why no answer is needed', false) },
     executor: 'none',
     after: { state: 'done' },
+    batchable: true,
   },
   make_it_work: {
     label: 'Make it work',
@@ -144,6 +151,7 @@ export const OUTCOMES = {
     executor: 'none',
     after: { state: 'waiting', waitingOn: 'date' },
     untilField: 'until',
+    batchable: true,
   },
   nudge: {
     label: 'Nudge',
@@ -160,6 +168,7 @@ export const OUTCOMES = {
     fields: { reason: line('Why', 'One line', false) },
     executor: 'none',
     after: { state: 'ignored' },
+    batchable: true,
   },
 } as const satisfies Record<string, OutcomeType>;
 

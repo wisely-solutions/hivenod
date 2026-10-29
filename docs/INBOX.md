@@ -23,13 +23,14 @@ All of these live under `workspaces/{wid}`. They are separate from projects and 
 inboxSubjects/{sid}   memberUid, name, area? (string|null, at most 60), createdBy{type,id}, createdAt,
                       updatedAt, lastEventId
 inboxThreads/{tid}    memberUid, subjectId|null, state, waiting{on, until|null}|null,
-                      question{text, by, at, answer|null, answeredAt|null}|null, title, refs[],
-                      lastMessageAt, fetchedBy (the home agent), urgent? (bool, thread_flag),
-                      createdAt, updatedAt, lastEventId
+                      question{text, by, at, answer|null, answeredAt|null, options?[]}|null, title,
+                      refs[], lastMessageAt, fetchedBy (the home agent), urgent? (bool, thread_flag),
+                      due? (timestamp|null, thread_due), createdAt, updatedAt, lastEventId
 inboxMessages/{mid}   memberUid, threadId, direction in|out, source, sender{name, handle}, text,
                       threadRef, messageId, permalink, replyRef, receivedAt, attachments[{name,url}],
                       fetchedBy, createdAt, lastEventId
-inboxOutcomes/{oid}   memberUid, threadId, type, fields{}, state, note, proposedBy, executor|null,
+inboxOutcomes/{oid}   memberUid, threadId, type, fields{}, state, note, confidence? (high|medium|low),
+                      checks?[] (at most 6), proposedBy, executor|null,
                       decision{byUid, at, edited, reason}|null,
                       result{text, permalink, itemId, error, by, at}|null, createdAt, updatedAt, lastEventId
 inboxEvents/{eid}     actor{type,id,name}, memberUid, threadId|null, subjectId|null, type, data{}, at
@@ -77,6 +78,13 @@ and the rules all use it:
 - `outcome_propose` lists the types and fields from it.
 
 To add a type, add one entry, then run `UPDATE_GO_CONTRACT=1 pnpm test:scripts`.
+
+A type with `batchable: true` (`no_reply`, `ignore`, `snooze`) is a **tidy-up** type: it takes
+effect on approval and sends nothing. The web app gathers a proposal into the Today page's
+tidy-ups card, which the member approves in one batch, only when all of these hold: its type is
+batchable, its `confidence` is `high`, the thread isn't urgent and has no `due` within 7 days,
+and it's the thread's only open proposal. The flag isn't in the rules: approving is always the
+member's own write. Never mark a type that sends or books as batchable.
 
 The initial types:
 
@@ -233,6 +241,28 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
 | `outcome_done`    | `hivenod outcome done OID`   | The executor reports an approved outcome as done or failed.                                                                 |
 | `thread_wake`     | `hivenod thread wake ID`     | Wakes a snoozed thread whose date has come.                                                                                 |
 | `thread_flag`     | `hivenod thread flag ID`     | Marks a thread urgent (or not, `urgent: false` / `--off`): the notifier pings the member at once, whatever the quiet hours. |
+| `thread_due`      | `hivenod thread due ID ISO`  | Sets the deadline a message states (ISO 8601 with its offset), or clears it (`due: null` / `--clear`). Today ranks by it.   |
+
+### Decision data (item kt3E7u9EliL3q2veDDI0)
+
+What the member's Today page needs to rank and explain a decision. All of it is optional, so
+older records stay valid.
+
+- **`note`**: the agent's why, 1-2 sentences. The member reads it first.
+- **`confidence`** (`outcome_propose`, CLI `--confidence`): `high`, `medium` or `low`, shown as
+  "Sure", "Likely" or "Unsure" with a 3-bar meter. Use `high` only when every fact the outcome
+  relies on is verified, and `low` when guessing what they want. Written only on create.
+- **`checks`** (`outcome_propose`, CLI `--check`, repeatable): what the agent verified, at most 6
+  lines of 1-200 characters, e.g. "Your calendar: Thu 10:00-11:00 free".
+- **`due`** (`thread_due`): a deadline stated in the thread. Its agents or its member set or clear
+  it with a `thread.due` event (data `{due, reason}`). Today's rank: band 1 is urgent or due
+  within 24 hours (or past), band 2 is due within 7 days, then `needsYou`, then `yourCall`.
+- **`question.options`** (`inbox_ask`, CLI `--option`, repeatable): up to 4 answer chips of 1-80
+  characters. A chip answers with its text, through the usual answer. The member's answer may
+  change only `answer` and `answeredAt` of the question.
+
+The Today brief counts `inboxMessages` received in the last 24 hours, with the composite index
+`inboxMessages (memberUid, receivedAt)`.
 
 The contract tests cover the agent actions: `cli/contract/cases.ts` against the Go actions, and
 `cli/e2e/test/go.test.ts`, which runs the inbox scenario through the Go CLI on the emulators and

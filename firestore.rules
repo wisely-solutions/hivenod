@@ -1153,13 +1153,13 @@ service cloud.firestore {
                   'thread.closed', 'thread.restored', 'thread.moved', 'thread.itemMade', 'outcome.approved',
                   'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
-                  'thread.flagged'])
+                  'thread.flagged', 'thread.due'])
                 && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))
             || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(wid, request.resource.data.memberUid)
                 && request.resource.data.type in ['inbox.added', 'thread.filed', 'thread.note',
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.done',
-                  'outcome.failed', 'relation.proposed', 'thread.flagged']));
+                  'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due']));
         allow update, delete: if false;
       }
 
@@ -1224,7 +1224,12 @@ service cloud.firestore {
             || ((isActiveAgent(wid) || inboxOwner(wid, resource.data))
               && changed(['urgent', 'updatedAt', 'lastEventId'])
               && request.resource.data.urgent is bool
-              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.flagged'], resource.data.memberUid, tid)));
+              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.flagged'], resource.data.memberUid, tid))
+            // A deadline, or none (thread_due): its agents or its member.
+            || ((isActiveAgent(wid) || inboxOwner(wid, resource.data))
+              && changed(['due', 'updatedAt', 'lastEventId'])
+              && (request.resource.data.due == null || request.resource.data.due is timestamp)
+              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.due'], resource.data.memberUid, tid)));
         allow delete: if false;
 
         function inboxThreadAgent(wid, tid, d, r) {
@@ -1235,7 +1240,9 @@ service cloud.firestore {
               && inboxTrackedThread(wid, d.lastEventId, ['thread.filed'], r.memberUid, tid))
             || (changed(['state', 'question', 'updatedAt', 'lastEventId'])
               && r.state != 'ignored' && d.state == 'needsYou'
-              && exactKeys(d.question, ['text', 'by', 'at', 'answer', 'answeredAt'])
+              && d.question.keys().hasAll(['text', 'by', 'at', 'answer', 'answeredAt'])
+              && d.question.keys().hasOnly(['text', 'by', 'at', 'answer', 'answeredAt', 'options'])
+              && (!('options' in d.question) || (d.question.options is list && d.question.options.size() <= 4))
               && str(d.question.text, 1, 4000) && d.question.by == me()
               && d.question.at == request.time && d.question.answer == null && d.question.answeredAt == null
               && inboxTrackedThread(wid, d.lastEventId, ['thread.asked'], r.memberUid, tid))
@@ -1275,9 +1282,7 @@ service cloud.firestore {
         function inboxThreadOwner(wid, tid, d, r) {
           return (changed(['state', 'question', 'updatedAt', 'lastEventId'])
               && r.state == 'needsYou' && r.question != null && d.state == 'investigating'
-              && exactKeys(d.question, ['text', 'by', 'at', 'answer', 'answeredAt'])
-              && d.question.text == r.question.text && d.question.by == r.question.by
-              && d.question.at == r.question.at
+              && d.question.diff(r.question).affectedKeys().hasOnly(['answer', 'answeredAt'])
               && str(d.question.answer, 1, 4000) && d.question.answeredAt == request.time
               && inboxTrackedThread(wid, d.lastEventId, ['thread.answered'], me(), tid))
             || (changed(['state', 'waiting', 'updatedAt', 'lastEventId'])
@@ -1314,8 +1319,14 @@ service cloud.firestore {
         // An agent proposes; who carries it out is fixed here: the thread's home agent, or nobody
         // for the types that take effect on approval.
         allow create: if isActiveAgent(wid)
-          && exactKeys(request.resource.data, ['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
+          && request.resource.data.keys().hasAll(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
                'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId'])
+          && request.resource.data.keys().hasOnly(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
+               'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId',
+               'confidence', 'checks'])
+          // How sure the agent is, and what it verified (item kt3E7u9EliL3q2veDDI0): optional.
+          && (!('confidence' in request.resource.data) || request.resource.data.confidence in ['high', 'medium', 'low'])
+          && (!('checks' in request.resource.data) || (request.resource.data.checks is list && request.resource.data.checks.size() <= 6))
           && request.resource.data.type in outcomeTypes()
           && inboxFieldsOk(request.resource.data.type, request.resource.data.fields)
           && request.resource.data.state == 'proposed'

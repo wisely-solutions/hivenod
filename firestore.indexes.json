@@ -513,6 +513,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "inboxMessages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "memberUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "receivedAt",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -406,8 +406,8 @@ const MUTATIONS = [
     'inbox: people write agent events',
     [
       [
-        "'relation.removed',\n                  'thread.flagged'])",
-        "'relation.removed',\n                  'thread.flagged', 'outcome.done'])",
+        "'relation.removed',\n                  'thread.flagged', 'thread.due'])",
+        "'relation.removed',\n                  'thread.flagged', 'thread.due', 'outcome.done'])",
       ],
     ],
   ],
@@ -439,8 +439,8 @@ const MUTATIONS = [
     'inbox: agents decide relations',
     [
       [
-        "'outcome.failed', 'relation.proposed', 'thread.flagged']));",
-        "'outcome.failed', 'relation.proposed', 'thread.flagged', 'relation.accepted']));",
+        "'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due']));",
+        "'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due', 'relation.accepted']));",
       ],
       [
         "allow update: if inboxOwner(wid, resource.data)\n          && changed(['state', 'note', 'decision'",
@@ -466,6 +466,68 @@ const MUTATIONS = [
         "&& request.resource.data.proposedBy == me_('agent')",
       ],
     ],
+  ],
+  // Decision data (item kt3E7u9EliL3q2veDDI0)
+  [
+    'inbox: any confidence',
+    [["|| request.resource.data.confidence in ['high', 'medium', 'low'])", '|| true)']],
+  ],
+  [
+    'inbox: unbounded checks',
+    [
+      [
+        '(request.resource.data.checks is list && request.resource.data.checks.size() <= 6))',
+        '(request.resource.data.checks is list))',
+      ],
+    ],
+  ],
+  [
+    'inbox: outcomes with any keys',
+    [
+      [
+        "'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId',\n               'confidence', 'checks'])",
+        "'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId',\n               'confidence', 'checks', 'score'])",
+      ],
+    ],
+  ],
+  [
+    'inbox: due without its event',
+    [
+      [
+        "['thread.due'], resource.data.memberUid, tid)",
+        "['thread.due', 'thread.flagged'], resource.data.memberUid, tid)",
+      ],
+    ],
+  ],
+  [
+    'inbox: due not a timestamp',
+    [['&& (request.resource.data.due == null || request.resource.data.due is timestamp)', '']],
+  ],
+  [
+    'inbox: due rewrites more',
+    [
+      [
+        "changed(['due', 'updatedAt', 'lastEventId'])",
+        "changed(['due', 'state', 'updatedAt', 'lastEventId'])",
+      ],
+    ],
+  ],
+  [
+    'inbox: unbounded options',
+    [
+      [
+        '(d.question.options is list && d.question.options.size() <= 4))',
+        '(d.question.options is list))',
+      ],
+    ],
+  ],
+  [
+    'inbox: questions with any keys',
+    [["&& d.question.keys().hasOnly(['text', 'by', 'at', 'answer', 'answeredAt', 'options'])", '']],
+  ],
+  [
+    'inbox: the answer rewrites the question',
+    [["&& d.question.diff(r.question).affectedKeys().hasOnly(['answer', 'answeredAt'])", '']],
   ],
 ];
 

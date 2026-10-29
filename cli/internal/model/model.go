@@ -432,6 +432,8 @@ type InboxQuestion struct {
 	By         string     `firestore:"by" json:"by"`
 	Answer     *string    `firestore:"answer" json:"answer"`
 	AnsweredAt *time.Time `firestore:"answeredAt" json:"answeredAt"`
+	// Options are the answer chips (nil on older questions).
+	Options []string `firestore:"options" json:"options"`
 }
 
 // InboxThread is workspaces/{w}/inboxThreads/{tid}.
@@ -446,6 +448,8 @@ type InboxThread struct {
 	LastMessageAt time.Time      `firestore:"lastMessageAt" json:"lastMessageAt"`
 	FetchedBy     string         `firestore:"fetchedBy" json:"fetchedBy"`
 	Urgent        bool           `firestore:"urgent" json:"urgent"`
+	// Due is the deadline set with thread_due (nil: none).
+	Due *time.Time `firestore:"due" json:"due"`
 }
 
 // InboxDecision is the member's approval or rejection of an outcome.
@@ -472,6 +476,8 @@ type InboxOutcome struct {
 	Fields     map[string]any `firestore:"fields" json:"fields"`
 	State      string         `firestore:"state" json:"state"`
 	Note       string         `firestore:"note" json:"note"`
+	Confidence *string        `firestore:"confidence" json:"confidence"`
+	Checks     []string       `firestore:"checks" json:"checks"`
 	ProposedBy string         `firestore:"proposedBy" json:"proposedBy"`
 	Executor   *string        `firestore:"executor" json:"executor"`
 	Decision   *InboxDecision `firestore:"decision" json:"decision"`
