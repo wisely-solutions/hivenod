@@ -114,8 +114,10 @@ test.describe('desktop 1440', () => {
       await expect(
         card.getByRole('button', { name: 'Revising, cancel the request' }),
       ).toBeVisible();
+      await expect
+        .poll(async () => (await outcomeDoc(s)).state!.stringValue, { timeout: 15_000 })
+        .toBe('revising');
       const o = await outcomeDoc(s);
-      expect(o.state!.stringValue).toBe('revising');
       expect(o.decision!.nullValue).toBe(null);
       expect(await threadState(s)).toBe('yourCall');
       await look(page, 'revising-1440');
@@ -193,8 +195,10 @@ test.describe('desktop 1440', () => {
       await box.getByRole('button', { name: 'Warmer' }).click();
       await box.getByLabel('What should change?').press('Control+Enter');
       await expect(card.locator('[data-revising]')).toContainText('Warmer');
+      await expect
+        .poll(async () => (await s.agent.outcome(s.outcomes.book)).state, { timeout: 15_000 })
+        .toBe('revising');
       const stale = await s.agent.outcome(s.outcomes.book);
-      expect(stale.state).toBe('revising');
       await card.getByRole('button', { name: /Send and book v1/ }).click();
       await expect
         .poll(async () => (await outcomeDoc(s)).state!.stringValue, { timeout: UNDO_WAIT + 8000 })

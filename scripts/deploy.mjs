@@ -7,7 +7,7 @@
 //                                            (live /version.json must show this commit) -> tag release-<n>
 //   node scripts/deploy.mjs rollback         redeploy the release tag before the latest one, then smoke test
 // Uses the service account in GOOGLE_APPLICATION_CREDENTIALS (or ~/.agent/secrets/gcp.env if present).
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,6 +23,7 @@ import {
   mainAuthProblems,
   aliasRedirectProblems,
   ALIAS_URL,
+  isRulesApi503,
   nextReleaseTag,
   pendingIndexes,
   siteUrls,
@@ -124,7 +125,31 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
   const stars = await fetchStars({ token: process.env.GH_TOKEN_WISELY || process.env.GH_TOKEN });
   writeFileSync(join(cwd, 'apps/web/dist/stars.json'), starsJson(stars));
   console.log(`GitHub stars: ${stars ?? 'unknown (the page shows no count)'}`);
-  fb(['deploy', '--only', 'hosting,firestore', '--message', `commit ${commit.slice(0, 7)}`], cwd);
+  const deployArgs = [
+    'exec',
+    'firebase',
+    'deploy',
+    '--only',
+    'hosting,firestore',
+    '--message',
+    `commit ${commit.slice(0, 7)}`,
+    '--project',
+    project,
+    '--non-interactive',
+  ];
+  for (let attempt = 1; ; attempt++) {
+    const r = spawnSync('pnpm', deployArgs, { cwd, env: process.env, encoding: 'utf8' });
+    process.stdout.write(r.stdout ?? '');
+    process.stderr.write(r.stderr ?? '');
+    if (r.status === 0) break;
+    // Google's rules API sometimes answers 503; nothing is deployed then, so one retry is safe.
+    if (attempt === 1 && isRulesApi503(`${r.stdout}\n${r.stderr}`)) {
+      console.log('retrying after a Google 503 (waiting 60 s)');
+      await new Promise((res) => setTimeout(res, 60_000));
+      continue;
+    }
+    process.exit(r.status ?? 1);
+  }
   return commit;
 }
 

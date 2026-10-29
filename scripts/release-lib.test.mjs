@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   previousTag,
+  isRulesApi503,
   compareVersions,
   versionRegressions,
   authHeaderProblems,
@@ -221,5 +222,25 @@ describe('discoveryProblems', () => {
     expect(discoveryProblems(200, json, good, 'other')).toEqual([
       '/.well-known/hivenod.json names hive-board-43be, not other',
     ]);
+  });
+});
+
+describe('isRulesApi503', () => {
+  it('retries a 503 from the rules API', () => {
+    expect(
+      isRulesApi503(
+        'Error: HTTP Error: 503, https://firebaserules.googleapis.com/v1/projects/p:test failed',
+      ),
+    ).toBe(true);
+  });
+  it('does not retry other errors', () => {
+    expect(isRulesApi503('Error: HTTP Error: 403, https://firebaserules.googleapis.com/x')).toBe(
+      false,
+    );
+    expect(isRulesApi503('Error: HTTP Error: 503, https://firebasehosting.googleapis.com/x')).toBe(
+      false,
+    );
+    expect(isRulesApi503('')).toBe(false);
+    expect(isRulesApi503(undefined)).toBe(false);
   });
 });
