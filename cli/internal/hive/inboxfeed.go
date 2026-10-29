@@ -141,7 +141,7 @@ func InboxText(e InboxEventInfo) string {
 	case "restored":
 		lines = append(lines, "The person brought "+t+" back to the agents.")
 	case "resume":
-		lines = append(lines, t+" is still being investigated (this session is new: an earlier sub-agent may have stopped).")
+		lines = append(lines, t+" is still being investigated (this session is new: earlier work on it may have stopped).")
 	case "nudge_due":
 		days := 3
 		if e.NudgeDays != nil {
@@ -159,9 +159,9 @@ func InboxText(e InboxEventInfo) string {
 		what = "propose a nudge (outcome_propose, type nudge) if one makes sense, otherwise say why not with inbox_note"
 	}
 	if e.Update {
-		lines = append(lines, fmt.Sprintf("A sub-agent of yours already works on thread %s: pass this on to it (if it has finished, start a new one with thread_read).", e.ThreadID))
+		lines = append(lines, fmt.Sprintf("Thread %s is already being worked on: this adds to it (thread_read shows the current state).", e.ThreadID))
 	} else {
-		lines = append(lines, fmt.Sprintf(`Run it in a new background sub-agent of its own, with this brief: "You work Hivenod inbox thread %s. Start with thread_read (threadId %s), then %s, and report back in one line. Nothing is sent, booked or handed over without the person's approval." Stay free for the next event; inbox work does not count toward max_items and never holds up an item.`, e.ThreadID, e.ThreadID, what))
+		lines = append(lines, fmt.Sprintf(`Start with thread_read (threadId %s), then %s. Nothing is sent, booked or handed over without the person's approval. Inbox work does not count toward max_items and never holds up an item.`, e.ThreadID, what))
 	}
 	return strings.Join(lines, "\n")
 }
