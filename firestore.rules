@@ -1122,12 +1122,15 @@ service cloud.firestore {
 
       // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by
       // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)
-      function outcomeTypes() { return ['reply', 'reply_book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore']; }
-      function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore']; }
-      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored'}; }
-      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null}; }
-      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'reply_book': ['text', 'start', 'end', 'with', 'title'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason']}; }
-      function outcomeRequired() { return {'reply': ['text'], 'reply_book': ['text', 'start', 'end', 'with'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': []}; }
+      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'approval']; }
+      function outcomeSingle() { return ['reply', 'reply_book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore']; }
+      function outcomePlanTypes() { return ['reply', 'reply_book', 'book', 'make_it_work', 'handover', 'snooze', 'nudge', 'approval']; }
+      function outcomeHuman() { return ['approval']; }
+      function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval']; }
+      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'approval': 'done'}; }
+      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'approval': null}; }
+      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'reply_book': ['text', 'start', 'end', 'with', 'title'], 'book': ['start', 'end', 'with', 'title'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'approval': ['what', 'detail', 'link']}; }
+      function outcomeRequired() { return {'reply': ['text'], 'reply_book': ['text', 'start', 'end', 'with'], 'book': ['start', 'end', 'with'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'approval': ['what']}; }
       // END outcome registry
 
       // The member's own "Make it work": the item is created in the same batch, by them, and the
@@ -1329,7 +1332,8 @@ service cloud.firestore {
           // How sure the agent is, and what it verified (item kt3E7u9EliL3q2veDDI0): optional.
           && (!('confidence' in request.resource.data) || request.resource.data.confidence in ['high', 'medium', 'low'])
           && (!('checks' in request.resource.data) || (request.resource.data.checks is list && request.resource.data.checks.size() <= 6))
-          && request.resource.data.type in outcomeTypes()
+          // Alone: never a plan-only type (approval, book: item qwFAWxZM5xkcE7PPjAzi).
+          && request.resource.data.type in outcomeSingle()
           && inboxFieldsOk(request.resource.data.type, request.resource.data.fields)
           && request.resource.data.state == 'proposed'
           && str(request.resource.data.note, 0, 2000)

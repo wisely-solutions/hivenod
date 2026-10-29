@@ -1,3 +1,4 @@
+import { ScopeLine } from '../shell/ScopePill';
 import type { ReactNode } from 'react';
 
 export function PageHeader({
@@ -6,6 +7,7 @@ export function PageHeader({
   subtitle,
   reserveSubtitle,
   section,
+  allOrgs,
 }: {
   title: string;
   action?: ReactNode;
@@ -14,6 +16,8 @@ export function PageHeader({
   reserveSubtitle?: boolean;
   /** A tab of the Settings page: a section heading (h2) under the page's own h1. */
   section?: boolean;
+  /** Pages that span every organization (item icVly): the "You · all organizations" pill. */
+  allOrgs?: boolean;
 }) {
   return (
     <div className={section ? 'mb-5' : 'mb-6'}>
@@ -24,7 +28,9 @@ export function PageHeader({
           ) : (
             <h1 className="text-28 font-semibold">{title}</h1>
           )}
-          {subtitle ? (
+          {allOrgs ? (
+            <ScopeLine className="mt-1.5">{subtitle}</ScopeLine>
+          ) : subtitle ? (
             <p className="mt-1 text-14 text-text-2">{subtitle}</p>
           ) : reserveSubtitle ? (
             <p aria-hidden className="mt-1 h-[1.3125rem]" />

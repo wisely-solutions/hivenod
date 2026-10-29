@@ -190,7 +190,7 @@ test('filter, select, and act on several items at once', async ({ page }) => {
   ).toBe('stopped');
 });
 
-test('the all-items list spans projects and links from All projects', async ({ page }) => {
+test('the all-items list spans projects and links from Projects', async ({ page }) => {
   const { pid } = await seed(page);
   await page.goto('/projects');
   await page.getByRole('link', { name: 'List all items' }).click();

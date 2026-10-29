@@ -33,7 +33,7 @@ import {
 } from './actions';
 import {
   cleanOutcomeFields,
-  OUTCOME_TYPES,
+  SINGLE_TYPES,
   OutcomeFieldError,
   outcomeType,
   type WaitingOn,
@@ -72,6 +72,8 @@ export const OUTCOME_STATES = [
   'proposed',
   'revising',
   'approved',
+  /** A plan's Build it step: the item is made, the step waits for it to be Done (qwFAW). */
+  'running',
   'rejected',
   'done',
   'failed',
@@ -333,6 +335,8 @@ export const inboxOutcomeSchema = z.object({
       at: timestamp,
     })
     .nullable(),
+  /** The plan it is a step of (item qwFAWxZM5xkcE7PPjAzi); absent: a single outcome. */
+  planId: z.string().optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
@@ -357,6 +361,7 @@ export const inboxPaths = {
   outcome: (w: string, o: string) => `workspaces/${w}/inboxOutcomes/${o}`,
   event: (w: string, e: string) => `workspaces/${w}/inboxEvents/${e}`,
   relation: (w: string, r: string) => `workspaces/${w}/inboxRelations/${r}`,
+  plan: (w: string, p: string) => `workspaces/${w}/inboxPlans/${p}`,
   /** The workspace's label list (absent: the defaults). */
   labels: (w: string) => `workspaces/${w}/inboxConfig/labels`,
   /** Tombstone event id of a subject deleted by a merge. */
@@ -834,7 +839,11 @@ export function proposeOutcome(
   const t = input.thread;
   liveThread(t);
   const type = outcomeType(input.type);
-  need(type !== null, `Unknown outcome type ${input.type}. Types: ${OUTCOME_TYPES.join(', ')}.`);
+  need(type !== null, `Unknown outcome type ${input.type}. Types: ${SINGLE_TYPES.join(', ')}.`);
+  need(
+    type!.planOnly !== true,
+    `${input.type} is only a step of a plan (plan_propose). Types alone: ${SINGLE_TYPES.join(', ')}.`,
+  );
   let fields: Record<string, string | boolean>;
   try {
     fields = cleanOutcomeFields(input.type, input.fields);
