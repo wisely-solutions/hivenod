@@ -277,6 +277,8 @@ test('one person, several organizations: create, switch, and keep their projects
   await axe(page);
   await list.getByRole('button', { name: /Sam’s organization/ }).click();
   await expectCurrentOrg(page, 'Sam’s organization');
+  // On a phone the switcher is in the organization tab (item icVly): back to the projects.
+  if ((page.viewportSize()?.width ?? 1440) < 640) await page.goto('/projects');
   await expect(page.getByRole('heading', { name: 'Alpha project' })).toBeVisible();
 
   // The choice sticks across a reload.
