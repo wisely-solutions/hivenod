@@ -380,6 +380,8 @@ for (const theme of ['light', 'dark'] as const) {
 
       // Switching follows: now Northwind's settings, where Cara is a member.
       await switchTo(page, /Northwind/);
+      // On a phone the switcher is in the organization tab: come back to the settings.
+      if (isPhone()) await page.goto('/settings/organization');
       await expect(page.locator('[data-org-scope]')).toContainText('Northwind · Member');
       await expect(tabs.first()).toHaveText('Northwind');
 
@@ -446,14 +448,16 @@ for (const theme of ['light', 'dark'] as const) {
         'aria-pressed',
         'true',
       );
-      await expect(page.getByText('Sign off the portal login flow').first()).toBeVisible();
-      await expect(page.getByText('Pick the hero photo')).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Needs you · 2', level: 2 })).toBeVisible();
+      // Reloaded (rows leaving animate out on the frozen test clock): the URL keeps the filter.
       await page.reload();
       await expect(chips.locator(`[data-org-chip="${s.client}"]`)).toHaveAttribute(
         'aria-pressed',
         'true',
         { timeout: 20_000 },
       );
+      await expect(page.getByText('Sign off the portal login flow').first()).toBeVisible();
+      await expect(page.getByText('Pick the hero photo')).toHaveCount(0);
       await expectNoHorizontalScroll(page);
       await shot(page, `A-today-chips-${vw}-${theme}`);
       await axe(page);
@@ -464,7 +468,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.goto('/');
       await chips.getByRole('button', { name: /^All/ }).click();
       await expect(page).not.toHaveURL(/org=/);
-      await expect(page.getByText('Pick the hero photo')).toBeVisible();
+      await expect(page.getByText('Pick the hero photo').first()).toBeVisible();
 
       // Inbox: the same chips.
       await page.goto('/inbox');

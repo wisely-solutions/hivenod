@@ -145,7 +145,7 @@ export function TabBar({ hidden }: { hidden: boolean }) {
             </li>
           </Fragment>
         ))}
-        <li>
+        <li className="min-w-0">
           <OrgTab />
         </li>
       </ul>
