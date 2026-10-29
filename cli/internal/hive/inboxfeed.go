@@ -94,6 +94,14 @@ type FeedRevise struct {
 	PlanID string
 }
 
+// FeedRecheck is a thread of this agent's whose person asked for a re-check (recheck pending,
+// item bmNoIvvqKCdAorLSShE9).
+type FeedRecheck struct {
+	ThreadID, MemberUID, Title string
+	// AtMs is when they asked: a new request (after an answer) is a new event.
+	AtMs int64
+}
+
 // FeedEvent is an inbox event (the timeline).
 type FeedEvent struct {
 	Type string
@@ -107,6 +115,7 @@ type InboxSource interface {
 	WatchThreads(ctx context.Context, on func([]FeedThread))
 	WatchOutcomes(ctx context.Context, on func([]FeedOutcome))
 	WatchRevising(ctx context.Context, on func([]FeedRevise))
+	WatchRechecks(ctx context.Context, on func([]FeedRecheck))
 	WatchPlans(ctx context.Context, on func([]FeedPlan))
 	WatchRunning(ctx context.Context, on func([]FeedRunning))
 	// ItemState is an item's status ("done", "stopped" for stopped or archived, …); gone: deleted.
@@ -165,7 +174,7 @@ var inboxTriggers = map[string]string{
 }
 
 var inboxPriority = map[string]int{
-	"carry_out": 0, "item_done": 0, "item_stopped": 1, "answered": 1, "revise": 1, "new": 2, "message": 2,
+	"carry_out": 0, "item_done": 0, "item_stopped": 1, "answered": 1, "revise": 1, "recheck": 1, "new": 2, "message": 2,
 	"woke": 3, "rejected": 3, "failed": 3, "restored": 3, "resume": 3, "nudge_due": 4,
 }
 
@@ -250,6 +259,8 @@ func InboxText(e InboxEventInfo) string {
 		if e.PlanID != "" {
 			lines = append(lines, "Only this step changes; the rest of the plan keeps its state.")
 		}
+	case "recheck":
+		lines = append(lines, "The person asked you to check "+t+" again: things may have changed since you proposed (new messages, their calendar, the facts).")
 	}
 	what := "investigate it (inbox_note for what you find, subject_assign if it is not filed, thread_due if a message states a deadline, inbox_ask only if you must), then propose what should come of it (outcome_propose, with your confidence and what you checked)"
 	switch e.Reason {
@@ -268,6 +279,8 @@ func InboxText(e InboxEventInfo) string {
 		}
 	case "revise":
 		what = fmt.Sprintf("revise it with outcome_propose revises=%s (same threadId and type): apply only what they asked and keep the rest; do not reject it or start a new outcome. If you cannot make the change, say why with inbox_ask on the thread", or(e.OutcomeID, "?"))
+	case "recheck":
+		what = "re-read the messages (new ones especially), calendar_free and the context; for each open proposal and each step of a live plan that has not run, keep it or write its next version with outcome_propose revises=<outcomeId> (only what changed), or ask with inbox_ask; then answer with thread_recheck_done (result still_good, revised or asked, with a one-line note)"
 	case "nudge_due":
 		what = "propose a nudge (outcome_propose, type nudge) if one makes sense, otherwise say why not with inbox_note"
 	}
@@ -285,6 +298,7 @@ type feedDue struct {
 	info                              InboxEventInfo
 	outcome                           *FeedOutcome
 	revise                            *FeedRevise
+	recheck                           *FeedRecheck
 	build                             *FeedRunning
 	state                             string
 	updatedAtMs                       *int64
@@ -294,6 +308,7 @@ type feedFlight struct {
 	at          int64
 	outcome     bool
 	revise      bool
+	recheck     bool
 	build       bool
 	state       string
 	updatedAtMs *int64
@@ -317,6 +332,9 @@ type InboxFeed struct {
 	revising map[string]FeedRevise
 	rorder   []string
 	revised  map[string]int64
+	rechecks map[string]FeedRecheck
+	korder   []string
+	recheckd map[string]int64 // thread id -> the request (AtMs) sent
 	plans    map[string]FeedPlan
 	running  map[string]FeedRunning
 	norder   []string
@@ -368,7 +386,7 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &InboxFeed{src: src, push: push, now: now, MaxInbox: o.MaxInbox, perMinute: o.PerMinute,
 		nudgeMs: o.NudgeAfter.Milliseconds(), leaseMs: o.Lease.Milliseconds(), tickMs: o.Tick.Milliseconds(),
-		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, handled: map[string]string{},
+		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, rechecks: map[string]FeedRecheck{}, recheckd: map[string]int64{}, plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, handled: map[string]string{},
 		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{},
 		inflight: map[string]*feedFlight{}, types: map[string]*FeedEvent{}, fetching: map[string]bool{},
 		wakes: map[string]string{}, ctx: ctx, cancel: cancel}
@@ -416,6 +434,7 @@ func (f *InboxFeed) Subscribe() {
 	f.src.WatchThreads(sctx, f.OnThreads)
 	f.src.WatchOutcomes(sctx, f.OnOutcomes)
 	f.src.WatchRevising(sctx, f.OnRevising)
+	f.src.WatchRechecks(sctx, f.OnRechecks)
 	f.src.WatchRunning(sctx, f.OnRunning)
 }
 
@@ -522,6 +541,19 @@ func (f *InboxFeed) OnRevising(rows []FeedRevise) {
 	f.Evaluate()
 }
 
+// OnRechecks takes a snapshot of this agent's threads with a pending re-check request.
+func (f *InboxFeed) OnRechecks(rows []FeedRecheck) {
+	f.mu.Lock()
+	f.rechecks = map[string]FeedRecheck{}
+	f.korder = f.korder[:0]
+	for _, r := range rows {
+		f.rechecks[r.ThreadID] = r
+		f.korder = append(f.korder, r.ThreadID)
+	}
+	f.mu.Unlock()
+	f.Evaluate()
+}
+
 // Evaluate works out what is due and sends what the cap and rate allow.
 func (f *InboxFeed) Evaluate() {
 	f.mu.Lock()
@@ -534,6 +566,9 @@ func (f *InboxFeed) Evaluate() {
 		over := now-fl.at >= f.leaseMs
 		if fl.revise {
 			_, ok := f.revising[slot[2:]]
+			over = over || !ok
+		} else if fl.recheck {
+			_, ok := f.rechecks[slot[2:]]
 			over = over || !ok
 		} else if fl.build {
 			_, ok := f.running[slot[2:]]
@@ -616,6 +651,24 @@ func (f *InboxFeed) Evaluate() {
 	for slot, d := range f.due {
 		if d.revise != nil {
 			if cur, ok := f.revising[d.revise.ID]; !ok || cur.AtMs != d.revise.AtMs {
+				delete(f.due, slot)
+			}
+		}
+	}
+	// Re-check (item bmNoIvvqKCdAorLSShE9): one recheck event per request.
+	for _, id := range f.korder {
+		rk := f.rechecks[id]
+		slot := "k:" + rk.ThreadID
+		if v, ok := f.recheckd[rk.ThreadID]; (ok && v == rk.AtMs) || f.due[slot] != nil {
+			continue
+		}
+		rc := rk
+		f.due[slot] = &feedDue{slot: slot, reason: "recheck", threadID: rk.ThreadID, atMs: rk.AtMs, memberUID: rk.MemberUID, recheck: &rc,
+			info: InboxEventInfo{Reason: "recheck", ThreadID: rk.ThreadID, Title: rk.Title}}
+	}
+	for slot, d := range f.due {
+		if d.recheck != nil {
+			if cur, ok := f.rechecks[d.recheck.ThreadID]; !ok || cur.AtMs != d.recheck.AtMs {
 				delete(f.due, slot)
 			}
 		}
@@ -815,6 +868,9 @@ func (f *InboxFeed) pump() []Event {
 		if d.revise != nil {
 			f.revised[d.revise.ID] = d.revise.AtMs
 		}
+		if d.recheck != nil {
+			f.recheckd[d.recheck.ThreadID] = d.recheck.AtMs
+		}
 		if d.build != nil {
 			f.built[d.build.ID] = d.reason
 		}
@@ -822,7 +878,7 @@ func (f *InboxFeed) pump() []Event {
 			f.nudged[d.threadID] = *d.updatedAtMs
 		}
 		if !update {
-			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, revise: d.revise != nil, build: d.build != nil, state: d.state, updatedAtMs: d.updatedAtMs}
+			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, revise: d.revise != nil, recheck: d.recheck != nil, build: d.build != nil, state: d.state, updatedAtMs: d.updatedAtMs}
 		}
 		f.sent = append(f.sent, f.nowMs())
 		meta := map[string]string{
@@ -982,6 +1038,27 @@ func (s firestoreInbox) WatchRevising(ctx context.Context, on func([]FeedRevise)
 					}
 				}
 				if at := feedMs(rv["at"]); at != 0 {
+					r.AtMs = at
+				}
+			}
+			rows = append(rows, r)
+		}
+		on(rows)
+	}, nil)
+}
+
+// WatchRechecks listens to this agent's threads whose person asked for a re-check.
+func (s firestoreInbox) WatchRechecks(ctx context.Context, on func([]FeedRecheck)) {
+	q := s.c.DB.Collection(model.Paths.InboxCollection(s.c.WorkspaceID, "inboxThreads")).
+		Where("fetchedBy", "==", s.c.UID).Where("recheck.state", "==", "pending")
+	go listenQuery(ctx, s.c.recon, q, func(docs []*firestore.DocumentSnapshot) {
+		rows := make([]FeedRecheck, 0, len(docs))
+		for _, d := range docs {
+			m := d.Data()
+			str := func(k string) string { v, _ := m[k].(string); return v }
+			r := FeedRecheck{ThreadID: d.Ref.ID, MemberUID: str("memberUid"), Title: str("title"), AtMs: feedMs(m["updatedAt"])}
+			if rk, ok := m["recheck"].(map[string]any); ok {
+				if at := feedMs(rk["requestedAt"]); at != 0 {
 					r.AtMs = at
 				}
 			}

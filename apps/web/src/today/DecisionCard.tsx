@@ -39,6 +39,7 @@ import {
   MessageSquareReply,
   MoreHorizontal,
   Pencil,
+  RefreshCw,
   Reply,
   SkipForward,
   Sparkles,
@@ -89,6 +90,7 @@ import { Icon } from '../ui/icon';
 import { ActionMenu } from '../ui/menu';
 import { Dialog, useCountdown, useToast } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
+import { RecheckLine, StaleChip, useRecheck } from '../threads/Recheck';
 import { waitLabel } from '../inbox/logic';
 import { dayLabel, hhmm, proposalSentence, replaceSlotText, slotOptions, type Slot } from './logic';
 import {
@@ -641,6 +643,11 @@ export interface ProposalPanelProps {
    */
   plan?: PlanInput;
   onRemove?: () => void;
+  /**
+   * Re-check (item bmNoIvvqKCdAorLSShE9): the "Checking again…" strip, the result line and the
+   * "May be out of date" chip; off where the plan panel shows them for the whole plan.
+   */
+  recheckUi?: boolean;
 }
 
 /**
@@ -651,6 +658,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
   function ProposalPanel(props, ref) {
     const { wid, thread, proposals, now, busy, agentName, onSkip, onDone, onOpen, sender } = props;
     const { after, compact, onShown, narrow, plan: inPlan, onRemove } = props;
+    const recheckUi = props.recheckUi ?? true;
     const { session, actionContext, run } = useReady();
     const toast = useToast();
     const t = thread.data;
@@ -689,6 +697,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
     const [rejecting, setRejecting] = useState(false);
     const [reason, setReason] = useState('');
     const [moreReason, setMoreReason] = useState(false);
+    const rc = useRecheck(wid, thread, now, setError);
     useEffect(() => {
       if (shown) onShown?.(shown.id);
     }, [shown, onShown]);
@@ -934,11 +943,24 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
     const confidence = view ? view.confidence : shown.data.confidence;
     const prevFields = viewN > 1 ? versions[viewN - 2]?.fields : undefined;
     const asked = view?.asked && viewN > 1 ? view.asked : null;
+    // A version the agent wrote on a re-check (no ask): its changes, said so.
+    const rechecked = !!view && viewN > 1 && !view.asked;
     const approveLabel = `${inPlan ? 'Approve step' : (type?.approve ?? 'Approve')}${nv > 1 || revising ? ` v${viewN}` : ''}`;
     const longReason = reasonText.length > 180;
     const TypeIcon = TYPE_ICON[shown.data.type] ?? ListChecks;
     const band = bandOf(t, now);
+    const recheckItem = rc.can
+      ? [
+          {
+            id: 'recheck',
+            label: 'Re-check',
+            icon: RefreshCw,
+            onSelect: () => rc.request('menu'),
+          },
+        ]
+      : [];
     const planMenu = [
+      ...recheckItem,
       ...(onRemove && !revising
         ? [
             {
@@ -972,6 +994,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
                   onSelect: () => setRejecting(true),
                 },
               ]),
+          ...recheckItem,
           { id: 'ignore', label: 'Ignore thread', icon: Ban, onSelect: () => threadAct('ignore') },
           {
             id: 'close',
@@ -1022,6 +1045,15 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
               agentId={shown.data.proposedBy}
             />
           ) : null}
+          {recheckUi ? (
+            <RecheckLine
+              wid={wid}
+              thread={thread}
+              now={now}
+              agent={agentName(t.fetchedBy)}
+              since={shown.data.createdAt?.toMillis()}
+            />
+          ) : null}
           {editing ? (
             <div className="mt-3 flex flex-col gap-3">
               {Object.entries(type?.fields ?? {}).map(([k, f]) => (
@@ -1055,12 +1087,18 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
               )}
             </p>
           )}
-          {asked ? (
+          {asked || rechecked ? (
             <div className="mt-2.5 flex items-start gap-2 text-13 text-text-2">
               <Icon icon={Sparkles} size={14} className="mt-0.5 shrink-0 text-agent" />
-              <p data-asked="" className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                You asked: <span className="italic">{askedText(asked)}</span>
-              </p>
+              {asked ? (
+                <p data-asked="" className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                  You asked: <span className="italic">{askedText(asked)}</span>
+                </p>
+              ) : (
+                <p data-asked="recheck" className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                  After a re-check
+                </p>
+              )}
               {!editing && !dirty ? (
                 <button
                   type="button"
@@ -1097,6 +1135,9 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
                 ) : null}
               </div>
             </div>
+          ) : null}
+          {recheckUi && !revising && !compact ? (
+            <StaleChip outcome={shown} thread={thread} now={now} rc={rc} />
           ) : null}
           {book && slots.length ? (
             <SlotStrip
@@ -1176,7 +1217,9 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
               <Key>C</Key>
             </Button>
           ) : null}
-          {menu.length ? (
+          {rc.counting?.tag === 'menu' ? (
+            <UndoButton countdown={rc.counting} variant="secondary" />
+          ) : menu.length ? (
             <ActionMenu
               label="Other actions"
               actions={menu}

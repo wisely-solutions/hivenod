@@ -187,6 +187,9 @@ var ToolRuns = map[string]Run{
 		}
 		return c.ThreadDue(ctx, a.S("threadId"), due, a.SP("reason"))
 	},
+	"thread_recheck_done": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.ThreadRecheckDone(ctx, a.S("threadId"), a.S("result"), a.SP("note"))
+	},
 	"subject_relate": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.SubjectRelate(ctx, a.S("a"), a.S("b"), a.SP("note"))
 	},

@@ -18,6 +18,8 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
   /** Inbox events: a Build it plan step's item is Done, or was stopped (item qwFAWxZM5xkcE7PPjAzi). */
   item_done: '0.2.174',
   item_stopped: '0.2.174',
+  /** Inbox event: the member asked the home agent to re-check a thread (item bmNoIvvqKCdAorLSShE9). */
+  recheck: '0.2.177',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */

@@ -451,6 +451,19 @@ type InboxThread struct {
 	Urgent        bool           `firestore:"urgent" json:"urgent"`
 	// Due is the deadline set with thread_due (nil: none).
 	Due *time.Time `firestore:"due" json:"due"`
+	// Recheck is the member's last re-check request and its answer (nil: never asked).
+	Recheck *InboxRecheck `firestore:"recheck" json:"recheck"`
+}
+
+// InboxRecheck is a thread's recheck (item bmNoIvvqKCdAorLSShE9): pending until the home agent
+// answers with thread_recheck_done (result still_good, revised or asked).
+type InboxRecheck struct {
+	State       string     `firestore:"state" json:"state"`
+	By          string     `firestore:"by" json:"by"`
+	RequestedAt *time.Time `firestore:"requestedAt" json:"requestedAt"`
+	Result      *string    `firestore:"result" json:"result"`
+	Note        *string    `firestore:"note" json:"note"`
+	At          *time.Time `firestore:"at" json:"at"`
 }
 
 // InboxDecision is the member's approval or rejection of an outcome.
@@ -517,6 +530,8 @@ type InboxOutcome struct {
 	Revise   *ReviseRequest   `firestore:"revise" json:"revise"`
 	// PlanID: a step of that plan (item qwFAWxZM5xkcE7PPjAzi); nil: a single outcome.
 	PlanID *string `firestore:"planId" json:"planId"`
+	// CheckedAt: when the home agent last re-checked it and found it still good (nil: never).
+	CheckedAt *time.Time `firestore:"checkedAt" json:"checkedAt"`
 }
 
 // InboxPlan is workspaces/{w}/inboxPlans/{pid}: the order of a plan's steps (outcome ids) and

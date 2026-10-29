@@ -21,6 +21,7 @@ import {
   finishOutcome,
   proposeOutcome,
   proposePlan,
+  recheckDone,
   reviseOutcome,
   type PlanInput,
   type PlanStepInput,
@@ -33,7 +34,16 @@ import { applyPlan } from '@hive/shared/firestore';
 import { createAgentIdentity, signInWithToken } from '@hive/shared/agent-auth';
 import { deleteApp, initializeApp } from 'firebase/app';
 import { connectAuthEmulator, initializeAuth, inMemoryPersistence } from 'firebase/auth';
-import { connectFirestoreEmulator, doc, getDoc, getFirestore } from 'firebase/firestore';
+import {
+  collection,
+  connectFirestoreEmulator,
+  doc,
+  getDoc,
+  getDocs,
+  getFirestore,
+  query,
+  where,
+} from 'firebase/firestore';
 import { createHash } from 'node:crypto';
 import {
   adminDoc,
@@ -151,6 +161,22 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
       });
       await run(p);
       return p.version;
+    },
+    /** Re-check (item bmNoIvvqKCdAorLSShE9): answers the member's request (thread_recheck_done). */
+    async recheck(tid: string, result: string, note?: string) {
+      const of = (coll: string) =>
+        getDocs(query(collection(db, `workspaces/${wid}/${coll}`), where('threadId', '==', tid)));
+      const [os, ps] = await Promise.all([of('inboxOutcomes'), of('inboxPlans')]);
+      const p = recheckDone(ctx, {
+        threadId: tid,
+        thread: await thread(tid),
+        result,
+        note,
+        outcomes: Object.fromEntries(os.docs.map((d) => [d.id, d.data() as OutcomeStateOf])),
+        plans: Object.fromEntries(ps.docs.map((d) => [d.id, d.data() as PlanInput['plan']])),
+      });
+      await run(p);
+      return p.checked;
     },
     async flag(tid: string, urgent: boolean) {
       await run(flagThread(ctx, { threadId: tid, thread: await thread(tid), urgent }));

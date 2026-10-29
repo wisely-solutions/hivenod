@@ -25,6 +25,7 @@ import {
   approvePlan,
   retryPlanStep,
   requestRevision,
+  requestRecheck,
   inboxPaths,
   type PlanInput,
   setInboxLabels,
@@ -837,6 +838,99 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
             versions: 2,
             fields: { text: 'Hi Sam, thanks for flagging this. Thursday works for me. Best, Cara' },
           },
+        ],
+      },
+    });
+    matchesGolden(r);
+  }, 120_000);
+
+  it('re-check (item bmNoI): the home agent answers once per request, still good stamps the proposal, or it revises unasked', async () => {
+    const r = await scenario(async (call) => {
+      const owner = as('owner');
+      const thread = async (tid: string) =>
+        (await snap(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+      const t1 = out(
+        await call('inbox_add', {
+          source: 'teams',
+          sender: { name: 'Sam Example', handle: 'sam@example.com' },
+          text: 'Can we move the payments review to Thursday?',
+          threadRef: 'review-2',
+          receivedAt: '2026-10-28T09:00:00Z',
+        }),
+      ).threadId as string;
+      const oid = out(
+        await call('outcome_propose', {
+          threadId: t1,
+          type: 'reply',
+          fields: { text: 'Thursday works for me.' },
+          note: 'They asked to move it.',
+        }),
+      ).outcomeId as string;
+      // Nobody asked: refused (the answer and an unasked revision).
+      await call('thread_recheck_done', { threadId: t1, result: 'still_good' });
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'reply',
+        fields: { text: 'x' },
+        revises: oid,
+      });
+      const ask = async () =>
+        owner.run(requestRecheck(owner.ctx, { threadId: t1, thread: await thread(t1) }));
+      await ask();
+      await call('thread_read', { threadId: t1 });
+      await call('thread_recheck_done', { threadId: t1, result: 'fine' });
+      await call('thread_recheck_done', {
+        threadId: t1,
+        result: 'still_good',
+        note: 'No new messages; Thursday 10:00 is still free.',
+      });
+      await call('thread_read', { threadId: t1 });
+      // Asked again: this time it changed, so the agent writes v2 unasked.
+      await ask();
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'reply',
+        fields: { text: 'Thursday is taken now; Friday 10:00 works for me.' },
+        note: 'Thursday got booked since.',
+        revises: oid,
+      });
+      await call('thread_recheck_done', {
+        threadId: t1,
+        result: 'revised',
+        note: 'Moved to Friday.',
+      });
+      // Answered: once only.
+      await call('thread_recheck_done', { threadId: t1, result: 'still_good' });
+      await call('thread_read', { threadId: t1 });
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+    ]);
+    expect(r.calls[4]).toMatchObject({ out: { recheck: { state: 'pending', result: null } } });
+    expect(r.calls[6]).toMatchObject({
+      out: { result: 'still_good', checked: [expect.any(String)] },
+    });
+    expect(r.calls[7]).toMatchObject({
+      out: { recheck: { state: 'done', result: 'still_good' }, outcomes: [{ state: 'proposed' }] },
+    });
+    expect(r.calls[8]).toMatchObject({ out: { version: 2, state: 'proposed' } });
+    expect(r.calls[11]).toMatchObject({
+      out: {
+        recheck: { state: 'done', result: 'revised', note: 'Moved to Friday.' },
+        outcomes: [
+          { versions: 2, fields: { text: 'Thursday is taken now; Friday 10:00 works for me.' } },
         ],
       },
     });

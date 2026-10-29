@@ -15,6 +15,8 @@ import {
   outcomeType,
   paths,
   planView,
+  recheckable,
+  staleReason,
   type InboxOutcome,
   type InboxPlan,
   type InboxThread,
@@ -48,6 +50,7 @@ import { UndoButton } from '../ui/UndoButton';
 import { BuildItCard } from './BuildItCard';
 import { FieldView } from './OutcomeCard';
 import { usePlanActions } from './usePlanActions';
+import { RecheckButton, RecheckLine, StaleChip, useRecheck } from './Recheck';
 import {
   firstFree,
   planInputOf,
@@ -120,6 +123,14 @@ export function PlanPanel(props: PlanPanelProps) {
     pl,
   );
 
+  // Re-check (item bmNoIvvqKCdAorLSShE9): the plan's steps that have not run, checked again.
+  const rc = useRecheck(wid, thread, props.now);
+  const unrun = live
+    ? outcomes.filter(
+        (o) => plan.data.steps.includes(o.id) && recheckable(o.id, o.data, { plan: pl.plan }),
+      )
+    : [];
+  const staleStep = unrun.find((o) => staleReason(o.data, thread.data, props.now));
   const movable = (i: number) => live && i >= free;
   const stepMenu = (s: PlanStepView): MenuAction[] => {
     if (!movable(s.index)) return [];
@@ -218,6 +229,7 @@ export function PlanPanel(props: PlanPanelProps) {
           onDone={() => setOpenId('')}
           narrow
           plan={pl}
+          recheckUi={false}
           onRemove={
             movable(s.index) && view.total > 1
               ? () => edit({ op: 'remove', index: s.index }, 'Step removed')
@@ -363,6 +375,24 @@ export function PlanPanel(props: PlanPanelProps) {
           Steps run in order. Approve plan approves the agent steps; your approval steps still wait
           for you when they are reached.
         </p>
+      ) : null}
+      {unrun.length ? (
+        <div data-plan-recheck="">
+          <RecheckLine
+            wid={wid}
+            thread={thread}
+            now={props.now}
+            agent={agentName(thread.data.fetchedBy)}
+            since={plan.data.createdAt?.toMillis()}
+          />
+          {staleStep ? (
+            <StaleChip outcome={staleStep} thread={thread} now={props.now} rc={rc} />
+          ) : !rc.pending ? (
+            <div className="mt-2">
+              <RecheckButton rc={rc} tag="plan" label="Re-check the steps not run" />
+            </div>
+          ) : null}
+        </div>
       ) : null}
       {old && live ? (
         <p

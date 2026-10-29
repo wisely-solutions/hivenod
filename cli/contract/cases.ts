@@ -69,6 +69,7 @@ import {
   searchSubjects,
   proposeOutcome,
   reviseOutcome,
+  recheckDone,
   retitleThread,
   threadAfter,
   titleFrom,
@@ -1849,6 +1850,85 @@ function build(): ContractCase[] {
     ),
   });
   const SNOOZE = { until: '2026-11-03T09:00:00.000Z' };
+  // ---------- Re-check (item bmNoIvvqKCdAorLSShE9) ----------
+  const RC_PENDING = TH({
+    subjectId: 's1',
+    state: 'yourCall',
+    recheck: { state: 'pending', requestedAt: ts(NOW_MS - 60_000) },
+  });
+  const RC_OPEN = OC({ state: 'proposed', proposedBy: 'agentA', note: 'They asked.' });
+  rev('re-check: an open proposal unasked', AGENT, {
+    outcome: RC_OPEN,
+    thread: RC_PENDING,
+  });
+  rev('re-check: not the home agent', OTHER, {
+    outcome: { ...RC_OPEN, proposedBy: 'agentB' },
+    thread: RC_PENDING,
+  });
+  rev('re-check: answered already', AGENT, {
+    outcome: RC_OPEN,
+    thread: TH({ state: 'yourCall', recheck: { state: 'done' } }),
+  });
+  rev('re-check: while asked for changes keeps the ask', AGENT, { thread: RC_PENDING });
+  const RPL = PL(
+    [
+      ['reply', 'done'],
+      ['reply', 'approved'],
+      ['reply', 'approved'],
+    ],
+    1,
+  );
+  for (const o of Object.values(RPL.outcomes)) Object.assign(o, { proposedBy: 'agentA', note: '' });
+  rev('re-check: an unrun approved step', AGENT, {
+    outcomeId: 'o3',
+    outcome: RPL.outcomes.o3,
+    thread: RC_PENDING,
+    plan: RPL,
+  });
+  rev('re-check: the step at its turn', AGENT, {
+    outcomeId: 'o2',
+    outcome: RPL.outcomes.o2,
+    thread: RC_PENDING,
+    plan: RPL,
+  });
+  rev('re-check: an approved step without its plan', AGENT, {
+    outcomeId: 'o3',
+    outcome: RPL.outcomes.o3,
+    thread: RC_PENDING,
+  });
+  const rdone = (name: string, actor: Actor, input: Partial<Parameters<typeof recheckDone>[1]>) =>
+    act(
+      `recheckDone/${name}`,
+      'recheckDone',
+      actor,
+      {
+        threadId: 'it1',
+        thread: RC_PENDING,
+        result: 'still_good',
+        note: '  Nothing new. ',
+        outcomes: {
+          o9: RC_OPEN,
+          o8: OC({ state: 'rejected' }),
+          o7: OC({ state: 'proposed', threadId: 'it2' }),
+          ...RPL.outcomes,
+        },
+        plans: { pl1: RPL.plan },
+        ...input,
+      },
+      recheckDone,
+    );
+  rdone('still good stamps the open ones', AGENT, {});
+  rdone('revised', AGENT, { result: 'revised', note: null });
+  rdone('asked', AGENT, { result: 'asked', outcomes: {}, plans: undefined });
+  rdone('without the plans', AGENT, { plans: undefined });
+  rdone('bad result', AGENT, { result: 'fine' });
+  rdone('long note', AGENT, { note: 'x'.repeat(501) });
+  rdone('nothing pending', AGENT, { thread: TH({ state: 'yourCall' }) });
+  rdone('answered already', AGENT, {
+    thread: TH({ state: 'yourCall', recheck: { state: 'done' } }),
+  });
+  rdone('not the home agent', OTHER, {});
+  rdone('person refused', HUMAN, {});
   const finP = (name: string, input: Partial<Parameters<typeof finishOutcome>[1]>) => {
     const pl = input.plan;
     const oid = input.outcomeId ?? (pl ? pl.plan.steps[pl.plan.cursor] : undefined) ?? 'o1';
