@@ -129,3 +129,20 @@ func TestContentionWindow(t *testing.T) {
 		t.Fatal("IsTaken")
 	}
 }
+
+// Items tied on stepAt and updatedAt come back in id order whatever order they were listed in.
+func TestOldestFirstTiesById(t *testing.T) {
+	c := &Client{arrivalKeys: map[string]arrivalKey{}}
+	same := model.Item{UpdatedAt: time.UnixMilli(1000)}
+	for _, perm := range [][]string{{"u1", "old"}, {"old", "u1"}} {
+		rows := []WorkRow{}
+		for _, id := range perm {
+			c.arrivalKeys[id] = arrivalKeyOf(same, id)
+			rows = append(rows, WorkRow{ItemID: id})
+		}
+		got := c.oldestFirst(rows)
+		if got[0].ItemID != "old" || got[1].ItemID != "u1" {
+			t.Fatalf("order %v for input %v, want old,u1", []string{got[0].ItemID, got[1].ItemID}, perm)
+		}
+	}
+}
