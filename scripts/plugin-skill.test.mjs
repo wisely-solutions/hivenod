@@ -20,3 +20,11 @@ describe('hivenod plugin skill', () => {
     expect(JSON.stringify(m)).toContain('./plugins/hivenod');
   });
 });
+
+describe('hivenod plugin fallback hint', () => {
+  it('a SessionStart hook points the session at the skill (Claude only, not in the channel)', () => {
+    const h = JSON.parse(read('plugins/hivenod/hooks/hooks.json'));
+    const cmd = h.hooks.SessionStart[0].hooks[0].command;
+    expect(cmd).toContain('hivenod skill');
+  });
+});
