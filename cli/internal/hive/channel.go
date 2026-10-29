@@ -549,6 +549,17 @@ func (s *Session) Start(ctx context.Context) error {
 		s.Busy = true
 		s.mu.Unlock()
 		s.info(Message(err)+" One live session per agent: this session gets no handovers from Hivenod. Its tools still work on items you claim yourself.", "busy")
+		go s.watchBusy(s.ctx, s.recheckPresence, s.o.Presence, func(dec string, live *actions.Terminal) {
+			s.mu.Lock()
+			if s.closed {
+				s.mu.Unlock()
+				return
+			}
+			s.Busy = false
+			s.mu.Unlock()
+			s.info("The other session of this agent stopped: this session takes the handovers now.", "takeover")
+			s.begin()
+		})
 		return nil
 	case actions.PresenceTakeOver:
 		since := ""
@@ -557,6 +568,44 @@ func (s *Session) Start(ctx context.Context) error {
 		}
 		s.info("This session took over from an earlier session of this agent on this machine"+since+": it gets the handovers now.", "takeover")
 	}
+	s.begin()
+	return nil
+}
+
+// recheckPresence reads the agent doc again and decides as Start does.
+func (s *Session) recheckPresence(ctx context.Context) (string, *actions.Terminal, bool) {
+	pctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if _, err := s.c.RefreshAgent(pctx); err != nil {
+		return "", nil, false
+	}
+	dec, live := s.c.StartDecision()
+	return dec, live, true
+}
+
+// watchBusy re-checks the presence every interval while this session is busy (another live session
+// of the agent holds it). When the other session is gone (stale or signed out), it calls onFree once
+// and stops. It never fires while the other session is live. It stops when ctx ends.
+func (s *Session) watchBusy(ctx context.Context, check func(context.Context) (string, *actions.Terminal, bool), every time.Duration, onFree func(string, *actions.Terminal)) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		dec, live, ok := check(ctx)
+		if !ok || dec == actions.PresenceBusy {
+			continue
+		}
+		onFree(dec, live)
+		return
+	}
+}
+
+// begin marks the agent online and starts handing over work (the normal start path).
+func (s *Session) begin() {
 	if s.o.UpdateNotice != nil {
 		go func() {
 			if msg := s.o.UpdateNotice(s.ctx); msg != "" {
@@ -613,10 +662,12 @@ func (s *Session) Start(ctx context.Context) error {
 	}()
 	s.look()
 	if s.o.Inbox.MaxInbox != 0 && s.c != nil {
-		s.Inbox = NewInboxFeed(s.c.InboxSource(), s.push, s.o.Inbox, s.o.Now)
-		s.Inbox.Start()
+		feed := NewInboxFeed(s.c.InboxSource(), s.push, s.o.Inbox, s.o.Now)
+		s.mu.Lock()
+		s.Inbox = feed
+		s.mu.Unlock()
+		feed.Start()
 	}
-	return nil
 }
 
 // Stop stops listening and tells Hivenod the agent is offline; held items keep their claims.
