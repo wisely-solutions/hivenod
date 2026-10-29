@@ -348,6 +348,47 @@ describe('Today (item kt3E7): proposals, tidy-ups and the stack order', () => {
     expect(by['t:w:two']!.proposals!.map((p) => p.id)).toEqual(['o3', 'o2']);
   });
 
+  it('plans (item qwFAW): a blocked plan waits; a gate not reached yet does not', () => {
+    const plan = (threadId: string, state: string, steps: string[], cursor: number) =>
+      ({
+        memberUid: 'me',
+        threadId,
+        proposedBy: 'agent',
+        steps,
+        cursor,
+        state,
+        note: '',
+        createdAt: ts(100),
+        updatedAt: ts(100),
+        lastEventId: 'e',
+      }) as never;
+    const o = org('w', {
+      threads: [
+        row('blocked', thread()),
+        row('later', thread()),
+        row('gate', thread()),
+        row('fresh', thread()),
+      ],
+      openOutcomes: [
+        // later: step 1 approved (running), the gate at step 2 not reached.
+        row('l2', outcome('later', 'approval', { planId: 'pl' } as never)),
+        row('g2', outcome('gate', 'approval', { planId: 'pg' } as never)),
+        row('f1', outcome('fresh', 'reply', { planId: 'pf', confidence: 'high' } as never)),
+      ],
+      livePlans: [
+        row('pb', plan('blocked', 'blocked', ['b1'], 0)),
+        row('pl', plan('later', 'active', ['l1', 'l2'], 0)),
+        row('pg', plan('gate', 'active', ['g1', 'g2'], 1)),
+        row('pf', plan('fresh', 'proposed', ['f1'], 0)),
+      ],
+    });
+    const n = buildNeeds([o], 'me', NOW);
+    expect(n.todo.map((x) => x.key).sort()).toEqual(['t:w:blocked', 't:w:fresh', 't:w:gate']);
+    const by = Object.fromEntries(n.todo.map((x) => [x.key, x]));
+    expect(by['t:w:blocked']!.plan!.id).toBe('pb');
+    expect(by['t:w:fresh']!.tidy).toBe(false);
+  });
+
   it('band-1 threads, urgent project entries, band-2 threads, then the rest oldest first', () => {
     const t = (key: string, over: Partial<InboxThread>, since: number) =>
       e({ key, kind: 'thread', since, thread: { id: key, data: thread(over) } });

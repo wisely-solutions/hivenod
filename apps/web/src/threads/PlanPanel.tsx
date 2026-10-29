@@ -9,24 +9,14 @@
  */
 import {
   agentSchema,
-  approveOutcome,
-  approvePlan,
   cliSupports,
-  editPlan,
   minVersionFor,
   outcomeType,
   paths,
   planView,
-  rejectOutcome,
-  rejectPlan,
-  retryPlanStep,
-  skipPlanStep,
-  stopPlan,
-  type ActionPlan,
   type InboxOutcome,
   type InboxPlan,
   type InboxThread,
-  type PlanEdit,
   type PlanStepView,
 } from '@hive/shared';
 import {
@@ -43,21 +33,19 @@ import {
   Zap,
 } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
-import { useReady } from '../auth/context';
-import { stash } from '../lib/pendingDecisions';
 import { useLiveDoc, type Row } from '../lib/live';
 import { ProposalPanel } from '../today/DecisionCard';
 import { ConfidenceMeter } from '../today/parts';
-import { Pill, type Tone } from '../ui/badge';
+import { Pill } from '../ui/badge';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 import { Input, Textarea } from '../ui/form';
 import { Icon } from '../ui/icon';
 import { ActionMenu, type MenuAction } from '../ui/menu';
-import { Dialog, useCountdown, useToast } from '../ui/overlay';
+import { Dialog } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
 import { FieldView } from './OutcomeCard';
-import { errorText } from './parts';
+import { usePlanActions } from './usePlanActions';
 import {
   firstFree,
   planInputOf,
@@ -66,41 +54,10 @@ import {
   planSummary,
   STEP_UI_TEXT,
   stepTitle,
+  BAR,
+  CIRCLE,
+  PILL,
 } from './plan';
-
-const PILL: Record<PlanStepView['ui'], Tone> = {
-  proposed: 'neutral',
-  revising: 'agent',
-  approved: 'approve',
-  running: 'agent',
-  done: 'approve',
-  waitingForYou: 'gate',
-  blocked: 'sendback',
-  skipped: 'neutral',
-  stopped: 'neutral',
-};
-const CIRCLE: Record<PlanStepView['ui'], string> = {
-  proposed: 'border-line-strong text-text-2',
-  revising: 'border-dashed border-agent text-agent',
-  approved: 'border-approve text-approve-text',
-  running: 'border-agent text-agent',
-  done: 'border-approve-solid bg-approve-solid text-on-solid',
-  waitingForYou: 'border-gate bg-gate text-on-gate',
-  blocked: 'border-sendback text-sendback',
-  skipped: 'border-line text-text-3 line-through',
-  stopped: 'border-line text-text-3',
-};
-const BAR: Record<PlanStepView['ui'], string> = {
-  proposed: 'bg-line',
-  revising: 'bg-agent/40',
-  approved: 'border border-approve bg-transparent',
-  running: 'bg-agent',
-  done: 'bg-approve-solid',
-  waitingForYou: 'bg-gate',
-  blocked: 'bg-sendback',
-  skipped: 'bg-line',
-  stopped: 'bg-line',
-};
 
 export interface PlanPanelProps {
   wid: string;
@@ -118,18 +75,13 @@ export interface PlanPanelProps {
 
 export function PlanPanel(props: PlanPanelProps) {
   const { wid, thread, plan, outcomes, agentName, sheet } = props;
-  const { session, actionContext, run } = useReady();
-  const toast = useToast();
   const pl = planInputOf(plan, outcomes);
   const view = planView(pl.plan, pl.outcomes);
   const live = planLive(plan.data.state);
   const main = planMain(pl);
   const free = firstFree(pl);
-  const key = `ip:${wid}:${plan.id}`;
-  const counting = useCountdown(key);
   const agent = agentName(plan.data.proposedBy);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<number | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
   const defaultOpen =
@@ -146,74 +98,11 @@ export function PlanPanel(props: PlanPanelProps) {
   const have = home.state === 'ready' ? home.data?.cliVersion : undefined;
   const old = home.state === 'ready' && !!home.data && cliSupports('plan', have) === 'old';
 
-  /** Counts down with Undo, then writes (the plan's decisions share one countdown). */
-  function commit(make: () => Pick<ActionPlan, 'ops'>, message: string, done: string) {
-    const ctx = actionContext(wid);
-    if (!ctx || counting) return;
-    setError(null);
-    let p: Pick<ActionPlan, 'ops'>;
-    try {
-      p = make();
-    } catch (e) {
-      setError(errorText(e));
-      return;
-    }
-    const forget = stash(session.me.uid, wid, [p.ops], `Saved: ${done}`);
-    toast.push({
-      message,
-      undoLabel: 'Undo',
-      duration: 5000,
-      countdown: { key, tag: message, announce: `${message}. Undo available for 5 seconds` },
-      onUndo: forget,
-      onCommit: () => {
-        run(p).then(
-          () => forget(),
-          (e: unknown) => {
-            forget();
-            setError(errorText(e));
-          },
-        );
-      },
-    });
-  }
-  const ctx = () => {
-    const c = actionContext(wid);
-    if (!c) throw new Error('Not signed in.');
-    return c;
-  };
-  const th = () => ({ ...thread.data });
-  const edit = (e: PlanEdit, message: string) =>
-    commit(() => editPlan(ctx(), { ...pl, thread: th(), edit: e }), message, `Plan · ${message}`);
-  const approveAll = () =>
-    commit(() => approvePlan(ctx(), { ...pl, thread: th() }), 'Plan approved', 'Plan approved');
-  const rejectAll = () =>
-    commit(() => rejectPlan(ctx(), { ...pl, thread: th() }), 'Plan rejected', 'Plan rejected');
-  const gate = (s: PlanStepView, yes: boolean) =>
-    commit(
-      () =>
-        yes
-          ? approveOutcome(ctx(), {
-              outcomeId: s.outcomeId,
-              outcome: pl.outcomes[s.outcomeId]!,
-              thread: th(),
-              plan: pl,
-            })
-          : rejectOutcome(ctx(), {
-              outcomeId: s.outcomeId,
-              outcome: pl.outcomes[s.outcomeId]!,
-              thread: th(),
-              othersPending: false,
-              plan: pl,
-            }),
-      yes ? `Step ${s.number} approved` : `Step ${s.number} not approved: the plan stops`,
-      yes ? `Approved step ${s.number}` : `Not approved: step ${s.number}`,
-    );
-  const retry = () =>
-    commit(() => retryPlanStep(ctx(), { ...pl, thread: th() }), 'Retrying', 'Retry');
-  const skip = () =>
-    commit(() => skipPlanStep(ctx(), { ...pl, thread: th() }), 'Step skipped', 'Skipped a step');
-  const stop = () =>
-    commit(() => stopPlan(ctx(), { ...pl, thread: th() }), 'Plan stopped', 'Plan stopped');
+  const { counting, error, edit, approveAll, rejectAll, gate, retry, skip, stop } = usePlanActions(
+    wid,
+    thread,
+    pl,
+  );
 
   const movable = (i: number) => live && i >= free;
   const stepMenu = (s: PlanStepView): MenuAction[] => {

@@ -35,12 +35,19 @@ export function DecisionRow({
   const first = entry.proposals?.[0];
   const band = bandOf(t, now);
   const rank = rankText(t, band, now);
-  // A plan (item qwFAWxZM5xkcE7PPjAzi): its steps are decided on the thread page.
-  const planned = entry.proposals?.some((p) => p.data.planId) ?? false;
+  // A plan (item qwFAWxZM5xkcE7PPjAzi): where it stands, the card shows the step that waits.
+  const plan = entry.plan?.data;
+  const planned = !!plan || (entry.proposals?.some((p) => p.data.planId) ?? false);
   const summary = asked
     ? `${sender ? `${sender.split(' ')[0]} asks: ` : 'Asks: '}${t.question?.text ?? ''}`
     : planned
-      ? 'A plan waits for you: open it to decide its steps'
+      ? plan?.state === 'blocked'
+        ? `Plan · step ${plan.cursor + 1} of ${plan.steps.length} failed: retry, skip or stop`
+        : plan?.state === 'proposed'
+          ? `Plan · ${plan.steps.length} steps to approve`
+          : plan
+            ? `Plan · step ${plan.cursor + 1} of ${plan.steps.length} waits for you`
+            : 'A plan waits for you: open it to decide its steps'
       : first
         ? `${proposalSentence(first.data.type, first.data.fields)}${
             (entry.proposals?.length ?? 0) > 1 ? ` · +${entry.proposals!.length - 1} more` : ''

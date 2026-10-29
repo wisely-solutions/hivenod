@@ -526,9 +526,18 @@ last event id it handled (`lastEventId`):
   `hivenod update` before approving. On a phone the plan is in the bottom sheet ("k of N done")
   with one main button (Approve plan, Approve step k for a gate, Review step k, Retry step k),
   Reject plan (×) and a ⋯ menu (Add an approval step, Stop plan).
-- **Today and plans (until slice 5):** a thread whose proposals are plan steps shows "A plan
-  waits for you" on its row and an **Open plan** card that opens the thread; plan steps never
-  join a tidy-up batch.
+- **Today and plans** (slice 5): Today lists a thread with a live plan when the plan asks the
+  member something now (`planAsksNow`): it is proposed, blocked (a step failed: listed even with
+  nothing proposed), its step at the cursor waits, or an agent step can still be approved ahead.
+  An approval step not reached yet keeps it off Today. The row reads "Plan · N steps to approve",
+  "Plan · step k of N waits for you" or "Plan · step k of N failed: retry, skip or stop". The card
+  shows the plan's progress ("Plan · Step k of N", "j of N done", a bar) and only the step that
+  waits (`planMain`): a proposed plan lists its steps with **Approve plan**; an approval step at
+  its turn has **Approve** and **Not approved**; an agent step not approved yet is the usual
+  proposal (Approve step, Edit, Ask for changes, versions); a blocked step has **Retry**, **Skip
+  step** and **Stop plan**. Keys A (the main action), E, C and [ ] work as on any card, and
+  **Open plan** opens the thread page. Plan steps never join a tidy-up batch. Single outcomes keep
+  their card.
 - **Make it work** (the member's own): `makeItemFromThread` creates a Hivenod item with
   `createItem`, the member as its creator, in one of their projects of the thread's
   organization, and links it on the thread's timeline with a `thread.itemMade` event in the

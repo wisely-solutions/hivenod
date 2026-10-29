@@ -97,7 +97,9 @@ test.describe('desktop 1440', () => {
     try {
       // Today sends the member to the plan.
       await page.goto('/');
-      await page.getByRole('button', { name: /A plan waits for you/ }).click({ timeout: 20_000 });
+      await page
+        .getByRole('button', { name: /Plan · 4 steps to approve/ })
+        .click({ timeout: 20_000 });
       const card = page.locator('[data-plan-card]');
       await expect(card).toBeVisible({ timeout: 20_000 });
       await card.getByRole('button', { name: 'Open plan' }).click();
@@ -205,9 +207,73 @@ test.describe('desktop 1440', () => {
   });
 });
 
+test.describe('Today 1440', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop layout');
+
+  test('the card shows the step that waits: Approve plan, the gate, a blocked step', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const { s, planId, stepIds } = await seedPlan(page);
+    const [s1, s2] = stepIds;
+    try {
+      await page.goto('/');
+      const row = (name: RegExp) => page.getByRole('button', { name });
+      await row(/Plan · 4 steps to approve/).click({ timeout: 20_000 });
+      const card = page.locator(`[data-plan-card][data-plan="${planId}"]`);
+      await expect(card).toHaveAttribute('data-plan-main', 'approvePlan');
+      await expect(card).toContainText('Plan · Step 1 of 4');
+      await expect(card.locator('li[data-step]')).toHaveCount(4);
+      await look(page, 'today-plan-1440');
+      await card.locator('[data-approve-plan]').click();
+      await page.waitForTimeout(UNDO_WAIT);
+      await expect.poll(() => stateOf(s, s1!)).toBe('approved');
+
+      // Step 1 done: the approval step waits; A approves it.
+      await s.agent.finishStep(planId, 'done');
+      await row(/Plan · step 2 of 4 waits for you/).click({ timeout: 20_000 });
+      await expect(card).toHaveAttribute('data-plan-main', 'step');
+      await expect(card).toContainText('Step 2 of 4 · Your approval');
+      await expect(card).toContainText('Basic €29 → €32, Pro €59 → €64');
+      await look(page, 'today-plan-gate-1440');
+      await card.locator('[data-gate-approve]').click();
+      await page.waitForTimeout(UNDO_WAIT);
+      await expect.poll(() => stateOf(s, s2!)).toBe('done');
+
+      // The nudge fails: Today shows the blocked plan; Skip step moves it on.
+      await s.agent.finishStep(planId, 'failed', { error: 'Teams said 403' });
+      await row(/Plan · step 3 of 4 failed/).click({ timeout: 20_000 });
+      await expect(card).toHaveAttribute('data-plan-main', 'retry');
+      await expect(card).toContainText('Teams said 403');
+      await card.locator('[data-skip]').click();
+      await page.waitForTimeout(UNDO_WAIT);
+      await expect.poll(() => cursor(s, planId)).toBe(3);
+    } finally {
+      await s.stop();
+    }
+  });
+});
+
 test.describe('phone 390', () => {
   test.skip(({ isMobile }) => !isMobile, 'phone layout');
   test.use({ viewport: { width: 390, height: 844 } });
+
+  test('Today: the plan card at 390', async ({ page }) => {
+    test.setTimeout(120_000);
+    const { s, planId } = await seedPlan(page);
+    try {
+      await page.goto('/');
+      await page
+        .getByRole('button', { name: /Plan · 4 steps to approve/ })
+        .click({ timeout: 20_000 });
+      const card = page.locator(`[data-plan-card][data-plan="${planId}"]`);
+      await expect(card).toHaveAttribute('data-plan-main', 'approvePlan');
+      await expect(card.locator('[data-approve-plan]')).toBeVisible();
+      await look(page, 'today-plan-390');
+    } finally {
+      await s.stop();
+    }
+  });
 
   test('the plan is in the bottom sheet, its main button in reach', async ({ page }) => {
     test.setTimeout(120_000);

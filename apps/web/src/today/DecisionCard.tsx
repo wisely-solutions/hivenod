@@ -20,7 +20,9 @@ import {
   REVISABLE_TYPES,
   versionCount,
   type ActionPlan,
+  planView,
   type InboxOutcome,
+  type InboxPlan,
   type InboxThread,
   type PlanInput,
 } from '@hive/shared';
@@ -43,6 +45,8 @@ import {
   Undo2,
   X,
   type LucideIcon,
+  User,
+  Zap,
 } from 'lucide-react';
 import {
   forwardRef,
@@ -74,6 +78,9 @@ import {
 import { askedText, AskBox, DiffText, RevisingStrip, VersionSwitcher } from './Revise';
 import { LabelBadge } from '../threads/labels';
 import { FieldView } from '../threads/OutcomeCard';
+import { useThreadOutcomes } from '../threads/data';
+import { BAR as PLAN_BAR, planInputOf, planMain, stepTitle } from '../threads/plan';
+import { usePlanActions } from '../threads/usePlanActions';
 import { errorText } from '../threads/parts';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
@@ -159,69 +166,78 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
       ask: () => inner.current?.ask?.() ?? false,
       version: (step) => inner.current?.version?.(step),
     }));
-    // A plan's step (item qwFAWxZM5xkcE7PPjAzi) is decided on the thread page, where the plan is.
+    // A plan (item qwFAWxZM5xkcE7PPjAzi): the card shows the step that waits for the member.
     const planStep = (entry.proposals ?? []).find((p) => p.data.planId);
-    const card = planStep
+    const card = entry.plan
       ? shell(
           band,
           <>
             <CardHead props={props} />
-            <div
-              data-plan-card=""
-              className="mt-3 rounded-card border border-agent/25 bg-agent-soft p-3.5 sm:p-4"
-            >
-              <p className="text-14 text-ink">
-                {props.agentName(planStep.data.proposedBy)} proposes a plan: steps that run in
-                order, each after your approval.
-              </p>
-              <div className="mt-3">
-                <Button
-                  variant="approve"
-                  onClick={props.onOpen}
-                  leading={<Icon icon={ListChecks} size={16} />}
-                >
-                  Open plan
-                </Button>
-              </div>
-            </div>
+            <PlanDecision ref={inner} props={props} plan={entry.plan} />
           </>,
           t.title,
         )
-      : t.state === 'needsYou'
+      : planStep
         ? shell(
             band,
             <>
               <CardHead props={props} />
-              <QuestionPanel
-                wid={entry.wid}
-                thread={entry.thread!}
-                agentName={props.agentName}
-                onDone={props.onDone}
-                onSkip={props.onSkip}
-              />
+              <div
+                data-plan-card=""
+                className="mt-3 rounded-card border border-agent/25 bg-agent-soft p-3.5 sm:p-4"
+              >
+                <p className="text-14 text-ink">
+                  {props.agentName(planStep.data.proposedBy)} proposes a plan: steps that run in
+                  order, each after your approval.
+                </p>
+                <div className="mt-3">
+                  <Button
+                    variant="approve"
+                    onClick={props.onOpen}
+                    leading={<Icon icon={ListChecks} size={16} />}
+                  >
+                    Open plan
+                  </Button>
+                </div>
+              </div>
             </>,
             t.title,
           )
-        : shell(
-            band,
-            <>
-              <CardHead props={props} />
-              <ProposalPanel
-                ref={inner}
-                wid={entry.wid}
-                thread={entry.thread!}
-                proposals={entry.proposals ?? []}
-                sender={props.sender}
-                now={props.now}
-                busy={props.busy}
-                agentName={props.agentName}
-                onDone={props.onDone}
-                onOpen={props.onOpen}
-                onSkip={props.onSkip}
-              />
-            </>,
-            t.title,
-          );
+        : t.state === 'needsYou'
+          ? shell(
+              band,
+              <>
+                <CardHead props={props} />
+                <QuestionPanel
+                  wid={entry.wid}
+                  thread={entry.thread!}
+                  agentName={props.agentName}
+                  onDone={props.onDone}
+                  onSkip={props.onSkip}
+                />
+              </>,
+              t.title,
+            )
+          : shell(
+              band,
+              <>
+                <CardHead props={props} />
+                <ProposalPanel
+                  ref={inner}
+                  wid={entry.wid}
+                  thread={entry.thread!}
+                  proposals={entry.proposals ?? []}
+                  sender={props.sender}
+                  now={props.now}
+                  busy={props.busy}
+                  agentName={props.agentName}
+                  onDone={props.onDone}
+                  onOpen={props.onOpen}
+                  onSkip={props.onSkip}
+                />
+              </>,
+              t.title,
+            );
     if (!props.swipe) return card;
     return (
       <SwipeCard
@@ -376,6 +392,223 @@ function shell(band: number | null, children: React.ReactNode, title: string) {
     </article>
   );
 }
+
+/**
+ * Today's card for a plan (item qwFAWxZM5xkcE7PPjAzi, slice 5): the plan's progress and only the
+ * step that waits for the member. A proposed plan offers Approve plan (its agent steps); an
+ * approval step at its turn, Approve and Not approved; an agent step not approved yet, the usual
+ * proposal (Approve step, Edit, Ask for changes); a blocked plan, Retry, Skip and Stop plan.
+ * Keys A, E, C and [ ] act on what is shown, as on any card; Open plan opens the thread page.
+ */
+const PlanDecision = forwardRef<
+  DecisionCardHandle,
+  { props: DecisionCardProps; plan: Row<InboxPlan> }
+>(function PlanDecision({ props, plan }, ref) {
+  const { entry, agentName } = props;
+  const thread = entry.thread!;
+  const { session } = useReady();
+  const outs = useThreadOutcomes(entry.wid, thread.id, session.me.uid);
+  const rows = outs.state === 'ready' ? outs.data : [];
+  const pl = planInputOf(plan, rows);
+  const loaded = plan.data.steps.every((id) => pl.outcomes[id]);
+  const view = planView(pl.plan, pl.outcomes);
+  const main = loaded ? planMain(pl) : null;
+  const acts = usePlanActions(entry.wid, thread, pl, props.onDone);
+  const inner = useRef<DecisionCardHandle>(null);
+  const at = main && main.kind !== 'approvePlan' ? view.steps[main.index] : undefined;
+  const atRow = at ? rows.find((r) => r.id === at.outcomeId) : undefined;
+  useImperativeHandle(ref, () => ({
+    approve: () => {
+      if (!main) return;
+      if (main.kind === 'approvePlan') acts.approveAll();
+      else if (main.kind === 'retry') acts.retry();
+      else if (main.gate && at) acts.gate(at, true);
+      else inner.current?.approve();
+    },
+    edit: () => inner.current?.edit(),
+    reject: () => {
+      if (main?.kind === 'step' && main.gate && at) acts.gate(at, false);
+      else inner.current?.reject();
+    },
+    ask: () => inner.current?.ask?.() ?? false,
+    version: (step) => inner.current?.version?.(step),
+  }));
+  const busy = !!acts.counting;
+  const open = (
+    <Button
+      variant="secondary"
+      onClick={props.onOpen}
+      leading={<Icon icon={ListChecks} size={15} />}
+    >
+      Open plan
+    </Button>
+  );
+  const skip = (
+    <Button
+      variant="ghost"
+      className="ml-auto max-sm:hidden"
+      disabled={busy}
+      onClick={props.onSkip}
+    >
+      Skip
+      <Key>S</Key>
+    </Button>
+  );
+  const title = (i: number) => {
+    const s = view.steps[i]!;
+    return stepTitle(s.type, pl.outcomes[s.outcomeId]?.fields ?? {});
+  };
+  return (
+    <div data-plan-card="" data-plan={plan.id} data-plan-main={main?.kind ?? 'none'}>
+      <div className="mt-3 flex items-center gap-2">
+        <Icon icon={ListChecks} size={16} className="text-agent" />
+        <span className="font-mono text-12 font-semibold uppercase tracking-[0.08em] text-agent">
+          Plan · {view.progress}
+        </span>
+        <span className="ml-auto text-12 text-text-2">
+          {view.through} of {view.total} done
+        </span>
+      </div>
+      <div aria-hidden className="mt-2 flex gap-1">
+        {view.steps.map((s) => (
+          <span key={s.outcomeId} className={cn('h-1.5 flex-1 rounded-full', PLAN_BAR[s.ui])} />
+        ))}
+      </div>
+      {!loaded ? (
+        <p className="mt-3 text-14 text-text-2">Loading the plan…</p>
+      ) : main?.kind === 'step' && !main.gate && atRow ? (
+        <ProposalPanel
+          ref={inner}
+          wid={entry.wid}
+          thread={thread}
+          proposals={[atRow]}
+          sender={props.sender}
+          now={props.now}
+          busy={props.busy}
+          agentName={agentName}
+          onDone={props.onDone}
+          onOpen={props.onOpen}
+          onSkip={props.onSkip}
+          plan={pl}
+        />
+      ) : (
+        <div className="mt-3 rounded-card border border-agent/25 bg-agent-soft p-3.5 sm:p-4">
+          {main?.kind === 'approvePlan' ? (
+            <>
+              <p className="text-14 text-ink">
+                {agentName(plan.data.proposedBy)} proposes {view.total}{' '}
+                {view.total === 1 ? 'step' : 'steps'} that run in order
+                {plan.data.note ? `: ${plan.data.note}` : '.'}
+              </p>
+              <ol aria-label="Steps" className="mt-2 flex flex-col gap-1">
+                {view.steps.map((s) => (
+                  <li
+                    key={s.outcomeId}
+                    data-step={s.number}
+                    className="flex items-center gap-2 text-14"
+                  >
+                    <span className="w-4 shrink-0 text-right text-12 font-semibold text-text-2">
+                      {s.number}
+                    </span>
+                    <Icon
+                      icon={s.kind === 'human' ? User : Zap}
+                      size={13}
+                      className={s.kind === 'human' ? 'text-gate-text' : 'text-agent'}
+                    />
+                    <span className="min-w-0 truncate text-ink">{title(s.index)}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-2 text-13 text-text-2">
+                Approve plan approves the agent steps; your approval steps still wait for you.
+              </p>
+            </>
+          ) : main?.kind === 'step' && at ? (
+            <>
+              <p className="text-13 font-medium text-gate-text">
+                Step {at.number} of {view.total} · Your approval
+              </p>
+              <h3 className="mt-1 text-15 font-semibold text-ink [overflow-wrap:anywhere]">
+                {title(at.index)}
+              </h3>
+              {typeof pl.outcomes[at.outcomeId]?.fields.detail === 'string' ? (
+                <p className="mt-1 whitespace-pre-wrap text-14 text-text-2 [overflow-wrap:anywhere]">
+                  {String(pl.outcomes[at.outcomeId]!.fields.detail)}
+                </p>
+              ) : null}
+            </>
+          ) : main?.kind === 'retry' && at ? (
+            <>
+              <p className="text-13 font-medium text-sendback">
+                Step {at.number} of {view.total} failed
+              </p>
+              <h3 className="mt-1 text-15 font-semibold text-ink [overflow-wrap:anywhere]">
+                {title(at.index)}
+              </h3>
+              {atRow?.data.result?.error ? (
+                <p className="mt-1 text-14 text-text-2">{atRow.data.result.error}</p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-14 text-text-2">Nothing in this plan waits for you right now.</p>
+          )}
+        </div>
+      )}
+      {acts.error ? (
+        <p role="alert" className="mt-3 text-14 text-sendback">
+          {acts.error}
+        </p>
+      ) : null}
+      {loaded && !(main?.kind === 'step' && !main.gate && atRow) ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {acts.counting ? (
+            <UndoButton countdown={acts.counting} variant="approve" />
+          ) : main?.kind === 'approvePlan' ? (
+            <Button
+              variant="approve"
+              data-approve-plan=""
+              onClick={acts.approveAll}
+              leading={<Icon icon={Check} size={16} />}
+            >
+              Approve plan
+              <Key>A</Key>
+            </Button>
+          ) : main?.kind === 'step' && at ? (
+            <>
+              <Button
+                variant="approve"
+                data-gate-approve=""
+                onClick={() => acts.gate(at, true)}
+                leading={<Icon icon={Check} size={16} />}
+              >
+                Approve
+                <Key>A</Key>
+              </Button>
+              <Button variant="sendback" data-gate-reject="" onClick={() => acts.gate(at, false)}>
+                Not approved
+              </Button>
+            </>
+          ) : main?.kind === 'retry' ? (
+            <>
+              <Button variant="approve" data-retry="" onClick={acts.retry}>
+                Retry
+                <Key>A</Key>
+              </Button>
+              <Button variant="secondary" data-skip="" onClick={acts.skip}>
+                Skip step
+              </Button>
+              <Button variant="sendback" data-stop="" onClick={acts.stop}>
+                Stop plan
+              </Button>
+            </>
+          ) : null}
+          {open}
+          {skip}
+        </div>
+      ) : null}
+    </div>
+  );
+});
 
 export interface ProposalPanelProps {
   wid: string;
