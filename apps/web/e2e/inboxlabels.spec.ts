@@ -213,7 +213,8 @@ test('Inbox labels: suggested by the agent, confirmed or changed, filtered, edit
     await page.reload();
     await expect(card2.locator('[data-label-chip="Billing"]')).toBeVisible();
 
-    // Filter by label (with counts), combined with the other filters.
+    // Filter by label (with counts), combined with the other filters (behind Filters, item kt3E7).
+    await page.getByRole('button', { name: /^Filters/ }).click();
     const filters = page.getByRole('group', { name: 'Label' });
     await expect(filters.getByRole('button', { name: 'Billing · 1' })).toBeVisible();
     await filters.getByRole('button', { name: 'Billing · 1' }).click();
@@ -228,6 +229,7 @@ test('Inbox labels: suggested by the agent, confirmed or changed, filtered, edit
     await page.getByRole('button', { name: 'Has open threads' }).click();
     await filters.getByRole('button', { name: 'Billing · 1' }).click();
     await filters.getByRole('button', { name: 'Sales · 1' }).click();
+    await page.keyboard.press('Escape');
     await expect(card3).toBeVisible();
 
     // Today: the threads that wait carry the chip, and the label filter narrows them.

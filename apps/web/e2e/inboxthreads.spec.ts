@@ -248,11 +248,16 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await agent.ask(t1, 'Thursday 10:00 or 14:00?');
     const card = page.locator(`[data-subject="${s1}"]`);
     await expect(card.getByRole('heading', { name: 'Review dates (Payments)' })).toBeVisible();
-    await expect(card.locator('[data-state="needsYou"]')).toBeVisible();
+    // Grouped by the most pressing thread (item kt3E7): Needs you, with who asked what last.
+    await expect(
+      page.locator('[data-group="needs"]').locator(`[data-subject="${s1}"]`),
+    ).toBeVisible();
     await expect(card.getByText('1 for you')).toBeVisible();
+    await expect(card).toContainText('Sam: Can we move the payments review to Thursday?');
     await look(page, 'list', info.project.name);
 
-    await card.locator(`[data-thread="${t1}"]`).click();
+    await card.getByRole('link', { name: 'Review dates (Payments)' }).click();
+    await page.locator(`[data-thread="${t1}"]`).click();
     await expect(
       page.getByRole('heading', { name: /move the payments review/, level: 1 }),
     ).toBeVisible();
@@ -460,7 +465,9 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await find.fill('nothing like this');
     await expect(page.getByText('No subject matches.')).toBeVisible();
     await find.fill('');
+    await page.getByRole('button', { name: /^Filters/ }).click();
     await page.getByRole('button', { name: 'Waiting for me' }).click();
+    await page.keyboard.press('Escape');
     await expect(page.getByText('No subject matches.')).toBeVisible();
 
     if (info.project.name === 'iphone-se') {
@@ -474,7 +481,7 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
   }
 });
 
-test('Inbox: subjects group by area; a quiet subject folds away and comes back', async ({
+test('Inbox: subjects group by state, areas filter them; a quiet subject folds away and comes back', async ({
   page,
 }, info) => {
   test.setTimeout(180_000);
@@ -517,32 +524,63 @@ test('Inbox: subjects group by area; a quiet subject folds away and comes back',
     const s5 = await agent.file(t5, { newName: 'Old contract', area: 'Admin' });
 
     await page.goto('/inbox');
-    const areaOf = (name: string) => page.locator(`section[data-area="${name}" i]`);
-    await expect(areaOf('Admin').locator(`[data-subject="${s3}"]`)).toBeVisible();
-    await expect(areaOf('Payments').locator(`[data-subject="${s1}"]`)).toBeVisible();
-    await expect(areaOf('Payments').locator(`[data-subject="${s2}"]`)).toBeVisible();
-    await expect(areaOf('').locator(`[data-subject="${s4}"]`)).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'No area', level: 2 })).toBeVisible();
-    const order = await page.locator('section[data-area] > h2').allTextContents();
-    expect(order).toEqual(['Admin', 'Payments', 'No area']);
+    // Grouped by the most pressing thread (item kt3E7): every one is with the agents here.
+    const working = page.locator('[data-group="working"]');
+    for (const sid of [s1, s2, s3, s4])
+      await expect(working.locator(`[data-subject="${sid}"]`)).toBeVisible();
+    const order = await working
+      .locator('[data-subject]')
+      .evaluateAll((els) => els.map((e) => e.getAttribute('data-subject')));
+    expect(order).toEqual([s1, s2, s3, s4]);
+    await expect(page.locator(`[data-subject="${s1}"]`)).toContainText('Payments');
+    await expect(page.locator(`[data-subject="${s1}"]`)).toContainText('Working');
+
+    // The area is a filter now (case-blind, with counts).
+    const filters = async () => {
+      if (!(await page.getByRole('group', { name: 'Area' }).isVisible()))
+        await page.getByRole('button', { name: /^Filters/ }).click();
+    };
+    await filters();
+    await page
+      .getByRole('group', { name: 'Area' })
+      .getByRole('button', { name: 'Payments · 2' })
+      .click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Filters · 1' })).toBeVisible();
+    await expect(page.locator(`[data-subject="${s1}"]`)).toBeVisible();
+    await expect(page.locator(`[data-subject="${s2}"]`)).toBeVisible();
+    await expect(page.locator(`[data-subject="${s3}"]`)).toHaveCount(0);
+    await filters();
+    await page
+      .getByRole('group', { name: 'Area' })
+      .getByRole('button', { name: 'Payments · 2' })
+      .click();
+    await page.keyboard.press('Escape');
+    await expect(page.locator(`[data-subject="${s3}"]`)).toBeVisible();
 
     // 70 days without a message: folded into Quiet, closed by default; never deleted.
     const quiet = page.locator('details[data-quiet]');
     await expect(quiet.getByText('Quiet (1)')).toBeVisible();
-    await expect(page.locator(`section[data-area] [data-subject="${s5}"]`)).toHaveCount(0);
+    await expect(working.locator(`[data-subject="${s5}"]`)).toHaveCount(0);
     await expect(quiet.locator(`[data-subject="${s5}"]`)).toBeHidden();
-    await look(page, 'areas', info.project.name);
+    await look(page, 'groups', info.project.name);
     await quiet.getByText('Quiet (1)').click();
     await expect(quiet.locator(`[data-subject="${s5}"]`)).toBeVisible();
-    await look(page, 'areas-quiet', info.project.name);
+    await look(page, 'groups-quiet', info.project.name);
 
     // The quiet threshold is configurable (and can be turned off).
+    await filters();
     await page.getByLabel('Quiet subjects').selectOption('30');
+    await page.keyboard.press('Escape');
     await expect(quiet.getByText('Quiet (1)')).toBeVisible();
+    await filters();
     await page.getByLabel('Quiet subjects').selectOption('0');
+    await page.keyboard.press('Escape');
     await expect(page.locator('details[data-quiet]')).toHaveCount(0);
-    await expect(areaOf('Admin').locator(`[data-subject="${s5}"]`)).toBeVisible();
+    await expect(working.locator(`[data-subject="${s5}"]`)).toBeVisible();
+    await filters();
     await page.getByLabel('Quiet subjects').selectOption('60');
+    await page.keyboard.press('Escape');
     await expect(quiet.getByText('Quiet (1)')).toBeVisible();
 
     // The member sets an area on the subject page.
@@ -555,8 +593,7 @@ test('Inbox: subjects group by area; a quiet subject folds away and comes back',
       'Admin',
     );
     await page.goto('/inbox');
-    await expect(areaOf('Admin').locator(`[data-subject="${s4}"]`)).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'No area', level: 2 })).toHaveCount(0);
+    await expect(page.locator(`[data-subject="${s4}"]`)).toContainText('Admin');
 
     // A new message brings the quiet subject back.
     await agent.add(uid, {
@@ -567,7 +604,7 @@ test('Inbox: subjects group by area; a quiet subject folds away and comes back',
       id: 'm-old-2',
     });
     await expect(page.locator('details[data-quiet]')).toHaveCount(0);
-    await expect(areaOf('Admin').locator(`[data-subject="${s5}"]`)).toBeVisible();
+    await expect(working.locator(`[data-subject="${s5}"]`)).toBeVisible();
   } finally {
     await agent.stop();
   }
