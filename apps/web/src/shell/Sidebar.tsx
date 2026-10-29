@@ -281,7 +281,7 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
             {/* Drawn by CSS, so the link's visible text stays the name its label starts with. */}
             <span
               aria-hidden
-              data-detail="Account and notifications"
+              data-detail="Your account"
               className="block truncate text-12 font-normal text-text-2 before:content-[attr(data-detail)]"
             />
           </span>

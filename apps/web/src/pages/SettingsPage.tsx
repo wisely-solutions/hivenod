@@ -83,7 +83,7 @@ export function AccountPage() {
   const current: AccountTab = tab && isAccountTab(tab) ? tab : 'profile';
   return (
     <>
-      <PageHeader title="Account" allOrgs subtitle="The same in all your organizations" />
+      <PageHeader title="Account" allOrgs subtitle="Profile, theme and notifications" />
       <SettingsTabs label="Account" tabs={ACCOUNT_TABS} current={current} route="/account/$tab" />
     </>
   );

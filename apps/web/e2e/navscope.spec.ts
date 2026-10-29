@@ -143,6 +143,7 @@ const switcher = (page: Page) => page.getByRole('button', { name: /, switch orga
 async function switchTo(page: Page, name: RegExp) {
   await switcher(page).first().click();
   await page
+    .getByRole('dialog', { name: 'Organizations' })
     .getByRole('list', { name: 'Your organizations' })
     .getByRole('button', { name })
     .click();
