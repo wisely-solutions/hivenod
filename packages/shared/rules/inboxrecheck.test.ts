@@ -364,7 +364,7 @@ describe('re-check: the agent revises unasked', () => {
             ...op,
             data: {
               ...op.data,
-              versions: (op.data.versions as Record<string, unknown>[]).map((v, i) =>
+              versions: (op.data!.versions as Record<string, unknown>[]).map((v, i) =>
                 i === 1 ? { ...v, asked: { instruction: 'x', chips: [] } } : v,
               ),
             },
@@ -415,7 +415,7 @@ describe('re-check: the agent revises unasked', () => {
     });
     // Keeping the approval is refused.
     await denied(
-      a.run({ ...p, ops: forge(p.ops, O('st3'), { decision: pl.outcomes.st3!.decision ?? null }) }),
+      a.run({ ...p, ops: forge(p.ops, O('st3'), { decision: (await snap(O('st3'))).decision }) }),
     );
     await ok(a.run(p));
     expect(await outcome('st3')).toMatchObject({ state: 'proposed', decision: null });

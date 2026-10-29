@@ -152,7 +152,7 @@ describe('recheckDone', () => {
         'recheck.at': SERVER_TIME,
       },
     });
-    expect(p.ops.slice(1, 3).map((o) => [o.path, o.data.checkedAt])).toEqual([
+    expect(p.ops.slice(1, 3).map((o) => [o.path, o.data!.checkedAt])).toEqual([
       ['workspaces/w1/inboxOutcomes/o1', SERVER_TIME],
       ['workspaces/w1/inboxOutcomes/s3', SERVER_TIME],
     ]);
