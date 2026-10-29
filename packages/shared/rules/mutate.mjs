@@ -3,6 +3,7 @@
 // MUTATE_ONLY="name,name" limits the run. Run inside the emulator:  pnpm test:rules:mutate   (from the repo root)
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { assertWellFormed } from './mutate-lib.mjs';
 
 const RULES = new URL('../../../firestore.rules', import.meta.url);
 const original = readFileSync(RULES, 'utf8');
@@ -501,6 +502,8 @@ const MUTATIONS = [
   [
     "inbox: linking another member's thread",
     [["&& get(inboxDoc(wid, 'inboxThreads', e.threadId)).data.memberUid == me()", '']],
+  ],
+  [
     'inbox: agents decide relations',
     [
       [
@@ -624,6 +627,7 @@ const runSuite = (verbose = false) => {
     return false;
   }
 };
+assertWellFormed(MUTATIONS);
 // The suite must pass on the unmutated rules, or "a test failed" proves nothing.
 if (!runSuite(true)) {
   console.error('The rules suite fails on the unmutated rules: fix it before mutating.');
