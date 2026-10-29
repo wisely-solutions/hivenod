@@ -103,6 +103,7 @@ async function session(
   maxItems?: number,
   maxInbox?: number,
   statusMinuteMs?: number,
+  extraEnv: Record<string, string> = {},
 ) {
   const events: Pushed[] = [];
   const client = new Client({ name: 'claude-code', version: '0' });
@@ -123,6 +124,7 @@ async function session(
       ...(statusMinuteMs
         ? { HIVENOD_STATUS_MINUTE_MS: String(statusMinuteMs), HIVENOD_STATUS_CHECK_MS: '200' }
         : {}),
+      ...extraEnv,
     }),
     stderr: 'inherit',
   });
@@ -163,6 +165,14 @@ async function session(
     call,
     next,
     close,
+    pid: transport.pid,
+    /** Sends a signal to this session's own process (by its PID) and waits until it exited. */
+    signal: async (sig: NodeJS.Signals) => {
+      const pid = transport.pid;
+      if (!pid) throw new Error('no pid');
+      process.kill(pid, sig);
+      await exited(pid);
+    },
     disconnect: async () => {
       await client.close();
     },
@@ -351,12 +361,106 @@ d('hivenod mcp --channel', () => {
     s = await session(token);
     const w = await s.next('work');
     expect(w.meta.item_id).toBe('a');
-    const other = await session(token);
+    // On another machine (item N0biX: the same machine would take over).
+    const other = await session(token, undefined, undefined, undefined, {
+      HIVENOD_HOST_ID: 'other-machine',
+    });
     const busy = await other.next('info');
     expect(busy.meta.code).toBe('busy');
     await put({ [I('b')]: itemDoc({ stepId: 'build', title: 'Not for the second' }) });
     await pause(1500);
     expect(other.events.filter((e) => e.meta.kind === 'work')).toHaveLength(0);
+  });
+});
+
+d('hivenod mcp --channel: restarts on the same machine take over (item N0biX)', () => {
+  const HOST = { HIVENOD_HOST_ID: 'machine-1' };
+  const start = (token: string, env: Record<string, string> = HOST) =>
+    session(token, undefined, undefined, undefined, env);
+  const presence = async (uid: string) => read(paths.agent(W, uid));
+
+  it('kill -9, then a new session on the same machine gets the handover within 5 s', async () => {
+    const { uid, token } = await newAgent();
+    const a = await start(token);
+    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'Held when killed' }) });
+    const wa = await a.next('work');
+    expect(wa.meta.item_id).toBe('a');
+    const seenA = (await presence(uid)).seenSession as string;
+    expect(seenA).toMatch(/^[0-9a-f]{24}$/);
+    expect((await presence(uid)).seenHostId).toBe('machine-1');
+    await a.signal('SIGKILL'); // a crash: no offline stamp
+    expect((await presence(uid)).signedOutAt ?? null).toBeNull();
+    const t0 = Date.now();
+    const b = await start(token);
+    const wb = await b.next('work', 1, 5000);
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(wb.meta.item_id).toBe('a'); // it resumes the item the killed session held
+    expect(b.events.find((e) => e.meta.code === 'takeover')?.content).toMatch(
+      /took over from an earlier session of this agent on this machine/,
+    );
+    expect(b.events.some((e) => e.meta.code === 'busy')).toBe(false);
+    await pause(1500);
+    const now = await presence(uid);
+    expect(now.seenSession).not.toBe(seenA);
+    expect((await read(I('a'))).claim).toMatchObject({ agentUid: uid, runId: wb.meta.run_id });
+  });
+
+  it('an old session still alive sees the takeover on its heartbeat and stops taking work', async () => {
+    const { uid, token } = await newAgent();
+    const a = await start(token);
+    const b = await start(token);
+    let over: Pushed | undefined;
+    for (const t0 = Date.now(); !over && Date.now() - t0 < 5000; await pause(50))
+      over = a.events.find((e) => e.meta.code === 'taken_over');
+    if (!over) throw new Error(`no taken_over info; got ${JSON.stringify(a.events)}`);
+    expect(over.content).toMatch(/Another session of this agent took over on this machine/);
+    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'For the new one' }) });
+    const wb = await b.next('work');
+    expect(wb.meta.item_id).toBe('a');
+    await pause(1500);
+    expect(a.events.filter((e) => e.meta.kind === 'work')).toHaveLength(0);
+    // The old one ending cleanly does not mark the new one offline.
+    await a.signal('SIGTERM');
+    const p = await presence(uid);
+    expect(p.signedOutAt ?? null).toBeNull();
+  });
+
+  it('a clean SIGTERM or SIGINT leaves no live presence: the next session starts with no takeover', async () => {
+    const { uid, token } = await newAgent();
+    for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+      const a = await start(token, { HIVENOD_HOST_ID: `machine-${sig}` });
+      await pause(1200);
+      await a.signal(sig);
+      const p = await presence(uid);
+      const seen = (p.lastSeenAt as { toMillis(): number }).toMillis();
+      const out = (p.signedOutAt as { toMillis(): number } | undefined)?.toMillis() ?? 0;
+      expect(out).toBeGreaterThanOrEqual(seen);
+      // Even from another machine: no "another live session".
+      const b = await start(token, { HIVENOD_HOST_ID: `elsewhere-${sig}` });
+      await put({ [I(`x${sig}`)]: itemDoc({ stepId: 'test', title: `After ${sig}` }) });
+      const w = await b.next('work');
+      expect(w.meta.item_id).toBe(`x${sig}`);
+      expect(b.events.some((e) => e.meta.code === 'busy' || e.meta.code === 'takeover')).toBe(
+        false,
+      );
+      await b.call('complete', { itemId: w.meta.item_id, runId: w.meta.run_id });
+      await b.close();
+    }
+  });
+
+  it('two machines: the second is still told about the other live session', async () => {
+    const { uid, token } = await newAgent();
+    const a = await start(token, { HIVENOD_HOST_ID: 'laptop' });
+    const b = await start(token, { HIVENOD_HOST_ID: 'desktop' });
+    const busy = await b.next('info');
+    expect(busy.meta.code).toBe('busy');
+    expect(busy.content).toMatch(/already running in another terminal/);
+    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'For the first machine' }) });
+    expect((await a.next('work')).meta.item_id).toBe('a');
+    await pause(1500);
+    expect(b.events.filter((e) => e.meta.kind === 'work')).toHaveLength(0);
+    expect(a.events.some((e) => e.meta.code === 'taken_over')).toBe(false);
+    expect((await presence(uid)).seenHostId).toBe('laptop');
   });
 });
 

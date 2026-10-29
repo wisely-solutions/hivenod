@@ -18,6 +18,12 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
   /** Inbox events: a Build it plan step's item is Done, or was stopped (item qwFAWxZM5xkcE7PPjAzi). */
   item_done: '0.2.174',
   item_stopped: '0.2.174',
+  /**
+   * Presence with a session and host id (item N0biXyXQN4TybBVUo5Lp): a restart on the same machine
+   * takes over at once (info code takeover). An older CLI is told another session is live until
+   * the old presence expires.
+   */
+  takeover: '0.2.175',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */

@@ -512,8 +512,9 @@ describe.skipIf(!run)('hivenod plugin: real Claude Code sessions', () => {
       expect(runId).toBeTruthy();
       out('CHECK stop: Stop work arrived in the session (model answered ACKSTOP): PASS');
 
-      // 4. A second session as the same agent is told it is busy.
-      await start('s2', null);
+      // 4. A second session as the same agent, on another machine, is told it is busy (on the
+      // same machine it would take over: item N0biX).
+      await start('s2', null, { env: 'HIVENOD_HOST_ID=smoke-second-machine' });
       await until(
         'busy notice',
         60_000,
