@@ -46,6 +46,7 @@ import { InboxRow, type RowAgent } from './InboxRow';
 import { isOpenFinding, nextKey, parseFilter, type InboxEntry } from './logic';
 import { useNeedsAll } from '../needs/data';
 import { ScopeLine } from '../shell/ScopePill';
+import { OrgChips } from '../orgs/OrgChips';
 import {
   countKinds,
   countNeeds,
@@ -630,7 +631,6 @@ export function InboxPage() {
   const activeFilters =
     (filter !== 'all' ? 1 : 0) +
     (scope !== 'all' ? 1 : 0) +
-    (orgFilter ? 1 : 0) +
     (labelFilter ? 1 : 0);
   const chips = (
     <div className="flex flex-col gap-3">
@@ -649,19 +649,6 @@ export function InboxPage() {
             { value: 'mine', label: 'Only me', count: whoCounts.onlyYou },
             { value: 'shared', label: 'Shared', count: whoCounts.shared },
             { value: 'all', label: 'All', count: whoCounts.total },
-          ]}
-        />
-      ) : null}
-      {manyOrgs ? (
-        <Select
-          label="Filter by organization"
-          hideLabel
-          inline
-          value={orgFilter ?? 'all'}
-          onValueChange={(v) => setSearch({ org: v })}
-          options={[
-            { value: 'all', label: 'All organizations' },
-            ...all.orgs.map((o) => ({ value: o.wid, label: o.name })),
           ]}
         />
       ) : null}
@@ -1030,6 +1017,16 @@ export function InboxPage() {
       {chips}
     </Popover>
   );
+  // The organization chips (item icVly): a filter of this page only, kept in the URL.
+  const orgChips = manyOrgs ? (
+    <OrgChips
+      className="mb-4"
+      orgs={all.orgs}
+      value={orgFilter}
+      onChange={(w) => setSearch({ org: w ?? 'all' })}
+      hint="Tap an organization to see only its decisions"
+    />
+  ) : null;
   const stackHead = (
     <div className="mb-3 flex items-center gap-3">
       <h2 className="font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3">
@@ -1079,11 +1076,13 @@ export function InboxPage() {
           <div className="min-w-0">
             {total === 0 && waiting.length === 0 ? (
               <>
+                {orgFilter ? orgChips : null}
                 {activeFilters ? stackHead : null}
                 <div className="mt-2">{empty}</div>
               </>
             ) : (
               <>
+                {orgChips}
                 {stackHead}
                 {list.length === 0 && found.length === 0 && tidyAll.length === 0 ? (
                   <p className="py-4 text-14 text-text-2">Nothing in this filter.</p>

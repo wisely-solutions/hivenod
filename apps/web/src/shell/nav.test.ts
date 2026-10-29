@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { NAV, ORG_NAV, TABS, YOU_NAV } from './nav';
+import { isOrgPath, NAV, ORG_NAV, TABS, YOU_NAV } from './nav';
 
 describe('phone tabs', () => {
-  it('are Today, Inbox, Calendar, Projects (item kt3E7); Activity stays in the sidebar', () => {
-    expect(TABS.map((t) => t.to)).toEqual(['/', '/inbox', '/calendar', '/projects']);
-    expect(TABS.map((t) => t.short ?? t.label)).toEqual(['Today', 'Inbox', 'Calendar', 'Projects']);
+  it('are Today, Inbox, Calendar, then the organization (item icVly)', () => {
+    expect(TABS.map((t) => t.to)).toEqual(['/', '/inbox', '/calendar']);
     expect(NAV.some((n) => n.to === '/activity')).toBe(true);
+  });
+  it('light the organization tab on every organization page', () => {
+    for (const p of ['/org', '/projects', '/p/x', '/p/x/process', '/agents', '/agents/a1', '/activity', '/insights', '/items', '/settings/members'])
+      expect(isOrgPath(p), p).toBe(true);
+    for (const p of ['/', '/inbox', '/inbox/w/t/1', '/calendar', '/account/profile', '/notifications'])
+      expect(isOrgPath(p), p).toBe(false);
   });
 });
 
