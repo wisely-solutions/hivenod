@@ -381,15 +381,15 @@ const MUTATIONS = [
     [["&& getAfter(inboxDoc(wid, 'inboxSubjects', sid)).data.memberUid == member;", ';']],
   ],
   [
-    'inbox: agent rewrites a subject, not only its area',
+    'inbox: agent rewrites more than a subject area',
     [["&& changed(['area', 'updatedAt', 'lastEventId'])", '']],
   ],
   [
     'inbox: agent sets an area outside a filing',
     [
       [
-        "inboxTracked(wid, request.resource.data.lastEventId, ['thread.filed'], resource.data.memberUid)",
-        'true',
+        "inboxTracked(wid, request.resource.data.lastEventId, ['thread.filed'], resource.data.memberUid)\n          && inboxEv(wid, request.resource.data.lastEventId).data.subjectId == sid;",
+        'true;',
       ],
     ],
   ],

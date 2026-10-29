@@ -119,17 +119,19 @@ function raw(
   evData: Record<string, unknown> = {},
   member = 'alice',
   threadId: string | null = 'itr1',
+  subjectId: string | null = null,
+  eventId = 'ev-x',
 ): WriteOp[] {
   return [
-    { kind: 'update', path, data: { ...data, updatedAt: SERVER_TIME, lastEventId: 'ev-x' } },
+    { kind: 'update', path, data: { ...data, updatedAt: SERVER_TIME, lastEventId: eventId } },
     {
       kind: 'set',
-      path: inboxPaths.event(W, 'ev-x'),
+      path: inboxPaths.event(W, eventId),
       data: {
         actor: { type: who.ctx.actor.type, id: who.uid, name: who.ctx.actor.name },
         memberUid: member,
         threadId,
-        subjectId: null,
+        subjectId,
         type,
         data: evData,
         at: SERVER_TIME,
@@ -841,6 +843,21 @@ describe('subjects: rename, merge, split, move (the member)', () => {
     // ...but not outside a filing, and not other fields.
     await denied(a.run(raw(a, S(f.subjectId), { area: 'X' }, 'thread.note', {}, 'alice')));
     await denied(a.run(raw(a, S(f.subjectId), { name: 'Hijack' }, 'thread.filed', {}, 'alice')));
+    // The same attacks with an event that names this subject: only the rule itself stops them.
+    const sid = f.subjectId;
+    // Each attempt has its own event id: a reused one would be refused (events are create-only).
+    let n = 0;
+    const edit = (data: Record<string, unknown>, type: string, evSubject: string | null = sid) =>
+      a.run(raw(a, S(sid), data, type, {}, 'alice', 'itr1', evSubject, `ev-area-${++n}`));
+    await ok(edit({ area: 'Ops' }, 'thread.filed')); // control: a real filing event
+    await denied(edit({ area: 'X' }, 'thread.note')); // not a filing
+    await denied(edit({ area: 'X' }, 'thread.titled')); // not a filing
+    await denied(edit({ area: 'X' }, 'thread.filed', null)); // a filing, but not of this subject
+    await denied(edit({ area: 'X' }, 'thread.filed', 'another-subject'));
+    await denied(edit({ name: 'Hijack' }, 'thread.filed'));
+    await denied(edit({ area: 'X', name: 'Hijack' }, 'thread.filed'));
+    await denied(edit({ memberUid: 'bob' }, 'thread.filed'));
+    await denied(edit({ createdBy: { type: 'human', id: 'alice' } }, 'thread.filed'));
     await denied(
       a.run(raw(a, S(f.subjectId), { area: 'a'.repeat(61) }, 'thread.filed', {}, 'alice')),
     );
