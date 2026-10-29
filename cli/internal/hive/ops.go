@@ -279,12 +279,18 @@ func (c *Client) ListWork(ctx context.Context, f Filter) ([]WorkRow, error) {
 	if _, err := c.requireNotPaused(ctx); err != nil {
 		return nil, err
 	}
-	ids := []string{f.ProjectID}
+	ids := []string{}
 	if f.ProjectID == "" {
 		var err error
 		if ids, err = c.projectIDs(ctx); err != nil {
 			return nil, err
 		}
+	} else {
+		pid, _, err := c.ResolveProject(ctx, f.ProjectID)
+		if err != nil {
+			return nil, err
+		}
+		ids = []string{pid}
 	}
 	out := []WorkRow{}
 	for _, pid := range ids {
@@ -314,12 +320,18 @@ func (c *Client) WaitForWork(ctx context.Context, f Filter, timeout time.Duratio
 	if _, err := c.requireNotPaused(ctx); err != nil {
 		return WaitResult{}, err
 	}
-	ids := []string{f.ProjectID}
+	ids := []string{}
 	if f.ProjectID == "" {
 		var err error
 		if ids, err = c.projectIDs(ctx); err != nil {
 			return WaitResult{}, err
 		}
+	} else {
+		pid, _, err := c.ResolveProject(ctx, f.ProjectID)
+		if err != nil {
+			return WaitResult{}, err
+		}
+		ids = []string{pid}
 	}
 	projects := map[string]model.Project{}
 	for _, pid := range ids {
@@ -544,10 +556,10 @@ func (c *Client) Claim(ctx context.Context, itemID, projectID string) (ClaimOut,
 
 func claimResult(l *loaded, runID string, resumed bool) ClaimOut {
 	out := ClaimOut{RunID: runID, Resumed: resumed, ItemID: l.ItemID, ProjectID: l.ProjectID, Title: l.Item.Title, StepID: l.Item.StepID,
-		Hint: "Call read_item / hivenod item read for the full brief, then log, attach and complete."}
+		Hint: "Call read_item for the full brief, then log, attach and complete."}
 	if actions.IsUnshaped(l.Item) {
 		out.Job = sp("shape")
-		out.Hint = "A shaping run: read the item and the step library (read_item / hivenod item read), then choose the steps it needs with shape_item / hivenod item shape. Do not do the work itself."
+		out.Hint = "A shaping run: read the item and the step library (read_item), then choose the steps it needs with shape_item. Do not do the work itself."
 	}
 	return out
 }
@@ -571,7 +583,7 @@ func (c *Client) Log(ctx context.Context, runID, text, level string) (LogOut, er
 		return LogOut{}, Errf(StoppedMessage(str(run.Summary)))
 	}
 	if run.EndedAt != nil {
-		return LogOut{}, Errf("This run has ended; start a new one with hivenod work claim.")
+		return LogOut{}, Errf("This run has ended; claim the item again with claim.")
 	}
 	c.mu.Lock()
 	n, ok := c.nextLog[runID]
@@ -762,7 +774,7 @@ func (c *Client) Ask(ctx context.Context, itemID, text, projectID string) (AskOu
 	}
 	claim := l.Item.Claim
 	if claim == nil {
-		return AskOut{}, Errf(fmt.Sprintf("You have not claimed this item, so you cannot ask a question on it yet. Run hivenod work claim %s first.", itemID))
+		return AskOut{}, Errf(fmt.Sprintf("You have not claimed this item, so you cannot ask a question on it yet. Call claim with itemId %s first.", itemID))
 	}
 	if claim.AgentUID != c.UID {
 		return AskOut{}, Errf("Another agent holds this item right now.")
@@ -987,7 +999,7 @@ func (c *Client) ReportUsage(ctx context.Context, runID string, u Usage) (map[st
 		return nil, Errf(StoppedMessage(str(run.Summary)))
 	}
 	if run.EndedAt != nil {
-		return nil, Errf("This run has ended; start a new one with hivenod work claim.")
+		return nil, Errf("This run has ended; claim the item again with claim.")
 	}
 	var runCached int64
 	if run.TokensCached != nil {

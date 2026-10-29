@@ -100,7 +100,7 @@ func Prepare(source, name string, deny []string) (*Prepared, error) {
 	}
 	base := filepath.Base(source)
 	tooBig := func(what string) error {
-		return errf("%s is %s, over the %s limit for inline attachments. Host it somewhere and attach its URL instead: hivenod item attach <itemId> https://…", base, what, kb(MaxBytes))
+		return errf("%s is %s, over the %s limit for inline attachments. Host it somewhere and attach its URL instead (attach with the URL as source)", base, what, kb(MaxBytes))
 	}
 	size := int(st.Size())
 	if size > MaxBytes {

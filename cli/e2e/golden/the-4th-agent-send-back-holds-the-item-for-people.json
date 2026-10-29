@@ -4,7 +4,7 @@
       "tool": "claim",
       "ok": true,
       "out": {
-        "hint": "Call read_item / hivenod item read for the full brief, then log, attach and complete.",
+        "hint": "Call read_item for the full brief, then log, attach and complete.",
         "itemId": "i1",
         "job": null,
         "projectId": "p1",

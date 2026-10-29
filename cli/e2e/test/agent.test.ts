@@ -202,6 +202,20 @@ d('the Go CLI as an agent, against the emulators', () => {
     await expect(c.createItem('p2', 'x')).rejects.toThrow(/cannot use the project "p2"/);
   });
 
+  it('list_work checks the project up front: foreign project, project name (item p6FzU)', async () => {
+    await put({ [P('p2')]: projectDoc({}, {}) });
+    const { uid, token } = await newAgent();
+    const c = await connect({ uid, token });
+    const err = await c.call('list_work', { project: 'p2' }).then(
+      () => '',
+      (e: Error) => e.message,
+    );
+    expect(err).toMatch(/This agent cannot use the project "p2"\. Its projects: /);
+    expect(err).not.toMatch(/change|permission denied|hivenod item/);
+    // by id and by name (any case)
+    expect(Array.isArray(await c.call('list_work', { project: 'p1' }))).toBe(true);
+  });
+
   it('stops at the rate limit with a clear message (item DhsO9)', async () => {
     await put({ [P('p1')]: projectDoc({}, { agentsMayCreateItems: true }) });
     const { uid, token } = await newAgent();
@@ -233,7 +247,7 @@ d('the Go CLI as an agent, against the emulators', () => {
     const { uid, token } = await newAgent();
     const c = await connect({ uid, token });
     await expect(c.ask('i1', 'Tone?')).rejects.toThrow(
-      /not claimed this item.*hivenod work claim i1/,
+      /not claimed this item.*Call claim with itemId i1/,
     );
   });
 

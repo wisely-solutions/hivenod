@@ -192,10 +192,19 @@ func (c *Client) requireNotPaused(ctx context.Context) (model.Agent, error) {
 
 // ---------- reading ----------
 
+// WriteDeniedMessage is the generic denial of a write; ReadDeniedMessage the one of a read.
+const (
+	WriteDeniedMessage = "Hivenod refused this change (permission denied). This agent may not be allowed on this project, or the item is no longer in the state it was read in. Read the item again with read_item."
+	ReadDeniedMessage  = "Hivenod refused to read this (permission denied): this agent may not use this project, or was revoked."
+)
+
 // read turns a permission error into a message a person can act on.
 func (c *Client) read(ctx context.Context, err error) error {
 	if err != nil && Denied(err) {
-		return Errf(c.diagnose(ctx, nil))
+		if m := c.diagnose(ctx, nil); m != WriteDeniedMessage {
+			return Errf(m)
+		}
+		return Errf(ReadDeniedMessage)
 	}
 	return err
 }
@@ -294,7 +303,7 @@ func (c *Client) load(ctx context.Context, itemID, projectID string) (*loaded, e
 		}
 		return &loaded{ProjectID: pid, ItemID: itemID, Project: p, Item: it}, nil
 	}
-	return nil, Errf(fmt.Sprintf("Item %s not found. Check the id (hivenod work list) and that this agent may use its project.", itemID))
+	return nil, Errf(fmt.Sprintf("Item %s not found. Check the id (list_work) and that this agent may use its project.", itemID))
 }
 
 func (c *Client) loadRun(ctx context.Context, runID string) (model.Run, error) {
@@ -364,7 +373,7 @@ func (c *Client) diagnose(ctx context.Context, at *loc) string {
 			}
 		}
 	}
-	return "Hivenod refused this change (permission denied). This agent may not be allowed on this project, or the item is no longer in the state it was read in. Read the item again with hivenod item read."
+	return WriteDeniedMessage
 }
 
 // wrap turns action errors into client errors (the same message).
