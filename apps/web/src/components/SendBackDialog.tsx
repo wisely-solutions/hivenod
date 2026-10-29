@@ -26,6 +26,7 @@ export function SendBackDialog({
   projectId,
   itemId,
   item,
+  wid,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -33,6 +34,8 @@ export function SendBackDialog({
   projectId: string;
   itemId: string;
   item: Item;
+  /** The item's organization when it is not the one on screen (Needs you across organizations). */
+  wid?: string;
 }) {
   // The body owns the form state, so it renders the modal and passes the buttons as the pinned footer.
   return open ? (
@@ -43,6 +46,7 @@ export function SendBackDialog({
       projectId={projectId}
       itemId={itemId}
       item={item}
+      wid={wid}
       onDone={() => onOpenChange(false)}
     />
   ) : (
@@ -57,6 +61,7 @@ function Body({
   projectId,
   itemId,
   item,
+  wid: itemWid,
   onDone,
 }: {
   open: boolean;
@@ -65,12 +70,13 @@ function Body({
   projectId: string;
   itemId: string;
   item: Item;
+  wid?: string;
   onDone: () => void;
 }) {
   const { session, actionContext, run } = useReady();
   const toast = useToast();
   const reduced = useReducedMotion();
-  const wid = session.workspaceId;
+  const wid = itemWid ?? session.workspaceId;
   const past = useLiveQuery(
     `sendback-history:${wid}:${projectId}:${item.stepId}`,
     () =>

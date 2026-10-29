@@ -145,7 +145,7 @@ test('the Needs-you nav badge never climbs across a reload (card JtZDsMEb)', asy
     const seen: string[] = [];
     (window as unknown as { __badge: string[] }).__badge = seen;
     const scan = () => {
-      // Sidebar link and phone tab both carry "Needs you N waiting" when the badge shows.
+      // Sidebar link and phone tab both carry "Needs you N waiting, M only you" when it shows.
       for (const el of document.querySelectorAll('[aria-label^="Needs you, "]')) {
         const t = el.getAttribute('aria-label') ?? '';
         if (seen[seen.length - 1] !== t) seen.push(t);
@@ -160,9 +160,11 @@ test('the Needs-you nav badge never climbs across a reload (card JtZDsMEb)', asy
   });
   await page.reload();
   await expect(page.getByText('3 things need you.')).toBeVisible();
-  await expect(page.locator('[aria-label="Needs you 3 waiting"]').first()).toBeAttached();
+  await expect(
+    page.locator('[aria-label="Needs you 3 waiting, 3 only you"]').first(),
+  ).toBeAttached();
   const seen = await page.evaluate(() => (window as unknown as { __badge: string[] }).__badge);
-  expect(seen.filter((t) => t !== 'Needs you 3 waiting')).toEqual([]);
+  expect(seen.filter((t) => t !== 'Needs you 3 waiting, 3 only you')).toEqual([]);
 });
 
 test('an item at the gate shows up live, is approved with a rationale and moves on', async ({

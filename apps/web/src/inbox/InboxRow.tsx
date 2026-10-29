@@ -11,6 +11,8 @@ import { gateWaitNote } from '../notify/note';
 import { useReminderMap } from '../notify/reminders';
 import { formatEur } from '../shell/logic';
 import { approvalLine, isStuckHold, swipeAction, waitLabel, type InboxEntry } from './logic';
+import { WhoTag } from '../needs/WhoTag';
+import type { Who } from '../needs/logic';
 
 export interface RowAgent {
   name: string;
@@ -46,6 +48,7 @@ export function InboxRow({
   summary,
   swipeable,
   select,
+  who,
   onOpen,
   onSwipe,
   onLongPress,
@@ -60,6 +63,8 @@ export function InboxRow({
   swipeable: boolean;
   /** Approve and Accept rows can be selected; `show` draws the checkbox (always on desktop, while selecting on phones). */
   select?: { show: boolean; checked: boolean; onToggle: (shift: boolean) => void };
+  /** Who else can act on it: "Only you" or "You or others · <names>" (item 2YZRd). */
+  who?: Who;
   onOpen: () => void;
   onSwipe: (action: 'approve' | 'iterate') => void;
   onLongPress: () => void;
@@ -192,6 +197,7 @@ export function InboxRow({
           <span className="text-15 font-semibold leading-snug text-ink">{title}</span>
           {text ? <span className="line-clamp-2 text-14 text-text-2">{text}</span> : null}
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-12 text-text-2">
+            {who ? <WhoTag who={who} /> : null}
             {agent ? (
               <span className="inline-flex items-center gap-1.5">
                 <AgentAvatar name={agent.name} color={agent.color} live={agent.live} size="sm" />

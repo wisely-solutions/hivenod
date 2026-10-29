@@ -83,9 +83,18 @@ const indexRoute = createRoute({
   path: '/',
   validateSearch: (
     s: Record<string, unknown>,
-  ): { sel?: string; f?: 'approvals' | 'questions' | 'findings' } => ({
+  ): {
+    sel?: string;
+    f?: 'approvals' | 'questions' | 'findings';
+    /** Who can act (item 2YZRd): only me, or shared with others. */
+    who?: 'mine' | 'shared';
+    /** One organization of the cross-organization list. */
+    org?: string;
+  } => ({
     ...(typeof s.sel === 'string' && s.sel ? { sel: s.sel } : {}),
     ...(s.f === 'approvals' || s.f === 'questions' || s.f === 'findings' ? { f: s.f } : {}),
+    ...(s.who === 'mine' || s.who === 'shared' ? { who: s.who } : {}),
+    ...(typeof s.org === 'string' && s.org ? { org: s.org } : {}),
   }),
   component: IndexPage,
 });

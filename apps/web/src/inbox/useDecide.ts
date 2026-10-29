@@ -88,7 +88,9 @@ export function useDecide() {
       onRestored?: () => void,
       onMoveOn?: () => void,
     ): string | null => {
-      const ctx = actionContext(session.workspaceId);
+      // The entry's own organization: Needs you lists every one the person is in (item 2YZRd).
+      const ws = entry.wid ?? session.workspaceId;
+      const ctx = actionContext(ws);
       if (!ctx) return 'You are signed out.';
       let prepared;
       try {
@@ -101,12 +103,7 @@ export function useDecide() {
       // place; every other decision leaves at once and shows an Undo toast, as before.
       const inline = d.kind === 'approve' || d.kind === 'reject';
       if (!inline) show(entry.key, true);
-      const forget = stash(
-        session.me.uid,
-        session.workspaceId,
-        [prepared.plan.ops],
-        savedMessage(entry, d),
-      );
+      const forget = stash(session.me.uid, ws, [prepared.plan.ops], savedMessage(entry, d));
       const final = !!prepared.pending;
       haptic('decide');
       const settled = () => {
@@ -188,15 +185,22 @@ export function useDecide() {
       gone: number,
       onCommitted?: () => void,
     ): string | null => {
-      const ctx = actionContext(session.workspaceId);
-      if (!ctx) return 'You are signed out.';
+      if (!actionContext(session.workspaceId)) return 'You are signed out.';
       const problem = decisionProblem(d);
       if (problem) return problem;
-      const ready: { entry: InboxEntry; prepared: ReturnType<typeof prepareDecision> }[] = [];
+      const ready: {
+        entry: InboxEntry;
+        ws: string;
+        prepared: ReturnType<typeof prepareDecision>;
+      }[] = [];
       let moved = gone;
       for (const entry of entries) {
+        // A selection may span organizations (item 2YZRd): each entry is decided in its own.
+        const ws = entry.wid ?? session.workspaceId;
+        const ctx = actionContext(ws);
+        if (!ctx) return 'You are signed out.';
         try {
-          ready.push({ entry, prepared: prepareDecision(ctx, entry, d) });
+          ready.push({ entry, ws, prepared: prepareDecision(ctx, entry, d) });
         } catch (e) {
           if (!(e instanceof ActionError)) throw e;
           moved += 1;
@@ -209,12 +213,17 @@ export function useDecide() {
         return null;
       }
       const keys = ready.map((r) => r.entry.key);
-      const forget = stash(
-        session.me.uid,
-        session.workspaceId,
-        ready.map((r) => r.prepared.plan.ops),
-        `Saved your ${verb === 'approved' ? 'approvals' : 'rejections'} of ${ready.length} items`,
+      // Saved per organization, so a reload replays each one where it belongs.
+      const label = `Saved your ${verb === 'approved' ? 'approvals' : 'rejections'} of ${ready.length} items`;
+      const forgets = [...new Set(ready.map((r) => r.ws))].map((ws) =>
+        stash(
+          session.me.uid,
+          ws,
+          ready.filter((r) => r.ws === ws).map((r) => r.prepared.plan.ops),
+          label,
+        ),
       );
+      const forget = () => forgets.forEach((f) => f());
       haptic('decide');
       const batchKey = `batch:${keys.join('+')}`;
       const done = () => {

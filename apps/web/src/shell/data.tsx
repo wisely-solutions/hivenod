@@ -188,7 +188,7 @@ interface FeedProps<T> {
 }
 
 /** One live listener per project for its open items and suggestions (counts, palette, lanes). */
-function ItemsFeed({ wid, pid, uid, onRows }: FeedProps<Item>) {
+export function ItemsFeed({ wid, pid, uid, onRows }: FeedProps<Item>) {
   const key = `items:${wid}:${pid}`;
   const live = useLiveQuery(key, () => openItemsQuery(wid, pid), itemSchema, { synced: true });
   useReport('items', pid, live, onRows, uid, key);
@@ -196,7 +196,7 @@ function ItemsFeed({ wid, pid, uid, onRows }: FeedProps<Item>) {
 }
 
 /** One live listener per project for the agent questions nobody has answered yet. */
-function QuestionsFeed({ wid, pid, uid, onRows }: FeedProps<Message>) {
+export function QuestionsFeed({ wid, pid, uid, onRows }: FeedProps<Message>) {
   const key = `questions:${wid}:${pid}`;
   const live = useLiveQuery(key, () => openQuestionsQuery(wid, pid), messageSchema, {
     synced: true,
@@ -206,7 +206,7 @@ function QuestionsFeed({ wid, pid, uid, onRows }: FeedProps<Message>) {
 }
 
 /** One listener per project this person approves steps for: its open step proposals. */
-function ProposalsFeed({ wid, pid, uid, onRows }: FeedProps<StepProposal>) {
+export function ProposalsFeed({ wid, pid, uid, onRows }: FeedProps<StepProposal>) {
   const key = `proposals:${wid}:${pid}`;
   const live = useLiveQuery(
     key,
@@ -251,7 +251,7 @@ function RunsFeed({ wid, pid, uid, since, onRows }: FeedProps<Run> & { since: Da
 }
 
 /** Rows and feed state per project, for one kind of feed. */
-function useFeedRows<T>() {
+export function useFeedRows<T>() {
   const [rows, setRows] = useState<Record<string, Row<T>[]>>({});
   const [states, setStates] = useState<Record<string, FeedState>>({});
   const onRows = useMemo<OnFeed<T>>(
@@ -264,7 +264,8 @@ function useFeedRows<T>() {
   return [rows, states, onRows] as const;
 }
 
-const answered = (s: FeedState | undefined) => s === 'synced' || s === 'warm' || s === 'failed';
+export const answered = (s: FeedState | undefined) =>
+  s === 'synced' || s === 'warm' || s === 'failed';
 
 /**
  * Live data the shell itself needs: projects, agents, this month's runs and open items. Admins
