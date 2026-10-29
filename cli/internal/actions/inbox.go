@@ -229,6 +229,7 @@ const (
 	InboxMaxAttachments    = 20
 	InboxMaxAttachmentName = 200
 	InboxMaxSubjectName    = 120
+	InboxMaxArea           = 60
 	InboxMaxTitle          = 200
 	InboxMaxNote           = 8000
 	InboxMaxQuestion       = 4000
@@ -395,6 +396,18 @@ func cleanSubjectName(name string) (string, error) {
 		return "", err
 	}
 	return n, need(jsLen(n) <= InboxMaxSubjectName, tooLong("A subject name", InboxMaxSubjectName))
+}
+
+// cleanArea is cleanArea: collapsed spaces; empty means no area (nil).
+func cleanArea(area string) (*string, error) {
+	n := Collapse(area)
+	if err := need(jsLen(n) <= InboxMaxArea, tooLong("An area", InboxMaxArea)); err != nil {
+		return nil, err
+	}
+	if n == "" {
+		return nil, nil
+	}
+	return &n, nil
 }
 
 // TitleFrom is titleFrom: the first non-empty line, at most 120 characters.
@@ -622,6 +635,7 @@ type AssignSubjectInput struct {
 	Thread    ThreadState `json:"thread"`
 	SubjectID *string     `json:"subjectId,omitempty"`
 	NewName   *string     `json:"newName,omitempty"`
+	Area      *string     `json:"area,omitempty"`
 }
 
 // AssignResult is the plan plus the subject it filed under.
@@ -648,6 +662,13 @@ func AssignSubject(ctx Ctx, in AssignSubjectInput) (AssignResult, error) {
 			return AssignResult{}, err
 		}
 	}
+	var area *string
+	if in.Area != nil {
+		var err error
+		if area, err = cleanArea(*in.Area); err != nil {
+			return AssignResult{}, err
+		}
+	}
 	subjectID := ""
 	if in.SubjectID != nil {
 		subjectID = *in.SubjectID
@@ -658,17 +679,26 @@ func AssignSubject(ctx Ctx, in AssignSubjectInput) (AssignResult, error) {
 	if created {
 		data = map[string]any{"name": name, "created": true, "from": strOrNil(t.SubjectID)}
 	}
+	if in.Area != nil {
+		data["area"] = strOrNil(area)
+	}
 	p := InboxPlan(ctx, "thread.filed", t.MemberUID, sp(in.ThreadID), sp(subjectID), data, func(eventID string) []plan.Op {
 		var ops []plan.Op
 		if created {
-			ops = append(ops, plan.Op{Kind: "set", Path: model.Paths.InboxSubject(ctx.WorkspaceID, subjectID), Data: map[string]any{
+			d := map[string]any{
 				"memberUid":   t.MemberUID,
 				"name":        name,
 				"createdBy":   map[string]any{"type": ctx.Actor.Type, "id": ctx.Actor.ID},
 				"createdAt":   ServerTime(),
 				"updatedAt":   ServerTime(),
 				"lastEventId": eventID,
-			}})
+			}
+			if area != nil {
+				d["area"] = *area
+			}
+			ops = append(ops, plan.Op{Kind: "set", Path: model.Paths.InboxSubject(ctx.WorkspaceID, subjectID), Data: d})
+		} else if in.Area != nil {
+			ops = append(ops, upd(model.Paths.InboxSubject(ctx.WorkspaceID, subjectID), map[string]any{"area": strOrNil(area)}, eventID))
 		}
 		return append(ops, upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{"subjectId": subjectID}, eventID))
 	}, "")

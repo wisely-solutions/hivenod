@@ -16645,6 +16645,193 @@
       }
     },
     {
+      "name": "assignSubject/new subject with an area",
+      "action": "assignSubject",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "newName": "Refunds",
+        "area": "  Payments   team "
+      },
+      "output": {
+        "eventId": "id02",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxSubjects/id01",
+            "data": {
+              "memberUid": "joao",
+              "name": "Refunds",
+              "area": "Payments team",
+              "createdBy": { "type": "agent", "id": "agentA" },
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id02"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "subjectId": "id01",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id02"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id02",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "id01",
+              "type": "thread.filed",
+              "data": { "name": "Refunds", "created": true, "from": null, "area": "Payments team" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "subjectId": "id01",
+        "created": true
+      }
+    },
+    {
+      "name": "assignSubject/existing subject, area set",
+      "action": "assignSubject",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s0",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "subjectId": "s1",
+        "area": "Admin"
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxSubjects/s1",
+            "data": {
+              "area": "Admin",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "subjectId": "s1",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.filed",
+              "data": { "created": false, "from": "s0", "area": "Admin" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "subjectId": "s1",
+        "created": false
+      }
+    },
+    {
+      "name": "assignSubject/existing subject, area cleared",
+      "action": "assignSubject",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s0",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "subjectId": "s1",
+        "area": "   "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxSubjects/s1",
+            "data": { "area": null, "updatedAt": { "__hive": "serverTime" }, "lastEventId": "id01" }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "subjectId": "s1",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.filed",
+              "data": { "created": false, "from": "s0", "area": null },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "subjectId": "s1",
+        "created": false
+      }
+    },
+    {
+      "name": "assignSubject/area too long",
+      "action": "assignSubject",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "newName": "x",
+        "area": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "output": { "error": "An area is at most 60 characters." }
+    },
+    {
       "name": "assignSubject/both given",
       "action": "assignSubject",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },

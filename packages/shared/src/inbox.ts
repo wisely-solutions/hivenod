@@ -93,6 +93,7 @@ export const INBOX_EVENT_TYPES = [
   'subject.renamed',
   'subject.merged',
   'subject.split',
+  'subject.area',
   // related subjects: an agent proposes, the member decides
   'relation.proposed',
   'relation.created',
@@ -117,6 +118,7 @@ export const INBOX_LIMITS = {
   attachments: 20,
   attachmentName: 200,
   subjectName: 120,
+  area: 60,
   title: 200,
   note: 8000,
   question: 4000,
@@ -133,6 +135,8 @@ const by = z.object({ type: z.enum(['human', 'agent']), id: z.string() });
 export const inboxSubjectSchema = z.object({
   memberUid: z.string(),
   name: z.string().min(1).max(INBOX_LIMITS.subjectName),
+  /** Optional area or tag (a client, a product, "admin"): the Inbox groups subjects by it. */
+  area: z.string().min(1).max(INBOX_LIMITS.area).nullable().optional(),
   createdBy: by,
   createdAt: timestamp,
   updatedAt: timestamp,
@@ -331,6 +335,12 @@ export function cleanSubjectName(name: string): string {
   need(n.length <= INBOX_LIMITS.subjectName, tooLong('A subject name', INBOX_LIMITS.subjectName));
   return n;
 }
+/** An area from input: collapsed spaces; empty means "no area" (null). */
+export function cleanArea(area: string): string | null {
+  const n = area.trim().replace(/\s+/g, ' ');
+  need(n.length <= INBOX_LIMITS.area, tooLong('An area', INBOX_LIMITS.area));
+  return n === '' ? null : n;
+}
 /** A thread's title from its first message: the first non-empty line, at most 120 characters. */
 export function titleFrom(text: string): string {
   const first = text.split('\n').find((l) => l.trim() !== '') ?? '';
@@ -510,7 +520,14 @@ export function addInboxMessage(
 /** Files a thread under a subject of its member: an existing one, or a new one named here. */
 export function assignSubject(
   ctx: ActionContext,
-  input: { threadId: string; thread: ThreadStateOf; subjectId?: string; newName?: string },
+  input: {
+    threadId: string;
+    thread: ThreadStateOf;
+    subjectId?: string;
+    newName?: string;
+    /** Sets the subject's area (new or existing); empty clears it. Left out: unchanged. */
+    area?: string;
+  },
 ): ActionPlan & { subjectId: string; created: boolean } {
   requireAgent(ctx);
   const t = input.thread;
@@ -520,12 +537,17 @@ export function assignSubject(
   );
   const created = input.newName !== undefined;
   const name = created ? cleanSubjectName(input.newName!) : null;
+  const area = input.area === undefined ? undefined : cleanArea(input.area);
   const subjectId = input.subjectId ?? nid(ctx);
   const p = inboxPlan(
     ctx,
     'thread.filed',
     { memberUid: t.memberUid, threadId: input.threadId, subjectId },
-    created ? { name, created: true, from: t.subjectId } : { created: false, from: t.subjectId },
+    {
+      ...(created ? { name, created: true } : { created: false }),
+      from: t.subjectId,
+      ...(area !== undefined ? { area } : {}),
+    },
     (eventId) => [
       ...(created
         ? [
@@ -535,6 +557,7 @@ export function assignSubject(
               data: {
                 memberUid: t.memberUid,
                 name,
+                ...(area ? { area } : {}),
                 createdBy: { type: ctx.actor.type, id: ctx.actor.id },
                 createdAt: SERVER_TIME,
                 updatedAt: SERVER_TIME,
@@ -542,7 +565,9 @@ export function assignSubject(
               },
             },
           ]
-        : []),
+        : area !== undefined
+          ? [upd(inboxPaths.subject(ctx.workspaceId, subjectId), { area }, eventId)]
+          : []),
       upd(inboxPaths.thread(ctx.workspaceId, input.threadId), { subjectId }, eventId),
     ],
   );
@@ -1078,6 +1103,22 @@ export function renameSubject(
     { memberUid: ctx.actor.id, subjectId: input.subjectId },
     { from: input.subject.name, name },
     (eventId) => [upd(inboxPaths.subject(ctx.workspaceId, input.subjectId), { name }, eventId)],
+  );
+}
+
+/** Sets (or clears, with an empty area) the area of one of the member's subjects. */
+export function setSubjectArea(
+  ctx: ActionContext,
+  input: { subjectId: string; subject: Pick<InboxSubject, 'memberUid' | 'name'>; area: string },
+): ActionPlan {
+  owner(ctx, input.subject.memberUid);
+  const area = cleanArea(input.area);
+  return inboxPlan(
+    ctx,
+    'subject.area',
+    { memberUid: ctx.actor.id, subjectId: input.subjectId },
+    { area },
+    (eventId) => [upd(inboxPaths.subject(ctx.workspaceId, input.subjectId), { area }, eventId)],
   );
 }
 

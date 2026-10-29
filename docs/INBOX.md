@@ -20,7 +20,8 @@ member approves it.** Hivenod itself connects to no external inbox. Code lives i
 All of these live under `workspaces/{wid}`. They are separate from projects and items.
 
 ```
-inboxSubjects/{sid}   memberUid, name, createdBy{type,id}, createdAt, updatedAt, lastEventId
+inboxSubjects/{sid}   memberUid, name, area? (string|null, at most 60), createdBy{type,id}, createdAt,
+                      updatedAt, lastEventId
 inboxThreads/{tid}    memberUid, subjectId|null, state, waiting{on, until|null}|null,
                       question{text, by, at, answer|null, answeredAt|null}|null, title, refs[],
                       lastMessageAt, fetchedBy (the home agent), urgent? (bool, thread_flag),
@@ -129,6 +130,22 @@ counting the meeting twice. It is refused unless the outcome is an approved (or 
 3. `calendar_mirror` with the Google event id.
 4. Send the reply (`text`) on the thread's channel, as the member.
 5. `outcome_done` with the reply's permalink.
+
+## Areas and quiet subjects
+
+- **Area:** an optional tag on a subject (a client, a product, "admin"; at most 60 characters,
+  spaces collapsed, empty means none). Agents set it with `subject_assign` (`area`, CLI
+  `--area`): on a new subject, or to change an existing one while filing under it (event
+  `thread.filed`, `data.area`). The member sets or clears it on the subject page
+  (`setSubjectArea`, event `subject.area`). `subject_list` shows each subject's `area`, so
+  agents reuse the existing areas. Rules: agents may change only `area` of a subject, in a
+  filing batch; the member may also rename.
+- **Quiet:** derived, never stored. A subject is quiet when none of its threads had a message
+  for N days (default 60; the list's "Quiet after" select offers 30, 60, 90, 180 or never, kept
+  per browser) and no thread waits for the member. The list folds quiet subjects into a closed
+  "Quiet (n)" section; nothing is deleted, and the next message makes the subject active again.
+  Threads not filed yet are never quiet. `groupByArea` and `isQuiet` in
+  `apps/web/src/threads/logic.ts`.
 
 ## Related subjects
 
@@ -272,8 +289,9 @@ last event id it handled (`lastEventId`):
 ## The Inbox view (web app)
 
 - **`/inbox`**: the member's subjects, across all their organizations or one (`?org=<id>`).
-  Subjects with threads waiting for the member (Needs you, Your call) come first, then the
-  rest by activity. Threads not filed yet gather under "Not filed yet". **Find** searches the
+  Subjects are grouped by area (areas A to Z, then "No area"; no headings while no subject
+  has an area), quiet ones in a "Quiet" section at the end. Within a group, subjects with
+  threads waiting for the member (Needs you, Your call) come first, then the rest by activity. Threads not filed yet gather under "Not filed yet". **Find** searches the
   subject names, thread titles, the people who wrote, the channels and the text of the
   messages; the filters are: organization, waiting for me, has open threads, active in the
   last 7, 30 or 90 days. Find runs `searchSubjects` (see "Finding subjects") in the browser over

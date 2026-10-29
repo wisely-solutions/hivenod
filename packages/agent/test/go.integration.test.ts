@@ -388,10 +388,14 @@ d('Go CLI = TypeScript CLI (MCP tools, emulators, rules)', () => {
       await call('inbox_add', { ...base, messageId: 'z', thread: t2 });
       await call('inbox_list', {});
       await call('subject_list', {});
-      await call('subject_assign', { threadId: t1, name: 'Review date (Payments)' });
+      await call('subject_assign', {
+        threadId: t1,
+        name: 'Review date (Payments)',
+        area: 'Payments',
+      });
       const sa = out(await call('subject_assign', { threadId: t2, name: 'review date (payments)' }))
         .subjectId as string;
-      await call('subject_assign', { threadId: t1, subjectId: sa });
+      await call('subject_assign', { threadId: t1, subjectId: sa, area: 'Admin' });
       await call('inbox_note', { threadId: t1, text: 'Checked the calendar: Thursday is free.' });
       await call('inbox_ask', { threadId: t1, question: 'Thursday or Friday?' });
       await owner.run(

@@ -463,6 +463,7 @@ export class InboxOps {
       .map((s) => ({
         subjectId: s.id,
         name: s.data.name,
+        area: s.data.area ?? null,
         forYou: count(s.id, ['needsYou', 'yourCall']),
         open: count(s.id, THREAD_OPEN),
       }))
@@ -476,7 +477,7 @@ export class InboxOps {
     return { member, subjects, unfiled: open.filter((t) => t.data.subjectId === null).length };
   }
 
-  async assign(threadId: string, subjectId?: string, name?: string) {
+  async assign(threadId: string, subjectId?: string, name?: string, area?: string) {
     if ((subjectId === undefined) === (name === undefined))
       throw new HiveError('Give either subjectId (an existing subject) or name (a new one).');
     const t = await this.thread(threadId);
@@ -500,6 +501,7 @@ export class InboxOps {
         threadId,
         thread: this.state(t),
         ...(target !== undefined ? { subjectId: target } : { newName: name! }),
+        ...(area !== undefined ? { area } : {}),
       }),
     );
     await this.write(plan);

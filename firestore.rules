@@ -1151,7 +1151,7 @@ service cloud.firestore {
                 && request.resource.data.memberUid == me()
                 && request.resource.data.type in ['thread.titled', 'thread.answered', 'thread.ignored',
                   'thread.closed', 'thread.restored', 'thread.moved', 'thread.itemMade', 'outcome.approved',
-                  'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split',
+                  'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged'])
                 && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))
@@ -1370,11 +1370,15 @@ service cloud.firestore {
         }
       }
 
+      // The optional area (a client, a product, "admin"): absent, null or 1 to 60 characters.
+      function inboxAreaOk(d) { return !('area' in d) || d.area == null || str(d.area, 1, 60); }
       match /inboxSubjects/{sid} {
         allow read: if inboxReader(wid, resource.data);
         // An agent names a new subject while filing a thread; the member makes one by a split.
-        allow create: if exactKeys(request.resource.data, ['memberUid', 'name', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
+        allow create: if (exactKeys(request.resource.data, ['memberUid', 'name', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
+            || exactKeys(request.resource.data, ['memberUid', 'name', 'area', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId']))
           && str(request.resource.data.name, 1, 120)
+          && inboxAreaOk(request.resource.data)
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time
           && ((isActiveAgent(wid) && inboxMember(wid, request.resource.data.memberUid)
@@ -1384,12 +1388,20 @@ service cloud.firestore {
             || (isMember(wid) && request.resource.data.memberUid == me()
                 && request.resource.data.createdBy == me_('human')
                 && inboxTracked(wid, request.resource.data.lastEventId, ['subject.split', 'subject.created'], me())));
-        // Only the member renames (or touches it in a merge).
+        // Only the member renames, sets the area (or touches it in a merge).
         allow update: if inboxOwner(wid, resource.data)
-          && changed(['name', 'updatedAt', 'lastEventId'])
+          && changed(['name', 'area', 'updatedAt', 'lastEventId'])
           && str(request.resource.data.name, 1, 120)
+          && inboxAreaOk(request.resource.data)
           && request.resource.data.updatedAt == request.time
-          && inboxTracked(wid, request.resource.data.lastEventId, ['subject.renamed', 'subject.merged'], me());
+          && inboxTracked(wid, request.resource.data.lastEventId, ['subject.renamed', 'subject.merged', 'subject.area'], me());
+        // An agent sets the area of the member's subject while filing a thread under it.
+        allow update: if isActiveAgent(wid) && inboxMember(wid, resource.data.memberUid)
+          && changed(['area', 'updatedAt', 'lastEventId'])
+          && inboxAreaOk(request.resource.data)
+          && request.resource.data.updatedAt == request.time
+          && inboxTracked(wid, request.resource.data.lastEventId, ['thread.filed'], resource.data.memberUid)
+          && inboxEv(wid, request.resource.data.lastEventId).data.subjectId == sid;
         // A merge deletes the subject it empties, with the tombstone event del-subject-<sid>.
         allow delete: if inboxOwner(wid, resource.data)
           && inboxTracked(wid, 'del-subject-' + sid, ['subject.merged'], me());

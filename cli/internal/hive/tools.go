@@ -168,7 +168,7 @@ var ToolRuns = map[string]Run{
 		return c.SubjectList(ctx, a.S("member"))
 	},
 	"subject_assign": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.SubjectAssign(ctx, a.S("threadId"), a.SP("subjectId"), a.SP("name"))
+		return c.SubjectAssign(ctx, a.S("threadId"), a.SP("subjectId"), a.SP("name"), a.SP("area"))
 	},
 	"subject_search": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.SubjectSearch(ctx, a.S("query"), SearchFilters{Member: a.S("member"), WaitingForMe: a.BP("waitingForMe"), ActiveDays: a.F("activeDays"), HasOpen: a.BP("hasOpen"), Limit: a.F("limit")})

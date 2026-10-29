@@ -381,6 +381,28 @@ const MUTATIONS = [
     [["&& getAfter(inboxDoc(wid, 'inboxSubjects', sid)).data.memberUid == member;", ';']],
   ],
   [
+    'inbox: agent rewrites more than a subject area',
+    [["&& changed(['area', 'updatedAt', 'lastEventId'])", '']],
+  ],
+  [
+    'inbox: agent sets an area outside a filing',
+    [
+      [
+        "inboxTracked(wid, request.resource.data.lastEventId, ['thread.filed'], resource.data.memberUid)\n          && inboxEv(wid, request.resource.data.lastEventId).data.subjectId == sid;",
+        'true;',
+      ],
+    ],
+  ],
+  [
+    'inbox: unbounded area',
+    [
+      [
+        "function inboxAreaOk(d) { return !('area' in d) || d.area == null || str(d.area, 1, 60); }",
+        'function inboxAreaOk(d) { return true; }',
+      ],
+    ],
+  ],
+  [
     'inbox: people write agent events',
     [
       [

@@ -7,6 +7,8 @@ import {
   findSubjectRows,
   formValues,
   countWaitingThreads,
+  groupByArea,
+  isQuiet,
   subjectRows,
   timeline,
   waitingText,
@@ -14,10 +16,16 @@ import {
 } from './logic';
 
 const ts = (ms: number) => ({ toMillis: () => ms, seconds: ms / 1000, nanoseconds: 0 });
-const subject = (id: string, name: string, at = 0) => ({
+const subject = (id: string, name: string, at = 0, area: string | null = null) => ({
   wid: 'w',
   id,
-  data: { memberUid: 'u', name, updatedAt: ts(at) } as unknown as InboxSubject,
+  data: {
+    memberUid: 'u',
+    name,
+    createdAt: ts(at),
+    updatedAt: ts(at),
+    area,
+  } as unknown as InboxSubject,
 });
 const thread = (id: string, over: Partial<InboxThread> & { at?: number } = {}): ThreadRow => ({
   wid: 'w',
@@ -164,5 +172,67 @@ describe('bookings', () => {
         text: 'x',
       }),
     ).toMatch(/^Booked in your calendar: .+ to .+, with Sam$/);
+  });
+});
+
+describe('areas and quiet subjects', () => {
+  const DAY = 86_400_000;
+  const NOW = 100 * DAY;
+  const rowsOf = () =>
+    subjectRows(
+      [
+        subject('s1', 'Refunds', 0, 'Payments'),
+        subject('s2', 'Payouts', 0, 'payments'),
+        subject('s3', 'Lunch', 0, null),
+        subject('s4', 'VPN', 0, 'Admin'),
+        subject('s5', 'Old', 0, 'Admin'),
+        subject('s6', 'Old but waiting', 0, 'Admin'),
+      ],
+      [
+        thread('t1', { subjectId: 's1', at: NOW - DAY }),
+        thread('t2', { subjectId: 's2', at: NOW - 2 * DAY }),
+        thread('t3', { subjectId: 's3', at: NOW - 3 * DAY }),
+        thread('t4', { subjectId: 's4', at: NOW - 10 * DAY }),
+        thread('t5', { subjectId: 's5', at: NOW - 61 * DAY }),
+        thread('t6', { subjectId: 's6', at: NOW - 90 * DAY, state: 'needsYou' }),
+        thread('tu', { subjectId: null, at: NOW - 200 * DAY }),
+      ],
+    );
+
+  it('groups by area, case-blind, areas A to Z, no area last', () => {
+    const { groups } = groupByArea(rowsOf(), 60, NOW);
+    expect(groups.map((g) => g.label)).toEqual(['Admin', 'Payments', null]);
+    expect(groups[1]!.label).toBe('Payments'); // the same either row order
+    expect(groups[1]!.rows.map((r) => r.name).sort()).toEqual(['Payouts', 'Refunds']);
+  });
+
+  it('a subject quiet for 60 days folds away; waiting and unfiled ones never do', () => {
+    const { groups, quiet } = groupByArea(rowsOf(), 60, NOW);
+    expect(quiet.map((r) => r.name)).toEqual(['Old']);
+    const shown = groups.flatMap((g) => g.rows.map((r) => r.name));
+    expect(shown).toContain('Old but waiting');
+    expect(shown).toContain('Not filed yet');
+  });
+
+  it('is configurable, and 0 turns it off', () => {
+    expect(
+      groupByArea(rowsOf(), 5, NOW)
+        .quiet.map((r) => r.name)
+        .sort(),
+    ).toEqual(['Old', 'VPN']);
+    expect(groupByArea(rowsOf(), 0, NOW).quiet).toEqual([]);
+  });
+
+  it('comes back with the next message', () => {
+    const before = rowsOf().find((r) => r.name === 'Old')!;
+    expect(isQuiet(before, 60, NOW)).toBe(true);
+    const after = subjectRows(
+      [subject('s5', 'Old', 0, 'Admin')],
+      [
+        thread('t5', { subjectId: 's5', at: NOW - 61 * DAY }),
+        thread('t7', { subjectId: 's5', at: NOW }),
+      ],
+    )[0]!;
+    expect(isQuiet(after, 60, NOW)).toBe(false);
   });
 });

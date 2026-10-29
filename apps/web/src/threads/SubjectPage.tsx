@@ -2,7 +2,13 @@
  * One subject (item 4PEHrOW5IfXBQWgOK9wo, part 3): its threads, open and closed, its timeline,
  * and the member's reorganizing: rename, merge into another subject, split threads off.
  */
-import { mergeSubjects, renameSubject, splitSubject, type ActionPlan } from '@hive/shared';
+import {
+  mergeSubjects,
+  renameSubject,
+  setSubjectArea,
+  splitSubject,
+  type ActionPlan,
+} from '@hive/shared';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { useReady } from '../auth/context';
@@ -24,6 +30,8 @@ export function SubjectPage() {
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
+  const [editingArea, setEditingArea] = useState(false);
+  const [area, setArea] = useState('');
   const [mergeOpen, setMergeOpen] = useState(false);
   const [splitOpen, setSplitOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +47,18 @@ export function SubjectPage() {
         })),
       ),
     [threads, wid],
+  );
+  const mine = useMySubjects(wid, uid);
+  const knownAreas = useMemo(
+    () =>
+      [
+        ...new Set(
+          (mine.state === 'ready' ? mine.data : [])
+            .map((x) => x.data.area?.trim() ?? '')
+            .filter(Boolean),
+        ),
+      ].sort((a, b) => a.localeCompare(b)),
+    [mine],
   );
   const entries = useMemo(
     () => timeline([], events.state === 'ready' ? events.data : []).reverse(),
@@ -124,6 +144,40 @@ export function SubjectPage() {
         {waiting > 0 ? `${waiting} waiting for you · ` : ''}
         {rows.length} thread{rows.length === 1 ? '' : 's'}
       </p>
+      {editingArea ? (
+        <form
+          className="mt-3 flex flex-wrap items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act(
+              () => setSubjectArea(ctx(), { subjectId: sid, subject: s, area }),
+              area.trim() ? 'Area saved.' : 'Area cleared.',
+              () => setEditingArea(false),
+            );
+          }}
+        >
+          <div className="min-w-0 flex-1 basis-60">
+            <Input
+              label="Area or tag"
+              list="inbox-areas"
+              placeholder="A client, a product, admin (empty: none)"
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+            />
+            <datalist id="inbox-areas">
+              {knownAreas.map((a) => (
+                <option key={a} value={a} />
+              ))}
+            </datalist>
+          </div>
+          <Button type="submit" variant="primary" loading={busy}>
+            Save area
+          </Button>
+          <Button variant="secondary" onClick={() => setEditingArea(false)}>
+            Cancel
+          </Button>
+        </form>
+      ) : null}
       <div className="mt-4 flex flex-wrap gap-2">
         {!renaming ? (
           <Button
@@ -134,6 +188,17 @@ export function SubjectPage() {
             }}
           >
             Rename
+          </Button>
+        ) : null}
+        {!editingArea ? (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setArea(s.area ?? '');
+              setEditingArea(true);
+            }}
+          >
+            {s.area ? `Area: ${s.area}` : 'Set area'}
           </Button>
         ) : null}
         <Button variant="secondary" onClick={() => setMergeOpen(true)}>

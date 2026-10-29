@@ -519,11 +519,12 @@ func (c *Client) SubjectList(ctx context.Context, given string) (map[string]any,
 	}
 	type row struct {
 		id, name     string
+		area         *string
 		forYou, open int
 	}
 	rows := make([]row, 0, len(subs))
 	for _, s := range subs {
-		rows = append(rows, row{s.ID, s.Data.Name, count(s.ID, []string{"needsYou", "yourCall"}), count(s.ID, threadOpen)})
+		rows = append(rows, row{s.ID, s.Data.Name, s.Data.Area, count(s.ID, []string{"needsYou", "yourCall"}), count(s.ID, threadOpen)})
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		a, b := rows[i], rows[j]
@@ -540,13 +541,13 @@ func (c *Client) SubjectList(ctx context.Context, given string) (map[string]any,
 	})
 	out := make([]any, len(rows))
 	for i, r := range rows {
-		out[i] = map[string]any{"subjectId": r.id, "name": r.name, "forYou": r.forYou, "open": r.open}
+		out[i] = map[string]any{"subjectId": r.id, "name": r.name, "area": strOrNull(r.area), "forYou": r.forYou, "open": r.open}
 	}
 	return map[string]any{"member": member, "subjects": out, "unfiled": unfiled}, nil
 }
 
 // SubjectAssign files a thread under an existing or a new subject (subject_assign).
-func (c *Client) SubjectAssign(ctx context.Context, id string, subjectID, name *string) (map[string]any, error) {
+func (c *Client) SubjectAssign(ctx context.Context, id string, subjectID, name, area *string) (map[string]any, error) {
 	if (subjectID == nil) == (name == nil) {
 		return nil, Errf("Give either subjectId (an existing subject) or name (a new one).")
 	}
@@ -578,7 +579,7 @@ func (c *Client) SubjectAssign(ctx context.Context, id string, subjectID, name *
 			}
 		}
 	}
-	in := actions.AssignSubjectInput{ThreadID: id, Thread: actions.ThreadStateFrom(t)}
+	in := actions.AssignSubjectInput{ThreadID: id, Thread: actions.ThreadStateFrom(t), Area: area}
 	if target != nil {
 		in.SubjectID = target
 	} else {
