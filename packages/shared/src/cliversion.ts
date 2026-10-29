@@ -14,7 +14,7 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * Inbox plans (item qwFAWxZM5xkcE7PPjAzi): plan_propose, and carry_out sent per step only at
    * its turn. An older CLI sends carry_out for every approved step at once.
    */
-  plan: '0.2.172',
+  plan: '0.2.171',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */
