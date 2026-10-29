@@ -10,6 +10,8 @@ package hive
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -815,6 +817,18 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 	if err != nil {
 		return nil, err
 	}
+	if status == "started" && o.PlanID != nil && res.ItemID != nil && strings.TrimSpace(*res.ItemID) != "" {
+		// Build it (item qwFAWxZM5xkcE7PPjAzi): the item must exist; its link shows on the step and
+		// tells the channel where to watch for Done.
+		l, err := c.load(ctx, strings.TrimSpace(*res.ItemID), "")
+		if err != nil {
+			return nil, err
+		}
+		if res.Permalink == nil || strings.TrimSpace(*res.Permalink) == "" {
+			link := ItemLink(c.WebURL, l.ProjectID, l.ItemID)
+			res.Permalink = &link
+		}
+	}
 	in := actions.FinishInput{OutcomeID: id, Outcome: actions.OutcomeStateFrom(o), Thread: actions.ThreadStateFrom(t), Status: status}
 	if o.PlanID != nil {
 		pl, _, err := c.planInput(ctx, *o.PlanID)
@@ -1025,4 +1039,28 @@ func stepNumber(step string) int {
 	n := 0
 	fmt.Sscanf(step, "%d of", &n)
 	return n
+}
+
+// ItemLink is an item's page on the Hivenod site: <site>/p/<project>?item=<item>.
+func ItemLink(site, projectID, itemID string) string {
+	if site == "" {
+		site = "https://hivenod.com"
+	}
+	return site + "/p/" + url.PathEscape(projectID) + "?item=" + url.QueryEscape(itemID)
+}
+
+var itemLinkRE = regexp.MustCompile(`/p/([^/?#]+)\?item=([^&#]+)`)
+
+// ItemLinkParts reads the project and item ids back from ItemLink ("" when it is not one).
+func ItemLinkParts(link string) (projectID, itemID string) {
+	m := itemLinkRE.FindStringSubmatch(link)
+	if m == nil {
+		return "", ""
+	}
+	p, err1 := url.PathUnescape(m[1])
+	i, err2 := url.QueryUnescape(m[2])
+	if err1 != nil || err2 != nil {
+		return "", ""
+	}
+	return p, i
 }
