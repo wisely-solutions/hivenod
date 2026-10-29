@@ -104,6 +104,8 @@ export const INBOX_EVENT_TYPES = [
   // plans (item qwFAWxZM5xkcE7PPjAzi): the agent proposes, starts a Build it step
   'plan.proposed',
   'outcome.started',
+  // Re-check (item bmNoIvvqKCdAorLSShE9): the home agent reports what it found
+  'thread.rechecked',
   // agents and the member
   'thread.titled',
   'thread.flagged',
@@ -118,6 +120,7 @@ export const INBOX_EVENT_TYPES = [
   'outcome.approved',
   'outcome.rejected',
   'outcome.revise_requested',
+  'thread.recheck_requested',
   'plan.approved',
   'plan.rejected',
   'plan.edited',
@@ -176,7 +179,19 @@ export const INBOX_LIMITS = {
   /** Ask for changes: the instruction's characters, and the versions an outcome keeps. */
   reviseInstruction: 500,
   versions: 10,
+  /** Re-check: the agent's note on what it found, in characters. */
+  recheckNote: 500,
 } as const;
+
+/**
+ * Re-check (item bmNoIvvqKCdAorLSShE9): what the home agent found when the member asked it to
+ * check a thread again. still_good: the open proposals stand (stamped `checkedAt`); revised: it
+ * wrote new versions (outcome_propose revises); asked: it asked the member (inbox_ask).
+ */
+export const RECHECK_RESULTS = ['still_good', 'revised', 'asked'] as const;
+export type RecheckResult = (typeof RECHECK_RESULTS)[number];
+/** A request the agent has not answered after this long may be made again. */
+export const RECHECK_RETRY_MS = 30 * 60_000;
 
 /** The quick chips of Ask for changes, in the order the card shows them. */
 export const REVISE_CHIPS = ['shorter', 'formal', 'warmer', 'availability'] as const;
@@ -261,6 +276,21 @@ export const inboxThreadSchema = z.object({
   urgent: z.boolean().optional(),
   /** A deadline stated in the thread (thread_due), or null when cleared. Absent at first. */
   due: timestamp.nullable().optional(),
+  /**
+   * Re-check (item bmNoIvvqKCdAorLSShE9): the member's last request that the home agent check the
+   * thread again, and what it found. Absent until the first request.
+   */
+  recheck: z
+    .object({
+      state: z.enum(['pending', 'done']),
+      by: z.string(),
+      requestedAt: timestamp,
+      result: z.enum(RECHECK_RESULTS).nullable(),
+      note: z.string().max(INBOX_LIMITS.recheckNote).nullable(),
+      at: timestamp.nullable(),
+    })
+    .nullable()
+    .optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
@@ -352,6 +382,8 @@ export const inboxOutcomeSchema = z.object({
     .nullable(),
   /** The plan it is a step of (item qwFAWxZM5xkcE7PPjAzi); absent: a single outcome. */
   planId: z.string().optional(),
+  /** When the home agent last re-checked it and found it still good (absent: never). */
+  checkedAt: timestamp.optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
@@ -390,6 +422,11 @@ export type ThreadStateOf = Pick<
 > & {
   waiting?: { on: string; until: { toMillis(): number } | null } | null;
   question?: InboxThread['question'];
+  /** Re-check: only `state` and `requestedAt` matter to the actions. */
+  recheck?: {
+    state: 'pending' | 'done';
+    requestedAt?: { toMillis(): number } | null;
+  } | null;
 };
 export type OutcomeStateOf = Pick<
   InboxOutcome,
@@ -2092,10 +2129,21 @@ export function reviseOutcome(
     note?: string;
     confidence?: string | null;
     checks?: readonly string[] | null;
+    /** A plan step's plan: during a re-check, an approved step that has not run may be revised. */
+    plan?: PlanInput;
   },
 ): ActionPlan & { version: number } {
   requireAgent(ctx);
   const o = input.outcome;
+  // Re-check (item bmNoIvvqKCdAorLSShE9): the home agent may revise an open proposal unasked.
+  const rechecking =
+    input.thread.recheck?.state === 'pending' && input.thread.fetchedBy === ctx.actor.id;
+  const unasked =
+    rechecking &&
+    (o.state === 'proposed' ||
+      (o.state === 'approved' &&
+        !!o.planId &&
+        recheckable(input.outcomeId, o, planFor(input.plan, o, input.outcomeId))));
   need(
     input.threadId === undefined || input.threadId === o.threadId,
     `Outcome ${input.outcomeId} is on thread ${o.threadId}, not ${input.threadId}: propose a new outcome instead.`,
@@ -2105,10 +2153,12 @@ export function reviseOutcome(
     `Outcome ${input.outcomeId} is a ${o.type}; a revision keeps the type: propose a new outcome instead.`,
   );
   need(
-    o.state === 'revising',
+    o.state === 'revising' || unasked,
     o.state === 'proposed'
       ? 'Nobody asked for changes on this outcome (or the person cancelled the request).'
-      : `This outcome was already decided (${o.state}): your revision is not needed.`,
+      : o.state === 'approved' && o.planId && rechecking
+        ? 'This step has started (it is its turn): it cannot be revised now.'
+        : `This outcome was already decided (${o.state}): your revision is not needed.`,
   );
   need(o.proposedBy === ctx.actor.id, 'Only the agent that proposed this outcome revises it.');
   let fields: Record<string, string | boolean>;
@@ -2145,7 +2195,10 @@ export function reviseOutcome(
     `This proposal has ${INBOX_LIMITS.versions} versions already.`,
   );
   const version = prior.length + 1;
-  const asked = o.revise ? { instruction: o.revise.instruction, chips: o.revise.chips } : null;
+  const asked =
+    o.state === 'revising' && o.revise
+      ? { instruction: o.revise.instruction, chips: o.revise.chips }
+      : null;
   const p = inboxPlan(
     ctx,
     'outcome.revised',
@@ -2174,12 +2227,154 @@ export function reviseOutcome(
             },
           ],
           revise: null,
+          // An approved plan step revised on a re-check needs the member's approval again.
+          ...(o.state === 'approved' ? { decision: null } : {}),
         },
         eventId,
       ),
     ],
   );
   return { ...p, version };
+}
+
+// ---------- Re-check (item bmNoIvvqKCdAorLSShE9) ----------
+
+/**
+ * Whether a re-check looks at this outcome: an open proposal (proposed), or a step of a live
+ * plan that has not run (approved, and not at the cursor, where it is being carried out).
+ */
+export function recheckable(
+  oid: string,
+  o: Pick<OutcomeStateOf, 'state' | 'planId'>,
+  plan?: Pick<PlanInput, 'plan'>,
+): boolean {
+  if (o.state === 'proposed') return true;
+  if (o.state !== 'approved' || !o.planId || !plan) return false;
+  const p = plan.plan;
+  return PLAN_LIVE.includes(p.state) && p.steps.includes(oid) && p.steps[p.cursor] !== oid;
+}
+
+/** Whether a re-check request of the thread is still waiting for its agent. */
+export function recheckPending(t: Pick<ThreadStateOf, 'recheck'>, nowMs: number): boolean {
+  const r = t.recheck;
+  if (!r || r.state !== 'pending') return false;
+  const at = r.requestedAt?.toMillis();
+  return at === undefined || nowMs - at < RECHECK_RETRY_MS;
+}
+
+/**
+ * The member asks the thread's home agent to check it again (Re-check): re-read the thread, the
+ * new messages, the calendar and the context, then confirm or revise the open proposals (and
+ * the steps of a live plan that have not run). Only on a thread with something open (Your call
+ * or waiting); a request the agent has not answered may be made again after 30 minutes. The
+ * agent gets a `recheck` inbox event. Nothing runs by itself.
+ */
+export function requestRecheck(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf; nowMs?: number },
+): ActionPlan {
+  const t = input.thread;
+  owner(ctx, t.memberUid);
+  need(
+    t.state === 'yourCall' || t.state === 'waiting',
+    'Only a thread with a proposal or a plan can be re-checked.',
+  );
+  need(
+    !recheckPending(t, input.nowMs ?? Date.now()),
+    'The agent is already checking it again.',
+  );
+  return inboxPlan(
+    ctx,
+    'thread.recheck_requested',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { from: t.state },
+    (eventId) => [
+      upd(
+        inboxPaths.thread(ctx.workspaceId, input.threadId),
+        {
+          recheck: {
+            state: 'pending',
+            by: ctx.actor.id,
+            requestedAt: SERVER_TIME,
+            result: null,
+            note: null,
+            at: null,
+          },
+        },
+        eventId,
+      ),
+    ],
+  );
+}
+
+/**
+ * The home agent reports its re-check (thread_recheck_done): still_good stamps `checkedAt` on
+ * every open proposal and unrun live-plan step of the thread; revised (after outcome_propose
+ * revises) and asked (after inbox_ask) only close the request.
+ */
+export function recheckDone(
+  ctx: ActionContext,
+  input: {
+    threadId: string;
+    thread: ThreadStateOf & { recheck?: (ThreadStateOf['recheck'] & { by?: string }) | null };
+    result: string;
+    note?: string | null;
+    /** The thread's outcomes, by id. */
+    outcomes: Readonly<Record<string, OutcomeStateOf>>;
+    /** The thread's plans, by id. */
+    plans?: Readonly<Record<string, PlanOf>>;
+  },
+): ActionPlan & { checked: string[] } {
+  requireAgent(ctx);
+  const t = input.thread;
+  need(
+    t.fetchedBy === ctx.actor.id,
+    "Only the thread's home agent (the one that brought it in) answers a re-check.",
+  );
+  need(t.recheck?.state === 'pending', 'Nobody asked to re-check this thread.');
+  need(
+    (RECHECK_RESULTS as readonly string[]).includes(input.result),
+    `The result is ${RECHECK_RESULTS.join(', ')}.`,
+  );
+  const result = input.result as RecheckResult;
+  const note = input.note?.trim() || null;
+  need(
+    note === null || note.length <= INBOX_LIMITS.recheckNote,
+    tooLong('The note', INBOX_LIMITS.recheckNote),
+  );
+  const checked =
+    result === 'still_good'
+      ? Object.keys(input.outcomes)
+          .sort()
+          .filter((oid) => {
+            const o = input.outcomes[oid]!;
+            if (o.threadId !== input.threadId) return false;
+            const pl = o.planId ? input.plans?.[o.planId] : undefined;
+            return recheckable(oid, o, pl ? { plan: pl } : undefined);
+          })
+      : [];
+  const p = inboxPlan(
+    ctx,
+    'thread.rechecked',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { result, note, checked },
+    (eventId) => [
+      upd(
+        inboxPaths.thread(ctx.workspaceId, input.threadId),
+        {
+          'recheck.state': 'done',
+          'recheck.result': result,
+          'recheck.note': note,
+          'recheck.at': SERVER_TIME,
+        },
+        eventId,
+      ),
+      ...checked.map((oid) =>
+        upd(inboxPaths.outcome(ctx.workspaceId, oid), { checkedAt: SERVER_TIME }, eventId),
+      ),
+    ],
+  );
+  return { ...p, checked };
 }
 
 function setThreadState(
