@@ -726,7 +726,12 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
             </span>
           </div>
           {revising && shown.data.revise ? (
-            <RevisingStrip agent={agentName(shown.data.proposedBy)} asked={shown.data.revise} />
+            <RevisingStrip
+              agent={agentName(shown.data.proposedBy)}
+              asked={shown.data.revise}
+              wid={wid}
+              agentId={shown.data.proposedBy}
+            />
           ) : null}
           {editing ? (
             <div className="mt-3 flex flex-col gap-3">

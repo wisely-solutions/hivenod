@@ -25,3 +25,4 @@ export * from './calendar';
 export * from './personalOrg';
 export * from './calendarSync';
 export * from './status';
+export * from './cliversion';

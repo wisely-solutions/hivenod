@@ -23,6 +23,7 @@ import (
 	"github.com/wisely-solutions/hivenod/cli/internal/plan"
 	"github.com/wisely-solutions/hivenod/cli/internal/store"
 	"github.com/wisely-solutions/hivenod/cli/internal/token"
+	"github.com/wisely-solutions/hivenod/cli/internal/update"
 )
 
 // HeartbeatInterval: how often an open run beats while this process lives.
@@ -408,10 +409,16 @@ func sp(s string) *string { return &s }
 // MarkSeen tells Hivenod this agent is online (shown for 2 minutes).
 func (c *Client) MarkSeen(ctx context.Context) error {
 	host, _ := os.Hostname()
-	_, err := c.DB.Doc(model.Paths.Agent(c.WorkspaceID, c.UID)).Update(ctx, []firestore.Update{
+	ups := []firestore.Update{
 		{Path: "lastSeenAt", Value: firestore.ServerTimestamp},
 		{Path: "seenHost", Value: clipRunes(host, 80)},
-	})
+	}
+	// The CLI's own version, so the web app can tell when it is too old for an event (item N9EEn).
+	// A development build (no version stamped) writes none.
+	if v := update.Version; v != "" && v != "0.0.0" {
+		ups = append(ups, firestore.Update{Path: "cliVersion", Value: clipRunes(v, 40)})
+	}
+	_, err := c.DB.Doc(model.Paths.Agent(c.WorkspaceID, c.UID)).Update(ctx, ups)
 	return err
 }
 
