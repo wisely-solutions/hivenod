@@ -12,7 +12,6 @@ const BAD = /[a-z0-9-]+\.(web\.app|firebaseapp\.com)\b/i;
 const ALLOW = {
   // Firebase's own sign-in handler (technical, not shown as a link; the popup briefly shows it).
   'apps/web/src/lib/app.ts': ['authDomain'],
-  'packages/agent/src/client.ts': ['authDomain'],
   'firebase.json': ['frame-src'], // CSP for the sign-in iframe
   'scripts/release-lib.mjs': [
     'frame-src',

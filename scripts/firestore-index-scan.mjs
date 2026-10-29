@@ -1,5 +1,5 @@
 /**
- * Finds every Firestore query in the app, shared and agent sources and reduces it to a
+ * Finds every Firestore query in the app and shared sources and reduces it to a
  * `QueryShape` (see firestore-index-rules.mjs), using the TypeScript compiler so that field
  * names held in constants (`MONTH_RUNS.equal`) resolve to their literal types.
  *
@@ -12,7 +12,7 @@ import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 
-export const SOURCE_DIRS = ['apps/web/src', 'packages/shared/src', 'packages/agent/src'];
+export const SOURCE_DIRS = ['apps/web/src', 'packages/shared/src'];
 const FIRESTORE_MODULES = new Set([
   'firebase/firestore',
   'firebase/firestore/lite',

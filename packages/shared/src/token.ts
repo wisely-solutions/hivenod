@@ -110,8 +110,8 @@ export function mcpConfigSnippet(token: string): string {
     {
       mcpServers: {
         hivenod: {
-          command: 'node',
-          args: ['/path/to/hivenod/packages/agent/dist/cli.js', 'mcp'],
+          command: 'hivenod',
+          args: ['mcp'],
           env: { HIVENOD_TOKEN: token },
         },
       },

@@ -323,7 +323,7 @@ export const r = query(collection(db, 'events'), orderBy(fs[0]![0]));
 });
 
 describe('the repository', () => {
-  it('every Firestore query in apps/web, packages/shared and packages/agent has its index', () => {
+  it('every Firestore query in apps/web and packages/shared has its index', () => {
     const { problems, results } = guard(root);
     expect(problems, problems.join('\n\n')).toEqual([]);
     expect(results.length).toBeGreaterThan(10);

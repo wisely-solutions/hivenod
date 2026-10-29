@@ -20,7 +20,7 @@ export function cliCommands(origin: string) {
  * The only way to connect an agent for now (cards KLCTVnX8, Ul32d6Ee): pair the machine once,
  * then the hivenod plugin from the marketplace in the Hivenod repository, as a live Claude Code
  * session. Until Hivenod is on Claude Code's approved channels list, the session starts with the
- * development-channels flag. `hivenod run` is paused.
+ * development-channels flag. (`hivenod run` went with the old TypeScript CLI.)
  */
 export const SESSION_COMMANDS = {
   pair: 'hivenod pair',

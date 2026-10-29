@@ -4,6 +4,4 @@
 description = "reviewed false positives"
 paths = [
   '''apps/web/src/lib/app\.ts''',
-  '''packages/agent/src/client\.ts''',
-  '''packages/agent/src/claude\.test\.ts''',
 ]

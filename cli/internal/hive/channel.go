@@ -15,7 +15,7 @@ import (
 	"github.com/wisely-solutions/hivenod/cli/internal/model"
 )
 
-// Channel mode of `hivenod mcp` (packages/agent/src/channel.ts): a live Claude Code session as a
+// Channel mode of `hivenod mcp` (ported from the former TypeScript channel.ts): a live Claude Code session as a
 // Hivenod agent. Work is pushed in as notifications/claude/channel events, claimed for the
 // session, up to MaxItems at a time; notes, answers and stops on the held items are pushed too.
 

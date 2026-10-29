@@ -60,8 +60,8 @@ action URL for this project; see the card vyH5uux3 findings). The smoke test che
    "indexes still building" or warns; check with `gcloud firestore indexes composite list`.
 
    The emulator never checks indexes, so `pnpm test:scripts` runs an index guard
-   (`pnpm check:indexes` alone): it finds every Firestore `query()` in `apps/web/src`,
-   `packages/shared/src` and `packages/agent/src` and fails with `file:line` and the index to add
+   (`pnpm check:indexes` alone): it finds every Firestore `query()` in `apps/web/src` and
+   `packages/shared/src` (not the Go CLI's queries) and fails with `file:line` and the index to add
    when `firestore.indexes.json` cannot serve it. Queries built at run time must be listed in
    `scripts/firestore-index-allowlist.mjs` with the test that covers them.
 

@@ -4,7 +4,7 @@
  * project presses "Ask for status" (item view and card menu): the ask is stored, the button reads
  * "Asked · waiting…" and stays disabled; a stub agent answers and the status shows. Settings >
  * Projects sets the interval (off by default) and the silence threshold (40 min). At 1440 and 390, light and dark, axe-clean. The status events and
- * the status tool are tested in packages/agent (channel integration, TS and Go); the silence check
+ * the status tool are tested in cli/e2e (channel suite, Go CLI); the silence check
  * in packages/notifier.
  */
 import AxeBuilder from '@axe-core/playwright';

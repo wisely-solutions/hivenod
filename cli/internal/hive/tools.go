@@ -107,7 +107,7 @@ func asMap(v any) map[string]any {
 // Run is a tool's work with a connected client.
 type Run func(ctx context.Context, c *Client, a Args) (any, error)
 
-// ToolRuns are the agent operations by tool name (packages/agent/src/tools.ts).
+// ToolRuns are the agent operations by tool name (ported from the former TypeScript tools.ts).
 var ToolRuns = map[string]Run{
 	"list_work": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.ListWork(ctx, Filter{ProjectID: a.S("project"), StepID: a.S("step")})

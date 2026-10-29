@@ -84,6 +84,6 @@ describe('token', () => {
     expect(tokenAsEnv(t)).toBe(`HIVENOD_TOKEN=${t}`);
     const cfg = JSON.parse(mcpConfigSnippet(t));
     expect(cfg.mcpServers.hivenod.env.HIVENOD_TOKEN).toBe(t);
-    expect(cfg.mcpServers.hivenod.args.at(-1)).toBe('mcp');
+    expect(cfg.mcpServers.hivenod).toMatchObject({ command: 'hivenod', args: ['mcp'] });
   });
 });

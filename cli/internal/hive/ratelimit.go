@@ -13,8 +13,8 @@ import (
 
 // Item DhsO9: an agent creates at most CreateItemLimit items per CreateItemWindow, so a loop
 // cannot flood a board. The limit lives in the agent's session code, like max_items (all agents
-// are their owner's own); the rules enforce who may create where. Mirrors
-// packages/agent/src/ratelimit.ts.
+// are their owner's own); the rules enforce who may create where. Ported
+// from the former TypeScript ratelimit.ts.
 const (
 	CreateItemLimit  = 30
 	CreateItemWindow = time.Hour
