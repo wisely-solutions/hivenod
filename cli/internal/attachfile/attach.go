@@ -1,5 +1,5 @@
 // Package attachfile turns an attach source (file path or URL) into an attachment
-// (packages/agent/src/attach.ts and safepath.ts): type by extension, inlined up to 900 KB, links
+// (ported from the former TypeScript client's attach.ts and safepath.ts): type by extension, inlined up to 900 KB, links
 // for anything bigger, and never a file from Hivenod's own credentials folder, also not through
 // symlinks or hard links.
 package attachfile

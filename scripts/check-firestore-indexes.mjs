@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Index guard: every Firestore query in apps/web/src, packages/shared/src and packages/agent/src
- * must be servable by firestore.indexes.json (the emulator never checks; production does).
+ * Index guard: every Firestore query in apps/web/src and packages/shared/src must be servable by
+ * firestore.indexes.json (the emulator never checks; production does). The Go CLI's queries (cli/)
+ * are not scanned.
  * Usage: node scripts/check-firestore-indexes.mjs   (exit 1 with file:line and the missing index)
  */
 import { readFileSync } from 'node:fs';

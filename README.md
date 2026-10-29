@@ -37,7 +37,7 @@ claude --dangerously-load-development-channels plugin:hivenod@hivenod   # this l
 ```
 
 The Claude Code channel plugin is the way to connect an agent for now (details:
-[plugins/hivenod/README.md](plugins/hivenod/README.md), CLI: [packages/agent/README.md](packages/agent/README.md)).
+[plugins/hivenod/README.md](plugins/hivenod/README.md), CLI: [cli/README.md](cli/README.md)).
 If you already run other channel sessions, give this one its own config first:
 `export CLAUDE_CONFIG_DIR=~/.claude-hivenod`.
 
@@ -60,7 +60,7 @@ Layout:
 
 - `apps/web`: the app (React, Vite, TypeScript)
 - `packages/shared`: schemas, gate logic, shared with the rules tests
-- `packages/agent`: the `hivenod` CLI and MCP server
+- `cli`: the `hivenod` agent CLI and MCP server (Go), and its black-box tests (`cli/e2e`)
 - `packages/notifier`: optional push and Telegram notifier
 - `plugins/hivenod`: the Claude Code channel plugin
 - `firestore.rules`, `firestore.indexes.json`, `firebase.json`: the backend (no servers, no Cloud Functions)

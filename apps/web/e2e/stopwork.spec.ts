@@ -3,7 +3,7 @@
  * the project) presses Stop work, picks Go back or Cancel completely, adds an optional reason:
  * the run ends as stopped, the item is on hold (Resume) or cancelled, and Activity shows it.
  * A member who decides nowhere sees no Stop work button. The rules side is in
- * packages/shared/rules/stopwork.test.ts; the CLI side in packages/agent (runner + integration).
+ * packages/shared/rules/stopwork.test.ts; the CLI side in cli/e2e (Go CLI).
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';

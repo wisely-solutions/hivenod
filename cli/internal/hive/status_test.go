@@ -10,7 +10,7 @@ import (
 	"github.com/wisely-solutions/hivenod/cli/internal/model"
 )
 
-// Status checks (item AzveC) with a fake clock, like packages/agent/src/channel.test.ts.
+// Status checks (item AzveC) with a fake clock, like the former TypeScript channel.test.ts.
 func statusSetup(every int64) (*Session, *[]Event, func(time.Duration), func() time.Time) {
 	t0 := time.UnixMilli(1_000_000)
 	now := t0

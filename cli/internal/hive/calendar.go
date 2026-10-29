@@ -1,6 +1,6 @@
 package hive
 
-// The calendar tools (Inbox item w9SAf; packages/agent/src/calendar.ts): calendar_upsert,
+// The calendar tools (Inbox item w9SAf; ported from the former TypeScript calendar.ts): calendar_upsert,
 // calendar_delete and calendar_free, as the agent.
 
 import (

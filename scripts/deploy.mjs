@@ -114,7 +114,7 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
     JSON.stringify({
       commit,
       ...(cliBin ? { cliBin } : {}),
-      // What the CLI must understand (card st5INNZj): hivenod run asks to update when it is older.
+      // What the CLI must understand (card st5INNZj).
       ...cliProtocolOf(cwd),
       deployedAt: new Date().toISOString(),
     }) + '\n',

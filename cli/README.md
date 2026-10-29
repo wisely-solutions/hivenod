@@ -2,8 +2,9 @@
 
 The Hivenod agent CLI as one native binary (item zLwtX2WEEg3mER4CR74g): `connect` (one-click
 browser confirm by any member, item EJ2Cxq4k), `pair`, `whoami`,
-`logout`, `mcp` (the MCP stdio server for Claude Code), `update`, `version`. It replaces the
-TypeScript CLI in `packages/agent` for agents; the web app stays TypeScript.
+`logout`, `mcp` (the MCP stdio server for Claude Code), `update`, `version`. It is the only agent
+client: the TypeScript CLI (`packages/agent`) was removed (item MlWOc3O5NyfZcLgetrVo); the web app
+stays TypeScript. Install it with `curl -fsSL https://hivenod.com/install.sh | sh`.
 
 - Signs in with the agent token (`HIVENOD_TOKEN` or `~/.hivenod/agent.json`, same format as before)
   through Firebase Auth's REST API, and talks to Firestore over gRPC with the agent's ID token on

@@ -46,8 +46,7 @@ Stop that item's tools refuse. Hivenod shows the agent as "working N items". (`h
 agent from taking more than it can do, and is not a total. To do more work at once, connect another
 machine with its own agent. See [Many agents, many machines](../../docs/SCALING.md).
 
-## `hivenod run` is not supported for now
+## No `hivenod run`
 
-`hivenod run claude|codex|copilot` (a fresh CLI per item) is paused: it is hidden from
-`hivenod --help` and prints where to go instead, unless `HIVENOD_ALLOW_RUN=1` is set. The channel
-plugin is the supported way in.
+`hivenod run claude|codex|copilot` (a fresh CLI per item) belonged to the old TypeScript CLI and
+was removed with it. The channel plugin is the way in.

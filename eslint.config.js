@@ -16,7 +16,7 @@ export default tseslint.config(
   },
   { files: ['apps/web/**/*.{ts,tsx}'], ...jsxA11y.flatConfigs.recommended },
   {
-    files: ['**/*.{js,mjs}', 'packages/agent/**/*.ts', 'scripts/**'],
+    files: ['**/*.{js,mjs}', 'cli/e2e/**/*.ts', 'scripts/**'],
     languageOptions: { globals: globals.node },
   },
   { files: ['apps/web/public/*.js'], languageOptions: { globals: globals.browser } },

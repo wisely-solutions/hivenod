@@ -1,6 +1,6 @@
 package hive
 
-// calendar_mirror (Inbox item fJnu6; packages/agent/src/calendar.ts mirrorBooking): an approved
+// calendar_mirror (Inbox item fJnu6; ported from the former TypeScript calendar.ts mirrorBooking): an approved
 // booking becomes its copy in the member's own calendar.
 
 import (

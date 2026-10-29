@@ -50,7 +50,7 @@ func (c Config) storeConfig() store.Config {
 }
 
 // PairTerminal shows a code, waits until an admin confirms it in Hivenod, and receives the new
-// agent's token encrypted for a key that never leaves this process (packages/agent/src/pair.ts).
+// agent's token encrypted for a key that never leaves this process (ported from the former TypeScript pair.ts).
 func PairTerminal(ctx context.Context, cfg Config, o PairOptions) (*Paired, error) {
 	keys, err := pairing.NewKeys()
 	if err != nil {
