@@ -45,6 +45,7 @@ import { DecisionDialog, type DialogMode } from './DecisionDialog';
 import { InboxRow, type RowAgent } from './InboxRow';
 import { isOpenFinding, nextKey, parseFilter, type InboxEntry } from './logic';
 import { useNeedsAll } from '../needs/data';
+import { ScopeLine } from '../shell/ScopePill';
 import {
   countKinds,
   countNeeds,
@@ -1049,6 +1050,17 @@ export function InboxPage() {
           name={firstName(session.profile.name)}
           now={now}
           loading={loading}
+          scope={
+            manyOrgs ? (
+              <ScopeLine className="mt-1.5">
+                {loading ? null : (
+                  <span data-today-count="">
+                    {total === 0 ? 'Nothing waits for you' : `${total} waiting for you`}
+                  </span>
+                )}
+              </ScopeLine>
+            ) : null
+          }
         />
         {/* The count for screen readers (and the old summary line's place). */}
         <p aria-live="polite" className="sr-only">

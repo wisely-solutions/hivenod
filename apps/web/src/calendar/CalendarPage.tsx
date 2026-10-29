@@ -166,7 +166,7 @@ export function CalendarPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl">
-      <PageHeader title="Calendar" subtitle={subtitle} />
+      <PageHeader title="Calendar" subtitle={subtitle} allOrgs={mine && orgs.length > 1} />
       <div className="mb-4 flex flex-wrap items-end gap-2">
         <Select
           label="Calendar"

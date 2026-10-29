@@ -430,7 +430,7 @@ export function ProjectPage() {
             description="Pick another one from the list."
             action={
               <Link to="/projects" className="text-14 font-medium underline underline-offset-4">
-                All projects
+                Projects
               </Link>
             }
           />
@@ -604,7 +604,7 @@ function Board({ pid, row }: { pid: string; row: Row<Project> }) {
     <div className="-ml-2 mb-1 flex h-12 items-center gap-1">
       <Link
         to="/projects"
-        aria-label="All projects"
+        aria-label="Projects"
         className="grid size-11 shrink-0 place-items-center rounded-btn text-ink hover:bg-canvas"
       >
         <Icon icon={ArrowLeft} size={20} />

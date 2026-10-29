@@ -3,7 +3,7 @@
  * greeting, 2-3 sentences from counts, "About N min", and a bar with one segment per decision.
  */
 import { Clock, Sun } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
 import type { Brief, Segment } from '../needs/brief';
@@ -21,11 +21,14 @@ export function BriefCard({
   name,
   now,
   loading,
+  scope,
 }: {
   brief: Brief | null;
   name: string;
   now: number;
   loading: boolean;
+  /** Under the greeting: the "You · all organizations" line (item icVly). */
+  scope?: ReactNode;
 }) {
   // Phone: three lines with "more" (design 2.7).
   const [more, setMore] = useState(false);
@@ -50,6 +53,7 @@ export function BriefCard({
           <h1 id="today-greeting" className="text-20 font-semibold text-ink sm:text-[22px]">
             {greeting(now)}, {name}
           </h1>
+          {scope}
         </div>
         {brief && !brief.empty && brief.minutes > 0 ? (
           <span className="mt-1 hidden shrink-0 items-center gap-1.5 text-13 text-text-2 sm:inline-flex">
