@@ -41,7 +41,9 @@ its environment, for example `HIVENOD_MAX_ITEMS=3 claude --dangerously-load-deve
 and it holds up to that many: each work event carries its `item_id`. Item tools then take `itemId` (required while
 several items are held); notes, answers and Stop work name the item they are about, and after a
 Stop that item's tools refuse. Hivenod shows the agent as "working N items". (`hivenod mcp
---channel --max-items N` does the same outside the plugin.)
+--channel --max-items N` does the same outside the plugin.) The limit is per session: it keeps one
+agent from taking more than it can do, and is not a total. To do more work at once, connect another
+machine with its own agent. See [Many agents, many machines](../../docs/SCALING.md).
 
 The channel protocol only states the contract. How the session organises the work is the plugin's
 `hivenod` skill (`skills/hivenod/SKILL.md`, new in 0.2.0): the main session stays a thin

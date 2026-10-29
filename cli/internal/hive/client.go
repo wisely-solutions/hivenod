@@ -360,7 +360,7 @@ func (c *Client) diagnose(ctx context.Context, at *loc) string {
 				return StepLimitedMessage
 			}
 			if l.Item.Claim != nil && l.Item.Claim.AgentUID != c.UID {
-				return "Another agent holds this item right now."
+				return TakenPrefix + "."
 			}
 		}
 	}

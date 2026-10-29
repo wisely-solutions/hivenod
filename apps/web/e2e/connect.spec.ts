@@ -262,6 +262,13 @@ test('Connect Claude Code: one line for everyone, and the page flips live when t
   await expect(main.getByLabel('Connect command', { exact: true })).toHaveText(
     /^curl -fsSL https?:\/\/[^ ]+\/install\.sh \| sh$/,
   );
+  // Scaling: one session per machine, more machines for more capacity, with a link to the guide.
+  await expect(main.getByText(/one Claude Code session per machine/)).toBeVisible();
+  await expect(main.getByRole('link', { name: 'Setup guide' })).toHaveAttribute(
+    'href',
+    /docs\/SCALING\.md$/,
+  );
+  await expectNoHorizontalScroll(page);
   await main.getByRole('button', { name: 'Windows' }).click();
   await expect(main.getByLabel('Connect command', { exact: true })).toHaveText(
     /^irm https?:\/\/[^ ]+\/install\.ps1 \| iex$/,

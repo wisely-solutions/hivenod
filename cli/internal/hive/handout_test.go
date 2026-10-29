@@ -63,3 +63,69 @@ func TestOldestFirst(t *testing.T) {
 		t.Fatalf("order %s, want dcbea", got)
 	}
 }
+
+// Fair hand-out (item lkkyB): agents on one step do not all go for the head item, and a lone agent
+// keeps strict oldest-first.
+func TestFairPick(t *testing.T) {
+	var rows []WorkRow
+	for _, id := range []string{"i1", "i2", "i3", "i4", "i5", "i6"} {
+		rows = append(rows, WorkRow{ItemID: id})
+	}
+	ids := func(r []WorkRow) string {
+		s := ""
+		for _, x := range r {
+			s += x.ItemID + " "
+		}
+		return s
+	}
+	// A lone agent (window 1): oldest first, untouched.
+	if got := ids(fairPick(rows, "agentA", 1)); got != "i1 i2 i3 i4 i5 i6 " {
+		t.Fatalf("lone agent: %s", got)
+	}
+	// Three contending agents (window 3): the first picks are spread, not all the head item.
+	first := map[string]bool{}
+	for _, a := range []string{"agentA", "agentB", "agentC"} {
+		got := fairPick(rows, a, 3)
+		first[got[0].ItemID] = true
+		if len(got) != 6 || ids(got[3:]) != "i4 i5 i6 " {
+			t.Fatalf("%s: rows beyond the window must stay oldest-first and none lost: %s", a, ids(got))
+		}
+		seen := map[string]bool{}
+		for _, r := range got[:3] {
+			seen[r.ItemID] = true
+		}
+		if !seen["i1"] || !seen["i2"] || !seen["i3"] {
+			t.Fatalf("%s: the window holds the 3 oldest: %s", a, ids(got))
+		}
+	}
+	if len(first) < 2 {
+		t.Fatalf("first picks not spread: %v", first)
+	}
+	// Items this agent already holds stay first.
+	held := []WorkRow{{ItemID: "h", Claim: &ClaimRef{Mine: true}}, rows[0], rows[1], rows[2]}
+	if got := fairPick(held, "agentA", 3); got[0].ItemID != "h" {
+		t.Fatalf("held first: %s", ids(got))
+	}
+}
+
+func TestContentionWindow(t *testing.T) {
+	s := NewSession(nil, Config{}, func(Event) {}, ChannelOptions{})
+	s.noteContention(true)
+	s.noteContention(true)
+	if s.contended != 2 {
+		t.Fatal("two losses widen the window")
+	}
+	s.noteContention(false)
+	if s.contended != 1 {
+		t.Fatal("a win narrows it")
+	}
+	for i := 0; i < 20; i++ {
+		s.noteContention(true)
+	}
+	if s.contended != maxContention-1 {
+		t.Fatalf("capped, got %d", s.contended)
+	}
+	if !IsTaken(Errf(TakenPrefix+".")) || IsTaken(Errf("other")) {
+		t.Fatal("IsTaken")
+	}
+}

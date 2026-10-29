@@ -9,6 +9,7 @@ import { Segmented } from '../ui/form';
 import { Icon } from '../ui/icon';
 import { cliCommands } from './cli';
 import { newlyConnected } from './confirm';
+import { GITHUB_URL } from '../lib/flags';
 import { isOnline } from './logic';
 
 const card = 'rounded-card border border-line bg-surface p-4 shadow-e1 sm:p-5';
@@ -70,6 +71,18 @@ export function ConnectClaudeCode({ codeForm }: { codeForm: ReactNode }) {
       <p className="mt-2 text-13 text-text-2">
         {os === 'windows' ? 'In PowerShell. ' : ''}The line holds no secret: the click in the
         browser is the approval.
+      </p>
+      <p className="mt-2 text-13 text-text-2">
+        Run one Claude Code session per machine; it hands each item to a sub-agent. For more
+        capacity, connect another machine: each one is its own agent.{' '}
+        <a
+          href={`${GITHUB_URL}/blob/main/docs/SCALING.md`}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2 foc:outline-2 foc:outline-offset-2 foc:outline-focus"
+        >
+          Setup guide
+        </a>
       </p>
 
       <div

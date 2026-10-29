@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"sort"
 	"strconv"
 	"strings"
@@ -96,6 +97,7 @@ type Session struct {
 	push func(Event)
 	o    ChannelOptions
 
+	contended    int // claims lost to other agents, recently (item lkkyB): widens the fair-pick window
 	mu           sync.Mutex
 	current      []*heldItem // hand-over order
 	stoppedItems map[string]string
@@ -706,6 +708,7 @@ func (s *Session) next() error {
 			mj := rows[j].Claim != nil && rows[j].Claim.Mine
 			return mi && !mj
 		})
+		rows = s.fairOrder(rows)
 		handed := false
 		for _, row := range rows {
 			if s.full() {
@@ -768,6 +771,9 @@ func (s *Session) handOver(row WorkRow) (bool, error) {
 	if err != nil {
 		var he *Error
 		if errors.As(err, &he) {
+			if IsTaken(err) {
+				s.noteContention(true)
+			}
 			return false, nil // taken, held or limited meanwhile
 		}
 		if s.ctx.Err() != nil {
@@ -775,6 +781,7 @@ func (s *Session) handOver(row WorkRow) (bool, error) {
 		}
 		return false, err
 	}
+	s.noteContention(false)
 	hctx, cancel := context.WithCancel(s.ctx)
 	h := &heldItem{Handover: Handover{ItemID: row.ItemID, ProjectID: row.ProjectID, RunID: claimed.RunID, Title: row.Title}, cancel: cancel}
 	if min > 0 {
@@ -816,6 +823,61 @@ func (s *Session) handOver(row WorkRow) (bool, error) {
 	}
 	s.push(Event{Content: WorkText(row, why, s.o.MaxItems), Meta: meta})
 	return true, nil
+}
+
+// maxContention bounds the fair-pick window: at most this many oldest rows are spread over.
+const maxContention = 8
+
+// noteContention adapts the fair pick (item lkkyB): a claim lost to another agent widens the window
+// the agent spreads over by one; a claim won narrows it. A lone agent never loses, so it stays at
+// strict oldest-first.
+func (s *Session) noteContention(lost bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if lost && s.contended < maxContention-1 {
+		s.contended++
+	} else if !lost && s.contended > 0 {
+		s.contended--
+	}
+}
+
+// fairOrder puts the rows in the order this session tries them. Items this agent holds come first;
+// then the oldest 1+contended waiting rows are tried in an order that depends on this agent and the
+// item (so several agents on one step do not all race for the head item); the rest stay oldest-first.
+func (s *Session) fairOrder(rows []WorkRow) []WorkRow {
+	s.mu.Lock()
+	w := 1 + s.contended
+	s.mu.Unlock()
+	return fairPick(rows, s.c.UID, w)
+}
+
+// fairPick: rows are oldest-first with own items first. The first window of not-held rows is
+// reordered by a hash of (agent, item); w <= 1 keeps strict oldest-first.
+func fairPick(rows []WorkRow, agent string, w int) []WorkRow {
+	mine := 0
+	for mine < len(rows) && rows[mine].Claim != nil && rows[mine].Claim.Mine {
+		mine++
+	}
+	rest := rows[mine:]
+	if w > len(rest) {
+		w = len(rest)
+	}
+	if w <= 1 {
+		return rows
+	}
+	out := append([]WorkRow{}, rows[:mine]...)
+	head := append([]WorkRow{}, rest[:w]...)
+	sort.SliceStable(head, func(i, j int) bool {
+		return pickRank(agent, head[i].ItemID) < pickRank(agent, head[j].ItemID)
+	})
+	out = append(out, head...)
+	return append(out, rest[w:]...)
+}
+
+func pickRank(agent, item string) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(agent + "/" + item))
+	return h.Sum32()
 }
 
 func (s *Session) isHeld(h *heldItem) bool {

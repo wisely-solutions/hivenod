@@ -3,6 +3,8 @@ package hive
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"math"
 	"sort"
 	"strings"
@@ -506,7 +508,7 @@ func (c *Client) Claim(ctx context.Context, itemID, projectID string) (ClaimOut,
 		other = nil
 	}
 	if other != nil && time.Since(other.HeartbeatAt) <= 10*time.Minute {
-		return ClaimOut{}, Errf("Another agent holds this item right now (its heartbeat is recent).")
+		return ClaimOut{}, Errf(TakenPrefix + " (its heartbeat is recent).")
 	}
 	var takeover *actions.Takeover
 	if other != nil {
@@ -526,6 +528,11 @@ func (c *Client) Claim(ctx context.Context, itemID, projectID string) (ClaimOut,
 		return ClaimOut{}, wrap(err)
 	}
 	if err := c.Write(ctx, p.Plan, l.loc()); err != nil {
+		// Several agents committing on the same item at once: the server may abort the loser
+		// instead of denying it. Either way this agent did not get the item.
+		if status.Code(err) == codes.Aborted {
+			return ClaimOut{}, Errf(TakenPrefix + " (several agents asked for it at the same moment).")
+		}
 		return ClaimOut{}, err
 	}
 	c.mu.Lock()

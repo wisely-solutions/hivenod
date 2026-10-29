@@ -32,6 +32,14 @@ const (
 	RejectedMessage    = "Hivenod rejected this token. The agent may have been revoked or rotated: ask an admin for a new one."
 )
 
+// TakenPrefix starts the message of a claim that lost to another agent: the item is held by
+// someone else (the heartbeat is recent, or their claim won the race at commit). Not an error
+// of this agent: it picks the next item.
+const TakenPrefix = "Another agent holds this item right now"
+
+// IsTaken reports a claim lost to another agent.
+func IsTaken(err error) bool { return err != nil && strings.HasPrefix(err.Error(), TakenPrefix) }
+
 // StoppedMessage: a person pressed Stop work on this item.
 func StoppedMessage(summary string) string {
 	s := StoppedPrefix

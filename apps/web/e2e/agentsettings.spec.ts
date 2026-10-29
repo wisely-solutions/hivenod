@@ -320,3 +320,56 @@ test('Held for the agent’s own question: the banner says the agent asked', asy
   await expect(held).toContainText('The agent asked a question and gave the item back');
   await expect(held).not.toContainText('guardrail');
 });
+
+test('Process editor: two agents share one step; both stay after a reload and both agent pages show it', async ({
+  page,
+}) => {
+  const { base } = await seed(page);
+  await page.goto('/p/blog/process');
+  await page.getByRole('button', { name: 'Edit Draft' }).click();
+  const who = page.getByTestId('who-can-do');
+  await who.getByRole('radio', { name: /Only these agents/ }).click();
+  await who.getByRole('button', { name: 'Writer' }).click();
+  await who.getByRole('button', { name: 'Scout' }).click();
+  await expect(who.getByRole('button', { name: 'Writer' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(who.getByRole('button', { name: 'Scout' })).toHaveAttribute('aria-pressed', 'true');
+  await expectNoHorizontalScroll(page);
+  const done = page.getByRole('dialog').getByRole('button', { name: 'Done' });
+  if (await done.isVisible().catch(() => false)) await done.click();
+  await page.getByRole('button', { name: 'Save process' }).click();
+  await expect(page.getByText('Process saved.')).toBeVisible();
+  await expect
+    .poll(async () => {
+      const v = (await adminDoc(`${base}/projects/blog`))?.fields.stepAgents?.mapValue?.fields
+        ?.draft?.arrayValue?.values as { stringValue: string }[] | undefined;
+      return (v ?? []).map((x) => x.stringValue).sort();
+    })
+    .toEqual(['scout', 'writer']);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit Draft' }).click();
+  const again = page.getByTestId('who-can-do');
+  await expect(again.getByRole('button', { name: 'Writer' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(again.getByRole('button', { name: 'Scout' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expectNoHorizontalScroll(page);
+
+  // Both agent pages: the step is limited to some agents, including this one.
+  for (const agent of ['writer', 'scout']) {
+    await page.goto(`/agents/${agent}`);
+    const steps = page.getByRole('list', { name: 'Steps this agent may take' });
+    await expect(steps.locator('[data-step="draft"]').first()).toHaveAttribute(
+      'data-allowed',
+      'yes',
+    );
+    await expect(
+      steps.getByTitle('Limited to some agents, including this one').first(),
+    ).toBeVisible();
+    await expectNoHorizontalScroll(page);
+  }
+});
