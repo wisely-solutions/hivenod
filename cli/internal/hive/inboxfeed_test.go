@@ -23,6 +23,8 @@ type fakeInbox struct {
 	revising []FeedRevise
 	onK      func([]FeedRecheck)
 	rechecks []FeedRecheck
+	onQ      func([]FeedInstruct)
+	instrs   []FeedInstruct
 	events   map[string]*FeedEvent
 	woken    []string
 	subs     int
@@ -56,6 +58,13 @@ func (f *fakeInbox) WatchRechecks(_ context.Context, on func([]FeedRecheck)) {
 	f.mu.Lock()
 	f.onK = on
 	rows := f.rechecks
+	f.mu.Unlock()
+	on(rows)
+}
+func (f *fakeInbox) WatchInstructs(_ context.Context, on func([]FeedInstruct)) {
+	f.mu.Lock()
+	f.onQ = on
+	rows := f.instrs
 	f.mu.Unlock()
 	on(rows)
 }
@@ -347,6 +356,60 @@ func TestInboxFeedRecheck(t *testing.T) {
 	rk2.AtMs += 60_000
 	r.recheck([]FeedRecheck{rk2})
 	r.want("t7:recheck", "t1:new", "t7:recheck")
+}
+
+func (r *feedRig) instruct(rows []FeedInstruct) {
+	r.src.mu.Lock()
+	r.src.instrs = rows
+	on := r.src.onQ
+	r.src.mu.Unlock()
+	if on != nil {
+		on(rows)
+	}
+	r.settle()
+}
+
+// Ask the agent (item w6O2KOw4ys70TQv9I1xD): one instruct event per request, at priority 1,
+// with the request's text or chip; answered, the slot frees; a new request is a new event.
+func TestInboxFeedInstruct(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 1})
+	r.event("e-t1", "inbox.added", map[string]any{"newThread": true})
+	in := FeedInstruct{ThreadID: "t8", MemberUID: "joao", Title: "Review move", ID: "ins1", Text: "Prepare me for Thursday", AtMs: r.now.UnixMilli()}
+	r.src.mu.Lock()
+	r.src.instrs = []FeedInstruct{in}
+	r.src.threads = []FeedThread{r.th("t1", nil)}
+	r.src.mu.Unlock()
+	r.feed.Start()
+	r.settle()
+	r.want("t8:instruct")
+	r.mu.Lock()
+	e := r.pushed[0]
+	r.mu.Unlock()
+	for _, w := range []string{"\"Review move\" (thread t8)", "request ins1", "\"Prepare me for Thursday\"", "thread_answer_instruction instructionId=ins1", "not an approval"} {
+		if !strings.Contains(e.Content, w) {
+			t.Fatalf("%q lacks %q", e.Content, w)
+		}
+	}
+	if e.Meta["instruction_id"] != "ins1" {
+		t.Fatalf("meta %v", e.Meta)
+	}
+	// The same request again (a reconnect) is not sent twice.
+	r.instruct([]FeedInstruct{in})
+	r.want("t8:instruct")
+	// Answered: the slot frees, the new thread goes out.
+	r.instruct(nil)
+	r.want("t8:instruct", "t1:new")
+	// A new request (a chip) is a new event.
+	r.set(nil, nil)
+	in2 := FeedInstruct{ThreadID: "t8", MemberUID: "joao", Title: "Review move", ID: "ins2", Chip: "summarize", AtMs: r.now.UnixMilli() + 60_000}
+	r.instruct([]FeedInstruct{in2})
+	r.want("t8:instruct", "t1:new", "t8:instruct")
+	r.mu.Lock()
+	e = r.pushed[2]
+	r.mu.Unlock()
+	if !strings.Contains(e.Content, "Summarize this thread") {
+		t.Fatalf("%q lacks the chip's text", e.Content)
+	}
 }
 
 func (r *feedRig) plans(rows []FeedPlan) {

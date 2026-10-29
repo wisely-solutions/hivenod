@@ -26,6 +26,7 @@ import {
   retryPlanStep,
   requestRevision,
   requestRecheck,
+  instructThread,
   inboxPaths,
   type PlanInput,
   setInboxLabels,
@@ -932,6 +933,110 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
         outcomes: [
           { versions: 2, fields: { text: 'Thursday is taken now; Friday 10:00 works for me.' } },
         ],
+      },
+    });
+    matchesGolden(r);
+  }, 120_000);
+
+  it('ask the agent (item w6O2K): the home agent answers each request once, with a note or the proposal it made, and sets chips', async () => {
+    const r = await scenario(async (call) => {
+      const owner = as('owner');
+      const thread = async (tid: string) =>
+        (await snap(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+      const t1 = out(
+        await call('inbox_add', {
+          source: 'teams',
+          sender: { name: 'Sam Example', handle: 'sam@example.com' },
+          text: 'Looking forward to the review on Thursday.',
+          threadRef: 'review-3',
+          receivedAt: '2026-10-28T09:00:00Z',
+        }),
+      ).threadId as string;
+      const ask = async (extra: { text?: string; chip?: string }) => {
+        const p = instructThread(owner.ctx, { threadId: t1, thread: await thread(t1), ...extra });
+        await owner.run(p);
+        return p.eventId;
+      };
+      // Nobody asked: refused.
+      await call('thread_answer_instruction', {
+        threadId: t1,
+        instructionId: 'nope',
+        kind: 'note',
+        note: 'x',
+      });
+      const i1 = await ask({ text: 'Prepare me for the Thursday review.' });
+      await call('thread_read', { threadId: t1 });
+      await call('thread_answer_instruction', { threadId: t1, instructionId: i1, kind: 'note' });
+      await call('thread_answer_instruction', {
+        threadId: t1,
+        instructionId: i1,
+        kind: 'note',
+        note: 'Sam leads it; bring the Q3 numbers.',
+      });
+      // Answered: once only.
+      await call('thread_answer_instruction', {
+        threadId: t1,
+        instructionId: i1,
+        kind: 'ask',
+      });
+      // A chip; answered with the proposal it made (which waits for approval).
+      const i2 = await ask({ chip: 'draft_reply' });
+      const oid = out(
+        await call('outcome_propose', {
+          threadId: t1,
+          type: 'reply',
+          fields: { text: 'Thanks Sam, see you Thursday.' },
+          note: 'You asked for a reply.',
+        }),
+      ).outcomeId as string;
+      await call('thread_answer_instruction', {
+        threadId: t1,
+        instructionId: i2,
+        kind: 'outcome',
+        refId: 'not-there',
+      });
+      await call('thread_answer_instruction', {
+        threadId: t1,
+        instructionId: i2,
+        kind: 'outcome',
+        refId: oid,
+      });
+      await call('thread_suggest_chips', { threadId: t1, chips: ['summarize', 'dance'] });
+      await call('thread_suggest_chips', { threadId: t1, chips: ['summarize', 'recheck'] });
+      await call('thread_read', { threadId: t1 });
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+    ]);
+    expect(r.calls[2]).toMatchObject({
+      out: {
+        instructions: [{ text: 'Prepare me for the Thursday review.', state: 'pending' }],
+        next: expect.stringContaining('thread_answer_instruction'),
+      },
+    });
+    expect(r.calls[11]).toMatchObject({
+      out: {
+        instructions: [
+          {
+            state: 'answered',
+            answer: { kind: 'note', note: 'Sam leads it; bring the Q3 numbers.' },
+          },
+          { chip: 'draft_reply', state: 'answered', answer: { kind: 'outcome' } },
+        ],
+        suggestedChips: ['summarize', 'recheck'],
+        outcomes: [{ state: 'proposed' }],
       },
     });
     matchesGolden(r);

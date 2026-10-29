@@ -190,6 +190,12 @@ var ToolRuns = map[string]Run{
 	"thread_recheck_done": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.ThreadRecheckDone(ctx, a.S("threadId"), a.S("result"), a.SP("note"))
 	},
+	"thread_answer_instruction": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.ThreadAnswerInstruction(ctx, a.S("threadId"), a.S("instructionId"), a.S("kind"), a.SP("refId"), a.SP("note"))
+	},
+	"thread_suggest_chips": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.ThreadSuggestChips(ctx, a.S("threadId"), a.Strings("chips"))
+	},
 	"subject_relate": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.SubjectRelate(ctx, a.S("a"), a.S("b"), a.SP("note"))
 	},

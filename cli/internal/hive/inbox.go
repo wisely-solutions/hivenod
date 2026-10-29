@@ -556,8 +556,45 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 			out["next"] = RecheckNext
 		}
 	}
+	// Ask the agent (item w6O2KOw4ys70TQv9I1xD): the person's requests, oldest first.
+	if len(t.Instructions) > 0 {
+		ids := make([]string, 0, len(t.Instructions))
+		for k := range t.Instructions {
+			ids = append(ids, k)
+		}
+		sort.Slice(ids, func(i, j int) bool {
+			a, b := t.Instructions[ids[i]].At, t.Instructions[ids[j]].At
+			if a != nil && b != nil && !a.Equal(*b) {
+				return a.Before(*b)
+			}
+			return ids[i] < ids[j]
+		})
+		list := make([]map[string]any, 0, len(ids))
+		pending := ""
+		for _, k := range ids {
+			in := t.Instructions[k]
+			row := map[string]any{"instructionId": k, "text": strOrNull(in.Text), "chip": strOrNull(in.Chip), "at": isoPtr(in.At), "state": in.State}
+			if in.Answer != nil {
+				row["answer"] = map[string]any{"kind": in.Answer.Kind, "refId": strOrNull(in.Answer.RefID), "note": strOrNull(in.Answer.Note)}
+			}
+			if in.State == "pending" {
+				pending = k
+			}
+			list = append(list, row)
+		}
+		out["instructions"] = list
+		if pending != "" && t.FetchedBy == c.UID && !carry {
+			out["next"] = fmt.Sprintf(InstructNext, pending)
+		}
+	}
+	if len(t.SuggestedChips) > 0 {
+		out["suggestedChips"] = t.SuggestedChips
+	}
 	return out, nil
 }
+
+// InstructNext is thread_read's next while a request of the person's waits for this agent.
+const InstructNext = "The person asked you something on this thread (instructions, %s): do it within the rules (investigate, then a note, a question, a proposal or a plan; nothing outward without their approval) and answer with thread_answer_instruction."
 
 // labelList is the workspace's label list: the admin's document, else the defaults.
 func (c *Client) labelList(ctx context.Context) ([]string, error) {
@@ -1076,6 +1113,52 @@ func (c *Client) ThreadRecheckDone(ctx context.Context, id, result string, note 
 		"asked":      "Answered: the person sees your question.",
 	}
 	return map[string]any{"threadId": id, "result": result, "checked": r.Checked, "note": notes[result]}, nil
+}
+
+// ThreadAnswerInstruction answers the person's request on a thread (thread_answer_instruction).
+// An outcome or plan answer must name one of this thread's.
+func (c *Client) ThreadAnswerInstruction(ctx context.Context, id, instructionID, kind string, refID, note *string) (map[string]any, error) {
+	if refID != nil && strings.TrimSpace(*refID) != "" && (kind == "outcome" || kind == "plan") {
+		ref := strings.TrimSpace(*refID)
+		if kind == "outcome" {
+			o, err := c.outcome(ctx, ref)
+			if err != nil {
+				return nil, err
+			}
+			if o.ThreadID != id {
+				return nil, Errf(fmt.Sprintf("Outcome %s is on thread %s, not %s.", ref, o.ThreadID, id))
+			}
+		} else {
+			_, p, err := c.planInput(ctx, ref)
+			if err != nil {
+				return nil, err
+			}
+			if p.ThreadID != id {
+				return nil, Errf(fmt.Sprintf("Plan %s is on thread %s, not %s.", ref, p.ThreadID, id))
+			}
+		}
+	}
+	err := c.threadAction(ctx, id, func(t actions.ThreadState) (plan.Plan, error) {
+		return actions.AnswerInstruction(c.actx(), actions.AnswerInstructionInput{ThreadID: id, Thread: t, InstructionID: instructionID, Kind: kind, RefID: refID, Note: note})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"threadId": id, "instructionId": instructionID, "kind": kind, "note": "Answered: the person sees your answer under their request."}, nil
+}
+
+// ThreadSuggestChips sets this agent's chips for a thread (thread_suggest_chips).
+func (c *Client) ThreadSuggestChips(ctx context.Context, id string, chips []string) (map[string]any, error) {
+	if chips == nil {
+		chips = []string{}
+	}
+	err := c.threadAction(ctx, id, func(t actions.ThreadState) (plan.Plan, error) {
+		return actions.SuggestChips(c.actx(), actions.SuggestChipsInput{ThreadID: id, Thread: t, Chips: chips})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"threadId": id, "chips": chips, "note": "Set: the person sees up to 3 chips, yours first."}, nil
 }
 
 // ThreadFlag marks a thread urgent or not (thread_flag).

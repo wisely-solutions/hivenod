@@ -36,6 +36,7 @@ import {
   ExternalLink,
   Forward,
   ListChecks,
+  MessageSquare,
   MessageSquareReply,
   MoreHorizontal,
   Pencil,
@@ -91,6 +92,7 @@ import { ActionMenu } from '../ui/menu';
 import { Dialog, useCountdown, useToast } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
 import { RecheckLine, StaleChip, useRecheck } from '../threads/Recheck';
+import { AskAgentDialog } from '../threads/AskAgent';
 import { waitLabel } from '../inbox/logic';
 import { dayLabel, hhmm, proposalSentence, replaceSlotText, slotOptions, type Slot } from './logic';
 import {
@@ -698,6 +700,8 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
     const [reason, setReason] = useState('');
     const [moreReason, setMoreReason] = useState(false);
     const rc = useRecheck(wid, thread, now, setError);
+    // Ask the agent (item w6O2KOw4ys70TQv9I1xD): from the Other menu where no box is on show.
+    const [askOpen, setAskOpen] = useState(false);
     useEffect(() => {
       if (shown) onShown?.(shown.id);
     }, [shown, onShown]);
@@ -959,8 +963,19 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
           },
         ]
       : [];
+    const askItem = narrow
+      ? []
+      : [
+          {
+            id: 'ask',
+            label: 'Ask the agent…',
+            icon: MessageSquare,
+            onSelect: () => setAskOpen(true),
+          },
+        ];
     const planMenu = [
       ...recheckItem,
+      ...askItem,
       ...(onRemove && !revising
         ? [
             {
@@ -995,6 +1010,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
                 },
               ]),
           ...recheckItem,
+          ...askItem,
           { id: 'ignore', label: 'Ignore thread', icon: Ban, onSelect: () => threadAct('ignore') },
           {
             id: 'close',
@@ -1276,6 +1292,14 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
             onAsk={() => void askAgent()}
           />
         ) : null}
+        <AskAgentDialog
+          open={askOpen}
+          onOpenChange={setAskOpen}
+          wid={wid}
+          thread={thread}
+          now={now}
+          agent={agentName(t.fetchedBy)}
+        />
         <Dialog
           open={rejecting}
           onOpenChange={(o) => {

@@ -26,6 +26,8 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * the old presence expires.
    */
   takeover: '0.2.180',
+  /** Inbox event: the member asked the home agent something on a thread (item w6O2KOw4ys70TQv9I1xD). */
+  instruct: '0.2.184',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */

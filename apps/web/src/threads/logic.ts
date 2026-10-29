@@ -6,6 +6,8 @@ import {
   THREAD_FOR_MEMBER,
   THREAD_OPEN,
   outcomeType,
+  INSTRUCT_CHIP_LABELS,
+  type InstructChip,
   searchSubjects,
   SEARCH_LIMIT,
   type InboxEvent,
@@ -313,6 +315,8 @@ const SHOWN = new Set<string>([
   'relation.created',
   'relation.rejected',
   'relation.removed',
+  'thread.instructed',
+  'thread.instruction_answered',
 ]);
 
 /** Messages and events, oldest first. */
@@ -404,6 +408,18 @@ export function eventText(e: Pick<InboxEvent, 'type' | 'data' | 'actor'>): strin
         ? `${who} cleared the due date`
         : `${who} set it due ${dueText(at)}${q(d.reason)}`;
     }
+    case 'thread.instructed':
+      return d.chip
+        ? `You asked: ${INSTRUCT_CHIP_LABELS[d.chip as InstructChip] ?? String(d.chip)}`
+        : `You asked${q(d.text)}`;
+    case 'thread.instruction_answered':
+      return d.kind === 'ask'
+        ? `${who} answered with a question`
+        : d.kind === 'outcome'
+          ? `${who} answered with a proposal`
+          : d.kind === 'plan'
+            ? `${who} answered with a plan`
+            : `${who} answered${q(d.note)}`;
     case 'relation.proposed':
       return `${who} suggested a related subject${q(d.note)}`;
     case 'relation.accepted':

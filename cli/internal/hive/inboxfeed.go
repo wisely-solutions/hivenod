@@ -102,6 +102,15 @@ type FeedRecheck struct {
 	AtMs int64
 }
 
+// FeedInstruct is a thread of this agent's whose person asked it something (instruct pending,
+// item w6O2KOw4ys70TQv9I1xD).
+type FeedInstruct struct {
+	ThreadID, MemberUID, Title string
+	// ID is the instruction's id; Text or Chip is what they asked.
+	ID, Text, Chip string
+	AtMs           int64
+}
+
 // FeedEvent is an inbox event (the timeline).
 type FeedEvent struct {
 	Type string
@@ -116,6 +125,7 @@ type InboxSource interface {
 	WatchOutcomes(ctx context.Context, on func([]FeedOutcome))
 	WatchRevising(ctx context.Context, on func([]FeedRevise))
 	WatchRechecks(ctx context.Context, on func([]FeedRecheck))
+	WatchInstructs(ctx context.Context, on func([]FeedInstruct))
 	WatchPlans(ctx context.Context, on func([]FeedPlan))
 	WatchRunning(ctx context.Context, on func([]FeedRunning))
 	// ItemState is an item's status ("done", "stopped" for stopped or archived, …); gone: deleted.
@@ -156,6 +166,17 @@ type InboxEventInfo struct {
 	// PlanEnd: how a plan ended for reason rejected ("plan.rejected", "plan.stopped", or a gate's
 	// "outcome.rejected").
 	PlanEnd string `json:"planEnd"`
+	// InstructionID: the person's request (reason instruct; its text is Instruction, a chip Chips[0]).
+	InstructionID string `json:"instructionId"`
+}
+
+// instructChipText is INSTRUCT_CHIP_TEXT: what a chip asks.
+var instructChipText = map[string]string{
+	"prepare_meeting": "Prepare me for the meeting on this thread: who, what it is about, what to bring or decide.",
+	"recheck":         "Check this thread again.",
+	"follow_up":       "They have not answered: propose a follow-up (a nudge) if one makes sense.",
+	"summarize":       "Summarize this thread: where it stands, what was agreed, what is open.",
+	"draft_reply":     "Draft a reply to their last message.",
 }
 
 // reviseChipText is how a chip reads in the event text.
@@ -174,7 +195,7 @@ var inboxTriggers = map[string]string{
 }
 
 var inboxPriority = map[string]int{
-	"carry_out": 0, "item_done": 0, "item_stopped": 1, "answered": 1, "revise": 1, "recheck": 1, "new": 2, "message": 2,
+	"carry_out": 0, "item_done": 0, "item_stopped": 1, "answered": 1, "revise": 1, "recheck": 1, "instruct": 1, "new": 2, "message": 2,
 	"woke": 3, "rejected": 3, "failed": 3, "restored": 3, "resume": 3, "nudge_due": 4,
 }
 
@@ -261,6 +282,15 @@ func InboxText(e InboxEventInfo) string {
 		}
 	case "recheck":
 		lines = append(lines, "The person asked you to check "+t+" again: things may have changed since you proposed (new messages, their calendar, the facts).")
+	case "instruct":
+		asked := ""
+		if len(e.Chips) > 0 {
+			asked = or(instructChipText[e.Chips[0]], e.Chips[0])
+		} else {
+			asked = `"` + clip(e.Instruction, 500) + `"`
+		}
+		lines = append(lines, fmt.Sprintf("The person asked you on %s (request %s): %s", t, or(e.InstructionID, "?"), asked))
+		lines = append(lines, "Treat it as their request on this thread, within the rules: it is not an approval of anything.")
 	}
 	what := "investigate it (inbox_note for what you find, subject_assign if it is not filed, thread_due if a message states a deadline, inbox_ask only if you must), then propose what should come of it (outcome_propose, with your confidence and what you checked)"
 	switch e.Reason {
@@ -281,6 +311,8 @@ func InboxText(e InboxEventInfo) string {
 		what = fmt.Sprintf("revise it with outcome_propose revises=%s (same threadId and type): apply only what they asked and keep the rest; do not reject it or start a new outcome. If you cannot make the change, say why with inbox_ask on the thread", or(e.OutcomeID, "?"))
 	case "recheck":
 		what = "re-read the messages (new ones especially), calendar_free and the context; for each open proposal and each step of a live plan that has not run, keep it or write its next version with outcome_propose revises=<outcomeId> (only what changed), or ask with inbox_ask; then answer with thread_recheck_done (result still_good, revised or asked, with a one-line note)"
+	case "instruct":
+		what = fmt.Sprintf("do what they asked: investigate (inbox_note, calendar_free), then answer with thread_answer_instruction instructionId=%s: kind note (your answer in the note), ask (after inbox_ask), outcome (after outcome_propose, refId its outcomeId) or plan (after plan_propose, refId its planId)", or(e.InstructionID, "?"))
 	case "nudge_due":
 		what = "propose a nudge (outcome_propose, type nudge) if one makes sense, otherwise say why not with inbox_note"
 	}
@@ -299,6 +331,7 @@ type feedDue struct {
 	outcome                           *FeedOutcome
 	revise                            *FeedRevise
 	recheck                           *FeedRecheck
+	instruct                          *FeedInstruct
 	build                             *FeedRunning
 	state                             string
 	updatedAtMs                       *int64
@@ -309,6 +342,7 @@ type feedFlight struct {
 	outcome     bool
 	revise      bool
 	recheck     bool
+	instruct    bool
 	build       bool
 	state       string
 	updatedAtMs *int64
@@ -324,37 +358,40 @@ type InboxFeed struct {
 	perMinute                int
 	nudgeMs, leaseMs, tickMs int64
 
-	mu       sync.Mutex
-	threads  map[string]FeedThread
-	order    []string // thread ids in snapshot order
-	outcomes map[string]FeedOutcome
-	oorder   []string
-	revising map[string]FeedRevise
-	rorder   []string
-	revised  map[string]int64
-	rechecks map[string]FeedRecheck
-	korder   []string
-	recheckd map[string]int64 // thread id -> the request (AtMs) sent
-	plans    map[string]FeedPlan
-	running  map[string]FeedRunning
-	norder   []string
-	items    map[string]string // outcome id -> its item's state ("done", "stopped", "gone", …)
-	checked  map[string]int64  // outcome id -> when its item was last looked at
-	checking map[string]bool
-	built    map[string]string // outcome id -> the item reason sent
-	plansIn  bool              // the first plans snapshot came
-	handled  map[string]string
-	seen     map[string]bool
-	due      map[string]*feedDue
-	nudged   map[string]int64
-	carried  map[string]bool
-	inflight map[string]*feedFlight
-	sent     []int64
-	types    map[string]*FeedEvent
-	fetching map[string]bool
-	wakes    map[string]string
-	closed   bool
-	pumping  bool
+	mu        sync.Mutex
+	threads   map[string]FeedThread
+	order     []string // thread ids in snapshot order
+	outcomes  map[string]FeedOutcome
+	oorder    []string
+	revising  map[string]FeedRevise
+	rorder    []string
+	revised   map[string]int64
+	rechecks  map[string]FeedRecheck
+	korder    []string
+	recheckd  map[string]int64 // thread id -> the request (AtMs) sent
+	instructs map[string]FeedInstruct
+	iorder    []string
+	instructd map[string]string // thread id -> the instruction id sent
+	plans     map[string]FeedPlan
+	running   map[string]FeedRunning
+	norder    []string
+	items     map[string]string // outcome id -> its item's state ("done", "stopped", "gone", …)
+	checked   map[string]int64  // outcome id -> when its item was last looked at
+	checking  map[string]bool
+	built     map[string]string // outcome id -> the item reason sent
+	plansIn   bool              // the first plans snapshot came
+	handled   map[string]string
+	seen      map[string]bool
+	due       map[string]*feedDue
+	nudged    map[string]int64
+	carried   map[string]bool
+	inflight  map[string]*feedFlight
+	sent      []int64
+	types     map[string]*FeedEvent
+	fetching  map[string]bool
+	wakes     map[string]string
+	closed    bool
+	pumping   bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -386,7 +423,7 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &InboxFeed{src: src, push: push, now: now, MaxInbox: o.MaxInbox, perMinute: o.PerMinute,
 		nudgeMs: o.NudgeAfter.Milliseconds(), leaseMs: o.Lease.Milliseconds(), tickMs: o.Tick.Milliseconds(),
-		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, rechecks: map[string]FeedRecheck{}, recheckd: map[string]int64{}, plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, handled: map[string]string{},
+		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, rechecks: map[string]FeedRecheck{}, recheckd: map[string]int64{}, instructs: map[string]FeedInstruct{}, instructd: map[string]string{}, plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, handled: map[string]string{},
 		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{},
 		inflight: map[string]*feedFlight{}, types: map[string]*FeedEvent{}, fetching: map[string]bool{},
 		wakes: map[string]string{}, ctx: ctx, cancel: cancel}
@@ -435,6 +472,7 @@ func (f *InboxFeed) Subscribe() {
 	f.src.WatchOutcomes(sctx, f.OnOutcomes)
 	f.src.WatchRevising(sctx, f.OnRevising)
 	f.src.WatchRechecks(sctx, f.OnRechecks)
+	f.src.WatchInstructs(sctx, f.OnInstructs)
 	f.src.WatchRunning(sctx, f.OnRunning)
 }
 
@@ -554,6 +592,19 @@ func (f *InboxFeed) OnRechecks(rows []FeedRecheck) {
 	f.Evaluate()
 }
 
+// OnInstructs takes a snapshot of this agent's threads with a pending request of the person's.
+func (f *InboxFeed) OnInstructs(rows []FeedInstruct) {
+	f.mu.Lock()
+	f.instructs = map[string]FeedInstruct{}
+	f.iorder = f.iorder[:0]
+	for _, r := range rows {
+		f.instructs[r.ThreadID] = r
+		f.iorder = append(f.iorder, r.ThreadID)
+	}
+	f.mu.Unlock()
+	f.Evaluate()
+}
+
 // Evaluate works out what is due and sends what the cap and rate allow.
 func (f *InboxFeed) Evaluate() {
 	f.mu.Lock()
@@ -569,6 +620,9 @@ func (f *InboxFeed) Evaluate() {
 			over = over || !ok
 		} else if fl.recheck {
 			_, ok := f.rechecks[slot[2:]]
+			over = over || !ok
+		} else if fl.instruct {
+			_, ok := f.instructs[slot[2:]]
 			over = over || !ok
 		} else if fl.build {
 			_, ok := f.running[slot[2:]]
@@ -669,6 +723,27 @@ func (f *InboxFeed) Evaluate() {
 	for slot, d := range f.due {
 		if d.recheck != nil {
 			if cur, ok := f.rechecks[d.recheck.ThreadID]; !ok || cur.AtMs != d.recheck.AtMs {
+				delete(f.due, slot)
+			}
+		}
+	}
+	// Ask the agent (item w6O2KOw4ys70TQv9I1xD): one instruct event per request.
+	for _, id := range f.iorder {
+		in := f.instructs[id]
+		slot := "q:" + in.ThreadID
+		if v, ok := f.instructd[in.ThreadID]; (ok && v == in.ID) || f.due[slot] != nil {
+			continue
+		}
+		rc := in
+		info := InboxEventInfo{Reason: "instruct", ThreadID: in.ThreadID, Title: in.Title, InstructionID: in.ID, Instruction: in.Text}
+		if in.Chip != "" {
+			info.Chips = []string{in.Chip}
+		}
+		f.due[slot] = &feedDue{slot: slot, reason: "instruct", threadID: in.ThreadID, atMs: in.AtMs, memberUID: in.MemberUID, instruct: &rc, info: info}
+	}
+	for slot, d := range f.due {
+		if d.instruct != nil {
+			if cur, ok := f.instructs[d.instruct.ThreadID]; !ok || cur.ID != d.instruct.ID {
 				delete(f.due, slot)
 			}
 		}
@@ -871,6 +946,9 @@ func (f *InboxFeed) pump() []Event {
 		if d.recheck != nil {
 			f.recheckd[d.recheck.ThreadID] = d.recheck.AtMs
 		}
+		if d.instruct != nil {
+			f.instructd[d.instruct.ThreadID] = d.instruct.ID
+		}
 		if d.build != nil {
 			f.built[d.build.ID] = d.reason
 		}
@@ -878,7 +956,7 @@ func (f *InboxFeed) pump() []Event {
 			f.nudged[d.threadID] = *d.updatedAtMs
 		}
 		if !update {
-			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, revise: d.revise != nil, recheck: d.recheck != nil, build: d.build != nil, state: d.state, updatedAtMs: d.updatedAtMs}
+			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, revise: d.revise != nil, recheck: d.recheck != nil, instruct: d.instruct != nil, build: d.build != nil, state: d.state, updatedAtMs: d.updatedAtMs}
 		}
 		f.sent = append(f.sent, f.nowMs())
 		meta := map[string]string{
@@ -893,6 +971,9 @@ func (f *InboxFeed) pump() []Event {
 		}
 		if d.build != nil {
 			meta["outcome_id"], meta["outcome_type"], meta["item_id"] = d.build.ID, d.build.Type, d.build.ItemID
+		}
+		if d.instruct != nil {
+			meta["instruction_id"] = d.instruct.ID
 		}
 		if d.info.PlanID != "" && d.info.Step == "" && d.info.OutcomeID != "" {
 			// The plans may arrive after the step (a fresh listener): look again when it goes out.
@@ -1061,6 +1142,40 @@ func (s firestoreInbox) WatchRechecks(ctx context.Context, on func([]FeedRecheck
 				if at := feedMs(rk["requestedAt"]); at != 0 {
 					r.AtMs = at
 				}
+			}
+			rows = append(rows, r)
+		}
+		on(rows)
+	}, nil)
+}
+
+// WatchInstructs listens to this agent's threads whose person asked it something.
+func (s firestoreInbox) WatchInstructs(ctx context.Context, on func([]FeedInstruct)) {
+	q := s.c.DB.Collection(model.Paths.InboxCollection(s.c.WorkspaceID, "inboxThreads")).
+		Where("fetchedBy", "==", s.c.UID).Where("instruct.state", "==", "pending")
+	go listenQuery(ctx, s.c.recon, q, func(docs []*firestore.DocumentSnapshot) {
+		rows := make([]FeedInstruct, 0, len(docs))
+		for _, d := range docs {
+			m := d.Data()
+			str := func(m map[string]any, k string) string { v, _ := m[k].(string); return v }
+			r := FeedInstruct{ThreadID: d.Ref.ID, MemberUID: str(m, "memberUid"), Title: str(m, "title"), AtMs: feedMs(m["updatedAt"])}
+			if in, ok := m["instruct"].(map[string]any); ok {
+				r.ID = str(in, "id")
+				if at := feedMs(in["at"]); at != 0 {
+					r.AtMs = at
+				}
+			}
+			if all, ok := m["instructions"].(map[string]any); ok {
+				if one, ok := all[r.ID].(map[string]any); ok {
+					r.Text, r.Chip = str(one, "text"), str(one, "chip")
+					// Answered already (the latest state not yet caught up): nothing to send.
+					if str(one, "state") != "pending" {
+						continue
+					}
+				}
+			}
+			if r.ID == "" {
+				continue
 			}
 			rows = append(rows, r)
 		}

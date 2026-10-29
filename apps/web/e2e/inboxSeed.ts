@@ -22,6 +22,8 @@ import {
   proposeOutcome,
   proposePlan,
   recheckDone,
+  answerInstruction,
+  suggestChips,
   reviseOutcome,
   type PlanInput,
   type PlanStepInput,
@@ -177,6 +179,22 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
       });
       await run(p);
       return p.checked;
+    },
+    /** Ask the agent (item w6O2KOw4ys70TQv9I1xD): answers the member's request once. */
+    async answer(tid: string, instructionId: string, kind: string, refId?: string, note?: string) {
+      await run(
+        answerInstruction(ctx, {
+          threadId: tid,
+          thread: await thread(tid),
+          instructionId,
+          kind,
+          refId: refId ?? null,
+          note: note ?? null,
+        }),
+      );
+    },
+    async chips(tid: string, chips: string[]) {
+      await run(suggestChips(ctx, { threadId: tid, thread: await thread(tid), chips }));
     },
     async flag(tid: string, urgent: boolean) {
       await run(flagThread(ctx, { threadId: tid, thread: await thread(tid), urgent }));

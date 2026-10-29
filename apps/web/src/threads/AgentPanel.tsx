@@ -6,7 +6,7 @@
  * proposal and Approve; its handle opens the rest.
  */
 import type { InboxEvent, InboxMessage, InboxOutcome, InboxPlan, InboxThread } from '@hive/shared';
-import { Bot, Check, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
+import { Bot, Check, ChevronDown, ChevronRight, ChevronUp, MessageSquare } from 'lucide-react';
 import { forwardRef, useState, type ReactNode } from 'react';
 import type { Row } from '../lib/live';
 import { effectLines } from '../lib/outcomes';
@@ -19,6 +19,8 @@ import { PlanPanel } from './PlanPanel';
 import { planInputOf, planLive, planWaits } from './plan';
 import { RelatedSubjects } from './RelatedSubjects';
 import { RecheckButton, useRecheck } from './Recheck';
+import { AskAgent } from './AskAgent';
+import { recheckable, staleReason } from '@hive/shared';
 
 export interface AgentPanelProps {
   wid: string;
@@ -43,13 +45,20 @@ function Block({
   title,
   children,
   label,
+  id,
 }: {
   title: ReactNode;
   children: ReactNode;
   label: string;
+  /** An anchor (the Ask the agent answer links to it). */
+  id?: string;
 }) {
   return (
-    <section aria-label={label} className="border-t border-line px-4 py-4 first:border-t-0 sm:px-5">
+    <section
+      id={id}
+      aria-label={label}
+      className="scroll-mt-20 border-t border-line px-4 py-4 first:border-t-0 sm:px-5"
+    >
       <h2 className="mb-2.5 flex items-center gap-2 font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3">
         {title}
       </h2>
@@ -173,6 +182,7 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
 
     const proposal = shown ? (
       <Block
+        id="proposed"
         label="Proposed"
         title={
           <>
@@ -207,8 +217,12 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
     ) : null;
 
     const planBlock = (list: Row<InboxPlan>[]) =>
-      list.map((p) => (
-        <div key={p.id} className="border-t border-line first:border-t-0">
+      list.map((p, i) => (
+        <div
+          key={p.id}
+          id={i === 0 && list === livePlans ? 'plan' : undefined}
+          className="scroll-mt-20 border-t border-line first:border-t-0"
+        >
           <PlanPanel
             wid={wid}
             thread={thread}
@@ -224,12 +238,47 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
       ));
 
     const question = asks ? (
-      <Block title="Agent asks" label="Agent asks">
+      <Block id="agent-asks" title="Agent asks" label="Agent asks">
         <div className="-mt-3">
           <QuestionPanel wid={wid} thread={thread} agentName={agentName} onDone={onDone} />
         </div>
       </Block>
     ) : null;
+
+    // Ask the agent (item w6O2KOw4ys70TQv9I1xD): on every thread, in any state.
+    const staleStep = livePlans.some((p) => {
+      const pl = planInputOf(p, allOutcomes);
+      return allOutcomes.some(
+        (o) =>
+          p.data.steps.includes(o.id) &&
+          recheckable(o.id, o.data, { plan: pl.plan }) &&
+          staleReason(o.data, t, now) !== null,
+      );
+    });
+    const ask = (
+      <Block
+        id="ask-agent"
+        label="Ask the agent"
+        title={
+          <>
+            <Icon icon={MessageSquare} size={13} />
+            Ask the agent
+          </>
+        }
+      >
+        <AskAgent
+          wid={wid}
+          thread={thread}
+          outcomes={allOutcomes.length ? allOutcomes : [...proposals, ...decided]}
+          messages={messages}
+          livePlan={livePlans.length > 0}
+          staleStep={staleStep}
+          now={now}
+          agent={agentName(t.fetchedBy)}
+          rc={rc}
+        />
+      </Block>
+    );
 
     const outcomesAndRelated = (
       <>
@@ -278,6 +327,7 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
             {read}
             {proposal}
             {question}
+            {ask}
             {pastPlans.length ? (
               <div className="border-t border-line">{planBlock(pastPlans)}</div>
             ) : null}
@@ -316,6 +366,7 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
           {question}
           {open ? (
             <>
+              {ask}
               {read}
               {outcomesAndRelated}
             </>
