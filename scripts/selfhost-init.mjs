@@ -102,7 +102,7 @@ const io = {
     if (r.status !== 0 && !r.stdout) throw new Error(`firebase ${args[0]} failed: ${r.stderr}`);
     return r.stdout;
   },
-  build: async (env, site) => {
+  build: async (env) => {
     const run = (cmd, args, extra = {}) =>
       execFileSync(cmd, args, { cwd: root, stdio: 'inherit', env: { ...process.env, ...extra } });
     const out = (cmd, args) =>
@@ -122,16 +122,7 @@ const io = {
       readFileSync(join(root, 'packages/shared/src/protocol.ts'), 'utf8'),
     )?.[1];
     // The CLI downloads under /cli, so agents install from your site; the Go binaries need Go.
-    let cli;
     let cliBin;
-    try {
-      cli = out('node', ['scripts/pack-cli.mjs', commit, 'apps/web/dist/cli', site])
-        .trim()
-        .split('\n')
-        .at(-1);
-    } catch {
-      say('• The npm CLI tarball could not be packed; agents can still use the Go CLI.');
-    }
     try {
       cliBin = out('node', ['scripts/build-cli-bin.mjs', commit, 'apps/web/dist', proto ?? ''])
         .trim()
@@ -146,7 +137,6 @@ const io = {
       join(root, 'apps/web/dist/version.json'),
       `${JSON.stringify({
         commit,
-        ...(cli ? { cli } : {}),
         ...(cliBin ? { cliBin } : {}),
         ...(proto ? { cliProtocol: Number(proto) } : {}),
         deployedAt: new Date().toISOString(),
