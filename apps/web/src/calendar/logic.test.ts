@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { allDayOn, layoutDay, rangeOf, shift, startOfWeek, type CalBlock } from './logic';
+import {
+  allDayOn,
+  freeInWorkHours,
+  hoursText,
+  layoutDay,
+  rangeOf,
+  shift,
+  startOfWeek,
+  weekTotals,
+  type CalBlock,
+} from './logic';
 
 const D = (day: number, h = 0, m = 0) => new Date(2026, 10, day, h, m); // November 2026
 const block = (id: string, s: Date, e: Date, over: Partial<CalBlock> = {}): CalBlock => ({
@@ -59,5 +69,53 @@ describe('layoutDay', () => {
     expect(layoutDay([all], D(2))).toEqual([]);
     expect(allDayOn([all], D(3))).toEqual([all]);
     expect(allDayOn([all], D(4))).toEqual([]);
+  });
+});
+
+describe('free time and totals (item kt3E7, design 2.6)', () => {
+  it('free time in working hours, 30 min at least, around the busy blocks', () => {
+    const blocks = [
+      block('a', D(2, 9), D(2, 9, 30)),
+      block('b', D(2, 9, 20), D(2, 10)), // overlaps a
+      block('c', D(2, 12), D(2, 12, 15)), // leaves 15 min before 12:30
+      block('d', D(2, 12, 30), D(2, 13)),
+      block('e', D(2, 17, 45), D(2, 19)),
+      block('all', D(2), D(3), { allDay: true }),
+    ];
+    const free = freeInWorkHours(blocks, D(2));
+    expect(
+      free.map((s) => [
+        s.start.getHours(),
+        s.start.getMinutes(),
+        s.end.getHours(),
+        s.end.getMinutes(),
+      ]),
+    ).toEqual([
+      [10, 0, 12, 0],
+      [13, 0, 17, 45],
+    ]);
+    // Weekends have no working hours.
+    expect(freeInWorkHours([], D(7))).toEqual([]);
+  });
+
+  it('a week: booked hours (overlaps counted once) and free hours in working hours', () => {
+    const blocks = [
+      block('a', D(2, 9), D(2, 10)),
+      block('b', D(2, 9, 30), D(2, 11)),
+      block('c', D(7, 10), D(7, 12)), // Saturday: booked, but no working hours
+      block('busy', D(3, 14), D(3, 15), { kind: 'busy' }),
+    ];
+    const days = rangeOf('week', D(2)).days;
+    const t = weekTotals(blocks, days);
+    expect(t.bookedMinutes).toBe(120 + 120 + 60);
+    // 5 working days × 9 h, less Mon 09-11 and Tue 14-15.
+    expect(t.freeMinutes).toBe(5 * 9 * 60 - 120 - 60);
+  });
+
+  it('hours as text', () => {
+    expect(hoursText(0)).toBe('0 h');
+    expect(hoursText(30)).toBe('30 min');
+    expect(hoursText(120)).toBe('2 h');
+    expect(hoursText(135)).toBe('2 h 15');
   });
 });

@@ -405,6 +405,16 @@ body:has([data-vaul-drawer]) [role='region'][aria-label='Notifications'] {
   }
 }
 
+/* Calendar events in their organization's colour (item kt3E7): a tint of it, its edge. */
+.cal-event {
+  border-color: color-mix(in srgb, var(--org, var(--agent)) 35%, var(--line));
+  border-left-color: var(--org, var(--agent));
+  background-color: color-mix(in srgb, var(--org, var(--agent)) 13%, var(--surface));
+}
+/* Free time in working hours (item kt3E7): a light green wash. */
+.cal-free {
+  background-color: color-mix(in srgb, var(--approve) 9%, transparent);
+}
 /* Calendar (item w9SAf): busy time shows no details, only a hatched block. */
 .cal-busy {
   background-color: var(--canvas);

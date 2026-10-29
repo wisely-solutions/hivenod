@@ -144,7 +144,8 @@ test('agents fill the calendar; another organization shows only as busy', async 
     await page.goto('/calendar');
     await expect(page.getByRole('heading', { name: 'Calendar', level: 1 })).toBeVisible();
     await page.getByRole('button', { name: 'Day', exact: true }).click();
-    const grid = page.getByRole('region', { name: 'Time grid' });
+    // The week grid, or on a phone the day's agenda (item kt3E7).
+    const grid = page.getByRole('region', { name: /^(Time grid|Agenda)$/ });
 
     // All my calendars: my events everywhere, with details (busy-only stays busy).
     await expect(grid.getByRole('group', { name: /^Team standup, / })).toBeVisible();
