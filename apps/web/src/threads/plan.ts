@@ -10,9 +10,11 @@ import {
   type InboxOutcome,
   type InboxPlan,
   type PlanInput,
+  type PlanStepView,
   type PlanView,
 } from '@hive/shared';
 import type { Row } from '../lib/live';
+import type { Tone } from '../ui/badge';
 import { dayLabel, hhmm } from '../today/logic';
 
 /** A plan with its steps' outcomes, as the plan actions take it. */
@@ -146,3 +148,38 @@ export function planMain(pl: PlanInput): PlanMain {
 export function planWaits(pl: PlanInput): boolean {
   return planMain(pl) !== null;
 }
+
+/** How each step state is drawn: its pill tone, number circle and progress bar segment. */
+export const PILL: Record<PlanStepView['ui'], Tone> = {
+  proposed: 'neutral',
+  revising: 'agent',
+  approved: 'approve',
+  running: 'agent',
+  done: 'approve',
+  waitingForYou: 'gate',
+  blocked: 'sendback',
+  skipped: 'neutral',
+  stopped: 'neutral',
+};
+export const CIRCLE: Record<PlanStepView['ui'], string> = {
+  proposed: 'border-line-strong text-text-2',
+  revising: 'border-dashed border-agent text-agent',
+  approved: 'border-approve text-approve-text',
+  running: 'border-agent text-agent',
+  done: 'border-approve-solid bg-approve-solid text-on-solid',
+  waitingForYou: 'border-gate bg-gate text-on-gate',
+  blocked: 'border-sendback text-sendback',
+  skipped: 'border-line text-text-3 line-through',
+  stopped: 'border-line text-text-3',
+};
+export const BAR: Record<PlanStepView['ui'], string> = {
+  proposed: 'bg-line',
+  revising: 'bg-agent/40',
+  approved: 'border border-approve bg-transparent',
+  running: 'bg-agent',
+  done: 'bg-approve-solid',
+  waitingForYou: 'bg-gate',
+  blocked: 'bg-sendback',
+  skipped: 'bg-line',
+  stopped: 'bg-line',
+};

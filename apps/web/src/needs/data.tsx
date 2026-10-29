@@ -10,6 +10,7 @@ import {
   canEditAgentSettings,
   groupSchema,
   inboxOutcomeSchema,
+  inboxPlanSchema,
   inboxSubjectSchema,
   inboxThreadSchema,
   memberProfileSchema,
@@ -17,6 +18,7 @@ import {
   projectSchema,
   workspaceSchema,
   type InboxOutcome,
+  type InboxPlan,
   type InboxSubject,
   type InboxThread,
   type Item,
@@ -123,6 +125,20 @@ function useExtras(wid: string, uid: string) {
       { synced: true },
     ),
   );
+  // Plans (item qwFAWxZM5xkcE7PPjAzi): a blocked plan waits for the member with nothing proposed.
+  const plans = usePart<InboxPlan>(
+    useLiveQuery(
+      `needs-plans:${wid}:${uid}`,
+      () =>
+        query(
+          collection(db, `workspaces/${wid}/inboxPlans`),
+          where('memberUid', '==', uid),
+          where('state', 'in', ['proposed', 'active', 'blocked']),
+        ),
+      inboxPlanSchema,
+      { synced: true },
+    ),
+  );
   const subjects = usePart<InboxSubject>(
     useLiveQuery(
       `needs-subjects:${wid}:${uid}`,
@@ -138,7 +154,7 @@ function useExtras(wid: string, uid: string) {
     }
     return by;
   }, [subjects.rows]);
-  return { groups, names, threads, proposals, subjectLabels };
+  return { groups, names, threads, proposals, plans, subjectLabels };
 }
 
 /** The organization on screen: the shell already listens to its projects and items. */
@@ -147,7 +163,7 @@ function CurrentOrg({ onOrg }: { onOrg: (wid: string, s: OrgState) => void }) {
   const shell = useShellData();
   const wid = session.workspaceId;
   const uid = session.me.uid;
-  const { groups, names, threads, proposals, subjectLabels } = useExtras(wid, uid);
+  const { groups, names, threads, proposals, plans, subjectLabels } = useExtras(wid, uid);
   const input = useMemo<OrgInput>(
     () => ({
       wid,
@@ -162,10 +178,21 @@ function CurrentOrg({ onOrg }: { onOrg: (wid: string, s: OrgState) => void }) {
       groups: groups.rows,
       threads: threads.rows,
       openOutcomes: proposals.rows,
+      livePlans: plans.rows,
       subjectLabels,
       names,
     }),
-    [wid, session, shell, groups.rows, threads.rows, proposals.rows, subjectLabels, names],
+    [
+      wid,
+      session,
+      shell,
+      groups.rows,
+      threads.rows,
+      proposals.rows,
+      plans.rows,
+      subjectLabels,
+      names,
+    ],
   );
   const settled = !shell.loading && shell.needsSettled && threads.done && proposals.done;
   useEffect(() => onOrg(wid, { input, settled }), [wid, input, settled, onOrg]);
@@ -198,7 +225,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
   const [questions, questionsState, setQs] = useFeedRows<Message>();
   const [proposals, , setProposals] = useFeedRows<StepProposal>();
   const { items, suggestions } = useMemo(() => splitSuggestions(openRows), [openRows]);
-  const { groups, names, threads, proposals: open, subjectLabels } = useExtras(wid, uid);
+  const { groups, names, threads, proposals: open, plans, subjectLabels } = useExtras(wid, uid);
 
   const input = useMemo<OrgInput | null>(
     () =>
@@ -216,6 +243,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
             groups: groups.rows,
             threads: threads.rows,
             openOutcomes: open.rows,
+            livePlans: plans.rows,
             subjectLabels,
             names,
           }
@@ -233,6 +261,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
       groups.rows,
       threads.rows,
       open.rows,
+      plans.rows,
       subjectLabels,
       names,
     ],

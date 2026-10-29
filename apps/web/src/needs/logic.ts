@@ -8,9 +8,11 @@
  * several people (or a group, shown by its name) can.
  */
 import {
+  outcomeKind,
   splitDeciders,
   type Group,
   type InboxOutcome,
+  type InboxPlan,
   type InboxThread,
   type Project,
 } from '@hive/shared';
@@ -36,6 +38,8 @@ export interface OrgInput extends Omit<InboxInput, 'uid'> {
   threads: readonly Row<InboxThread>[];
   /** The member's open outcome proposals (inboxOutcomes at `proposed`), item kt3E7. */
   openOutcomes: readonly Row<InboxOutcome>[];
+  /** The member's live plans (proposed, active, blocked), item qwFAWxZM5xkcE7PPjAzi. */
+  livePlans?: readonly Row<InboxPlan>[];
   /** The labels of the member's subjects, by subject id (subjects without one are left out). */
   subjectLabels?: Readonly<Record<string, { label: string; suggested: boolean }>>;
   /** Display names of the organization's members, by uid. */
@@ -64,6 +68,8 @@ export interface NeedsEntry {
   thread?: Row<InboxThread>;
   /** A thread's open proposals, oldest first (item kt3E7). */
   proposals?: Row<InboxOutcome>[];
+  /** The thread's newest live plan (item qwFAWxZM5xkcE7PPjAzi): the card shows its waiting step. */
+  plan?: Row<InboxPlan>;
   /** A thread whose one proposal is a tidy-up: it goes to the tidy-ups card, not the stack. */
   tidy?: boolean;
   /** The label of the thread's subject, if it has one (item YaOErIjeIFG8Y3EvZuIp). */
@@ -197,8 +203,21 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.no
           (a, b) =>
             a.data.createdAt.toMillis() - b.data.createdAt.toMillis() || (a.id < b.id ? -1 : 1),
         );
-      // Your call with nothing left to decide: approved, the agent carries it out.
-      if (t.data.state === 'yourCall' && proposals.length === 0) continue;
+      const plan = (o.livePlans ?? [])
+        .filter((p) => p.data.threadId === t.id)
+        .sort((a, b) => b.data.createdAt.toMillis() - a.data.createdAt.toMillis())[0];
+      // Your call with nothing left to decide: approved, the agent carries it out. A blocked
+      // plan (a step failed) waits for the member: retry, skip or stop.
+      if (t.data.state === 'yourCall' && proposals.length === 0 && plan?.data.state !== 'blocked')
+        continue;
+      // A plan whose open steps all wait later (an approval step not reached yet) asks nothing now.
+      if (
+        plan &&
+        proposals.length > 0 &&
+        proposals.every((p) => p.data.planId === plan.id) &&
+        !planAsksNow(plan.data, proposals)
+      )
+        continue;
       const tidy =
         t.data.state === 'yourCall' &&
         proposals.length === 1 &&
@@ -216,6 +235,7 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.no
         group: 'inbox',
         thread: t,
         proposals,
+        ...(plan ? { plan } : {}),
         tidy,
         ...(t.data.subjectId && o.subjectLabels?.[t.data.subjectId]
           ? { label: o.subjectLabels[t.data.subjectId] }
@@ -396,4 +416,22 @@ export function orderToday(list: readonly NeedsEntry[], now: number): NeedsEntry
         a.i - b.i,
     )
     .map((x) => x.e);
+}
+
+/**
+ * Whether a live plan asks the member something now (item qwFAWxZM5xkcE7PPjAzi): it is blocked,
+ * or proposed, or its step at the cursor waits, or an agent step can still be approved ahead.
+ * An approval step not reached yet waits for its turn.
+ */
+export function planAsksNow(
+  plan: Pick<InboxPlan, 'state' | 'steps' | 'cursor'>,
+  open: readonly Row<InboxOutcome>[],
+): boolean {
+  if (plan.state === 'blocked' || plan.state === 'proposed') return true;
+  const at = plan.steps[plan.cursor];
+  return open.some(
+    (p) =>
+      p.data.planId &&
+      (p.id === at || (outcomeKind(p.data.type) === 'agent' && p.data.state === 'proposed')),
+  );
 }

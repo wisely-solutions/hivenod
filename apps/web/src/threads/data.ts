@@ -181,6 +181,15 @@ export function useMyRelations(uid: string, wids: readonly string[], enabled = t
   );
 }
 
+/** One thread's outcomes (the Today plan card loads its plan's steps). */
+export function useThreadOutcomes(wid: string, tid: string, uid: string) {
+  return useLiveQuery(
+    `io:${wid}/${tid}/${uid}`,
+    () => threadOutcomesQuery(wid, uid, tid),
+    inboxOutcomeSchema,
+  );
+}
+
 /** One thread with its messages, outcomes, plans and events. */
 export function useThread(wid: string, tid: string, uid: string) {
   // Someone else's thread is refused: say so at once, not after the sign-in retries.
