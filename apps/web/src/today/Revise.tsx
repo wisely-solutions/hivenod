@@ -126,7 +126,7 @@ export function AskBox({
           variant="primary"
           loading={busy}
           disabled={!can}
-          className="max-sm:flex-[2]"
+          className="bg-agent! text-surface! max-sm:flex-[2]"
           leading={<Icon icon={Sparkles} size={15} />}
         >
           Ask agent

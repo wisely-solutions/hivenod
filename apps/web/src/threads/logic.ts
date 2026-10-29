@@ -700,5 +700,39 @@ export function wordDiff(a: string, b: string): DiffPart[] {
   }
   while (i < n) push('del', x[i++]!);
   while (j < m) push('ins', y[j++]!);
+  return grouped(out);
+}
+
+/**
+ * Reads like an edit, not confetti: changes that only a space keeps apart become one removed
+ * run followed by one added run (the space goes into both).
+ */
+function grouped(parts: DiffPart[]): DiffPart[] {
+  const out: DiffPart[] = [];
+  let k = 0;
+  while (k < parts.length) {
+    const p = parts[k]!;
+    if (p.op === 'same') {
+      out.push(p);
+      k++;
+      continue;
+    }
+    let del = '';
+    let ins = '';
+    let end = k;
+    while (end < parts.length) {
+      const q = parts[end]!;
+      if (q.op === 'del') del += q.text;
+      else if (q.op === 'ins') ins += q.text;
+      else if (/^\s+$/.test(q.text) && parts[end + 1] && parts[end + 1]!.op !== 'same') {
+        del += q.text;
+        ins += q.text;
+      } else break;
+      end++;
+    }
+    if (del) out.push({ op: 'del', text: del });
+    if (ins) out.push({ op: 'ins', text: ins });
+    k = end;
+  }
   return out;
 }

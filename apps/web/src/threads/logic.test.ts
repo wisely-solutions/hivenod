@@ -400,6 +400,16 @@ describe('wordDiff (Ask for changes)', () => {
         .join(''),
     ).toBe(b);
   });
+  it('changes only a space apart read as one removed and one added run', () => {
+    expect(wordDiff('so I booked 10:00 to 11:00 in', 'so 10:00 or 14:00 in')).toEqual([
+      { op: 'same', text: 'so ' },
+      { op: 'del', text: 'I booked ' },
+      { op: 'same', text: '10:00 ' },
+      { op: 'del', text: 'to 11:00' },
+      { op: 'ins', text: 'or 14:00' },
+      { op: 'same', text: ' in' },
+    ]);
+  });
   it('gives up on detail for huge texts', () => {
     const big = Array(2500).fill('w').join(' ');
     expect(wordDiff(big, big + ' x').map((p) => p.op)).toEqual(['del', 'ins']);
