@@ -704,11 +704,14 @@ service cloud.firestore {
             && request.resource.data.revokedAt == request.time
             && tracked(wid, request.resource.data.lastEventId, ['agent.revoked']))
           || (signedIn() && aid == me() && isActiveAgent(wid)
-            && changed(['lastSeenAt', 'seenHost', 'cliVersion'])
+            && changed(['lastSeenAt', 'seenHost', 'cliVersion', 'seenSession', 'seenHostId'])
             && request.resource.data.lastSeenAt == request.time
             && strOrNull(request.resource.data.get('seenHost', null), 80)
             // The CLI's own version (item N9EEn), shown on cards and the agent page.
-            && strOrNull(request.resource.data.get('cliVersion', null), 40))
+            && strOrNull(request.resource.data.get('cliVersion', null), 40)
+            // The channel session and its machine (item N0biX): a restart on the same machine takes over.
+            && strOrNull(request.resource.data.get('seenSession', null), 64)
+            && strOrNull(request.resource.data.get('seenHostId', null), 64))
           // Presence: the agent's `hive run` session stopped (shown offline at once).
           || (signedIn() && aid == me() && isActiveAgent(wid)
             && changed(['signedOutAt'])

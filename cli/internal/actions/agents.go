@@ -101,3 +101,39 @@ func LiveTerminal(agent model.Agent, nowMs int64) *Terminal {
 	}
 	return &Terminal{Host: agent.SeenHost, Since: time.UnixMilli(seen).UTC()}
 }
+
+// Presence decisions of a starting channel session (item N0biX).
+const (
+	// PresenceFree: no other live session of this agent.
+	PresenceFree = "free"
+	// PresenceTakeOver: the live presence is an earlier session of this agent on the same machine
+	// (a restart after a crash or kill): the new session takes over at once.
+	PresenceTakeOver = "takeover"
+	// PresenceBusy: another live session on another machine (or one that does not say where it
+	// runs, an older CLI): this session gets no handovers.
+	PresenceBusy = "busy"
+)
+
+// StartDecision is what a starting session with this host id and session id does about the
+// agent's presence (nowMs: Unix ms).
+func StartDecision(agent model.Agent, nowMs int64, hostID, sessionID string) string {
+	if LiveTerminal(agent, nowMs) == nil {
+		return PresenceFree
+	}
+	if agent.SeenSession != nil && *agent.SeenSession == sessionID && sessionID != "" {
+		return PresenceFree // its own presence
+	}
+	if hostID != "" && agent.SeenHostID != nil && *agent.SeenHostID == hostID {
+		return PresenceTakeOver
+	}
+	return PresenceBusy
+}
+
+// TakenOver: a running session (sessionID) sees on its heartbeat that another live session of
+// this agent replaced its presence (item N0biX); it then stops taking work.
+func TakenOver(agent model.Agent, nowMs int64, sessionID string) bool {
+	if sessionID == "" || agent.SeenSession == nil || *agent.SeenSession == "" || *agent.SeenSession == sessionID {
+		return false
+	}
+	return LiveTerminal(agent, nowMs) != nil
+}

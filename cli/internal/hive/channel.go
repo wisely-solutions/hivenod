@@ -533,12 +533,29 @@ func (s *Session) Start(ctx context.Context) error {
 		return err
 	}
 	s.c.SyncServerClock(ctx, s.cfg)
-	if err := s.c.CheckNoOtherTerminal(); err != nil {
+	// Item N0biX: an earlier session of this agent on this machine (a restart after a crash) is
+	// taken over at once; one on another machine still makes this session busy.
+	if sid, _ := s.c.PresenceIdentity(); sid == "" {
+		s.c.SetPresenceIdentity(NewSessionID(), HostID())
+	}
+	decision, live := s.c.StartDecision()
+	switch decision {
+	case actions.PresenceBusy:
+		err := s.c.CheckNoOtherTerminal()
+		if err == nil { // the clock moved on between the two reads
+			break
+		}
 		s.mu.Lock()
 		s.Busy = true
 		s.mu.Unlock()
 		s.info(Message(err)+" One live session per agent: this session gets no handovers from Hivenod. Its tools still work on items you claim yourself.", "busy")
 		return nil
+	case actions.PresenceTakeOver:
+		since := ""
+		if live != nil {
+			since = " (last seen " + live.Since.Local().Format("3:04:05 PM") + ")"
+		}
+		s.info("This session took over from an earlier session of this agent on this machine"+since+": it gets the handovers now.", "takeover")
 	}
 	if s.o.UpdateNotice != nil {
 		go func() {
@@ -550,8 +567,17 @@ func (s *Session) Start(ctx context.Context) error {
 	go func() {
 		t := time.NewTicker(s.o.Presence)
 		defer t.Stop()
-		for {
+		for first := true; ; first = false {
 			pctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+			// The first stamp is this session's (it may take over); later ones first check that
+			// no other session of this agent took over since (item N0biX).
+			if !first {
+				if over, err := s.c.TakenOver(pctx); err == nil && over {
+					cancel()
+					s.takenOver()
+					return
+				}
+			}
 			_ = s.c.MarkSeen(pctx)
 			cancel()
 			select {
@@ -611,10 +637,38 @@ func (s *Session) Stop() {
 		s.cancel()
 		if !busy {
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-			_ = s.c.MarkOffline(ctx)
+			// Never mark offline a session that took over from this one (item N0biX).
+			if over, err := s.c.TakenOver(ctx); err != nil || !over {
+				_ = s.c.MarkOffline(ctx)
+			}
 			cancel()
 		}
 	})
+}
+
+// TakenOverText is the info event of a session another session of the same agent took over.
+const TakenOverText = "Another session of this agent took over on this machine. This session gets no more handovers and no longer holds its items (the new session resumes them): stop working on them. Its tools still work on items you claim yourself."
+
+// takenOver: another session of this agent stamped presence since this one did (item N0biX).
+// This one stops taking work and drops its items; it writes no presence and never marks the
+// agent offline.
+func (s *Session) takenOver() {
+	s.mu.Lock()
+	if s.closed || s.Busy {
+		s.mu.Unlock()
+		return
+	}
+	s.Busy = true
+	for _, h := range s.current {
+		h.cancel()
+	}
+	s.current = nil
+	feed := s.Inbox
+	s.mu.Unlock()
+	if feed != nil {
+		feed.Stop()
+	}
+	s.info(TakenOverText, "taken_over")
 }
 
 func (s *Session) info(text, code string) {
@@ -679,7 +733,8 @@ func (s *Session) look() {
 func (s *Session) full() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.closed || s.active() >= s.o.MaxItems // parked items do not count (item QjTTL)
+	// parked items do not count (item QjTTL); a session taken over takes no more (item N0biX)
+	return s.closed || s.Busy || s.active() >= s.o.MaxItems
 }
 
 func (s *Session) next() error {
@@ -798,7 +853,7 @@ func (s *Session) handOver(row WorkRow) (bool, error) {
 		h.statusDue = s.o.Now().Add(time.Duration(min) * s.o.StatusMinute)
 	}
 	s.mu.Lock()
-	if s.closed {
+	if s.closed || s.Busy {
 		s.mu.Unlock()
 		cancel()
 		return false, nil

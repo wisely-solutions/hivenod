@@ -51,7 +51,7 @@ One real session (`s1`), then more, each printed as `[smoke] CHECK ... PASS`:
 | Work is handed over, already claimed | an item reaches the agent's step; its claim is seen in Firestore with no claim call (the channel offers none)                                    |
 | Complete                             | the model adds a note and calls `complete`; the item moves to Review, claim released                                                             |
 | A note and Stop work arrive          | on a held item a person's note and then Stop work are pushed; the model answers `ACKNOTE` / `ACKSTOP`                                            |
-| A second session is told busy        | a second `claude` as the same agent shows "already running in another terminal"                                                                  |
+| A second session is told busy        | a second `claude` as the same agent (another machine, `HIVENOD_HOST_ID`) shows "already running in another terminal"                             |
 | Quit, then restart                   | `/exit` the first session, add a waiting item (nobody online: unclaimed), start a new session: the item is handed over on reconnect and finished |
 
 Then (card cGSENsRF; item xkQd9: the standing prompt never mentions sub-agents, the hint comes only from the plugin's `hivenod` skill) one session with `HIVENOD_MAX_ITEMS=3` and four items (two finish at once, two

@@ -8,7 +8,8 @@ total. Two settings shape the load, and both are yours.
 - **One main Claude Code session per machine.** It holds up to N items (`--max-items N` or
   `HIVENOD_MAX_ITEMS`, 1 to 10) and runs each item in a background sub-agent of its own. The session
   is the orchestrator; the sub-agents do the work.
-- **One agent token per machine.** An agent token allows one live session. To add capacity, connect
+- **One agent token per machine.** An agent token allows one live session. A restart on the same
+  machine takes over from the old session at once; a session on another machine is told it is busy. To add capacity, connect
   another machine (the Connect page, or `hivenod pair`) and give it its own agent. Machines work
   side by side; they never share a token.
 - **Scale by adding machines, not by raising a cap.** `--max-items` protects one session from

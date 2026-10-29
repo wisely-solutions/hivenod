@@ -303,6 +303,9 @@ export const agentSchema = z.object({
   seenHost: z.string().max(80).optional(),
   /** `hivenod --version` of the CLI that last stamped presence (item N9EEn); absent on older CLIs. */
   cliVersion: z.string().max(40).optional(),
+  /** The channel session that last stamped presence, and a stable id of its machine (item N0biX). */
+  seenSession: z.string().max(64).optional(),
+  seenHostId: z.string().max(64).optional(),
   tokenHint: z.string().max(8),
   previousAgentUid: uid.nullable(),
   /** Optional (card zSzW3LXy); absent means the defaults. */
