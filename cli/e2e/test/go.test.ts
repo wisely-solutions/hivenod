@@ -23,6 +23,8 @@ import {
   relationId,
   approveOutcome,
   inboxPaths,
+  setInboxLabels,
+  setSubjectLabel,
   type OutcomeStateOf,
   type ThreadStateOf,
   type ItemState,
@@ -562,6 +564,73 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
     expect(r.calls[21]).toMatchObject({
       out: { subjects: [{ name: 'Klarna refunds', related: [{ name: 'Klarna payouts' }] }] },
     });
+    matchesGolden(r);
+  }, 120_000);
+
+  it('subject labels (item YaOEr): suggested by the agent from the workspace list, confirmed by the person, never overwritten', async () => {
+    const r = await scenario(async (call) => {
+      const owner = as('owner');
+      const add = async (ref: string) =>
+        out(
+          await call('inbox_add', {
+            source: 'mail',
+            sender: { name: 'Sam Example', handle: 'sam@example.com' },
+            text: `Question ${ref}`,
+            threadRef: ref,
+            receivedAt: '2026-10-28T09:00:00Z',
+          }),
+        ).threadId as string;
+      const t1 = await add('r1');
+      const t2 = await add('r2');
+      const t3 = await add('r3');
+      // The defaults are offered until an admin edits the list.
+      await call('subject_list', {});
+      const s1 = out(
+        await call('subject_assign', { threadId: t1, name: 'Price list', label: 'sales' }),
+      ).subjectId as string;
+      // Not on the list: refused with the allowed values.
+      await call('subject_assign', { threadId: t2, name: 'Login broken', label: 'Marketing' });
+      await call('subject_list', {});
+      // The person confirms; the agent cannot change a confirmed label.
+      await owner.run(
+        setSubjectLabel(owner.ctx, {
+          subjectId: s1,
+          subject: { memberUid: 'owner', name: 'Price list', label: 'Sales' },
+          label: 'Sales',
+        }),
+      );
+      await call('subject_assign', { threadId: t2, subjectId: s1, label: 'Support' });
+      await call('subject_list', {});
+      // An admin edits the list; the agent sees it on its next subject_list and uses it.
+      await owner.run(setInboxLabels(owner.ctx, { labels: ['Deals', 'Tickets'] }));
+      await call('subject_assign', { threadId: t3, name: 'Old label', label: 'Sales' });
+      const s3 = out(
+        await call('subject_assign', { threadId: t3, name: 'Renewal', label: 'deals' }),
+      ).subjectId as string;
+      await call('subject_assign', { threadId: t3, subjectId: s3, label: 'Tickets' });
+      await call('subject_list', {});
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+    ]);
+    expect(r.calls[4]).toMatchObject({ out: { created: true, labelApplied: true } });
+    expect(r.calls[3]).toMatchObject({
+      out: { labels: ['Sales', 'Support', 'Billing', 'Partnership', 'Internal', 'Other'] },
+    });
+    expect(r.calls[7]).toMatchObject({ out: { labelApplied: false } });
     matchesGolden(r);
   }, 120_000);
 

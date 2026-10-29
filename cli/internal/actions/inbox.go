@@ -233,6 +233,8 @@ const (
 	InboxMaxAttachmentName = 200
 	InboxMaxSubjectName    = 120
 	InboxMaxArea           = 60
+	InboxMaxLabel          = 30
+	InboxMaxLabels         = 12
 	InboxMaxTitle          = 200
 	InboxMaxNote           = 8000
 	InboxMaxQuestion       = 4000
@@ -245,6 +247,10 @@ const (
 	InboxMaxOptions        = 4
 	InboxMaxOption         = 80
 )
+
+// DefaultInboxLabels is DEFAULT_INBOX_LABELS: the labels a workspace offers until an admin edits
+// the list (the contract cases and the rules keep the copies equal).
+var DefaultInboxLabels = []string{"Sales", "Support", "Billing", "Partnership", "Internal", "Other"}
 
 // OutcomeConfidence lists how sure an agent may be of an outcome (OUTCOME_CONFIDENCE).
 var OutcomeConfidence = []string{"high", "medium", "low"}
@@ -434,6 +440,18 @@ func cleanArea(area string) (*string, error) {
 		return nil, nil
 	}
 	return &n, nil
+}
+
+// MatchLabel is matchLabel: the listed spelling of a label (matched ignoring case), or "" when
+// it is not listed.
+func MatchLabel(label string, list []string) string {
+	w := strings.ToLower(Collapse(label))
+	for _, l := range list {
+		if strings.ToLower(l) == w {
+			return l
+		}
+	}
+	return ""
 }
 
 // TitleFrom is titleFrom: the first non-empty line, at most 120 characters.
@@ -662,13 +680,25 @@ type AssignSubjectInput struct {
 	SubjectID *string     `json:"subjectId,omitempty"`
 	NewName   *string     `json:"newName,omitempty"`
 	Area      *string     `json:"area,omitempty"`
+	// Label is the agent's suggested label (one of Labels, the workspace list; the defaults when
+	// absent). Existing is the subject's current label state, when it already exists.
+	Label    *string        `json:"label,omitempty"`
+	Labels   []string       `json:"labels,omitempty"`
+	Existing *ExistingLabel `json:"existing,omitempty"`
+}
+
+// ExistingLabel is the label state of a subject a thread is filed under.
+type ExistingLabel struct {
+	Label   *string `json:"label"`
+	LabelBy *string `json:"labelBy"`
 }
 
 // AssignResult is the plan plus the subject it filed under.
 type AssignResult struct {
 	plan.Plan
-	SubjectID string `json:"subjectId"`
-	Created   bool   `json:"created"`
+	SubjectID    string `json:"subjectId"`
+	Created      bool   `json:"created"`
+	LabelApplied bool   `json:"labelApplied"`
 }
 
 // AssignSubject is assignSubject: files a thread under an existing or a new subject.
@@ -701,12 +731,30 @@ func AssignSubject(ctx Ctx, in AssignSubjectInput) (AssignResult, error) {
 	} else {
 		subjectID = ctx.nid()
 	}
+	label := ""
+	if in.Label != nil {
+		list := in.Labels
+		if list == nil {
+			list = DefaultInboxLabels
+		}
+		label = MatchLabel(*in.Label, list)
+		if err := need(label != "", "Unknown label. Use one of: "+strings.Join(list, ", ")+"."); err != nil {
+			return AssignResult{}, err
+		}
+		if !created && in.Existing != nil && in.Existing.Label != nil && *in.Existing.Label != "" {
+			label = ""
+		}
+	}
+	labelFields := map[string]any{"label": label, "labelSuggested": true, "labelBy": "agent"}
 	data := map[string]any{"created": false, "from": strOrNil(t.SubjectID)}
 	if created {
 		data = map[string]any{"name": name, "created": true, "from": strOrNil(t.SubjectID)}
 	}
 	if in.Area != nil {
 		data["area"] = strOrNil(area)
+	}
+	if label != "" {
+		data["label"] = label
 	}
 	p := InboxPlan(ctx, "thread.filed", t.MemberUID, sp(in.ThreadID), sp(subjectID), data, func(eventID string) []plan.Op {
 		var ops []plan.Op
@@ -722,13 +770,27 @@ func AssignSubject(ctx Ctx, in AssignSubjectInput) (AssignResult, error) {
 			if area != nil {
 				d["area"] = *area
 			}
+			if label != "" {
+				for k, v := range labelFields {
+					d[k] = v
+				}
+			}
 			ops = append(ops, plan.Op{Kind: "set", Path: model.Paths.InboxSubject(ctx.WorkspaceID, subjectID), Data: d})
-		} else if in.Area != nil {
-			ops = append(ops, upd(model.Paths.InboxSubject(ctx.WorkspaceID, subjectID), map[string]any{"area": strOrNil(area)}, eventID))
+		} else if in.Area != nil || label != "" {
+			u := map[string]any{}
+			if in.Area != nil {
+				u["area"] = strOrNil(area)
+			}
+			if label != "" {
+				for k, v := range labelFields {
+					u[k] = v
+				}
+			}
+			ops = append(ops, upd(model.Paths.InboxSubject(ctx.WorkspaceID, subjectID), u, eventID))
 		}
 		return append(ops, upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{"subjectId": subjectID}, eventID))
 	}, "")
-	return AssignResult{Plan: p, SubjectID: subjectID, Created: created}, nil
+	return AssignResult{Plan: p, SubjectID: subjectID, Created: created, LabelApplied: label != ""}, nil
 }
 
 // ThreadTextInput is the input of addThreadNote (Text) and retitleThread (Title).

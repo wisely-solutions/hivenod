@@ -1,0 +1,776 @@
+{
+  "calls": [
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "imd6494c82c5b6be3711cc014a",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "it9a33789ec88739ec22ba5440"
+      }
+    },
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "im2fba2b73b7a62a2174234ef2",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "itb479a395b71bf4dfed23d0f7"
+      }
+    },
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "im13c477325771389b24f5d407",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "it01f86384d4d2f64d340fad11"
+      }
+    },
+    {
+      "tool": "subject_list",
+      "ok": true,
+      "out": {
+        "labels": [
+          "Sales",
+          "Support",
+          "Billing",
+          "Partnership",
+          "Internal",
+          "Other"
+        ],
+        "member": "owner",
+        "subjects": [],
+        "unfiled": 3
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": true,
+      "out": {
+        "created": true,
+        "labelApplied": true,
+        "name": "Price list",
+        "note": "Filed under a new subject \"Price list\".",
+        "subjectId": "<id>",
+        "threadId": "it9a33789ec88739ec22ba5440"
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": false,
+      "out": "Unknown label. Use one of: Sales, Support, Billing, Partnership, Internal, Other."
+    },
+    {
+      "tool": "subject_list",
+      "ok": true,
+      "out": {
+        "labels": [
+          "Sales",
+          "Support",
+          "Billing",
+          "Partnership",
+          "Internal",
+          "Other"
+        ],
+        "member": "owner",
+        "subjects": [
+          {
+            "area": null,
+            "forYou": 0,
+            "label": "Sales",
+            "labelSuggested": true,
+            "name": "Price list",
+            "open": 1,
+            "subjectId": "<id>"
+          }
+        ],
+        "unfiled": 2
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": true,
+      "out": {
+        "created": false,
+        "labelApplied": false,
+        "labelNote": "The subject already has a label, so yours was not applied.",
+        "name": "Price list",
+        "note": "Filed under \"Price list\".",
+        "subjectId": "<id>",
+        "threadId": "itb479a395b71bf4dfed23d0f7"
+      }
+    },
+    {
+      "tool": "subject_list",
+      "ok": true,
+      "out": {
+        "labels": [
+          "Sales",
+          "Support",
+          "Billing",
+          "Partnership",
+          "Internal",
+          "Other"
+        ],
+        "member": "owner",
+        "subjects": [
+          {
+            "area": null,
+            "forYou": 0,
+            "label": "Sales",
+            "labelSuggested": false,
+            "name": "Price list",
+            "open": 2,
+            "subjectId": "<id>"
+          }
+        ],
+        "unfiled": 1
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": false,
+      "out": "Unknown label. Use one of: Deals, Tickets."
+    },
+    {
+      "tool": "subject_assign",
+      "ok": true,
+      "out": {
+        "created": true,
+        "labelApplied": true,
+        "name": "Renewal",
+        "note": "Filed under a new subject \"Renewal\".",
+        "subjectId": "<id>",
+        "threadId": "it01f86384d4d2f64d340fad11"
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": true,
+      "out": {
+        "created": false,
+        "labelApplied": false,
+        "labelNote": "The subject already has a label, so yours was not applied.",
+        "name": "Renewal",
+        "note": "Filed under \"Renewal\".",
+        "subjectId": "<id>",
+        "threadId": "it01f86384d4d2f64d340fad11"
+      }
+    },
+    {
+      "tool": "subject_list",
+      "ok": true,
+      "out": {
+        "labels": [
+          "Deals",
+          "Tickets"
+        ],
+        "member": "owner",
+        "subjects": [
+          {
+            "area": null,
+            "forYou": 0,
+            "label": "Sales",
+            "labelSuggested": false,
+            "name": "Price list",
+            "open": 2,
+            "subjectId": "<id>"
+          },
+          {
+            "area": null,
+            "forYou": 0,
+            "label": "Deals",
+            "labelSuggested": true,
+            "name": "Renewal",
+            "open": 1,
+            "subjectId": "<id>"
+          }
+        ],
+        "unfiled": 0
+      }
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      }
+    ],
+    "workspaces/w1/inboxSubjects": [
+      {
+        "createdAt": "<ts>",
+        "createdBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "label": "Deals",
+        "labelBy": "agent",
+        "labelSuggested": true,
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "name": "Renewal",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "createdBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "label": "Sales",
+        "labelBy": "member",
+        "labelSuggested": false,
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "name": "Price list",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/inboxThreads": [
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "01f86384d4d2f64d340fad11"
+        ],
+        "state": "investigating",
+        "subjectId": "<id>",
+        "title": "Question r3",
+        "updatedAt": "<ts>",
+        "waiting": null
+      },
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "9a33789ec88739ec22ba5440"
+        ],
+        "state": "investigating",
+        "subjectId": "<id>",
+        "title": "Question r1",
+        "updatedAt": "<ts>",
+        "waiting": null
+      },
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "b479a395b71bf4dfed23d0f7"
+        ],
+        "state": "investigating",
+        "subjectId": "<id>",
+        "title": "Question r2",
+        "updatedAt": "<ts>",
+        "waiting": null
+      }
+    ],
+    "workspaces/w1/inboxMessages": [
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "mail",
+        "text": "Question r1",
+        "threadId": "it9a33789ec88739ec22ba5440",
+        "threadRef": "r1"
+      },
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "mail",
+        "text": "Question r2",
+        "threadId": "itb479a395b71bf4dfed23d0f7",
+        "threadRef": "r2"
+      },
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "mail",
+        "text": "Question r3",
+        "threadId": "it01f86384d4d2f64d340fad11",
+        "threadRef": "r3"
+      }
+    ],
+    "workspaces/w1/inboxEvents": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "created": false,
+          "from": "<id>"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "it01f86384d4d2f64d340fad11",
+        "type": "thread.filed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "created": false,
+          "from": null
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itb479a395b71bf4dfed23d0f7",
+        "type": "thread.filed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "created": true,
+          "from": null,
+          "label": "Deals",
+          "name": "Renewal"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "it01f86384d4d2f64d340fad11",
+        "type": "thread.filed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "created": true,
+          "from": null,
+          "label": "Sales",
+          "name": "Price list"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "it9a33789ec88739ec22ba5440",
+        "type": "thread.filed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "im13c477325771389b24f5d407",
+          "newThread": true,
+          "sender": "Sam Example",
+          "source": "mail"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it01f86384d4d2f64d340fad11",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "im2fba2b73b7a62a2174234ef2",
+          "newThread": true,
+          "sender": "Sam Example",
+          "source": "mail"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "itb479a395b71bf4dfed23d0f7",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "imd6494c82c5b6be3711cc014a",
+          "newThread": true,
+          "sender": "Sam Example",
+          "source": "mail"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it9a33789ec88739ec22ba5440",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "from": "Sales",
+          "label": "Sales"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": null,
+        "type": "subject.label"
+      }
+    ],
+    "workspaces/w1/projects": [
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      },
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      }
+    ],
+    "workspaces/w1/projects/p1/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      },
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": {
+          "approvals": {},
+          "rejections": {},
+          "stepId": "review"
+        },
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "waiting",
+        "stepId": "review",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects/p2/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ]
+  }
+}

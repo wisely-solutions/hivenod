@@ -35,9 +35,10 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome: a person's Hivenod 
                            sets the deadline a message states (ISO 8601 with its offset), or clears it
   hivenod subject list [--member UID]
                            the person's subjects, with threads waiting for them and open
-  hivenod subject assign THREAD (--subject-id S | --name "Topic (client)") [--area "Client A"]
+  hivenod subject assign THREAD (--subject-id S | --name "Topic (client)") [--area "Client A"] [--label Sales]
                            files a thread under an existing or a new subject; --area sets
-                           its area or tag ("" clears it)
+                           its area or tag ("" clears it); --label suggests one of the
+                           workspace's labels (see subject list)
   hivenod subject search ["words"] [--member UID] [--waiting] [--active-days N] [--has-open] [--limit N]
                            finds subjects by name, people, channel and thread text
   hivenod subject relate SUBJECT SUBJECT [--note "how"]
@@ -72,7 +73,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
@@ -214,6 +215,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 		opt(a, "subjectId", "subject-id")
 		opt(a, "name", "name")
 		opt(a, "area", "area")
+		opt(a, "label", "label")
 	case "outcome propose":
 		tool = "outcome_propose"
 		t := actions.OutcomeTypeOf(*str["type"])
