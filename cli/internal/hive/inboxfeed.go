@@ -151,7 +151,7 @@ func InboxText(e InboxEventInfo) string {
 	case "carry_out":
 		lines = append(lines, fmt.Sprintf("The person approved a %s outcome (outcome %s) on thread %s.", or(e.OutcomeType, "?"), or(e.OutcomeID, "?"), e.ThreadID))
 	}
-	what := "investigate it (inbox_note for what you find, subject_assign if it is not filed, inbox_ask only if you must), then propose what should come of it (outcome_propose)"
+	what := "investigate it (inbox_note for what you find, subject_assign if it is not filed, thread_due if a message states a deadline, inbox_ask only if you must), then propose what should come of it (outcome_propose, with your confidence and what you checked)"
 	switch e.Reason {
 	case "carry_out":
 		what = fmt.Sprintf("carry out outcome %s exactly as approved (its fields, as the person left them), then report it with outcome_done", or(e.OutcomeID, "?"))

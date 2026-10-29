@@ -63,6 +63,7 @@ import {
   inboxMessageKey,
   inboxThreadKey,
   flagThread,
+  dueThread,
   proposeRelation,
   relationId,
   searchSubjects,
@@ -1505,6 +1506,15 @@ function build(): ContractCase[] {
   askM('ignored', AGENT, { question: 'x', thread: TH({ state: 'ignored' }) });
   askM('empty', AGENT, { question: '' });
   askM('person refused', HUMAN, { question: 'x' });
+  // Answer chips (item kt3E7u9EliL3q2veDDI0)
+  askM('with options', AGENT, {
+    question: 'Thursday or Friday?',
+    options: [' Thursday ', 'Friday'],
+  });
+  askM('no options', AGENT, { question: 'Which day?', options: [] });
+  askM('five options', AGENT, { question: 'x', options: ['a', 'b', 'c', 'd', 'e'] });
+  askM('blank option', AGENT, { question: 'x', options: ['a', '  '] });
+  askM('option too long', AGENT, { question: 'x', options: ['é'.repeat(81)] });
   const title = text('retitleThread', retitleThread);
   title('plain', AGENT, { title: '  Review   on Thursday ' });
   title('empty', AGENT, { title: '   ' });
@@ -1568,6 +1578,16 @@ function build(): ContractCase[] {
   propose('note too long', AGENT, { note: 'n'.repeat(2001) });
   propose('ignored thread', AGENT, { thread: TH({ state: 'ignored' }) });
   propose('person refused', HUMAN, {});
+  // Confidence and checks (item kt3E7u9EliL3q2veDDI0)
+  propose('high confidence with checks', AGENT, {
+    confidence: 'high',
+    checks: ['  Your calendar: Thu 10:00-11:00 free ', 'Asked Rita by mail: either works'],
+  });
+  propose('low confidence, no checks', AGENT, { confidence: 'low', checks: [] });
+  propose('bad confidence', AGENT, { confidence: 'sure' });
+  propose('seven checks', AGENT, { checks: Array.from({ length: 7 }, (_, i) => `c${i}`) });
+  propose('blank check', AGENT, { checks: [' '] });
+  propose('check too long', AGENT, { checks: ['c'.repeat(201)] });
   const OC = (over: Partial<OutcomeStateOf> = {}): OutcomeStateOf => ({
     memberUid: 'joao',
     threadId: 'it1',
@@ -1674,6 +1694,26 @@ function build(): ContractCase[] {
   flag('urgent with a reason', AGENT, { reason: '  Production is down ' });
   flag('not urgent', AGENT, { urgent: false, reason: '  ' });
   flag('reason too long', AGENT, { reason: 'r'.repeat(1001) });
+  // Due dates (thread_due, item kt3E7u9EliL3q2veDDI0)
+  const due = (name: string, actor: Actor, input: Partial<Parameters<typeof dueThread>[1]>) =>
+    act(
+      `dueThread/${name}`,
+      'dueThread',
+      actor,
+      {
+        threadId: 'it1',
+        thread: TH({ subjectId: 's1' }),
+        due: '2026-10-30T12:00:00+01:00',
+        ...input,
+      },
+      dueThread,
+    );
+  due('set with a reason', AGENT, { reason: '  Sam: by Friday noon ' });
+  due('fractional seconds', AGENT, { due: '2026-10-30T12:00:00.1239Z' });
+  due('cleared', AGENT, { due: null, reason: ' ' });
+  due('not iso', AGENT, { due: 'Friday' });
+  due('no offset', AGENT, { due: '2026-10-30T12:00:00' });
+  due('reason too long', AGENT, { reason: 'r'.repeat(1001) });
   // Related subjects and search (item 4PEHr, scope addition 2026-10-28)
   const J = { memberUid: 'joao' };
   const relate = (

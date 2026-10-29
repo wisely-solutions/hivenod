@@ -80,6 +80,7 @@ export const INBOX_EVENT_TYPES = [
   // agents and the member
   'thread.titled',
   'thread.flagged',
+  'thread.due',
   // the member
   'thread.answered',
   'thread.ignored',
@@ -128,7 +129,17 @@ export const INBOX_LIMITS = {
   resultText: 20_000,
   refs: 50,
   relationNote: 500,
+  /** Outcome checks (what the agent verified): count, then characters each. */
+  checks: 6,
+  check: 200,
+  /** Answer chips on a question: count, then characters each. */
+  options: 4,
+  option: 80,
 } as const;
+
+/** How sure the agent is of a proposed outcome (item kt3E7u9EliL3q2veDDI0). */
+export const OUTCOME_CONFIDENCE = ['high', 'medium', 'low'] as const;
+export type OutcomeConfidence = (typeof OUTCOME_CONFIDENCE)[number];
 
 const by = z.object({ type: z.enum(['human', 'agent']), id: z.string() });
 
@@ -158,6 +169,8 @@ export const inboxThreadSchema = z.object({
       at: timestamp,
       answer: z.string().nullable(),
       answeredAt: timestamp.nullable(),
+      /** Answer chips: tapping one answers with its text. Absent on older questions. */
+      options: z.array(z.string()).max(INBOX_LIMITS.options).optional(),
     })
     .nullable(),
   title: z.string().max(INBOX_LIMITS.title),
@@ -168,6 +181,8 @@ export const inboxThreadSchema = z.object({
   fetchedBy: z.string(),
   /** Urgent (thread_flag): the member is pinged at once. Absent means false. */
   urgent: z.boolean().optional(),
+  /** A deadline stated in the thread (thread_due), or null when cleared. Absent at first. */
+  due: timestamp.nullable().optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
@@ -202,6 +217,10 @@ export const inboxOutcomeSchema = z.object({
   state: z.enum(OUTCOME_STATES),
   /** The agent's why, for the member. */
   note: z.string().max(INBOX_LIMITS.outcomeNote),
+  /** How sure the agent is; absent on older outcomes (no meter). */
+  confidence: z.enum(OUTCOME_CONFIDENCE).optional(),
+  /** What the agent verified, one line each; absent on older outcomes. */
+  checks: z.array(z.string().max(INBOX_LIMITS.check)).max(INBOX_LIMITS.checks).optional(),
   proposedBy: z.string(),
   /** The agent that carries it out; null when it takes effect on approval. */
   executor: z.string().nullable(),
@@ -346,6 +365,23 @@ export function titleFrom(text: string): string {
   const first = text.split('\n').find((l) => l.trim() !== '') ?? '';
   return first.trim().replace(/\s+/g, ' ').slice(0, 120);
 }
+/** A list of short lines (checks, options): trimmed, each 1..each characters, at most max. */
+function cleanLines(
+  what: string,
+  v: readonly unknown[] | null | undefined,
+  max: number,
+  each: number,
+): string[] {
+  if (v === null || v === undefined) return [];
+  need(Array.isArray(v), `${what} is a list of texts.`);
+  need(v.length <= max, `At most ${max} ${what}.`);
+  return v.map((e) => {
+    const t = typeof e === 'string' ? e.trim() : '';
+    need(t.length > 0 && t.length <= each, `Each of the ${what} is 1-${each} characters.`);
+    return t;
+  });
+}
+const ISO_OFFSET = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/;
 function liveThread(t: ThreadStateOf) {
   need(t.state !== 'ignored', 'This thread was ignored: bring it back first.');
 }
@@ -597,23 +633,38 @@ export function addThreadNote(
 /** The agent asks the member (inbox_ask): the thread goes to Needs you until they answer. */
 export function askMember(
   ctx: ActionContext,
-  input: { threadId: string; thread: ThreadStateOf; question: string },
+  input: {
+    threadId: string;
+    thread: ThreadStateOf;
+    question: string;
+    /** Up to 4 answer chips (item kt3E7u9EliL3q2veDDI0). */
+    options?: readonly string[] | null;
+  },
 ): ActionPlan {
   requireAgent(ctx);
   const t = input.thread;
   liveThread(t);
   const text = cleanText('The question', input.question, INBOX_LIMITS.question);
+  const options = cleanLines('options', input.options, INBOX_LIMITS.options, INBOX_LIMITS.option);
+  const opt = options.length > 0 ? { options } : {};
   return inboxPlan(
     ctx,
     'thread.asked',
     { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
-    { text },
+    { text, ...opt },
     (eventId) => [
       upd(
         inboxPaths.thread(ctx.workspaceId, input.threadId),
         {
           state: 'needsYou',
-          question: { text, by: ctx.actor.id, at: SERVER_TIME, answer: null, answeredAt: null },
+          question: {
+            text,
+            by: ctx.actor.id,
+            at: SERVER_TIME,
+            answer: null,
+            answeredAt: null,
+            ...opt,
+          },
         },
         eventId,
       ),
@@ -631,6 +682,10 @@ export function proposeOutcome(
     fields: Readonly<Record<string, unknown>>;
     note?: string;
     outcomeId?: string;
+    /** How sure the agent is (item kt3E7u9EliL3q2veDDI0); absent: no meter. */
+    confidence?: string | null;
+    /** What the agent verified, at most 6 lines of 1-200 characters. */
+    checks?: readonly string[] | null;
   },
 ): ActionPlan & { outcomeId: string } {
   requireAgent(ctx);
@@ -647,6 +702,12 @@ export function proposeOutcome(
   }
   const note = (input.note ?? '').trim();
   need(note.length <= INBOX_LIMITS.outcomeNote, tooLong('The note', INBOX_LIMITS.outcomeNote));
+  const conf = input.confidence ?? null;
+  need(
+    conf === null || (OUTCOME_CONFIDENCE as readonly string[]).includes(conf),
+    'The confidence is high, medium or low.',
+  );
+  const checks = cleanLines('checks', input.checks, INBOX_LIMITS.checks, INBOX_LIMITS.check);
   const outcomeId = input.outcomeId ?? nid(ctx);
   const p = inboxPlan(
     ctx,
@@ -664,6 +725,8 @@ export function proposeOutcome(
           fields,
           state: 'proposed',
           note,
+          ...(conf !== null ? { confidence: conf } : {}),
+          ...(checks.length > 0 ? { checks } : {}),
           proposedBy: ctx.actor.id,
           executor: type!.executor === 'agent' ? t.fetchedBy : null,
           decision: null,
@@ -818,6 +881,43 @@ export function flagThread(
     (eventId) => [
       upd(inboxPaths.thread(ctx.workspaceId, input.threadId), { urgent: input.urgent }, eventId),
     ],
+  );
+}
+
+/**
+ * Sets or clears a thread's deadline (thread_due; its agent or its member, item
+ * kt3E7u9EliL3q2veDDI0): an ISO 8601 time with its offset, or null. The Today page ranks by it.
+ */
+export function dueThread(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf; due: string | null; reason?: string | null },
+): ActionPlan {
+  if (ctx.actor.type === 'human') owner(ctx, input.thread.memberUid);
+  let due: Date | null = null;
+  if (input.due !== null) {
+    const s = typeof input.due === 'string' ? input.due.trim() : '';
+    const ms = Date.parse(s);
+    need(
+      ISO_OFFSET.test(s) && !Number.isNaN(ms),
+      'The due date is an ISO 8601 time with its offset, e.g. 2026-11-03T12:00:00Z.',
+    );
+    due = new Date(ms);
+  }
+  const reason = input.reason?.trim() || null;
+  need(
+    reason === null || reason.length <= INBOX_LIMITS.reason,
+    tooLong('The reason', INBOX_LIMITS.reason),
+  );
+  return inboxPlan(
+    ctx,
+    'thread.due',
+    {
+      memberUid: input.thread.memberUid,
+      threadId: input.threadId,
+      subjectId: input.thread.subjectId,
+    },
+    { due: due ? due.toISOString() : null, reason },
+    (eventId) => [upd(inboxPaths.thread(ctx.workspaceId, input.threadId), { due }, eventId)],
   );
 }
 

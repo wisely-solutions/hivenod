@@ -268,6 +268,7 @@ const SHOWN = new Set<string>([
   'subject.split',
   'subject.area',
   'thread.flagged',
+  'thread.due',
   'relation.proposed',
   'relation.accepted',
   'relation.created',
@@ -296,6 +297,20 @@ export function timeline(
 
 const typeLabel = (t: unknown) => outcomeType(String(t))?.label ?? String(t);
 const q = (s: unknown) => (typeof s === 'string' && s ? `: “${s}”` : '');
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pad2 = (n: number) => String(n).padStart(2, '0');
+/** A deadline in the browser's zone: "Fri 30 Oct 12:00" (item kt3E7u9EliL3q2veDDI0). */
+export function dueText(ms: number): string {
+  const d = new Date(ms);
+  return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** The word for an outcome's confidence (absent on older outcomes: no meter). */
+export function confidenceText(c: string | null | undefined): 'Sure' | 'Likely' | 'Unsure' | null {
+  return c === 'high' ? 'Sure' : c === 'medium' ? 'Likely' : c === 'low' ? 'Unsure' : null;
+}
 
 /** One line for a timeline event. */
 export function eventText(e: Pick<InboxEvent, 'type' | 'data' | 'actor'>): string {
@@ -342,6 +357,12 @@ export function eventText(e: Pick<InboxEvent, 'type' | 'data' | 'actor'>): strin
       return d.area ? `You set the area to “${String(d.area)}”` : 'You cleared the area';
     case 'thread.flagged':
       return d.urgent ? `${who} marked it urgent${q(d.reason)}` : `${who} marked it not urgent`;
+    case 'thread.due': {
+      const at = typeof d.due === 'string' ? Date.parse(d.due) : NaN;
+      return Number.isNaN(at)
+        ? `${who} cleared the due date`
+        : `${who} set it due ${dueText(at)}${q(d.reason)}`;
+    }
     case 'relation.proposed':
       return `${who} suggested a related subject${q(d.note)}`;
     case 'relation.accepted':

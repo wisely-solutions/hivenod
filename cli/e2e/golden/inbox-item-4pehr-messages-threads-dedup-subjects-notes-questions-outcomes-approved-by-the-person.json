@@ -217,6 +217,7 @@
       "tool": "thread_read",
       "ok": true,
       "out": {
+        "due": null,
         "fetchedBy": "<agent>",
         "fetchedByMe": true,
         "member": "owner",
@@ -285,6 +286,8 @@
         "next": "Carry out the approved outcome exactly as approved (its fields, as the person left them), then report it with outcome_done.",
         "outcomes": [
           {
+            "checks": [],
+            "confidence": null,
             "decision": {
               "edited": true,
               "reason": null
@@ -303,6 +306,7 @@
         ],
         "question": {
           "answer": "Thursday",
+          "options": [],
           "text": "Thursday or Friday?"
         },
         "state": "yourCall",
@@ -421,6 +425,7 @@
       "tool": "thread_read",
       "ok": true,
       "out": {
+        "due": null,
         "fetchedBy": "<agent>",
         "fetchedByMe": true,
         "member": "owner",
@@ -509,6 +514,8 @@
         "next": "Investigate: read the messages and the subject's other threads, note what you find (inbox_note), ask the person if you must (inbox_ask), then propose what should come of it (outcome_propose).",
         "outcomes": [
           {
+            "checks": [],
+            "confidence": null,
             "decision": {
               "edited": true,
               "reason": null
@@ -530,6 +537,8 @@
             "type": "reply"
           },
           {
+            "checks": [],
+            "confidence": null,
             "decision": {
               "edited": false,
               "reason": null
@@ -548,6 +557,7 @@
         ],
         "question": {
           "answer": "Thursday",
+          "options": [],
           "text": "Thursday or Friday?"
         },
         "state": "investigating",

@@ -108,14 +108,26 @@ func TestInboxCommands(t *testing.T) {
 		{"subject", "assign", "it1", "--name", "A", "--subject-id", "s1"},
 		{"outcome", "propose", "it1"},
 		{"outcome", "done", "o1", "--status", "maybe"},
+		// thread due (item kt3E7): a time or --clear, not both, not neither
+		{"thread", "due", "it1"},
+		{"thread", "due", "it1", "2026-10-30T12:00:00Z", "--clear"},
+		{"thread", "due", "it1", "2026-10-30T12:00:00Z", "extra"},
 	} {
 		if code, _, errs := call(args...); code != 2 || !strings.Contains(errs, "hivenod inbox add") {
 			t.Errorf("%v: %d %q", args, code, errs)
 		}
 	}
 	// Valid arguments go on to connect: without a token that fails plainly.
-	if code, _, errs := call("inbox", "list"); code != 1 || !strings.Contains(errs, "hivenod:") {
-		t.Errorf("list without a token: %d %q", code, errs)
+	for _, args := range [][]string{
+		{"inbox", "list"},
+		{"thread", "due", "it1", "2026-10-30T12:00:00Z", "--reason", "Friday noon"},
+		{"thread", "due", "it1", "--clear"},
+		{"inbox", "ask", "it1", "--text", "Thu or Fri?", "--option", "Thu", "--option", "Fri"},
+		{"outcome", "propose", "it1", "--type", "no_reply", "--confidence", "high", "--check", "An FYI"},
+	} {
+		if code, _, errs := call(args...); code != 1 || !strings.Contains(errs, "hivenod:") {
+			t.Errorf("%v without a token: %d %q", args, code, errs)
+		}
 	}
 	if code, out, _ := call(); code != 0 || !strings.Contains(out, "hivenod inbox") {
 		t.Fatal("main help mentions inbox")

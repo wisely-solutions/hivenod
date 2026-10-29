@@ -1,0 +1,741 @@
+{
+  "calls": [
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "im64fde152a327b04e96e993da",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "it90863b52d802ff177333eb8b"
+      }
+    },
+    {
+      "tool": "thread_due",
+      "ok": true,
+      "out": {
+        "due": "<iso>",
+        "note": "Due date set: the person sees it ranked by it in Today.",
+        "threadId": "it90863b52d802ff177333eb8b"
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": "<iso>",
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "im64fde152a327b04e96e993da",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "mail",
+            "text": "Please sign off the price list by Friday noon.",
+            "threadRef": "price-1"
+          }
+        ],
+        "next": "Investigate: read the messages and the subject's other threads, note what you find (inbox_note), ask the person if you must (inbox_ask), then propose what should come of it (outcome_propose).",
+        "outcomes": [],
+        "question": null,
+        "state": "investigating",
+        "subject": null,
+        "threadId": "it90863b52d802ff177333eb8b",
+        "timeline": [],
+        "title": "Please sign off the price list by Friday noon.",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "thread_due",
+      "ok": true,
+      "out": {
+        "due": null,
+        "note": "No due date any more.",
+        "threadId": "it90863b52d802ff177333eb8b"
+      }
+    },
+    {
+      "tool": "thread_due",
+      "ok": false,
+      "out": "The due date is an ISO 8601 time with its offset, e.g. <iso>."
+    },
+    {
+      "tool": "thread_due",
+      "ok": false,
+      "out": "due is an ISO 8601 time with its offset, or null to clear it."
+    },
+    {
+      "tool": "thread_due",
+      "ok": false,
+      "out": "Thread nope not found."
+    },
+    {
+      "tool": "thread_due",
+      "ok": true,
+      "out": {
+        "due": "<iso>",
+        "note": "Due date set: the person sees it ranked by it in Today.",
+        "threadId": "it90863b52d802ff177333eb8b"
+      }
+    },
+    {
+      "tool": "inbox_ask",
+      "ok": false,
+      "out": "MCP error -32602: Input validation error: Invalid arguments for tool inbox_ask: options: at most 4 entries"
+    },
+    {
+      "tool": "inbox_ask",
+      "ok": true,
+      "out": {
+        "note": "Asked. The thread waits in Needs you; the answer shows in thread_read.",
+        "state": "needsYou",
+        "threadId": "it90863b52d802ff177333eb8b"
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": "<iso>",
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "im64fde152a327b04e96e993da",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "mail",
+            "text": "Please sign off the price list by Friday noon.",
+            "threadRef": "price-1"
+          }
+        ],
+        "next": "Waiting for the person's answer to your question.",
+        "outcomes": [],
+        "question": {
+          "answer": null,
+          "options": [
+            "Sign as is",
+            "Ask for 3%"
+          ],
+          "text": "Sign as is, or ask for the 3% discount first?"
+        },
+        "state": "needsYou",
+        "subject": null,
+        "threadId": "it90863b52d802ff177333eb8b",
+        "timeline": [
+          {
+            "at": "<iso>",
+            "by": "agent",
+            "text": "Sign as is, or ask for the 3% discount first?",
+            "type": "thread.asked"
+          }
+        ],
+        "title": "Please sign off the price list by Friday noon.",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": true,
+      "out": {
+        "note": "Proposed. It waits for the person to approve, edit or reject it; nothing is carried out before.",
+        "outcomeId": "<id>",
+        "state": "proposed",
+        "threadId": "it90863b52d802ff177333eb8b",
+        "type": "reply"
+      }
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": false,
+      "out": "MCP error -32602: Input validation error: Invalid arguments for tool outcome_propose: confidence: must be one of \"high\", \"medium\", \"low\""
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": false,
+      "out": "MCP error -32602: Input validation error: Invalid arguments for tool outcome_propose: checks: at most 6 entries"
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": "<iso>",
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "im64fde152a327b04e96e993da",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "mail",
+            "text": "Please sign off the price list by Friday noon.",
+            "threadRef": "price-1"
+          }
+        ],
+        "next": "Waiting for the person to approve, edit or reject the proposed outcomes.",
+        "outcomes": [
+          {
+            "checks": [
+              "Last year: 3% for early sign-off",
+              "Your answer: ask for 3%"
+            ],
+            "confidence": "high",
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "text": "Could you do 3% off? Then I sign today."
+            },
+            "note": "You asked for the discount first.",
+            "outcomeId": "<id>",
+            "result": null,
+            "state": "proposed",
+            "type": "reply"
+          }
+        ],
+        "question": {
+          "answer": "Ask for 3%",
+          "options": [
+            "Sign as is",
+            "Ask for 3%"
+          ],
+          "text": "Sign as is, or ask for the 3% discount first?"
+        },
+        "state": "yourCall",
+        "subject": null,
+        "threadId": "it90863b52d802ff177333eb8b",
+        "timeline": [
+          {
+            "at": "<iso>",
+            "by": "agent",
+            "text": "Sign as is, or ask for the 3% discount first?",
+            "type": "thread.asked"
+          },
+          {
+            "at": "<iso>",
+            "by": "human",
+            "text": "Ask for 3%",
+            "type": "thread.answered"
+          }
+        ],
+        "title": "Please sign off the price list by Friday noon.",
+        "urgent": false,
+        "waiting": null
+      }
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      }
+    ],
+    "workspaces/w1/inboxThreads": [
+      {
+        "createdAt": "<ts>",
+        "due": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": {
+          "answer": "Ask for 3%",
+          "answeredAt": "<ts>",
+          "at": "<ts>",
+          "by": "<agent>",
+          "options": [
+            "Sign as is",
+            "Ask for 3%"
+          ],
+          "text": "Sign as is, or ask for the 3% discount first?"
+        },
+        "refs": [
+          "90863b52d802ff177333eb8b"
+        ],
+        "state": "yourCall",
+        "subjectId": null,
+        "title": "Please sign off the price list by Friday noon.",
+        "updatedAt": "<ts>",
+        "waiting": null
+      }
+    ],
+    "workspaces/w1/inboxMessages": [
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "mail",
+        "text": "Please sign off the price list by Friday noon.",
+        "threadId": "it90863b52d802ff177333eb8b",
+        "threadRef": "price-1"
+      }
+    ],
+    "workspaces/w1/inboxOutcomes": [
+      {
+        "checks": [
+          "Last year: 3% for early sign-off",
+          "Your answer: ask for 3%"
+        ],
+        "confidence": "high",
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {
+          "text": "Could you do 3% off? Then I sign today."
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "You asked for the discount first.",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "proposed",
+        "threadId": "it90863b52d802ff177333eb8b",
+        "type": "reply",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/inboxEvents": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "im64fde152a327b04e96e993da",
+          "newThread": true,
+          "sender": "Sam Example",
+          "source": "mail"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it90863b52d802ff177333eb8b",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "due": "<iso>",
+          "reason": "Friday noon"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it90863b52d802ff177333eb8b",
+        "type": "thread.due"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "due": "<iso>",
+          "reason": null
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it90863b52d802ff177333eb8b",
+        "type": "thread.due"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "due": null,
+          "reason": null
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it90863b52d802ff177333eb8b",
+        "type": "thread.due"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "fields": {
+            "text": "Could you do 3% off? Then I sign today."
+          },
+          "outcomeId": "<id>",
+          "type": "reply"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it90863b52d802ff177333eb8b",
+        "type": "outcome.proposed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "options": [
+            "Sign as is",
+            "Ask for 3%"
+          ],
+          "text": "Sign as is, or ask for the 3% discount first?"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it90863b52d802ff177333eb8b",
+        "type": "thread.asked"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "answer": "Ask for 3%",
+          "question": "Sign as is, or ask for the 3% discount first?"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it90863b52d802ff177333eb8b",
+        "type": "thread.answered"
+      }
+    ],
+    "workspaces/w1/projects": [
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      },
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      }
+    ],
+    "workspaces/w1/projects/p1/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      },
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": {
+          "approvals": {},
+          "rejections": {},
+          "stepId": "review"
+        },
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "waiting",
+        "stepId": "review",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects/p2/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ]
+  }
+}

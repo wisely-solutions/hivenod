@@ -14,6 +14,7 @@ import {
   askMember,
   assignSubject,
   closeThread,
+  dueThread,
   finishOutcome,
   flagThread,
   ignoreThread,
@@ -458,6 +459,171 @@ describe('urgent threads (thread_flag)', () => {
         }),
       ),
     );
+  });
+});
+
+describe('decision data (item kt3E7): confidence, checks, due dates, answer chips', () => {
+  it('an agent proposes with confidence and checks; not with a bad confidence or 7 checks', async () => {
+    await started();
+    const a = as(AGENTS.a);
+    const p = proposeOutcome(a.ctx, {
+      threadId: 'itr1',
+      thread: await thread(),
+      type: 'reply',
+      fields: { text: 'Thursday works.' },
+      confidence: 'high',
+      checks: ['Your calendar: Thu 10:00-11:00 free', 'Asked Rita by mail: either works'],
+    });
+    const forge = (over: Record<string, unknown>) =>
+      a.run(
+        p.ops.map((op) =>
+          op.path === O(p.outcomeId) ? { ...op, data: { ...op.data, ...over } } : op,
+        ),
+      );
+    await denied(forge({ confidence: 'certain' }));
+    await denied(forge({ checks: Array.from({ length: 7 }, (_, i) => `check ${i}`) }));
+    await denied(forge({ checks: 'all of them' }));
+    await denied(forge({ score: 5 }));
+    await ok(a.run(p));
+    expect(await outcome(p.outcomeId)).toMatchObject({
+      state: 'proposed',
+      confidence: 'high',
+      checks: ['Your calendar: Thu 10:00-11:00 free', 'Asked Rita by mail: either works'],
+    });
+    // The member still approves it as before.
+    const alice = as('alice');
+    await ok(
+      alice.run(
+        approveOutcome(alice.ctx, {
+          outcomeId: p.outcomeId,
+          outcome: await outcome(p.outcomeId),
+          thread: await thread(),
+        }),
+      ),
+    );
+    expect((await outcome(p.outcomeId)).state).toBe('approved');
+  });
+
+  it('its agents and its member set and clear a due date, only with a thread.due event', async () => {
+    const a = await started();
+    await ok(
+      a.run(
+        dueThread(a.ctx, {
+          threadId: 'itr1',
+          thread: await thread(),
+          due: '2026-10-30T12:00:00Z',
+          reason: 'Sam asked for Friday noon',
+        }),
+      ),
+    );
+    expect((await snap(T('itr1'))).due).toEqual(
+      Timestamp.fromMillis(Date.parse('2026-10-30T12:00:00Z')),
+    );
+    const alice = as('alice');
+    await ok(
+      alice.run(dueThread(alice.ctx, { threadId: 'itr1', thread: await thread(), due: null })),
+    );
+    expect(await snap(T('itr1'))).toMatchObject({ due: null });
+    await ok(
+      alice.run(
+        dueThread(alice.ctx, {
+          threadId: 'itr1',
+          thread: await thread(),
+          due: '2026-11-02T09:00:00Z',
+        }),
+      ),
+    );
+    const when = new Date('2026-11-03T09:00:00Z');
+    // Not without its event, not with another event type, not as text, not with other fields.
+    await denied(a.run(raw(a, T('itr1'), { due: when }, 'thread.flagged', { urgent: true })));
+    await denied(a.run(raw(a, T('itr1'), { due: 'Friday' }, 'thread.due')));
+    await denied(a.run(raw(a, T('itr1'), { due: when, state: 'done' }, 'thread.due')));
+    await denied(
+      a.run([{ kind: 'update', path: T('itr1'), data: { due: when, updatedAt: SERVER_TIME } }]),
+    );
+    const bob = as('bob');
+    await denied(bob.run(raw(bob, T('itr1'), { due: when }, 'thread.due', {}, 'bob')));
+    await denied(
+      as(AGENTS.revoked).run(
+        dueThread(as(AGENTS.revoked).ctx, { threadId: 'itr1', thread: await thread(), due: null }),
+      ),
+    );
+    await ok(a.run(raw(a, T('itr1'), { due: when }, 'thread.due', { due: when.toISOString() })));
+  });
+
+  it('an agent asks with up to 4 options; the member answers by changing only the answer', async () => {
+    const a = await started();
+    const ask = async (options: string[]) =>
+      askMember(a.ctx, {
+        threadId: 'itr1',
+        thread: await thread(),
+        question: 'Thursday or Friday?',
+        options,
+      });
+    const five = await ask(['a', 'b', 'c', 'd']);
+    await denied(
+      a.run(
+        five.ops.map((op) =>
+          op.path === T('itr1')
+            ? {
+                ...op,
+                data: {
+                  ...op.data,
+                  question: {
+                    ...(op.data as { question: object }).question,
+                    options: ['a', 'b', 'c', 'd', 'e'],
+                  },
+                },
+              }
+            : op,
+        ),
+      ),
+    );
+    await denied(
+      a.run(
+        five.ops.map((op) =>
+          op.path === T('itr1')
+            ? {
+                ...op,
+                data: {
+                  ...op.data,
+                  question: { ...(op.data as { question: object }).question, extra: true },
+                },
+              }
+            : op,
+        ),
+      ),
+    );
+    await ok(a.run(await ask(['Thursday', 'Friday'])));
+    expect(await thread()).toMatchObject({
+      state: 'needsYou',
+      question: { text: 'Thursday or Friday?', options: ['Thursday', 'Friday'], answer: null },
+    });
+    const alice = as('alice');
+    const q = (await snap(T('itr1'))).question as Record<string, unknown>;
+    const answer = (over: Record<string, unknown>) =>
+      raw(
+        alice,
+        T('itr1'),
+        {
+          state: 'investigating',
+          question: { ...q, answer: 'Friday', answeredAt: SERVER_TIME, ...over },
+        },
+        'thread.answered',
+        { question: q.text, answer: 'Friday' },
+      );
+    await denied(alice.run(answer({ text: 'Something else?' })));
+    await denied(alice.run(answer({ options: ['Friday'] })));
+    await denied(alice.run(answer({ by: 'alice' })));
+    await ok(
+      alice.run(
+        answerQuestion(alice.ctx, { threadId: 'itr1', thread: await thread(), answer: 'Friday' }),
+      ),
+    );
+    expect(await thread()).toMatchObject({
+      state: 'investigating',
+      question: { options: ['Thursday', 'Friday'], answer: 'Friday' },
+    });
   });
 });
 

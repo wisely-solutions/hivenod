@@ -565,6 +565,106 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
     matchesGolden(r);
   }, 120_000);
 
+  it('decision data (item kt3E7): confidence and checks, due dates, answer chips', async () => {
+    const r = await scenario(async (call) => {
+      const owner = as('owner');
+      const thread = async (tid: string) =>
+        (await snap(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+      const t1 = out(
+        await call('inbox_add', {
+          source: 'mail',
+          sender: { name: 'Sam Example', handle: 'sam@example.com' },
+          text: 'Please sign off the price list by Friday noon.',
+          threadRef: 'price-1',
+          receivedAt: '2026-10-28T09:00:00Z',
+        }),
+      ).threadId as string;
+      // Due dates (thread_due): set, read back, cleared; refused when bad.
+      await call('thread_due', {
+        threadId: t1,
+        due: '2026-10-30T12:00:00+01:00',
+        reason: 'Friday noon',
+      });
+      await call('thread_read', { threadId: t1 });
+      await call('thread_due', { threadId: t1, due: null });
+      await call('thread_due', { threadId: t1, due: 'Friday' });
+      await call('thread_due', { threadId: t1, due: 5 });
+      await call('thread_due', { threadId: 'nope', due: null });
+      await call('thread_due', { threadId: t1, due: '2026-10-30T12:00:00Z' });
+      // Answer chips: up to 4; the person answers with one.
+      await call('inbox_ask', {
+        threadId: t1,
+        question: 'Sign as is, or ask for the 3% discount first?',
+        options: ['Sign as is', 'Ask for 3%', 'x', 'y', 'z'],
+      });
+      await call('inbox_ask', {
+        threadId: t1,
+        question: 'Sign as is, or ask for the 3% discount first?',
+        options: [' Sign as is ', 'Ask for 3%'],
+      });
+      await call('thread_read', { threadId: t1 });
+      await owner.run(
+        answerQuestion(owner.ctx, { threadId: t1, thread: await thread(t1), answer: 'Ask for 3%' }),
+      );
+      // Confidence and checks on a proposal.
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'reply',
+        fields: { text: 'Could you do 3% off? Then I sign today.' },
+        note: 'You asked for the discount first.',
+        confidence: 'high',
+        checks: ['Last year: 3% for early sign-off', 'Your answer: ask for 3%'],
+      });
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'no_reply',
+        fields: {},
+        confidence: 'sure',
+      });
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'no_reply',
+        fields: {},
+        checks: ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+      });
+      await call('thread_read', { threadId: t1 });
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+    ]);
+    expect(r.calls[2]).toMatchObject({ out: { due: '<iso>' } });
+    expect(r.calls[10]).toMatchObject({
+      out: { question: { options: ['Sign as is', 'Ask for 3%'], answer: null } },
+    });
+    expect(r.calls[14]).toMatchObject({
+      out: {
+        due: '<iso>',
+        outcomes: [
+          {
+            confidence: 'high',
+            checks: ['Last year: 3% for early sign-off', 'Your answer: ask for 3%'],
+          },
+        ],
+      },
+    });
+    matchesGolden(r);
+  }, 120_000);
+
   it('errors: gate, not claimed, wrong run, unknown item, oversized file, bad progress', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hive-att-'));
     const big = join(dir, 'big.txt');

@@ -2,6 +2,8 @@ import type { InboxEvent, InboxMessage, InboxSubject, InboxThread } from '@hive/
 import { describe, expect, it } from 'vitest';
 import {
   bookedText,
+  confidenceText,
+  dueText,
   editedFields,
   eventText,
   findSubjectRows,
@@ -234,5 +236,26 @@ describe('areas and quiet subjects', () => {
       ],
     )[0]!;
     expect(isQuiet(after, 60, NOW)).toBe(false);
+  });
+
+  it('decision data (item kt3E7): due dates and confidence', () => {
+    const at = new Date(2026, 9, 30, 12, 0).getTime();
+    expect(dueText(at)).toBe('Fri 30 Oct 12:00');
+    const ev = (data: Record<string, unknown>, human = false) =>
+      ({
+        actor: human
+          ? { type: 'human', id: 'u', name: 'U' }
+          : { type: 'agent', id: 'a', name: 'Desk agent' },
+        type: 'thread.due',
+        data,
+      }) as unknown as InboxEvent;
+    expect(eventText(ev({ due: new Date(at).toISOString(), reason: 'Sam: Friday noon' }))).toBe(
+      'Desk agent set it due Fri 30 Oct 12:00: “Sam: Friday noon”',
+    );
+    expect(eventText(ev({ due: null, reason: null }, true))).toBe('You cleared the due date');
+    expect(confidenceText('high')).toBe('Sure');
+    expect(confidenceText('medium')).toBe('Likely');
+    expect(confidenceText('low')).toBe('Unsure');
+    expect(confidenceText(undefined)).toBeNull();
   });
 });

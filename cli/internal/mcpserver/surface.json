@@ -652,6 +652,36 @@
         }
       },
       {
+        "name": "thread_due",
+        "description": "Set the deadline a thread's messages state (\"by Friday noon\", \"before the 3rd\"): the person's Today ranks threads by it, and one due within 24 hours comes first. due: null clears it. Set it only from what they wrote, never a guess.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "due": {
+              "description": "The deadline: ISO 8601 with its offset, e.g. 2026-11-03T12:00:00+01:00; null clears it"
+            },
+            "reason": {
+              "description": "Where the deadline comes from, in one line",
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          "required": [
+            "threadId",
+            "due"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "subject_relate",
         "description": "Propose that two subjects of the same person are related (the same client, project or problem seen from two sides), with an optional note saying how. It is a proposal: the person OKs or turns it down, and a link turned down is not proposed again. Related subjects show on each other's page and in subject_search.",
         "inputSchema": {
@@ -712,7 +742,7 @@
       },
       {
         "name": "inbox_ask",
-        "description": "Ask the person a question about a thread when only they can answer it. The thread waits in their Needs you; the answer shows in thread_read and the thread comes back for you to go on.",
+        "description": "Ask the person a question about a thread when only they can answer it. The thread waits in their Needs you; the answer shows in thread_read and the thread comes back for you to go on. Give up to 4 short options when the answer is one of a few (\"Thursday\", \"Friday\"): the person answers with one tap, or writes their own.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -725,6 +755,16 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 4000
+            },
+            "options": {
+              "description": "Up to 4 answer chips, 1-80 characters each",
+              "type": "array",
+              "maxItems": 4,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              }
             }
           },
           "required": [
@@ -739,7 +779,7 @@
       },
       {
         "name": "outcome_propose",
-        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
+        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. note: 1-2 sentences, why this outcome; the person reads it first. confidence: high only when you verified every fact the outcome relies on, low when you are guessing what they want. checks: what you verified, one line each (\"Your calendar: Thu 10:00-11:00 free\"). no_reply, ignore and snooze proposed with high confidence are approved by the person in one batch. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -776,9 +816,28 @@
               "description": "The type's fields"
             },
             "note": {
-              "description": "Why you propose it, for the person",
+              "description": "Why you propose it, in 1-2 sentences: the person reads it first",
               "type": "string",
               "maxLength": 2000
+            },
+            "confidence": {
+              "description": "How sure you are: high only when you verified every fact it relies on; low when you are guessing",
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            "checks": {
+              "description": "What you verified, one line each (at most 6)",
+              "type": "array",
+              "maxItems": 6,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
             }
           },
           "required": [
@@ -2231,6 +2290,36 @@
         }
       },
       {
+        "name": "thread_due",
+        "description": "Set the deadline a thread's messages state (\"by Friday noon\", \"before the 3rd\"): the person's Today ranks threads by it, and one due within 24 hours comes first. due: null clears it. Set it only from what they wrote, never a guess.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "due": {
+              "description": "The deadline: ISO 8601 with its offset, e.g. 2026-11-03T12:00:00+01:00; null clears it"
+            },
+            "reason": {
+              "description": "Where the deadline comes from, in one line",
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          "required": [
+            "threadId",
+            "due"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "subject_relate",
         "description": "Propose that two subjects of the same person are related (the same client, project or problem seen from two sides), with an optional note saying how. It is a proposal: the person OKs or turns it down, and a link turned down is not proposed again. Related subjects show on each other's page and in subject_search.",
         "inputSchema": {
@@ -2291,7 +2380,7 @@
       },
       {
         "name": "inbox_ask",
-        "description": "Ask the person a question about a thread when only they can answer it. The thread waits in their Needs you; the answer shows in thread_read and the thread comes back for you to go on.",
+        "description": "Ask the person a question about a thread when only they can answer it. The thread waits in their Needs you; the answer shows in thread_read and the thread comes back for you to go on. Give up to 4 short options when the answer is one of a few (\"Thursday\", \"Friday\"): the person answers with one tap, or writes their own.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2304,6 +2393,16 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 4000
+            },
+            "options": {
+              "description": "Up to 4 answer chips, 1-80 characters each",
+              "type": "array",
+              "maxItems": 4,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              }
             }
           },
           "required": [
@@ -2318,7 +2417,7 @@
       },
       {
         "name": "outcome_propose",
-        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
+        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. note: 1-2 sentences, why this outcome; the person reads it first. confidence: high only when you verified every fact the outcome relies on, low when you are guessing what they want. checks: what you verified, one line each (\"Your calendar: Thu 10:00-11:00 free\"). no_reply, ignore and snooze proposed with high confidence are approved by the person in one batch. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2355,9 +2454,28 @@
               "description": "The type's fields"
             },
             "note": {
-              "description": "Why you propose it, for the person",
+              "description": "Why you propose it, in 1-2 sentences: the person reads it first",
               "type": "string",
               "maxLength": 2000
+            },
+            "confidence": {
+              "description": "How sure you are: high only when you verified every fact it relies on; low when you are guessing",
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            "checks": {
+              "description": "What you verified, one line each (at most 6)",
+              "type": "array",
+              "maxItems": 6,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
             }
           },
           "required": [

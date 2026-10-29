@@ -31,6 +31,8 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome: a person's Hivenod 
   hivenod thread wake ID   wakes a snoozed thread whose date has come
   hivenod thread flag ID [--off] [--reason R]
                            marks a thread urgent (the person is pinged at once), or not with --off
+  hivenod thread due ID ISO [--reason R] | hivenod thread due ID --clear
+                           sets the deadline a message states (ISO 8601 with its offset), or clears it
   hivenod subject list [--member UID]
                            the person's subjects, with threads waiting for them and open
   hivenod subject assign THREAD (--subject-id S | --name "Topic (client)") [--area "Client A"]
@@ -41,9 +43,13 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome: a person's Hivenod 
   hivenod subject relate SUBJECT SUBJECT [--note "how"]
                            proposes two related subjects (the person OKs it)
   hivenod inbox note THREAD --text T      an investigation note on the timeline
-  hivenod inbox ask THREAD --text Q       asks the person (the thread waits in Needs you)
+  hivenod inbox ask THREAD --text Q [--option O]...
+                           asks the person (the thread waits in Needs you); up to 4
+                           --option answer chips
   hivenod outcome propose THREAD --type T [--field name=value]... [--note N]
-                           proposes an outcome (types: ` + outcomeTypeList() + `)
+                          [--confidence high|medium|low] [--check C]...
+                           proposes an outcome (types: ` + outcomeTypeList() + `);
+                           --check: what you verified, up to 6
   hivenod outcome done OUTCOME --status done|failed [--text T] [--permalink URL] [--item-id I] [--error E]
                            after carrying out an outcome the person approved
 
@@ -66,15 +72,18 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
 	waiting := fs.Bool("waiting", false, "")
 	hasOpen := fs.Bool("has-open", false, "")
 	off := fs.Bool("off", false, "")
-	var fields multi
+	clear := fs.Bool("clear", false, "")
+	var fields, checks, options multi
 	fs.Var(&fields, "field", "")
+	fs.Var(&checks, "check", "")
+	fs.Var(&options, "option", "")
 	fs.Bool("json", true, "")
 	var pos []string
 	rest := args[2:]
@@ -140,6 +149,9 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 			tool, a["text"] = "inbox_note", *str["text"]
 		} else {
 			tool, a["question"] = "inbox_ask", *str["text"]
+			if len(options) > 0 {
+				a["options"] = anyList(options)
+			}
 		}
 	case "thread read", "thread wake":
 		if id == "" {
@@ -154,6 +166,17 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 			return usage()
 		}
 		tool, a["threadId"], a["urgent"] = "thread_flag", id, !*off
+		opt(a, "reason", "reason")
+	case "thread due":
+		if id == "" || (len(pos) == 2) == *clear || len(pos) > 2 {
+			return usage()
+		}
+		tool, a["threadId"] = "thread_due", id
+		if *clear {
+			a["due"] = nil
+		} else {
+			a["due"] = pos[1]
+		}
 		opt(a, "reason", "reason")
 	case "subject search":
 		tool = "subject_search"
@@ -215,6 +238,10 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 		}
 		a["threadId"], a["type"], a["fields"] = id, *str["type"], f
 		opt(a, "note", "note")
+		opt(a, "confidence", "confidence")
+		if len(checks) > 0 {
+			a["checks"] = anyList(checks)
+		}
 	case "outcome done":
 		tool = "outcome_done"
 		if id == "" || (*str["status"] != "done" && *str["status"] != "failed") {
@@ -253,4 +280,13 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, hive.JSON(res))
 	return 0
+}
+
+// anyList is a repeated flag as a JSON array argument.
+func anyList(m multi) []any {
+	out := make([]any, len(m))
+	for i, v := range m {
+		out[i] = v
+	}
+	return out
 }

@@ -20,7 +20,14 @@ import { Button } from '../ui/button';
 import { Input, Textarea, Toggle } from '../ui/form';
 import { useCountdown, useToast } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
-import { bookedText, editedFields, formValues, fromLocalInput, toLocalInput } from './logic';
+import {
+  bookedText,
+  confidenceText,
+  editedFields,
+  formValues,
+  fromLocalInput,
+  toLocalInput,
+} from './logic';
 import { errorText, when } from './parts';
 
 const STATE_TEXT: Record<InboxOutcome['state'], string> = {
@@ -150,6 +157,19 @@ export function OutcomeCard({
         </span>
       </div>
       {outcome.note ? <p className="mb-3 text-14 text-text-2">{outcome.note}</p> : null}
+      <Confidence value={outcome.confidence} />
+      {outcome.checks?.length ? (
+        <ul data-checks="" aria-label="What the agent checked" className="mb-3 flex flex-col gap-1">
+          {outcome.checks.map((c, i) => (
+            <li key={i} className="flex gap-2 text-13 text-text-2">
+              <span aria-hidden="true" className="text-approve-text">
+                ✓
+              </span>
+              <span>{c}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="flex flex-col gap-3">
         {Object.entries(t?.fields ?? {}).map(([k, f]) => (
           <FieldView
@@ -214,6 +234,29 @@ export function OutcomeCard({
         </div>
       ) : null}
     </article>
+  );
+}
+
+const BARS = { high: 3, medium: 2, low: 1 } as const;
+
+/** How sure the agent is: a word plus a 3-bar meter; nothing for older outcomes. */
+function Confidence({ value }: { value: InboxOutcome['confidence'] }) {
+  const word = confidenceText(value);
+  if (!word || !value) return null;
+  const n = BARS[value];
+  return (
+    <p data-confidence={value} className="mb-2 flex items-center gap-2 text-13 text-text-2">
+      <span className="font-medium text-ink">{word}</span>
+      <span aria-hidden="true" className="flex items-end gap-0.5">
+        {[1, 2, 3].map((i) => (
+          <span
+            key={i}
+            className={`inline-block w-1 rounded-sm ${i <= n ? 'bg-agent' : 'bg-line-strong'}`}
+            style={{ height: 4 + i * 3 }}
+          />
+        ))}
+      </span>
+    </p>
   );
 }
 

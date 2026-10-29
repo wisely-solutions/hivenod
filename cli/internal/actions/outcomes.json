@@ -77,7 +77,8 @@
     "executor": "none",
     "after": {
       "state": "done"
-    }
+    },
+    "batchable": true
   },
   "make_it_work": {
     "label": "Make it work",
@@ -152,7 +153,8 @@
       "state": "waiting",
       "waitingOn": "date"
     },
-    "untilField": "until"
+    "untilField": "until",
+    "batchable": true
   },
   "nudge": {
     "label": "Nudge",
@@ -186,6 +188,7 @@
     "executor": "none",
     "after": {
       "state": "ignored"
-    }
+    },
+    "batchable": true
   }
 }

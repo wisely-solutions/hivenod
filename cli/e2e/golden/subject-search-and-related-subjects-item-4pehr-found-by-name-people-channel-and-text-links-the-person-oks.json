@@ -552,6 +552,7 @@
       "tool": "thread_read",
       "ok": true,
       "out": {
+        "due": null,
         "fetchedBy": "<agent>",
         "fetchedByMe": true,
         "member": "owner",
