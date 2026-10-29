@@ -11,11 +11,18 @@ export interface CalBlock {
   end: Date;
   /** '' for busy time. */
   title: string;
-  /** busy: time from another organization, or a busy-only event: no details, greyed. */
-  kind: 'event' | 'busy';
+  /**
+   * busy: time from another organization, or a busy-only event: no details, greyed. proposed: a
+   * booking an agent proposed (a reply_book waiting for the member's OK), dashed (item kt3E7).
+   */
+  kind: 'event' | 'busy' | 'proposed';
   /** Where it is from (organization, or the member when it is someone else's). */
   label: string;
   allDay: boolean;
+  /** The organization's colour (item kt3E7). */
+  color?: string;
+  /** For a proposed booking: the thread it opens. */
+  proposal?: { wid: string; tid: string; oid: string };
 }
 
 export interface Placed {
@@ -141,7 +148,12 @@ export function timeRange(b: Pick<CalBlock, 'start' | 'end' | 'allDay'>): string
 
 /** What a screen reader hears for a block. */
 export function blockLabel(b: CalBlock): string {
-  const what = b.kind === 'busy' ? 'Busy' : b.title || '(no title)';
+  const what =
+    b.kind === 'busy'
+      ? 'Busy'
+      : b.kind === 'proposed'
+        ? `${b.title || 'Meeting'} · proposed`
+        : b.title || '(no title)';
   return `${what}, ${timeRange(b)}${b.label ? `, ${b.label}` : ''}`;
 }
 
@@ -159,4 +171,70 @@ export function rangeTitle(view: CalView, anchor: Date): string {
   const a = from.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   const b = last.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   return `${a} – ${b}`;
+}
+
+/** Merged [start, end) intervals (ms) of the timed blocks, clipped to [lo, hi). */
+function merged(blocks: readonly CalBlock[], lo: number, hi: number): Array<[number, number]> {
+  const xs = blocks
+    .filter((b) => !b.allDay)
+    .map(
+      (b) => [Math.max(b.start.getTime(), lo), Math.min(b.end.getTime(), hi)] as [number, number],
+    )
+    .filter(([s, e]) => e > s)
+    .sort((a, b) => a[0] - b[0]);
+  const out: Array<[number, number]> = [];
+  for (const [s, e] of xs) {
+    const last = out[out.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e);
+    else out.push([s, e]);
+  }
+  return out;
+}
+
+/**
+ * Free time in a day's working hours (item kt3E7, design 2.6): the gaps of at least 30 minutes
+ * between the timed blocks, from 09:00 to 18:00 on working days.
+ */
+export function freeInWorkHours(
+  blocks: readonly CalBlock[],
+  day: Date,
+  minMinutes = 30,
+): Array<{ start: Date; end: Date }> {
+  if (!isWorkDay(day)) return [];
+  const lo = new Date(day).setHours(WORK_HOURS.start, 0, 0, 0);
+  const hi = new Date(day).setHours(WORK_HOURS.end, 0, 0, 0);
+  const out: Array<{ start: Date; end: Date }> = [];
+  let cursor = lo;
+  const push = (s: number, e: number) => {
+    if (e - s >= minMinutes * 60_000) out.push({ start: new Date(s), end: new Date(e) });
+  };
+  for (const [s, e] of merged(blocks, lo, hi)) {
+    push(cursor, s);
+    cursor = Math.max(cursor, e);
+  }
+  push(cursor, hi);
+  return out;
+}
+
+/** The header totals of a range: time booked (overlaps once) and free in working hours. */
+export function weekTotals(
+  blocks: readonly CalBlock[],
+  days: readonly Date[],
+): { bookedMinutes: number; freeMinutes: number } {
+  let booked = 0;
+  let free = 0;
+  for (const d of days) {
+    const lo = startOfDay(d).getTime();
+    for (const [s, e] of merged(blocks, lo, lo + DAY_MS)) booked += e - s;
+    for (const f of freeInWorkHours(blocks, d)) free += f.end.getTime() - f.start.getTime();
+  }
+  return { bookedMinutes: Math.round(booked / 60_000), freeMinutes: Math.round(free / 60_000) };
+}
+
+/** "2 h 15", "30 min", "0 h". */
+export function hoursText(minutes: number): string {
+  if (minutes > 0 && minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${m}` : `${h} h`;
 }

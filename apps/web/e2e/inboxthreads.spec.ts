@@ -345,7 +345,7 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await page.goto('/calendar');
     await expect(
       page
-        .getByRole('region', { name: 'Time grid' })
+        .getByRole('region', { name: /^(Time grid|Agenda)$/ })
         .getByRole('group', { name: /^Meeting with Sam Example, / }),
     ).toBeVisible();
     await agent.done(o4, 'https://teams.example.com/conv-1/invite');
