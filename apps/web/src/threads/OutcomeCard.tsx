@@ -34,6 +34,7 @@ const STATE_TEXT: Record<InboxOutcome['state'], string> = {
   proposed: 'Proposed',
   revising: 'Revising',
   approved: 'Approved',
+  running: 'Running',
   rejected: 'Rejected',
   done: 'Done',
   failed: 'Failed',
