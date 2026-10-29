@@ -31,6 +31,14 @@ async function look(page: Page, name: string) {
     expect(
       violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
     ).toEqual([]);
+    // Experimental rule, off by default: the accessible name must contain the visible text.
+    // Checked on the phone, where the week strip's day buttons show "M 15".
+    if ((page.viewportSize()?.width ?? 1440) <= 500) {
+      const mismatch = await new AxeBuilder({ page })
+        .withRules(['label-content-name-mismatch'])
+        .analyze();
+      expect(mismatch.violations.map((v) => v.nodes.map((n) => n.target.join(' ')))).toEqual([]);
+    }
     if (shots) await page.screenshot({ path: `${shots}/${name}-${scheme}.png`, fullPage: true });
   }
   await page.emulateMedia({ colorScheme: 'light' });
@@ -184,12 +192,12 @@ test.describe('phone 390', () => {
       await look(page, 'calendar-390');
       // Tuesday: the proposed booking, dashed.
       const strip = page.getByRole('group', { name: 'Week' });
-      await strip.getByRole('button', { name: /^Tuesday/ }).click();
+      await strip.getByRole('button', { name: /, Tuesday/ }).click();
       await expect(
         agenda.getByRole('button', { name: /^Meeting with Sam Okafor · proposed/ }),
       ).toBeVisible();
       // Wednesday: the deadline.
-      await strip.getByRole('button', { name: /^Wednesday/ }).click();
+      await strip.getByRole('button', { name: /, Wednesday/ }).click();
       await expect(agenda.locator('[data-due-strip]')).toContainText('due 12:00');
       await look(page, 'calendar-390-wed');
     } finally {
