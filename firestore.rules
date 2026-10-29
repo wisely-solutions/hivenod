@@ -1301,14 +1301,16 @@ service cloud.firestore {
                   'outcome.rejected', 'outcome.revise_requested', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area', 'subject.label',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged', 'thread.due', 'plan.approved', 'plan.rejected', 'plan.edited',
-                  'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested'])
+                  'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
+                  'thread.instructed'])
                 && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))
             || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(wid, request.resource.data.memberUid)
                 && request.resource.data.type in ['inbox.added', 'thread.filed', 'thread.note',
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.revised',
                   'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
-                  'plan.proposed', 'outcome.started', 'thread.rechecked']));
+                  'plan.proposed', 'outcome.started', 'thread.rechecked',
+                  'thread.instruction_answered', 'thread.chips_suggested']));
         allow update, delete: if false;
       }
 
@@ -1381,8 +1383,73 @@ service cloud.firestore {
               && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.due'], resource.data.memberUid, tid))
             // Re-check (item bmNoIvvqKCdAorLSShE9): the member asks, the home agent answers.
             || (inboxOwner(wid, resource.data) && inboxRecheckAsked(wid, tid, request.resource.data, resource.data))
-            || (isActiveAgent(wid) && inboxRecheckAnswered(wid, tid, request.resource.data, resource.data)));
+            || (isActiveAgent(wid) && inboxRecheckAnswered(wid, tid, request.resource.data, resource.data))
+            // Ask the agent (item w6O2KOw4ys70TQv9I1xD): the member asks, the home agent answers
+            // and suggests chips.
+            || (inboxOwner(wid, resource.data) && inboxInstructed(wid, tid, request.resource.data, resource.data))
+            || (isActiveAgent(wid) && inboxInstructionAnswered(wid, tid, request.resource.data, resource.data))
+            || (isActiveAgent(wid) && inboxChipsSuggested(wid, tid, request.resource.data, resource.data)));
         allow delete: if false;
+
+        // One new instruction (its id is its event's), pending, by the member, with a text or a
+        // chip; the others unchanged (at 20, exactly one goes); not while the last one (under 30
+        // minutes old) waits for the agent.
+        function inboxInstructed(wid, tid, d, r) {
+          let id = d.lastEventId;
+          let before = r.get('instructions', {});
+          let diff = d.instructions.diff(before);
+          let n = d.instructions[id];
+          let e = inboxEv(wid, id).data.data;
+          return changed(['instructions', 'instruct', 'updatedAt', 'lastEventId'])
+            && d.instructions is map
+            && diff.addedKeys() == [id].toSet() && diff.changedKeys().size() == 0
+            && (before.size() < 20
+              ? diff.removedKeys().size() == 0
+              : diff.removedKeys().size() == 1 && d.instructions.size() == 20)
+            && exactKeys(n, ['text', 'chip', 'by', 'at', 'state', 'answer'])
+            && n.by == me() && n.at == request.time && n.state == 'pending' && n.answer == null
+            && ((n.chip == null && str(n.text, 1, 500))
+              || (n.text == null && n.chip in ['prepare_meeting', 'follow_up', 'summarize', 'draft_reply']))
+            && d.instruct == {'state': 'pending', 'id': id, 'at': request.time}
+            && (r.get('instruct', null) == null || r.instruct.state == 'done'
+              || r.instruct.at + duration.value(30, 'm') <= request.time)
+            && inboxTrackedThread(wid, id, ['thread.instructed'], me(), tid)
+            && e.text == n.text && e.chip == n.chip;
+        }
+        // Only the home agent, only a pending instruction (the one its event names), once; the
+        // latest request is done when it is that one.
+        function inboxInstructionAnswered(wid, tid, d, r) {
+          let e = inboxEv(wid, d.lastEventId).data.data;
+          let id = e.instructionId;
+          let a = r.instructions[id];
+          let b = d.instructions[id];
+          return changed(['instructions', 'instruct', 'updatedAt', 'lastEventId'])
+            && r.fetchedBy == me()
+            && r.get('instructions', null) != null && id is string && id in r.instructions
+            && d.instructions.diff(r.instructions).affectedKeys() == [id].toSet()
+            && a.state == 'pending'
+            && exactKeys(b, ['text', 'chip', 'by', 'at', 'state', 'answer'])
+            && b.text == a.text && b.chip == a.chip && b.by == a.by && b.at == a.at
+            && b.state == 'answered'
+            && exactKeys(b.answer, ['kind', 'refId', 'note', 'at'])
+            && b.answer.kind in ['note', 'ask', 'outcome', 'plan']
+            && (b.answer.kind in ['outcome', 'plan'] ? str(b.answer.refId, 1, 200) : b.answer.refId == null)
+            && strOrNull(b.answer.note, 500) && (b.answer.kind != 'note' || b.answer.note != null)
+            && b.answer.at == request.time
+            && b.answer.kind == e.kind
+            && d.get('instruct', null) == (r.instruct.id == id
+              ? {'state': 'done', 'id': id, 'at': r.instruct.at} : r.instruct)
+            && inboxTrackedThread(wid, d.lastEventId, ['thread.instruction_answered'], r.memberUid, tid);
+        }
+        // Only the home agent: 0-5 known chips, once each.
+        function inboxChipsSuggested(wid, tid, d, r) {
+          return changed(['suggestedChips', 'updatedAt', 'lastEventId'])
+            && r.fetchedBy == me()
+            && d.suggestedChips is list && d.suggestedChips.size() <= 5
+            && d.suggestedChips.hasOnly(['prepare_meeting', 'recheck', 'follow_up', 'summarize', 'draft_reply'])
+            && d.suggestedChips.toSet().size() == d.suggestedChips.size()
+            && inboxTrackedThread(wid, d.lastEventId, ['thread.chips_suggested'], r.memberUid, tid);
+        }
 
         // Only on a thread with something open, and not while a request (under 30 minutes old)
         // waits for the agent.

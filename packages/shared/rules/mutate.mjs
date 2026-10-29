@@ -860,6 +860,97 @@ const MUTATIONS = [
       ],
     ],
   ],
+  // Ask the agent (item w6O2KOw4ys70TQv9I1xD).
+  [
+    'instruct: another member asks',
+    [['(inboxOwner(wid, resource.data) && inboxInstructed(', '(inboxInstructed(']],
+  ],
+  [
+    'instruct: ask while pending',
+    [["|| r.instruct.at + duration.value(30, 'm') <= request.time)", '|| true)']],
+  ],
+  [
+    'instruct: rewrite or drop earlier ones',
+    [['&& diff.addedKeys() == [id].toSet() && diff.changedKeys().size() == 0', '&& true']],
+  ],
+  ['instruct: drop one below 20', [['? diff.removedKeys().size() == 0', '? true']]],
+  [
+    'instruct: drop two at 20',
+    [[': diff.removedKeys().size() == 1 && d.instructions.size() == 20)', ': true)']],
+  ],
+  [
+    'instruct: forged entry',
+    [["&& n.by == me() && n.at == request.time && n.state == 'pending' && n.answer == null", '']],
+  ],
+  [
+    'instruct: unbounded text or any chip',
+    [
+      [
+        "&& ((n.chip == null && str(n.text, 1, 500))\n              || (n.text == null && n.chip in ['prepare_meeting', 'follow_up', 'summarize', 'draft_reply']))",
+        '',
+      ],
+    ],
+  ],
+  [
+    'instruct: latest not pointing at it',
+    [["&& d.instruct == {'state': 'pending', 'id': id, 'at': request.time}", '']],
+  ],
+  ['instruct: event says other', [['\n            && e.text == n.text && e.chip == n.chip;', ';']]],
+  [
+    'instruct: any agent answers',
+    [
+      [
+        "            && r.fetchedBy == me()\n            && r.get('instructions', null) != null",
+        "            && r.get('instructions', null) != null",
+      ],
+    ],
+  ],
+  ['instruct: answered twice', [["            && a.state == 'pending'\n", '']]],
+  [
+    'instruct: answer rewrites the request',
+    [['&& b.text == a.text && b.chip == a.chip && b.by == a.by && b.at == a.at', '']],
+  ],
+  [
+    'instruct: answer touches others',
+    [['&& d.instructions.diff(r.instructions).affectedKeys() == [id].toSet()', '']],
+  ],
+  [
+    'instruct: answer unchecked',
+    [
+      [
+        "&& (b.answer.kind in ['outcome', 'plan'] ? str(b.answer.refId, 1, 200) : b.answer.refId == null)\n            && strOrNull(b.answer.note, 500) && (b.answer.kind != 'note' || b.answer.note != null)",
+        '',
+      ],
+    ],
+  ],
+  ['instruct: answer kind not its event', [['\n            && b.answer.kind == e.kind', '']]],
+  [
+    'instruct: latest state forged',
+    [
+      [
+        "&& d.get('instruct', null) == (r.instruct.id == id\n              ? {'state': 'done', 'id': id, 'at': r.instruct.at} : r.instruct)",
+        '',
+      ],
+    ],
+  ],
+  [
+    'chips: any agent',
+    [
+      [
+        "return changed(['suggestedChips', 'updatedAt', 'lastEventId'])\n            && r.fetchedBy == me()",
+        "return changed(['suggestedChips', 'updatedAt', 'lastEventId'])",
+      ],
+    ],
+  ],
+  [
+    'chips: unchecked list',
+    [
+      [
+        "&& d.suggestedChips.hasOnly(['prepare_meeting', 'recheck', 'follow_up', 'summarize', 'draft_reply'])\n            && d.suggestedChips.toSet().size() == d.suggestedChips.size()",
+        '',
+      ],
+    ],
+  ],
 ];
 
 // A search text that no longer matches (the rules were refactored) would check nothing: it is
