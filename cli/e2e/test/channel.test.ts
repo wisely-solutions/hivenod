@@ -14,6 +14,8 @@ import {
   answer,
   answerQuestion,
   approveOutcome,
+  approvePlan,
+  type PlanInput,
   askForStatus,
   buildStepIndex,
   inboxPaths,
@@ -731,6 +733,59 @@ d('hivenod mcp --channel inbox events (item 4PEHr)', () => {
     });
     await pause(1200);
     expect(inbox(s)).toHaveLength(2);
+  });
+
+  it('plans (item qwFAW): one carry_out per step, only at its turn, with plan_id and step', async () => {
+    const { token } = await newAgent();
+    const s = await session(token, 2);
+    const tid = (await s.call('inbox_add', msg())).threadId as string;
+    await s.next('inbox');
+    const p = await s.call('plan_propose', {
+      threadId: tid,
+      steps: [
+        { type: 'reply', fields: { text: 'Thursday works.' } },
+        { type: 'approval', fields: { what: 'Move the review' } },
+        { type: 'nudge', fields: { text: 'Still on for Thursday?' } },
+      ],
+    });
+    const pid = p.planId as string;
+    const [s1, s2, s3] = p.stepIds as string[];
+    const planOf = async (): Promise<PlanInput> => {
+      const plan = (await read(inboxPaths.plan(W, pid))) as unknown as PlanInput['plan'];
+      const outcomes: Record<string, OutcomeStateOf> = {};
+      for (const id of plan.steps)
+        outcomes[id] = (await read(inboxPaths.outcome(W, id))) as unknown as OutcomeStateOf;
+      return { planId: pid, plan, outcomes };
+    };
+    const o = owner();
+    // Approve plan: steps 1 and 3 are approved; only step 1 is its turn.
+    await o.run(approvePlan(o.ctx, { ...(await planOf()), thread: await thread(tid) }));
+    const e1 = await s.next('inbox', 2);
+    expect(e1.meta).toMatchObject({
+      thread_id: tid,
+      reason: 'carry_out',
+      outcome_id: s1,
+      plan_id: pid,
+      step: '1 of 3',
+    });
+    await s.call('outcome_done', { outcomeId: s1, status: 'done' });
+    // The gate waits for the person: step 3 is not sent.
+    await pause(1200);
+    expect(inbox(s)).toHaveLength(2);
+    const pl = await planOf();
+    await o.run(
+      approveOutcome(o.ctx, {
+        outcomeId: s2!,
+        outcome: pl.outcomes[s2!]!,
+        thread: await thread(tid),
+        plan: pl,
+      }),
+    );
+    const e3 = await s.next('inbox', 3);
+    expect(e3.meta).toMatchObject({ reason: 'carry_out', outcome_id: s3, step: '3 of 3' });
+    await s.call('outcome_done', { outcomeId: s3, status: 'done' });
+    await pause(1200);
+    expect(inbox(s)).toHaveLength(3);
   });
 
   it('at most maxInbox threads at a time; a reconnect or restart sends no duplicates', async () => {

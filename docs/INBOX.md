@@ -350,7 +350,8 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
 | `inbox_note`      | `hivenod inbox note ID`      | Adds an investigation note to the timeline.                                                                                      |
 | `inbox_ask`       | `hivenod inbox ask ID`       | Asks the member a question. The thread waits in Needs you.                                                                       |
 | `outcome_propose` | `hivenod outcome propose ID` | Proposes an outcome of a type from the registry, with its fields. With `revises` (`--revises OID`): that outcome's next version. |
-| `outcome_done`    | `hivenod outcome done OID`   | The executor reports an approved outcome as done or failed.                                                                      |
+| `plan_propose`    | `hivenod plan propose ID`    | Proposes a plan: 1-8 ordered steps in one call (`--steps-file F`, `-` for stdin). See "Plans: the agent side".                   |
+| `outcome_done`    | `hivenod outcome done OID`   | The executor reports an approved outcome as done or failed; a Build it plan step as `started` (with its `itemId`) first.         |
 | `thread_wake`     | `hivenod thread wake ID`     | Wakes a snoozed thread whose date has come.                                                                                      |
 | `thread_flag`     | `hivenod thread flag ID`     | Marks a thread urgent (or not, `urgent: false` / `--off`): the notifier pings the member at once, whatever the quiet hours.      |
 | `thread_due`      | `hivenod thread due ID ISO`  | Sets the deadline a message states (ISO 8601 with its offset), or clears it (`due: null` / `--clear`). Today ranks by it.        |
@@ -381,6 +382,37 @@ The contract tests cover the agent actions: `cli/contract/cases.ts` against the 
 requires the results and documents of its golden files (first recorded while the TypeScript client
 and the Go CLI agreed).
 
+### Plans: the agent side (item qwFAWxZM5xkcE7PPjAzi, slice 3)
+
+- **`plan_propose`** `{threadId, note?, confidence?, steps: [{type, fields, note?, confidence?,
+checks?}]}` (Go `actions.ProposePlan`, the port of `proposePlan`): one batch with the plan, its
+  steps and the `plan.proposed` event. It returns `{planId, stepIds, steps: [{step, outcomeId,
+type, kind}]}`. The CLI reads the steps from a JSON file: a list of steps, or `{steps, note,
+confidence}`. Use it when the answer has more than one action or needs the person's OK on the
+  way; put an `approval` step before anything that changes money, prices, contracts or public
+  content. A single action stays `outcome_propose`.
+- **`outcome_done`** on a plan step works only at its turn (the plan's cursor, the plan
+  `proposed` or `active`): `done` moves the cursor on, `failed` blocks the plan (the member
+  retries, skips or stops). A `make_it_work` step (Build it) is reported `started` with
+  `result.itemId` once the item is made (the step is `running`, the thread waits on the item),
+  then `done` when the item is Done.
+- **`thread_wake`** on a thread whose live plan waits at a `snooze` step marks that step done and
+  moves the plan on (no `woke` event to investigate).
+- **`thread_read`** adds `plans`: each with `planId, state, cursor, progress` ("Step 3 of 5"),
+  `note, confidence` and its `steps` (`step, outcomeId, type, kind, label, ui, atCursor`; `ui` as
+  `planView`). Each outcome of a plan has `planId` and `step` ("3 of 5"); a plan's steps list in
+  their order. `next` says carry out only for a step at its turn.
+- **`inbox_list`** `toCarryOut` lists a plan step only at its turn, with `planId` and `step`.
+- **Revising a step** is `outcome_propose revises=<stepId>`, as for a single outcome: only that
+  step changes, its `planId` stays.
+- The Go actions are kept equal to the TypeScript ones by the contract cases (`proposePlan`,
+  `finishOutcome/plan/…`, `wakeThread/plan/…`, `planThreadState`, `planView`); the golden
+  scenario "plans (item qwFAW)" in `cli/e2e/test/go.test.ts` runs a 4-step plan (reply, approval,
+  Build it, reply) through the Go CLI against the rules, and `channel.test.ts` checks one
+  `carry_out` per step at its turn.
+- An older CLI sends `carry_out` for every approved step at once: `EVENT_MIN_VERSION.plan`
+  (`cliversion.ts`) is the first CLI that handles plans, for the web app's hint.
+
 ## Channel events (part 2)
 
 A channel session (`hivenod mcp --channel`, `cli/internal/hive/inboxfeed.go`) pushes `<channel source="hivenod" kind="inbox">` events for
@@ -404,12 +436,22 @@ first. (In Claude Code, the plugin's `hivenod` skill runs each thread in a backg
 - **A nudge due** (`nudge_due`) also goes to the home agent: the thread has waited on them for
   `nudgeAfter` (3 days) since its last change. Noting why not (`inbox_note`) restarts the wait.
 - **Carrying out an approved outcome** (`carry_out`, with `outcome_id` and `outcome_type`) goes
-  to its executor, which the rules fix to the home agent.
+  to its executor, which the rules fix to the home agent. A plan step is sent only at its turn:
+  the session also listens to the workspace's live plans (`inboxPlans`, state proposed, active
+  or blocked) and sends a step's `carry_out` only when it is at its plan's cursor and the plan
+  runs (not blocked). A step approved ahead waits; when the step before it is done (or the gate
+  before it passed) the cursor moves and its `carry_out` follows. A `make_it_work` step's text
+  says to report `started` with the item first.
+- **A plan rejected or stopped** (`plan.rejected`, `plan.stopped`, or Not approved on a gate:
+  `outcome.rejected` with `planId`) puts the thread back to investigating: `rejected` with
+  `plan_id` (and `outcome_id`, `step` for a gate). The text says to re-plan (`plan_propose`,
+  `outcome_propose`) or ask.
 - A due snooze is woken by the home agent's session itself (`thread_wake`), and the wake then
   sends `woke`.
 
 Meta: `kind: inbox, thread_id, reason, member, inbox_cap, inbox_active`, plus `outcome_id` and
-`outcome_type` for `carry_out` and `revise`. `update: true` means that thread is already being worked on,
+`outcome_type` for `carry_out` and `revise`, and `plan_id` and `step` ("3 of 5") when the event is
+about a plan (`carry_out`, `revise` of a step, `rejected`). `update: true` means that thread is already being worked on,
 so the session passes the event on instead of starting another one.
 
 **Dedupe.** It's one event per thread state change. The session remembers, per thread, the

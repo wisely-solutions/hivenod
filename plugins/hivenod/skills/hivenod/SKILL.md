@@ -39,6 +39,15 @@ dispatch, route and give back; the sub-agents do the work.
    and type): apply only what was asked, keep the rest, and do not reject it or start a new
    outcome. If the change can't be made (the asked time is taken), say why with `inbox_ask` on
    the thread.
+   **Plans.** When the answer has more than one action, or needs the person's OK on the way,
+   the sub-agent proposes a plan in one call (`plan_propose`): ordered steps (reply, book,
+   make_it_work as "Build it", handover, snooze as "wait until", nudge, approval). Put an
+   `approval` step before anything that changes money, prices, contracts or public content.
+   Steps run in order: a `carry_out` comes once per step (with `plan_id` and `step`, "3 of 5"),
+   only when that step is approved and its turn; carry out exactly that step and report it with
+   `outcome_done`. For a Build it step, create the item, report `status: started` with its
+   `itemId`, and report `done` when the item is Done. A `rejected` event with `plan_id` means
+   the plan stopped: re-plan or ask.
 6. **Keep the main context small.** Sub-agents report in one line and report their own run cost
    with complete, send_back or end_run. Keep a short table item_id -> sub-agent in your head or
    notes, nothing more.

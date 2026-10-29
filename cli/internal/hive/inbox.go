@@ -433,17 +433,21 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 	if err != nil {
 		return nil, err
 	}
+	plans, stepOf, err := c.planRows(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// A plan's steps are made in one batch (same createdAt): they list in the plan's order.
 	sort.SliceStable(ocs, func(i, j int) bool {
 		a, b := ocs[i].Data.CreatedAt.UnixMilli(), ocs[j].Data.CreatedAt.UnixMilli()
 		if a != b {
 			return a < b
 		}
+		if si, sj := stepNumber(stepOf[ocs[i].ID]), stepNumber(stepOf[ocs[j].ID]); si != sj {
+			return si < sj
+		}
 		return ocs[i].ID < ocs[j].ID
 	})
-	plans, stepOf, err := c.planRows(ctx, id)
-	if err != nil {
-		return nil, err
-	}
 	turn := map[string]bool{}
 	for _, pr := range plans {
 		r := pr.(map[string]any)
@@ -841,6 +845,8 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 	switch {
 	case status == "started":
 		state, note = "running", "Started: the step waits until the item is Done; then report it done (outcome_done status done)."
+	case o.PlanID != nil && status == "done" && in.Plan != nil && in.Plan.Plan.Cursor+1 >= len(in.Plan.Plan.Steps):
+		note = "Reported as done: that was the plan's last step, the plan is done."
 	case o.PlanID != nil && status == "done":
 		note = "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn)."
 	case o.PlanID != nil:
@@ -1012,4 +1018,11 @@ func (c *Client) ThreadFlag(ctx context.Context, id string, urgent bool, reason 
 		note = "Marked urgent: the person is pinged at once, whatever their quiet hours."
 	}
 	return map[string]any{"threadId": id, "urgent": urgent, "note": note}, nil
+}
+
+// stepNumber is 3 for "3 of 5" (0 for a single outcome).
+func stepNumber(step string) int {
+	n := 0
+	fmt.Sscanf(step, "%d of", &n)
+	return n
 }

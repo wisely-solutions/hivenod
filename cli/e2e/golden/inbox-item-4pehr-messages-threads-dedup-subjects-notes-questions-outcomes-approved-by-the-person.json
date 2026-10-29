@@ -312,6 +312,7 @@
             "type": "reply"
           }
         ],
+        "plans": [],
         "question": {
           "answer": "Thursday",
           "options": [],
@@ -563,6 +564,7 @@
             "type": "snooze"
           }
         ],
+        "plans": [],
         "question": {
           "answer": "Thursday",
           "options": [],
