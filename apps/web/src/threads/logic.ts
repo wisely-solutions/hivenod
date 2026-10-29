@@ -647,3 +647,92 @@ export function filterByAreas(
   if (keys.size === 0) return [...rows];
   return rows.filter((r) => r.area && keys.has(r.area.toLowerCase()));
 }
+
+// ---------- Ask for changes: the word diff between two versions (item L7OzWKMYZ1O2dX33Xkrj) ----------
+
+export interface DiffPart {
+  op: 'same' | 'ins' | 'del';
+  text: string;
+}
+
+/** Above this many token pairs the diff gives up on detail: all of a out, all of b in. */
+const DIFF_CELLS = 4_000_000;
+
+/**
+ * A word-level diff of `a` (the earlier version) to `b`: the longest common subsequence of words
+ * and spaces, adjacent parts of the same kind merged. Small and dependency-free.
+ */
+export function wordDiff(a: string, b: string): DiffPart[] {
+  const x = a.split(/(\s+)/).filter((t) => t !== '');
+  const y = b.split(/(\s+)/).filter((t) => t !== '');
+  const out: DiffPart[] = [];
+  const push = (op: DiffPart['op'], text: string) => {
+    const last = out[out.length - 1];
+    if (last && last.op === op) last.text += text;
+    else out.push({ op, text });
+  };
+  if (a === b) return a ? [{ op: 'same', text: a }] : [];
+  if (x.length * y.length > DIFF_CELLS) {
+    if (a) push('del', a);
+    if (b) push('ins', b);
+    return out;
+  }
+  const n = x.length;
+  const m = y.length;
+  // lcs[i][j]: the LCS length of x[i..] and y[j..], in one flat array.
+  const lcs = new Uint32Array((n + 1) * (m + 1));
+  const at = (i: number, j: number) => i * (m + 1) + j;
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      lcs[at(i, j)] =
+        x[i] === y[j]
+          ? lcs[at(i + 1, j + 1)]! + 1
+          : Math.max(lcs[at(i + 1, j)]!, lcs[at(i, j + 1)]!);
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (x[i] === y[j]) {
+      push('same', x[i]!);
+      i++;
+      j++;
+    } else if (lcs[at(i + 1, j)]! >= lcs[at(i, j + 1)]!) push('del', x[i++]!);
+    else push('ins', y[j++]!);
+  }
+  while (i < n) push('del', x[i++]!);
+  while (j < m) push('ins', y[j++]!);
+  return grouped(out);
+}
+
+/**
+ * Reads like an edit, not confetti: changes that only a space keeps apart become one removed
+ * run followed by one added run (the space goes into both).
+ */
+function grouped(parts: DiffPart[]): DiffPart[] {
+  const out: DiffPart[] = [];
+  let k = 0;
+  while (k < parts.length) {
+    const p = parts[k]!;
+    if (p.op === 'same') {
+      out.push(p);
+      k++;
+      continue;
+    }
+    let del = '';
+    let ins = '';
+    let end = k;
+    while (end < parts.length) {
+      const q = parts[end]!;
+      if (q.op === 'del') del += q.text;
+      else if (q.op === 'ins') ins += q.text;
+      else if (/^\s+$/.test(q.text) && parts[end + 1] && parts[end + 1]!.op !== 'same') {
+        del += q.text;
+        ins += q.text;
+      } else break;
+      end++;
+    }
+    if (del) out.push({ op: 'del', text: del });
+    if (ins) out.push({ op: 'ins', text: ins });
+    k = end;
+  }
+  return out;
+}

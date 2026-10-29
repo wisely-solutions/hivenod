@@ -1,6 +1,7 @@
 import type { InboxEvent, InboxMessage, InboxSubject, InboxThread } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  wordDiff,
   bookedText,
   confidenceText,
   dueText,
@@ -363,5 +364,54 @@ describe('Inbox list groups (item kt3E7, design 2.4)', () => {
     ]);
     expect(filterByAreas(rows, new Set(['payments'])).map((r) => r.id)).toEqual(['a', 'b']);
     expect(filterByAreas(rows, new Set())).toHaveLength(4);
+  });
+});
+
+describe('wordDiff (Ask for changes)', () => {
+  it('marks the words taken out and put in, keeping the rest', () => {
+    expect(wordDiff('Hi Sam, thanks. Thursday works.', 'Hi Sam, Thursday 10:00 works.')).toEqual([
+      { op: 'same', text: 'Hi Sam, ' },
+      { op: 'del', text: 'thanks. ' },
+      { op: 'same', text: 'Thursday ' },
+      { op: 'ins', text: '10:00 ' },
+      { op: 'same', text: 'works.' },
+    ]);
+  });
+  it('the same text is one part; empty sides', () => {
+    expect(wordDiff('a b', 'a b')).toEqual([{ op: 'same', text: 'a b' }]);
+    expect(wordDiff('', 'new')).toEqual([{ op: 'ins', text: 'new' }]);
+    expect(wordDiff('old', '')).toEqual([{ op: 'del', text: 'old' }]);
+    expect(wordDiff('', '')).toEqual([]);
+  });
+  it('rebuilds both texts', () => {
+    const a = 'One two three four five six';
+    const b = 'One 2 three five six seven';
+    const d = wordDiff(a, b);
+    expect(
+      d
+        .filter((p) => p.op !== 'ins')
+        .map((p) => p.text)
+        .join(''),
+    ).toBe(a);
+    expect(
+      d
+        .filter((p) => p.op !== 'del')
+        .map((p) => p.text)
+        .join(''),
+    ).toBe(b);
+  });
+  it('changes only a space apart read as one removed and one added run', () => {
+    expect(wordDiff('so I booked 10:00 to 11:00 in', 'so 10:00 or 14:00 in')).toEqual([
+      { op: 'same', text: 'so ' },
+      { op: 'del', text: 'I booked ' },
+      { op: 'same', text: '10:00 ' },
+      { op: 'del', text: 'to 11:00' },
+      { op: 'ins', text: 'or 14:00' },
+      { op: 'same', text: ' in' },
+    ]);
+  });
+  it('gives up on detail for huge texts', () => {
+    const big = Array(2500).fill('w').join(' ');
+    expect(wordDiff(big, big + ' x').map((p) => p.op)).toEqual(['del', 'ins']);
   });
 });

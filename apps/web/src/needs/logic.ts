@@ -188,7 +188,11 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.no
       if (t.data.memberUid !== uid) continue;
       if (!(THREAD_NEEDS as readonly string[]).includes(t.data.state)) continue;
       const proposals = o.openOutcomes
-        .filter((p) => p.data.threadId === t.id && p.data.state === 'proposed')
+        .filter(
+          (p) =>
+            p.data.threadId === t.id &&
+            (p.data.state === 'proposed' || p.data.state === 'revising'),
+        )
         .sort(
           (a, b) =>
             a.data.createdAt.toMillis() - b.data.createdAt.toMillis() || (a.id < b.id ? -1 : 1),

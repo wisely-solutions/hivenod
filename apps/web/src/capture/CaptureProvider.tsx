@@ -48,6 +48,11 @@ export function useCapture(): Api {
   return v;
 }
 
+/** The capture box, if this tree has one (a screen falling back to Add an item). */
+export function useOptionalCapture(): Api | null {
+  return useContext(Ctx);
+}
+
 const draftKey = (wid: string) => `hive.capture.draft.${wid}`;
 function readDraft(wid: string): Draft | null {
   try {

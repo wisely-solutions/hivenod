@@ -32,6 +32,7 @@ import { errorText, when } from './parts';
 
 const STATE_TEXT: Record<InboxOutcome['state'], string> = {
   proposed: 'Proposed',
+  revising: 'Revising',
   approved: 'Approved',
   rejected: 'Rejected',
   done: 'Done',

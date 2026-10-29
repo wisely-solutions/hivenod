@@ -10,10 +10,15 @@
 import {
   answerQuestion,
   approveOutcome,
+  cancelRevision,
   closeThread,
   ignoreThread,
+  INBOX_LIMITS,
   outcomeType,
   rejectOutcome,
+  requestRevision,
+  REVISABLE_TYPES,
+  versionCount,
   type ActionPlan,
   type InboxOutcome,
   type InboxThread,
@@ -54,7 +59,18 @@ import { Key } from '../components/DecisionBar';
 import { stash } from '../lib/pendingDecisions';
 import type { Row } from '../lib/live';
 import type { NeedsEntry } from '../needs/logic';
-import { editedFields, formValues, bandOf } from '../threads/logic';
+import { editedFields, formValues, bandOf, wordDiff } from '../threads/logic';
+import {
+  editKey,
+  forgetOutcome,
+  getAsk,
+  getEdit,
+  getShown,
+  setAsk,
+  setEdit,
+  setShown,
+} from './drafts';
+import { askedText, AskBox, DiffText, RevisingStrip, VersionSwitcher } from './Revise';
 import { LabelBadge } from '../threads/labels';
 import { FieldView } from '../threads/OutcomeCard';
 import { errorText } from '../threads/parts';
@@ -81,6 +97,10 @@ export interface DecisionCardHandle {
   approve(): void;
   edit(): void;
   reject(): void;
+  /** Ask for changes (key C); false when this card can't (then C adds an item as usual). */
+  ask?(): boolean;
+  /** The version before or after the one on show (keys [ and ]). */
+  version?(step: -1 | 1): void;
 }
 
 export interface DecisionCardProps {
@@ -135,6 +155,8 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
       approve: () => inner.current?.approve(),
       edit: () => inner.current?.edit(),
       reject: () => inner.current?.reject(),
+      ask: () => inner.current?.ask?.() ?? false,
+      version: (step) => inner.current?.version?.(step),
     }));
     const card =
       t.state === 'needsYou'
@@ -369,11 +391,29 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
     const counting = useCountdown(key);
     const threadCounting = useCountdown(`it:${wid}:${thread.id}`);
     const pending = counting ?? threadCounting;
-    const [editing, setEditing] = useState(false);
-    const [values, setValues] = useState<Record<string, string | boolean>>(() =>
-      shown ? formValues(shown.data.type, shown.data.fields) : {},
+    // Ask for changes (item L7OzWKMYZ1O2dX33Xkrj): the versions, the one on show, its draft.
+    const versions = shown?.data.versions ?? [];
+    const nv = shown ? versionCount(shown.data) : 1;
+    const oKey = shown ? `${wid}:${shown.id}` : '';
+    const [picked, setPicked] = useState<number | undefined>(() =>
+      shown ? getShown(oKey) : undefined,
     );
-    const [valuesFor, setValuesFor] = useState(shown?.id);
+    const [pickedFor, setPickedFor] = useState(oKey);
+    const viewN = Math.min(Math.max(1, picked ?? nv), nv);
+    const view = versions.length ? versions[viewN - 1] : undefined;
+    const viewFields = useMemo(() => view?.fields ?? shown?.data.fields ?? {}, [view, shown]);
+    const eKey = shown ? editKey(wid, shown.id, viewN) : '';
+    const fresh = () => (shown ? formValues(shown.data.type, viewFields) : {});
+    const [editing, setEditing] = useState(() => getEdit(eKey)?.editing ?? false);
+    const [values, setValues] = useState<Record<string, string | boolean>>(
+      () => getEdit(eKey)?.values ?? fresh(),
+    );
+    const [valuesFor, setValuesFor] = useState(eKey);
+    const [asking, setAsking] = useState(() => !!getAsk(oKey));
+    const [askChips, setAskChips] = useState<string[]>(() => getAsk(oKey)?.chips ?? []);
+    const [askText, setAskText] = useState(() => getAsk(oKey)?.text ?? '');
+    const [revBusy, setRevBusy] = useState(false);
+    const [showDiff, setShowDiff] = useState(true);
     const [note, setNote] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [rejecting, setRejecting] = useState(false);
@@ -382,20 +422,46 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
     useEffect(() => {
       if (shown) onShown?.(shown.id);
     }, [shown, onShown]);
-    if (shown && valuesFor !== shown.id) {
-      setValuesFor(shown.id);
-      setValues(formValues(shown.data.type, shown.data.fields));
-      setEditing(false);
+    if (shown && pickedFor !== oKey) {
+      setPickedFor(oKey);
+      setPicked(getShown(oKey));
+      setAsking(!!getAsk(oKey));
+      setAskChips(getAsk(oKey)?.chips ?? []);
+      setAskText(getAsk(oKey)?.text ?? '');
+    }
+    if (shown && valuesFor !== eKey) {
+      // Another proposal or version on show: its own draft, or its text as the agent wrote it.
+      setValuesFor(eKey);
+      setValues(getEdit(eKey)?.values ?? fresh());
+      setEditing(getEdit(eKey)?.editing ?? false);
       setNote(null);
     }
+    // The draft outlives a remount (the phone sheet, the panel layouts): Send sends what is shown.
+    useEffect(() => {
+      if (!eKey || valuesFor !== eKey || !shown) return;
+      const same = sameFields(editedFields(shown.data.type, values), viewFields);
+      setEdit(eKey, !editing && same ? null : { editing, values });
+    }, [eKey, valuesFor, editing, values, shown, viewFields]);
+    useEffect(() => {
+      if (!oKey) return;
+      setAsk(oKey, asking ? { chips: askChips, text: askText } : null);
+    }, [oKey, asking, askChips, askText]);
 
     const type = shown ? outcomeType(shown.data.type) : null;
     const label = type?.label ?? shown?.data.type ?? '';
     const edited = shown
       ? editedFields(shown.data.type, values)
       : ({} as Record<string, string | boolean>);
-    const dirty = !!shown && !sameFields(edited, shown.data.fields);
-    const current = dirty ? edited : (shown?.data.fields ?? {});
+    const dirty = !!shown && !sameFields(edited, viewFields);
+    const current = dirty ? edited : viewFields;
+    const revising = shown?.data.state === 'revising';
+    const revisable = !!shown && REVISABLE_TYPES.includes(shown.data.type);
+    const full = nv >= INBOX_LIMITS.versions;
+    const goVersion = (n: number) => {
+      if (!shown || n < 1 || n > nv) return;
+      setPicked(n === nv ? undefined : n);
+      setShown(oKey, n === nv ? null : n);
+    };
     const who = sender ? firstName(sender.name) : '';
 
     function count(
@@ -415,6 +481,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
           run(plan).then(
             () => {
               forget();
+              if (shown) forgetOutcome(wid, shown.id);
               onDone(done);
             },
             (e: unknown) => {
@@ -432,10 +499,12 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
       setError(null);
       let plan;
       try {
+        // Exactly what is on screen at the press: the version shown, with the edit if any.
         plan = approveOutcome(ctx, {
           outcomeId: shown.id,
           outcome: shown.data,
           thread: { ...t },
+          ...(versions.length ? { version: viewN } : {}),
           ...(dirty ? { fields: edited } : {}),
         });
       } catch (e) {
@@ -494,14 +563,67 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
       );
     }
 
+    async function askAgent() {
+      const ctx = actionContext(wid);
+      if (!ctx || !shown || pending || revBusy) return;
+      setError(null);
+      let plan;
+      try {
+        plan = requestRevision(ctx, {
+          outcomeId: shown.id,
+          outcome: shown.data,
+          thread: { ...t },
+          chips: askChips,
+          instruction: askText,
+        });
+      } catch (e) {
+        setError(errorText(e));
+        return;
+      }
+      setRevBusy(true);
+      try {
+        await run(plan);
+        setAsking(false);
+        setAskChips([]);
+        setAskText('');
+        goVersion(nv);
+      } catch (e) {
+        setError(errorText(e));
+      } finally {
+        setRevBusy(false);
+      }
+    }
+
+    async function cancelAsk() {
+      const ctx = actionContext(wid);
+      if (!ctx || !shown || pending || revBusy) return;
+      setError(null);
+      setRevBusy(true);
+      try {
+        await run(
+          cancelRevision(ctx, { outcomeId: shown.id, outcome: shown.data, thread: { ...t } }),
+        );
+      } catch (e) {
+        setError(errorText(e));
+      } finally {
+        setRevBusy(false);
+      }
+    }
+
     useImperativeHandle(ref, () => ({
       approve,
       edit: () => {
         if (!pending && shown) setEditing((v) => !v);
       },
       reject: () => {
-        if (!pending && shown) setRejecting(true);
+        if (!pending && shown && !revising) setRejecting(true);
       },
+      ask: () => {
+        if (pending || !shown || !revisable || revising || full) return false;
+        setAsking(true);
+        return true;
+      },
+      version: (step) => goVersion(viewN + step),
     }));
 
     // reply_book: the agent's slot plus up to two more free ones (design 3.6).
@@ -534,7 +656,11 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
 
     if (!shown) return null;
     const others = proposals.filter((p) => p.id !== shown.id);
-    const reasonText = shown.data.note;
+    const reasonText = view ? view.note : shown.data.note;
+    const confidence = view ? view.confidence : shown.data.confidence;
+    const prevFields = viewN > 1 ? versions[viewN - 2]?.fields : undefined;
+    const asked = view?.asked && viewN > 1 ? view.asked : null;
+    const approveLabel = `${type?.approve ?? 'Approve'}${nv > 1 || revising ? ` v${viewN}` : ''}`;
     const longReason = reasonText.length > 180;
     const TypeIcon = TYPE_ICON[shown.data.type] ?? ListChecks;
     const band = bandOf(t, now);
@@ -545,13 +671,18 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
         icon: ArrowRight,
         onSelect: () => setShownId(p.id),
       })),
-      {
-        id: 'reject',
-        label: 'Reject proposal',
-        icon: X,
-        tone: 'danger' as const,
-        onSelect: () => setRejecting(true),
-      },
+      // While the agent revises, Cancel the request first (a rejection would race its v2).
+      ...(revising
+        ? []
+        : [
+            {
+              id: 'reject',
+              label: 'Reject proposal',
+              icon: X,
+              tone: 'danger' as const,
+              onSelect: () => setRejecting(true),
+            },
+          ]),
       { id: 'ignore', label: 'Ignore thread', icon: Ban, onSelect: () => threadAct('ignore') },
       {
         id: 'close',
@@ -569,7 +700,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
     void band;
 
     return (
-      <div data-outcome={shown.id} data-outcome-state="proposed">
+      <div data-outcome={shown.id} data-outcome-state={shown.data.state}>
         <div
           data-proposal={shown.id}
           data-type={shown.data.type}
@@ -585,8 +716,18 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
                 · {proposals.findIndex((p) => p.id === shown.id) + 1} of {proposals.length}
               </span>
             ) : null}
-            <ConfidenceMeter value={shown.data.confidence} className="ml-auto" />
+            <span className="ml-auto flex items-center gap-2">
+              <ConfidenceMeter value={confidence ?? undefined} />
+              {nv > 1 ? (
+                <VersionSwitcher n={viewN} of={nv} onGo={goVersion} />
+              ) : revising ? (
+                <span className="text-13 font-medium tabular-nums text-text-2">v1</span>
+              ) : null}
+            </span>
           </div>
+          {revising && shown.data.revise ? (
+            <RevisingStrip agent={agentName(shown.data.proposedBy)} asked={shown.data.revise} />
+          ) : null}
           {editing ? (
             <div className="mt-3 flex flex-col gap-3">
               {Object.entries(type?.fields ?? {}).map(([k, f]) => (
@@ -603,11 +744,41 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
           ) : (
             <p
               data-sentence=""
-              className="mt-2 text-15 leading-relaxed text-ink [overflow-wrap:anywhere]"
+              className={cn(
+                'mt-2 text-15 leading-relaxed text-ink [overflow-wrap:anywhere]',
+                revising && 'opacity-60',
+              )}
             >
-              {proposalSentence(shown.data.type, current)}
+              {prevFields && showDiff && !dirty ? (
+                <DiffText
+                  parts={wordDiff(
+                    proposalSentence(shown.data.type, prevFields),
+                    proposalSentence(shown.data.type, viewFields),
+                  )}
+                />
+              ) : (
+                proposalSentence(shown.data.type, current)
+              )}
             </p>
           )}
+          {asked ? (
+            <div className="mt-2.5 flex items-start gap-2 text-13 text-text-2">
+              <Icon icon={Sparkles} size={14} className="mt-0.5 shrink-0 text-agent" />
+              <p data-asked="" className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                You asked: <span className="italic">{askedText(asked)}</span>
+              </p>
+              {!editing && !dirty ? (
+                <button
+                  type="button"
+                  aria-pressed={!showDiff}
+                  onClick={() => setShowDiff((v) => !v)}
+                  className="shrink-0 text-13 font-medium text-agent hov:underline foc:outline-2 foc:outline-focus"
+                >
+                  {showDiff ? 'Hide changes' : 'Show changes'}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {note ? <p className="mt-2 text-13 font-medium text-gate-text">{note}</p> : null}
           {reasonText && !compact ? (
             <div className="mt-2.5 flex gap-2 text-13 text-text-2">
@@ -664,7 +835,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
               onClick={approve}
               leading={<Icon icon={Check} size={16} />}
             >
-              {type?.approve ?? 'Approve'}
+              {approveLabel}
               <Key>A</Key>
             </Button>
           )}
@@ -686,6 +857,31 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
             </span>
             {editing ? null : <Key>E</Key>}
           </Button>
+          {revisable && revising ? (
+            <Button
+              variant="secondary"
+              disabled={!!pending}
+              loading={revBusy}
+              onClick={() => void cancelAsk()}
+              aria-label="Revising, cancel the request"
+              leading={<Icon icon={Sparkles} size={15} className="text-agent" />}
+            >
+              <span className="text-agent">Revising… · Cancel</span>
+            </Button>
+          ) : revisable ? (
+            <Button
+              variant="secondary"
+              disabled={!!pending || full}
+              aria-expanded={asking}
+              data-ask-changes=""
+              onClick={() => setAsking((v) => !v)}
+              leading={<Icon icon={Sparkles} size={15} className="text-agent" />}
+            >
+              <span className={narrow ? 'hidden' : 'max-sm:hidden'}>Ask for changes</span>
+              <span className={narrow ? '' : 'sm:hidden'}>Changes</span>
+              <Key>C</Key>
+            </Button>
+          ) : null}
           <ActionMenu
             label="Other actions"
             actions={menu}
@@ -715,6 +911,32 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
             </Button>
           ) : null}
         </div>
+        {revisable && full && !revising ? (
+          <p className="mt-2 text-13 text-text-2">
+            {nv} versions: edit it yourself or pick another outcome.
+          </p>
+        ) : null}
+        {revisable && revising ? (
+          <p className="mt-2 text-13 text-text-2">
+            You can still send v{viewN}, or edit it; the agent’s v{nv + 1} then is refused.
+          </p>
+        ) : null}
+        {asking && revisable && !revising && !pending ? (
+          <AskBox
+            chips={askChips}
+            text={askText}
+            next={nv + 1}
+            busy={revBusy}
+            onChips={setAskChips}
+            onText={setAskText}
+            onCancel={() => {
+              setAsking(false);
+              setAskChips([]);
+              setAskText('');
+            }}
+            onAsk={() => void askAgent()}
+          />
+        ) : null}
         <Dialog
           open={rejecting}
           onOpenChange={(o) => {

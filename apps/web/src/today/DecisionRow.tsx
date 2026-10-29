@@ -92,7 +92,11 @@ export function DecisionRow({
           </span>
         ) : null}
         {first && !asked ? (
-          <ConfidenceMeter value={first.data.confidence} compact className="max-sm:hidden" />
+          <ConfidenceMeter
+            value={first.data.confidence ?? undefined}
+            compact
+            className="max-sm:hidden"
+          />
         ) : null}
         <Badge tone={asked ? 'gate' : 'agent'} className="shrink-0">
           {asked

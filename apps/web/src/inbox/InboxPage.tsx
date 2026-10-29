@@ -21,6 +21,7 @@ import { displayName, useProfiles } from '../members/data';
 import { isLive } from '../shell/logic';
 import { useShellData } from '../shell/data';
 import { useShortcut } from '../shell/shortcuts';
+import { useOptionalCapture } from '../capture/CaptureProvider';
 import { AgentAvatar } from '../ui/avatar';
 import { Segmented, Select } from '../ui/form';
 import { Eyebrow } from '../ui/badge';
@@ -238,6 +239,7 @@ export function InboxPage() {
     return r?.thread ? r : null;
   })();
   const cardRef = useRef<DecisionCardHandle>(null);
+  const capture = useOptionalCapture();
   const today = useToday(all, list, tidy, now, done.length);
 
   // Moving on: the held entry goes in the same render that shows the next selection.
@@ -540,6 +542,30 @@ export function InboxPage() {
     label: 'Edit the proposal',
     group: 'Needs you',
     run: () => cardRef.current?.edit(),
+  });
+  useShortcut({
+    id: 'today:ask',
+    keys: ['c'],
+    label: 'Ask the agent for changes',
+    group: 'Needs you',
+    priority: 1,
+    run: () => {
+      if (!cardRef.current?.ask?.()) capture?.open();
+    },
+  });
+  useShortcut({
+    id: 'today:prev-version',
+    keys: ['['],
+    label: 'Earlier version of the proposal',
+    group: 'Needs you',
+    run: () => cardRef.current?.version?.(-1),
+  });
+  useShortcut({
+    id: 'today:next-version',
+    keys: [']'],
+    label: 'Later version of the proposal',
+    group: 'Needs you',
+    run: () => cardRef.current?.version?.(1),
   });
   useShortcut({
     id: 'today:skip',

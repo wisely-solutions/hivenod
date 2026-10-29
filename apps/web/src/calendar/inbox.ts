@@ -42,7 +42,11 @@ export function proposedBookings(
   const out: Proposed[] = [];
   for (const i of inputs)
     for (const o of i.openOutcomes) {
-      if (o.data.type !== 'reply_book' || o.data.state !== 'proposed') continue;
+      if (
+        o.data.type !== 'reply_book' ||
+        (o.data.state !== 'proposed' && o.data.state !== 'revising')
+      )
+        continue;
       const s = Date.parse(String(o.data.fields.start ?? ''));
       const e = Date.parse(String(o.data.fields.end ?? ''));
       if (Number.isNaN(s) || Number.isNaN(e) || e <= s) continue;

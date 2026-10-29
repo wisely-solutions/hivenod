@@ -124,6 +124,7 @@ var runners = map[string]runner{
 	"retitleThread":   act(RetitleThread),
 	"proposeOutcome":  act(ProposeOutcome),
 	"finishOutcome":   act(FinishOutcome),
+	"reviseOutcome":   act(ReviseOutcome),
 	"wakeThread":      act(WakeThread),
 	"cleanOutcomeFields": pure(func(in struct {
 		Type   string         `json:"type"`

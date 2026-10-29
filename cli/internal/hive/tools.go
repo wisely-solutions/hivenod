@@ -197,7 +197,7 @@ var ToolRuns = map[string]Run{
 		return c.InboxAsk(ctx, a.S("threadId"), a.S("question"), a.Strings("options"))
 	},
 	"outcome_propose": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.OutcomePropose(ctx, a.S("threadId"), a.S("type"), asMap(a["fields"]), a.SP("note"), ProposeExtra{Confidence: a.SP("confidence"), Checks: a.Strings("checks")})
+		return c.OutcomePropose(ctx, a.S("threadId"), a.S("type"), asMap(a["fields"]), a.SP("note"), ProposeExtra{Confidence: a.SP("confidence"), Checks: a.Strings("checks"), Revises: a.SP("revises")})
 	},
 	"outcome_done": func(ctx context.Context, c *Client, a Args) (any, error) {
 		r := Args(asMap(a["result"]))

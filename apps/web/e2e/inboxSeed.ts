@@ -19,6 +19,7 @@ import {
   inboxPaths,
   inboxThreadKey,
   proposeOutcome,
+  reviseOutcome,
   type ActionContext,
   type ActionPlan,
   type OutcomeStateOf,
@@ -125,6 +126,27 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
       });
       await run(p);
       return p.outcomeId;
+    },
+    /** Ask for changes: the next version of an outcome the member asked changes for. */
+    async revise(
+      oid: string,
+      fields: Record<string, unknown>,
+      note = '',
+      /** A stale read of the outcome (a revision that arrives late). */
+      snapshot?: OutcomeStateOf,
+    ) {
+      const o =
+        snapshot ??
+        ((await getDoc(doc(db, inboxPaths.outcome(wid, oid)))).data() as OutcomeStateOf);
+      const p = reviseOutcome(ctx, {
+        outcomeId: oid,
+        outcome: o,
+        thread: await thread(o.threadId),
+        fields,
+        note,
+      });
+      await run(p);
+      return p.version;
     },
     async flag(tid: string, urgent: boolean) {
       await run(flagThread(ctx, { threadId: tid, thread: await thread(tid), urgent }));

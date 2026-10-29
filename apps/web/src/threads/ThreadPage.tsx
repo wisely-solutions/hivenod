@@ -155,8 +155,10 @@ export function ThreadPage() {
   const allOutcomes = (outcomes.state === 'ready' ? outcomes.data : []).sort(
     (a, b) => a.data.createdAt.toMillis() - b.data.createdAt.toMillis(),
   );
-  const proposed = allOutcomes.filter((o) => o.data.state === 'proposed');
-  const decided = allOutcomes.filter((o) => o.data.state !== 'proposed');
+  const open = (o: (typeof allOutcomes)[number]) =>
+    o.data.state === 'proposed' || o.data.state === 'revising';
+  const proposed = allOutcomes.filter(open);
+  const decided = allOutcomes.filter((o) => !open(o));
   const subjectName = subject.state === 'ready' ? (subject.data?.name ?? '') : '';
   const closed = t.state === 'done' || t.state === 'ignored';
   const urgent = t.urgent === true;

@@ -22,6 +22,7 @@ import {
   relateSubjects,
   relationId,
   approveOutcome,
+  requestRevision,
   inboxPaths,
   setInboxLabels,
   setSubjectLabel,
@@ -727,6 +728,110 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
           {
             confidence: 'high',
             checks: ['Last year: 3% for early sign-off', 'Your answer: ask for 3%'],
+          },
+        ],
+      },
+    });
+    matchesGolden(r);
+  }, 120_000);
+
+  it('ask for changes (item L7OzW): the proposer revises in place, versions kept, a late revision refused', async () => {
+    const r = await scenario(async (call) => {
+      const owner = as('owner');
+      const thread = async (tid: string) =>
+        (await snap(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+      const outcome = async (oid: string) =>
+        (await snap(inboxPaths.outcome(W, oid))) as unknown as OutcomeStateOf;
+      const t1 = out(
+        await call('inbox_add', {
+          source: 'teams',
+          sender: { name: 'Sam Example', handle: 'sam@example.com' },
+          text: 'Can we move the payments review to Thursday?',
+          threadRef: 'review-1',
+          receivedAt: '2026-10-28T09:00:00Z',
+        }),
+      ).threadId as string;
+      const oid = out(
+        await call('outcome_propose', {
+          threadId: t1,
+          type: 'reply',
+          fields: { text: 'Hi Sam, thanks for flagging this. Thursday works for me. Best, Cara' },
+          note: 'They asked to move it.',
+          confidence: 'high',
+        }),
+      ).outcomeId as string;
+      // Nobody asked yet: refused.
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'reply',
+        fields: { text: 'x' },
+        revises: oid,
+      });
+      const ask = async (chips: string[], instruction: string | null) =>
+        owner.run(
+          requestRevision(owner.ctx, {
+            outcomeId: oid,
+            outcome: await outcome(oid),
+            thread: await thread(t1),
+            chips,
+            instruction,
+          }),
+        );
+      await ask(['shorter', 'availability'], 'Mention 14:00 as a backup');
+      await call('thread_read', { threadId: t1 });
+      // Another type: refused, propose a new outcome instead.
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'nudge',
+        fields: { text: 'x' },
+        revises: oid,
+      });
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'reply',
+        fields: { text: 'Hi Sam, Thursday 10:00 works; 14:00 is free too. Cara' },
+        note: 'Shorter, with a backup.',
+        confidence: 'medium',
+        checks: ['Thu 14:00 free'],
+        revises: oid,
+      });
+      await call('thread_read', { threadId: t1 });
+      // Asked again, but the person sends v1 meanwhile: the late revision is refused.
+      await ask(['warmer'], null);
+      const o = await outcome(oid);
+      await owner.run(
+        approveOutcome(owner.ctx, {
+          outcomeId: oid,
+          outcome: o,
+          thread: await thread(t1),
+          version: 1,
+        }),
+      );
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'reply',
+        fields: { text: 'Late.' },
+        revises: oid,
+      });
+      await call('thread_read', { threadId: t1 });
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([true, true, false, true, false, true, true, false, true]);
+    expect(r.calls[3]).toMatchObject({
+      out: {
+        outcomes: [
+          { state: 'revising', versions: 1, revise: { chips: ['shorter', 'availability'] } },
+        ],
+      },
+    });
+    expect(r.calls[5]).toMatchObject({ out: { version: 2, state: 'proposed' } });
+    expect(r.calls[8]).toMatchObject({
+      out: {
+        outcomes: [
+          {
+            state: 'approved',
+            versions: 2,
+            fields: { text: 'Hi Sam, thanks for flagging this. Thursday works for me. Best, Cara' },
           },
         ],
       },

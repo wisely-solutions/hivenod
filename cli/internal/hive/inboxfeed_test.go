@@ -3,6 +3,7 @@ package hive
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +13,8 @@ type fakeInbox struct {
 	mu       sync.Mutex
 	onT      func([]FeedThread)
 	onO      func([]FeedOutcome)
+	onR      func([]FeedRevise)
+	revising []FeedRevise
 	events   map[string]*FeedEvent
 	woken    []string
 	subs     int
@@ -31,6 +34,13 @@ func (f *fakeInbox) WatchOutcomes(_ context.Context, on func([]FeedOutcome)) {
 	f.mu.Lock()
 	f.onO = on
 	rows := f.outcomes
+	f.mu.Unlock()
+	on(rows)
+}
+func (f *fakeInbox) WatchRevising(_ context.Context, on func([]FeedRevise)) {
+	f.mu.Lock()
+	f.onR = on
+	rows := f.revising
 	f.mu.Unlock()
 	on(rows)
 }
@@ -205,4 +215,54 @@ func TestInboxFeedOff(t *testing.T) {
 	if r.src.subs != 0 {
 		t.Fatal("subscribed while off")
 	}
+}
+
+func (r *feedRig) revise(rows []FeedRevise) {
+	r.src.mu.Lock()
+	r.src.revising = rows
+	on := r.src.onR
+	r.src.mu.Unlock()
+	if on != nil {
+		on(rows)
+	}
+	r.settle()
+}
+
+// Ask for changes (item L7OzWKMYZ1O2dX33Xkrj): one revise event per request, at priority 1
+// (after carry_out, before new work); a new request after a cancel is a new event.
+func TestInboxFeedRevise(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 1})
+	r.event("e-t1", "inbox.added", map[string]any{"newThread": true})
+	rv := FeedRevise{ID: "o1", ThreadID: "t5", MemberUID: "joao", Type: "reply", Instruction: "Mention 14:00", Chips: []string{"shorter", "availability"}, AtMs: r.now.UnixMilli()}
+	r.src.mu.Lock()
+	r.src.revising = []FeedRevise{rv}
+	r.src.threads = []FeedThread{r.th("t1", nil)}
+	r.src.mu.Unlock()
+	r.feed.Start()
+	r.settle()
+	r.want("t5:revise")
+	r.mu.Lock()
+	e := r.pushed[0]
+	r.mu.Unlock()
+	if e.Meta["outcome_id"] != "o1" || e.Meta["outcome_type"] != "reply" {
+		t.Fatal(e.Meta)
+	}
+	for _, w := range []string{"shorter; add my availability; \"Mention 14:00\"", "outcome_propose revises=o1", "inbox_ask"} {
+		if !strings.Contains(e.Content, w) {
+			t.Fatalf("%q lacks %q", e.Content, w)
+		}
+	}
+	// The same request again (a reconnect) is not sent twice.
+	r.revise([]FeedRevise{rv})
+	r.want("t5:revise")
+	// Revised (no longer revising): the slot frees, the new thread goes out.
+	r.revise(nil)
+	r.want("t5:revise", "t1:new")
+	// A new request later is a new event.
+	r.set(nil, nil)
+	rv2 := rv
+	rv2.AtMs += 60_000
+	rv2.Chips, rv2.Instruction = []string{"warmer"}, ""
+	r.revise([]FeedRevise{rv2})
+	r.want("t5:revise", "t1:new", "t5:revise")
 }

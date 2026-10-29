@@ -64,7 +64,18 @@ export const THREAD_OPEN: readonly ThreadState[] = [
 /** A new message from them reopens these. */
 const REOPENS: readonly ThreadState[] = ['waiting', 'done', 'ignored'];
 
-export const OUTCOME_STATES = ['proposed', 'approved', 'rejected', 'done', 'failed'] as const;
+/**
+ * `revising`: the member asked the proposing agent for changes (Ask for changes, item
+ * L7OzWKMYZ1O2dX33Xkrj); the thread stays in Your call and nothing is rejected.
+ */
+export const OUTCOME_STATES = [
+  'proposed',
+  'revising',
+  'approved',
+  'rejected',
+  'done',
+  'failed',
+] as const;
 export type OutcomeState = (typeof OUTCOME_STATES)[number];
 
 export const INBOX_EVENT_TYPES = [
@@ -75,6 +86,7 @@ export const INBOX_EVENT_TYPES = [
   'thread.asked',
   'thread.woke',
   'outcome.proposed',
+  'outcome.revised',
   'outcome.done',
   'outcome.failed',
   // agents and the member
@@ -90,6 +102,7 @@ export const INBOX_EVENT_TYPES = [
   'thread.itemMade',
   'outcome.approved',
   'outcome.rejected',
+  'outcome.revise_requested',
   'subject.created',
   'subject.renamed',
   'subject.merged',
@@ -139,7 +152,28 @@ export const INBOX_LIMITS = {
   /** Answer chips on a question: count, then characters each. */
   options: 4,
   option: 80,
+  /** Ask for changes: the instruction's characters, and the versions an outcome keeps. */
+  reviseInstruction: 500,
+  versions: 10,
 } as const;
+
+/** The quick chips of Ask for changes, in the order the card shows them. */
+export const REVISE_CHIPS = ['shorter', 'formal', 'warmer', 'availability'] as const;
+export type ReviseChip = (typeof REVISE_CHIPS)[number];
+export const REVISE_CHIP_LABELS: Record<ReviseChip, string> = {
+  shorter: 'Shorter',
+  formal: 'More formal',
+  warmer: 'Warmer',
+  availability: 'Add my availability',
+};
+/** The outcome types with text worth revising (the others are a one-tap decision). */
+export const REVISABLE_TYPES: readonly string[] = [
+  'reply',
+  'reply_book',
+  'nudge',
+  'handover',
+  'make_it_work',
+];
 
 /** How sure the agent is of a proposed outcome (item kt3E7u9EliL3q2veDDI0). */
 export const OUTCOME_CONFIDENCE = ['high', 'medium', 'low'] as const;
@@ -236,6 +270,27 @@ export const inboxMessageSchema = z.object({
 });
 export type InboxMessage = z.infer<typeof inboxMessageSchema>;
 
+const reviseAskSchema = z.object({
+  instruction: z.string().max(INBOX_LIMITS.reviseInstruction).nullable(),
+  chips: z.array(z.enum(REVISE_CHIPS)).max(REVISE_CHIPS.length),
+});
+const reviseSchema = reviseAskSchema.extend({ byUid: z.string(), at: timestamp });
+export const outcomeVersionSchema = z.object({
+  /** 1, 2, … in order. */
+  n: z.number().int().min(1),
+  fields: z.record(z.string(), z.union([z.string(), z.boolean()])),
+  note: z.string().max(INBOX_LIMITS.outcomeNote),
+  confidence: z.enum(OUTCOME_CONFIDENCE).nullable(),
+  checks: z.array(z.string()),
+  /** The agent that wrote it. */
+  by: z.string(),
+  /** The outcome.revised event that wrote it (null for v1: the proposal). */
+  eventId: z.string().nullable(),
+  /** What the member asked for to get it (null for v1). */
+  asked: reviseAskSchema.nullable(),
+});
+export type OutcomeVersion = z.infer<typeof outcomeVersionSchema>;
+
 export const inboxOutcomeSchema = z.object({
   memberUid: z.string(),
   threadId: z.string(),
@@ -244,8 +299,8 @@ export const inboxOutcomeSchema = z.object({
   state: z.enum(OUTCOME_STATES),
   /** The agent's why, for the member. */
   note: z.string().max(INBOX_LIMITS.outcomeNote),
-  /** How sure the agent is; absent on older outcomes (no meter). */
-  confidence: z.enum(OUTCOME_CONFIDENCE).optional(),
+  /** How sure the agent is; absent (or null after a revision without one): no meter. */
+  confidence: z.enum(OUTCOME_CONFIDENCE).nullable().optional(),
   /** What the agent verified, one line each; absent on older outcomes. */
   checks: z.array(z.string().max(INBOX_LIMITS.check)).max(INBOX_LIMITS.checks).optional(),
   proposedBy: z.string(),
@@ -257,8 +312,17 @@ export const inboxOutcomeSchema = z.object({
       at: timestamp,
       edited: z.boolean(),
       reason: z.string().nullable(),
+      /** The version approved (absent or null: the outcome was never revised). */
+      version: z.number().int().nullable().optional(),
     })
     .nullable(),
+  /**
+   * Every version once the member asked for changes (append-only, at most 10; absent before).
+   * The top-level fields, note, confidence and checks always hold the latest one.
+   */
+  versions: z.array(outcomeVersionSchema).max(INBOX_LIMITS.versions).optional(),
+  /** What the member asked while `revising`; null (or absent) otherwise. */
+  revise: reviseSchema.nullable().optional(),
   result: z
     .object({
       text: z.string().nullable(),
@@ -310,7 +374,10 @@ export type ThreadStateOf = Pick<
 export type OutcomeStateOf = Pick<
   InboxOutcome,
   'memberUid' | 'threadId' | 'type' | 'fields' | 'state' | 'executor'
->;
+> &
+  Partial<
+    Pick<InboxOutcome, 'proposedBy' | 'note' | 'confidence' | 'checks' | 'versions' | 'revise'>
+  >;
 
 // ---------- ids ----------
 
@@ -1057,12 +1124,31 @@ export function approveOutcome(
     outcome: OutcomeStateOf;
     thread: ThreadStateOf;
     fields?: Readonly<Record<string, unknown>>;
+    /**
+     * The version on show (Ask for changes): its fields are the ones approved, unless edited.
+     * Approving while the agent revises ends the request; its late revision is then refused.
+     */
+    version?: number;
   },
 ): ActionPlan {
   const o = input.outcome;
   owner(ctx, o.memberUid);
-  need(o.state === 'proposed', 'Only a proposed outcome can be approved.');
-  let fields = o.fields;
+  need(
+    o.state === 'proposed' || o.state === 'revising',
+    'Only a proposed outcome can be approved.',
+  );
+  const versions = o.versions ?? [];
+  let base = o.fields;
+  if (input.version !== undefined) {
+    const v = versions[input.version - 1];
+    need(
+      Number.isInteger(input.version) && v !== undefined && v.n === input.version,
+      `There is no version ${input.version} of this proposal.`,
+    );
+    base = v!.fields;
+  }
+  const version = versions.length ? (input.version ?? versions.length) : null;
+  let fields = base;
   if (input.fields) {
     try {
       fields = cleanOutcomeFields(o.type, input.fields);
@@ -1071,20 +1157,33 @@ export function approveOutcome(
       throw e;
     }
   }
-  const edited = JSON.stringify(sorted(fields)) !== JSON.stringify(sorted(o.fields));
+  const edited = JSON.stringify(sorted(fields)) !== JSON.stringify(sorted(base));
   const immediate = outcomeType(o.type)?.executor === 'none';
   const approval = inboxPlan(
     ctx,
     'outcome.approved',
     { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
-    { outcomeId: input.outcomeId, type: o.type, edited, ...(edited ? { fields } : {}) },
+    {
+      outcomeId: input.outcomeId,
+      type: o.type,
+      edited,
+      ...(edited ? { fields } : {}),
+      ...(version !== null ? { version } : {}),
+    },
     (eventId) => [
       upd(
         inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
         {
           state: immediate ? 'done' : 'approved',
           fields,
-          decision: { byUid: ctx.actor.id, at: SERVER_TIME, edited, reason: null },
+          decision: {
+            byUid: ctx.actor.id,
+            at: SERVER_TIME,
+            edited,
+            reason: null,
+            ...(version !== null ? { version } : {}),
+          },
+          ...(o.state === 'revising' ? { revise: null } : {}),
         },
         eventId,
       ),
@@ -1195,6 +1294,201 @@ export function rejectOutcome(
         : []),
     ],
   );
+}
+
+// ---------- Ask for changes (item L7OzWKMYZ1O2dX33Xkrj) ----------
+
+/** How many versions an outcome has (1 before any revision). */
+export function versionCount(o: Pick<OutcomeStateOf, 'versions'>): number {
+  return Math.max(o.versions?.length ?? 0, 1);
+}
+
+/**
+ * The member asks the proposing agent for changes: quick chips and/or an instruction (1-500
+ * characters). The outcome goes to `revising` in place; the thread stays in Your call and no
+ * rejection is written. The agent gets a `revise` inbox event.
+ */
+export function requestRevision(
+  ctx: ActionContext,
+  input: {
+    outcomeId: string;
+    outcome: OutcomeStateOf;
+    thread: ThreadStateOf;
+    instruction?: string | null;
+    chips?: readonly string[] | null;
+  },
+): ActionPlan {
+  const o = input.outcome;
+  owner(ctx, o.memberUid);
+  need(
+    o.state === 'proposed',
+    o.state === 'revising'
+      ? 'The agent is already revising it.'
+      : 'Only a proposed outcome can be revised.',
+  );
+  need(REVISABLE_TYPES.includes(o.type), `A ${o.type} proposal has nothing to revise.`);
+  need(
+    versionCount(o) < INBOX_LIMITS.versions,
+    `This proposal has ${INBOX_LIMITS.versions} versions: edit it yourself or pick another outcome.`,
+  );
+  const instruction = input.instruction?.trim() || null;
+  need(
+    instruction === null || instruction.length <= INBOX_LIMITS.reviseInstruction,
+    tooLong('The instruction', INBOX_LIMITS.reviseInstruction),
+  );
+  const raw = input.chips ?? [];
+  need(
+    raw.every((c) => (REVISE_CHIPS as readonly string[]).includes(c)),
+    `The chips are ${REVISE_CHIPS.join(', ')}.`,
+  );
+  const chips = REVISE_CHIPS.filter((c) => raw.includes(c));
+  need(instruction !== null || chips.length > 0, 'Say what should change.');
+  return inboxPlan(
+    ctx,
+    'outcome.revise_requested',
+    { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
+    { outcomeId: input.outcomeId, type: o.type, instruction, chips },
+    (eventId) => [
+      upd(
+        inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
+        {
+          state: 'revising',
+          revise: { instruction, chips, byUid: ctx.actor.id, at: SERVER_TIME },
+        },
+        eventId,
+      ),
+    ],
+  );
+}
+
+/** The member takes the request back ("Revising… · Cancel"): the outcome is proposed again. */
+export function cancelRevision(
+  ctx: ActionContext,
+  input: { outcomeId: string; outcome: OutcomeStateOf; thread: ThreadStateOf },
+): ActionPlan {
+  const o = input.outcome;
+  owner(ctx, o.memberUid);
+  need(o.state === 'revising', 'Nothing to cancel: the agent is not revising it.');
+  return inboxPlan(
+    ctx,
+    'outcome.revise_requested',
+    { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
+    { outcomeId: input.outcomeId, type: o.type, instruction: null, chips: [] },
+    (eventId) => [
+      upd(
+        inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
+        { state: 'proposed', revise: null },
+        eventId,
+      ),
+    ],
+  );
+}
+
+/**
+ * The proposing agent writes the next version (outcome_propose with `revises`): same type, the
+ * fields cleaned as a proposal's. The first revision keeps the original as v1. The outcome is
+ * proposed again in the same slot; a decided outcome refuses it.
+ */
+export function reviseOutcome(
+  ctx: ActionContext,
+  input: {
+    outcomeId: string;
+    outcome: OutcomeStateOf;
+    thread: ThreadStateOf;
+    type?: string;
+    threadId?: string;
+    fields: Readonly<Record<string, unknown>>;
+    note?: string;
+    confidence?: string | null;
+    checks?: readonly string[] | null;
+  },
+): ActionPlan & { version: number } {
+  requireAgent(ctx);
+  const o = input.outcome;
+  need(
+    input.threadId === undefined || input.threadId === o.threadId,
+    `Outcome ${input.outcomeId} is on thread ${o.threadId}, not ${input.threadId}: propose a new outcome instead.`,
+  );
+  need(
+    input.type === undefined || input.type === o.type,
+    `Outcome ${input.outcomeId} is a ${o.type}; a revision keeps the type: propose a new outcome instead.`,
+  );
+  need(
+    o.state === 'revising',
+    o.state === 'proposed'
+      ? 'Nobody asked for changes on this outcome (or the person cancelled the request).'
+      : `This outcome was already decided (${o.state}): your revision is not needed.`,
+  );
+  need(o.proposedBy === ctx.actor.id, 'Only the agent that proposed this outcome revises it.');
+  let fields: Record<string, string | boolean>;
+  try {
+    fields = cleanOutcomeFields(o.type, input.fields);
+  } catch (e) {
+    if (e instanceof OutcomeFieldError) throw new ActionError(e.message);
+    throw e;
+  }
+  const note = (input.note ?? '').trim();
+  need(note.length <= INBOX_LIMITS.outcomeNote, tooLong('The note', INBOX_LIMITS.outcomeNote));
+  const conf = input.confidence ?? null;
+  need(
+    conf === null || (OUTCOME_CONFIDENCE as readonly string[]).includes(conf),
+    'The confidence is high, medium or low.',
+  );
+  const checks = cleanLines('checks', input.checks, INBOX_LIMITS.checks, INBOX_LIMITS.check);
+  const prior: OutcomeVersion[] = o.versions?.length
+    ? [...o.versions]
+    : [
+        {
+          n: 1,
+          fields: o.fields,
+          note: o.note ?? '',
+          confidence: o.confidence ?? null,
+          checks: o.checks ?? [],
+          by: o.proposedBy ?? ctx.actor.id,
+          eventId: null,
+          asked: null,
+        },
+      ];
+  need(
+    prior.length < INBOX_LIMITS.versions,
+    `This proposal has ${INBOX_LIMITS.versions} versions already.`,
+  );
+  const version = prior.length + 1;
+  const asked = o.revise ? { instruction: o.revise.instruction, chips: o.revise.chips } : null;
+  const p = inboxPlan(
+    ctx,
+    'outcome.revised',
+    { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
+    { outcomeId: input.outcomeId, type: o.type, version, fields },
+    (eventId) => [
+      upd(
+        inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
+        {
+          state: 'proposed',
+          fields,
+          note,
+          confidence: conf,
+          checks,
+          versions: [
+            ...prior,
+            {
+              n: version,
+              fields,
+              note,
+              confidence: conf,
+              checks,
+              by: ctx.actor.id,
+              eventId,
+              asked,
+            },
+          ],
+          revise: null,
+        },
+        eventId,
+      ),
+    ],
+  );
+  return { ...p, version };
 }
 
 function setThreadState(

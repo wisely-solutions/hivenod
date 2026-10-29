@@ -34,6 +34,11 @@ dispatch, route and give back; the sub-agents do the work.
    exactly one `label` (the kind of request) from the `labels` that `subject_list` returns,
    Other if none fits; the person confirms or changes it, and a label they confirmed is never
    overwritten.
+   When the person asks for changes (`reason="revise"`), route it to the thread's sub-agent (or
+   start one). Revise the same outcome with `outcome_propose` `revises=<outcomeId>` (same thread
+   and type): apply only what was asked, keep the rest, and do not reject it or start a new
+   outcome. If the change can't be made (the asked time is taken), say why with `inbox_ask` on
+   the thread.
 6. **Keep the main context small.** Sub-agents report in one line and report their own run cost
    with complete, send_back or end_run. Keep a short table item_id -> sub-agent in your head or
    notes, nothing more.

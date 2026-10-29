@@ -85,7 +85,7 @@ export const AgentPanel = forwardRef<DecisionCardHandle, AgentPanelProps>(
             worked on this · {sources} {sources === 1 ? 'source' : 'sources'}
           </p>
         </div>
-        {shown ? <ConfidenceMeter value={shown.data.confidence} /> : null}
+        {shown ? <ConfidenceMeter value={shown.data.confidence ?? undefined} /> : null}
       </div>
     );
 

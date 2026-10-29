@@ -114,6 +114,35 @@ An outcome's life:
    `outcome_done`: `done` moves the thread to the type's state, and `failed` sends it back to
    `investigating`.
 
+### Ask for changes (item L7OzWKMYZ1O2dX33Xkrj)
+
+Instead of rejecting a proposal and waiting for a new one, the member can ask the agent that
+proposed it to change it. It works on the types with text: `reply`, `reply_book`, `nudge`,
+`handover` and `make_it_work`.
+
+1. **The member asks** (`requestRevision`, event `outcome.revise_requested`, member): quick
+   chips (`shorter`, `formal`, `warmer`, `availability`) and/or an instruction of 1-500
+   characters. The outcome goes to **`revising`** in place, with
+   `revise: {instruction, chips, byUid, at}`. The thread stays in `yourCall`, so the card keeps
+   its slot, and no rejection is written. Cancel (`cancelRevision`, the same event with no
+   chips and no instruction) puts it back to `proposed`.
+2. **The proposing agent revises** (`outcome_propose` with `revises: <outcomeId>`, CLI
+   `--revises`; `reviseOutcome`, event `outcome.revised`): same thread and type, fields cleaned
+   as for a proposal. The outcome is `proposed` again. `versions` is an append-only list on the
+   outcome, created by the first revision: v1 is the original proposal, then one entry per
+   revision `{n, fields, note, confidence, checks, by, eventId, asked}` (`asked` is what the
+   member asked for, `eventId` the `outcome.revised` event; both null for v1). At most 10
+   versions. The top-level `fields`, `note`, `confidence` and `checks` always hold the latest
+   version, so carrying out and the CLI are unchanged.
+3. **The member approves the version shown** (`approveOutcome` with `version`): its fields, or
+   the member's edit of them, and `decision.version` records which one. Edit changes the shown
+   version at approval; it never makes a new version. Approving also works while the agent
+   revises: that ends the request, and the agent's late revision is refused ("already decided").
+   Reject needs `proposed` (Cancel first).
+
+An agent that can't make the change (the time asked for is taken, say) says why with
+`inbox_ask` on the thread; the outcome stays `revising` until the member cancels or sends.
+
 ### Bookings (`reply_book`, item w9SAf)
 
 Approving a `reply_book` outcome also books the meeting, in the same batch: `approveOutcome`
@@ -224,12 +253,16 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
   - bring messages in for a member of their organization;
   - file threads under that member's subjects;
   - add notes, ask questions and propose outcomes. The executor is fixed by the rules;
+  - revise an outcome they proposed while the member asks for changes (`revising`): same type,
+    a proposal's fields, the versions append-only, at most 10;
   - wake a thread whose date has passed;
   - report outcomes they carry out, but only after approval;
   - retitle threads.
 - **The member** can:
   - answer questions;
-  - approve, edit and reject outcomes;
+  - approve, edit and reject outcomes, approve a chosen version (also while revising);
+  - ask the proposing agent for changes (chips and/or 1-500 characters, below 10 versions) and
+    cancel that;
   - ignore, close and bring back threads;
   - move threads between subjects;
   - rename, merge and split subjects.
@@ -239,27 +272,27 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
   the member's OK.
 - **Tracking:** every inbox write is tracked in `inboxEvents`, never in the organization-wide
   `events`, which every member can read.
-- **Tests:** `packages/shared/rules/inbox.test.ts` and `inboxrelations.test.ts`. The `inbox: …` mutations in
+- **Tests:** `packages/shared/rules/inbox.test.ts`, `inboxrevise.test.ts` and `inboxrelations.test.ts`. The `inbox: …` mutations in
   `packages/shared/rules/mutate.mjs` are all caught.
 
 ## Agent tools (MCP and Go CLI)
 
-| Tool              | CLI                          | What it does                                                                                                                |
-| ----------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `inbox_add`       | `hivenod inbox add`          | Brings a message in. It's for `member`, by default the person who connected the agent. Repeats are reported as duplicates.  |
-| `inbox_list`      | `hivenod inbox list`         | Lists what agents have to do: `toWork`, `toCarryOut` (approved outcomes this agent carries out) and `toWake`.               |
-| `thread_read`     | `hivenod thread read ID`     | Shows one thread: messages, subject, outcomes and decisions, notes and Q&A, and what to do next.                            |
-| `subject_list`    | `hivenod subject list`       | Lists a member's subjects, with how many threads wait for them and how many are open.                                       |
-| `subject_assign`  | `hivenod subject assign ID`  | Files or moves a thread under an existing subject or a new one. A matching name reuses the existing subject.                |
-| `subject_search`  | `hivenod subject search …`   | Finds a member's subjects by name, people, channel and thread text, with filters (see "Finding subjects").                  |
-| `subject_relate`  | `hivenod subject relate A B` | Proposes two subjects as related, with a note. The member OKs or turns it down.                                             |
-| `inbox_note`      | `hivenod inbox note ID`      | Adds an investigation note to the timeline.                                                                                 |
-| `inbox_ask`       | `hivenod inbox ask ID`       | Asks the member a question. The thread waits in Needs you.                                                                  |
-| `outcome_propose` | `hivenod outcome propose ID` | Proposes an outcome of a type from the registry, with its fields.                                                           |
-| `outcome_done`    | `hivenod outcome done OID`   | The executor reports an approved outcome as done or failed.                                                                 |
-| `thread_wake`     | `hivenod thread wake ID`     | Wakes a snoozed thread whose date has come.                                                                                 |
-| `thread_flag`     | `hivenod thread flag ID`     | Marks a thread urgent (or not, `urgent: false` / `--off`): the notifier pings the member at once, whatever the quiet hours. |
-| `thread_due`      | `hivenod thread due ID ISO`  | Sets the deadline a message states (ISO 8601 with its offset), or clears it (`due: null` / `--clear`). Today ranks by it.   |
+| Tool              | CLI                          | What it does                                                                                                                     |
+| ----------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `inbox_add`       | `hivenod inbox add`          | Brings a message in. It's for `member`, by default the person who connected the agent. Repeats are reported as duplicates.       |
+| `inbox_list`      | `hivenod inbox list`         | Lists what agents have to do: `toWork`, `toCarryOut` (approved outcomes this agent carries out) and `toWake`.                    |
+| `thread_read`     | `hivenod thread read ID`     | Shows one thread: messages, subject, outcomes and decisions, notes and Q&A, and what to do next.                                 |
+| `subject_list`    | `hivenod subject list`       | Lists a member's subjects, with how many threads wait for them and how many are open.                                            |
+| `subject_assign`  | `hivenod subject assign ID`  | Files or moves a thread under an existing subject or a new one. A matching name reuses the existing subject.                     |
+| `subject_search`  | `hivenod subject search …`   | Finds a member's subjects by name, people, channel and thread text, with filters (see "Finding subjects").                       |
+| `subject_relate`  | `hivenod subject relate A B` | Proposes two subjects as related, with a note. The member OKs or turns it down.                                                  |
+| `inbox_note`      | `hivenod inbox note ID`      | Adds an investigation note to the timeline.                                                                                      |
+| `inbox_ask`       | `hivenod inbox ask ID`       | Asks the member a question. The thread waits in Needs you.                                                                       |
+| `outcome_propose` | `hivenod outcome propose ID` | Proposes an outcome of a type from the registry, with its fields. With `revises` (`--revises OID`): that outcome's next version. |
+| `outcome_done`    | `hivenod outcome done OID`   | The executor reports an approved outcome as done or failed.                                                                      |
+| `thread_wake`     | `hivenod thread wake ID`     | Wakes a snoozed thread whose date has come.                                                                                      |
+| `thread_flag`     | `hivenod thread flag ID`     | Marks a thread urgent (or not, `urgent: false` / `--off`): the notifier pings the member at once, whatever the quiet hours.      |
+| `thread_due`      | `hivenod thread due ID ISO`  | Sets the deadline a message states (ISO 8601 with its offset), or clears it (`due: null` / `--clear`). Today ranks by it.        |
 
 ### Decision data (item kt3E7u9EliL3q2veDDI0)
 
@@ -302,6 +335,11 @@ first. (In Claude Code, the plugin's `hivenod` skill runs each thread in a backg
   snooze is over), `rejected` (the member turned the proposal down), `failed` (carrying out
   failed), `restored` (the member brought it back), `resume` (still investigating when a new
   session starts).
+- **Asked for changes** (`revise`, with `outcome_id` and `outcome_type`) goes to the agent that
+  proposed the outcome, while it is `revising` (a second listener: `proposedBy == me`,
+  `state == 'revising'`). The text carries the chips and the instruction and says to revise
+  with `outcome_propose revises=<id>`: apply only what was asked, keep the rest, never reject or
+  start a new outcome. One event per request; a new request after a cancel is a new event.
 - **A nudge due** (`nudge_due`) also goes to the home agent: the thread has waited on them for
   `nudgeAfter` (3 days) since its last change. Noting why not (`inbox_note`) restarts the wait.
 - **Carrying out an approved outcome** (`carry_out`, with `outcome_id` and `outcome_type`) goes
@@ -310,7 +348,7 @@ first. (In Claude Code, the plugin's `hivenod` skill runs each thread in a backg
   sends `woke`.
 
 Meta: `kind: inbox, thread_id, reason, member, inbox_cap, inbox_active`, plus `outcome_id` and
-`outcome_type` for `carry_out`. `update: true` means that thread is already being worked on,
+`outcome_type` for `carry_out` and `revise`. `update: true` means that thread is already being worked on,
 so the session passes the event on instead of starting another one.
 
 **Dedupe.** It's one event per thread state change. The session remembers, per thread, the
@@ -329,8 +367,8 @@ last event id it handled (`lastEventId`):
 - A thread is in flight from its event until it leaves the state it was sent for (or the
   outcome leaves `approved`), or for at most 30 minutes.
 - At most 10 events go out a minute.
-- Waiting ones go out in this order: approved outcomes, answers, new messages, the rest, then
-  nudges. Oldest first within each.
+- Waiting ones go out in this order: approved outcomes, answers and change requests (the
+  member waits on them now), new messages, the rest, then nudges. Oldest first within each.
 - Tuning and tests: `HIVENOD_INBOX_PER_MIN`, and in milliseconds `HIVENOD_INBOX_NUDGE_MS`,
   `HIVENOD_INBOX_LEASE_MS` and `HIVENOD_INBOX_TICK_MS`.
 
@@ -356,6 +394,17 @@ last event id it handled (`lastEventId`):
   Undo before it is written. The member can also move the thread to another subject, mark it
   done, ignore it, bring it back, mark it urgent or not (`flagThread`), and **Make it work**.
   An approved `reply_book` shows the slot it booked.
+- **Ask for changes** (Today card, the thread page's agent panel and its phone bottom sheet,
+  key C): a box with four toggle chips (Shorter, More formal, Warmer, Add my availability), a
+  textarea with a 500-character counter and **Ask agent** (⌘↵). While the agent revises, a
+  dashed "<agent> is revising · …" strip sits over the dimmed v1, the button reads "Revising… ·
+  Cancel", and Send v1 and Edit stay live. A new version shows an inline word diff against the
+  one before (added text green and underlined, removed text red and struck; "Hide changes"),
+  "You asked: …", and a "‹ v2 of 2 ›" switcher (keys [ and ]). Send names the version shown
+  ("Send v1", "Send v2") and counts down on the button with Undo. At 10 versions the button is
+  off: edit it yourself or pick another outcome. What the member typed (an edit, the open box,
+  the version on show) is kept for the tab, so a remount never drops it: Send sends exactly
+  what is on screen.
 - **Make it work** (the member's own): `makeItemFromThread` creates a Hivenod item with
   `createItem`, the member as its creator, in one of their projects of the thread's
   organization, and links it on the thread's timeline with a `thread.itemMade` event in the
