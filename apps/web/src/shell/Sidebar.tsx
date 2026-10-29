@@ -1,5 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Bot, Search, Settings } from 'lucide-react';
+import { Bot, ChevronRight, Search, Settings } from 'lucide-react';
 import { useReady } from '../auth/context';
 import { Logo } from '../components/Logo';
 import { PersonAvatar } from '../components/PersonAvatar';
@@ -264,9 +264,9 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
         </div>
         <Link
           to={ME.to}
-          title="Settings"
-          className={item}
-          aria-label={`${session.profile.name}, Settings`}
+          title="Account and notifications"
+          className={cn(item, 'xl:min-h-14')}
+          aria-label={`${session.profile.name}, Account`}
         >
           {session.status === 'ready' ? (
             <PersonAvatar
@@ -276,8 +276,16 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
               size="sm"
             />
           ) : null}
-          <span className="flex-1 truncate max-xl:hidden">{session.profile.name}</span>
-          <Icon icon={Settings} size={16} className="text-text-2 max-xl:hidden" />
+          <span className="min-w-0 flex-1 max-xl:hidden">
+            <span className="block truncate">{session.profile.name}</span>
+            {/* Drawn by CSS, so the link's visible text stays the name its label starts with. */}
+            <span
+              aria-hidden
+              data-detail="Account and notifications"
+              className="block truncate text-12 font-normal text-text-2 before:content-[attr(data-detail)]"
+            />
+          </span>
+          <Icon icon={ChevronRight} size={16} className="text-text-3 max-xl:hidden" />
         </Link>
       </div>
     </aside>

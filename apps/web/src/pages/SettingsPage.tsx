@@ -3,7 +3,18 @@ import { lazy, Suspense } from 'react';
 import { LoadingMark } from '../components/Loading';
 import { Tabs } from '../ui/form';
 import { PageHeader } from './Chrome';
-import { isSettingsTab, SETTINGS_LABELS, SETTINGS_TABS, type SettingsTab } from './settingsTabs';
+import { useReady } from '../auth/context';
+import { OrgMark, orgDetail } from '../orgs/OrgSwitcher';
+import {
+  ACCOUNT_TABS,
+  isAccountTab,
+  isOrgTab,
+  ORG_TABS,
+  SETTINGS_LABELS,
+  type AccountTab,
+  type OrgTab,
+  type SettingsTab,
+} from './settingsTabs';
 
 // Each tab is its own piece of code, loaded when opened.
 const ProfileTab = lazy(() =>
@@ -34,26 +45,77 @@ const CONTENT: Record<SettingsTab, React.JSX.Element> = {
   notifications: <NotificationsPage />,
 };
 
-/** One place for every setting: /settings/<tab>. */
-export function SettingsPage() {
-  const { tab } = useParams({ strict: false }) as { tab?: string };
+function SettingsTabs<T extends SettingsTab>({
+  label,
+  tabs,
+  current,
+  labels,
+  route,
+}: {
+  label: string;
+  tabs: readonly T[];
+  current: T;
+  labels?: Partial<Record<T, string>>;
+  route: '/account/$tab' | '/settings/$tab';
+}) {
   const navigate = useNavigate();
-  const current: SettingsTab = tab && isSettingsTab(tab) ? tab : 'profile';
+  return (
+    <Tabs
+      label={label}
+      value={current}
+      onValueChange={(v) => {
+        const t = tabs.find((x) => x === v);
+        if (t) void navigate({ to: route, params: { tab: t } });
+      }}
+      tabs={tabs.map((t) => ({
+        value: t,
+        label: labels?.[t] ?? SETTINGS_LABELS[t],
+        content:
+          t === current ? <Suspense fallback={<LoadingMark />}>{CONTENT[t]}</Suspense> : null,
+      }))}
+    />
+  );
+}
+
+/** Your own settings, the same in every organization (item icVly): /account/<tab>. */
+export function AccountPage() {
+  const { tab } = useParams({ strict: false }) as { tab?: string };
+  const current: AccountTab = tab && isAccountTab(tab) ? tab : 'profile';
   return (
     <>
-      <PageHeader title="Settings" />
-      <Tabs
-        label="Settings"
-        value={current}
-        onValueChange={(v) => {
-          if (isSettingsTab(v)) void navigate({ to: '/settings/$tab', params: { tab: v } });
-        }}
-        tabs={SETTINGS_TABS.map((t) => ({
-          value: t,
-          label: SETTINGS_LABELS[t],
-          content:
-            t === current ? <Suspense fallback={<LoadingMark />}>{CONTENT[t]}</Suspense> : null,
-        }))}
+      <PageHeader title="Account" allOrgs subtitle="The same in all your organizations" />
+      <SettingsTabs label="Account" tabs={ACCOUNT_TABS} current={current} route="/account/$tab" />
+    </>
+  );
+}
+
+/**
+ * The organization picked in the switcher (item icVly): /settings/<tab>. Its name is on the page
+ * and on its first tab, so it is clear whose settings these are.
+ */
+export function OrgSettingsPage() {
+  const { tab } = useParams({ strict: false }) as { tab?: string };
+  const { session } = useReady();
+  const current: OrgTab = tab && isOrgTab(tab) ? tab : 'organization';
+  const name = session.workspace.name;
+  const detail = orgDetail(session.role, Object.keys(session.workspace.memberRoles).length);
+  return (
+    <>
+      <div className="mb-6">
+        <h1 className="text-28 font-semibold">Organization settings</h1>
+        <p data-org-scope="" className="mt-1.5 flex min-w-0 items-center gap-2 text-14 text-text-2">
+          <OrgMark name={name} className="size-6 text-12" />
+          <span className="min-w-0 truncate">
+            <span className="font-medium text-ink">{name}</span> · {detail}
+          </span>
+        </p>
+      </div>
+      <SettingsTabs
+        label="Organization settings"
+        tabs={ORG_TABS}
+        current={current}
+        labels={{ organization: name }}
+        route="/settings/$tab"
       />
     </>
   );

@@ -166,7 +166,7 @@ function Frame({ children }: { children?: ReactNode }) {
         void router.preloadRoute({ to }).catch(() => undefined);
       }
       void router
-        .preloadRoute({ to: '/settings/$tab', params: { tab: 'profile' } })
+        .preloadRoute({ to: '/account/$tab', params: { tab: 'profile' } })
         .catch(() => undefined);
     };
     if ('requestIdleCallback' in window) {
@@ -242,10 +242,10 @@ function Frame({ children }: { children?: ReactNode }) {
             <div className="flex items-center gap-1">
               <BellLink />
               <OrgSwitcher compact className="w-11 border-transparent bg-transparent" />
-              {/* Settings live under the avatar on a phone (item kt3E7): the tabs make room for Calendar. */}
+              {/* Your Account lives under the avatar (items kt3E7, icVly); organization settings are the organization's. */}
               <Link
-                to="/settings"
-                aria-label={`${session.profile.name}, Settings`}
+                to="/account"
+                aria-label={`${session.profile.name}, Account`}
                 className="grid size-11 place-items-center rounded-full foc:outline-2 foc:outline-focus"
               >
                 <PersonAvatar
@@ -272,7 +272,7 @@ function Frame({ children }: { children?: ReactNode }) {
         >
           <ErrorBoundary key={path}>
             <Suspense fallback={<RouteSkeleton />}>
-              {unreachable && !path.startsWith('/settings') ? (
+              {unreachable && !path.startsWith('/settings') && !path.startsWith('/account') ? (
                 <UnreachableState onRetry={retry} retrying={retrying} />
               ) : (
                 <div className="route-fade">{children ?? <Outlet />}</div>

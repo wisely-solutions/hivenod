@@ -5,13 +5,13 @@ import {
   ChartNoAxesColumn,
   FolderKanban,
   Mails,
-  Settings,
   Sun,
+  UserRound,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export type NavPath =
-  '/' | '/inbox' | '/projects' | '/calendar' | '/insights' | '/activity' | '/agents' | '/settings';
+  '/' | '/inbox' | '/projects' | '/calendar' | '/insights' | '/activity' | '/agents' | '/account';
 
 export interface NavEntry {
   to: NavPath;
@@ -47,10 +47,11 @@ export const YOU_NAV: NavEntry[] = NAV.filter((n) => n.zone === 'you');
 /** The sidebar's second zone: the organization picked in the switcher. */
 export const ORG_NAV: NavEntry[] = NAV.filter((n) => n.zone === 'org');
 
+/** Your account (item icVly): profile, theme, notifications, under the avatar. */
 export const ME: NavEntry = {
-  to: '/settings',
-  label: 'Settings',
-  icon: Settings,
+  to: '/account',
+  label: 'Account',
+  icon: UserRound,
   key: 's',
   zone: 'you',
 };

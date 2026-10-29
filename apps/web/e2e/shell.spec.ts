@@ -34,7 +34,7 @@ test('the shell frames the app and has no accessibility violations', async ({ pa
       /^Projects/,
     ]);
     // Settings moved under the avatar in the top bar (item kt3E7).
-    await expect(page.getByRole('banner').getByRole('link', { name: /, Settings$/ })).toBeVisible();
+    await expect(page.getByRole('banner').getByRole('link', { name: /, Account$/ })).toBeVisible();
     await expect(tabs.getByRole('link', { name: 'Activity' })).toHaveCount(0);
     await expect(page.getByRole('complementary', { name: 'Main' })).toBeHidden();
     for (const l of await tabs.getByRole('link').all()) {
@@ -75,7 +75,8 @@ test('every screen route renders inside the shell', async ({ page }) => {
     ['/insights', 'Decision insights'],
     ['/activity', 'Activity'],
     ['/agents', 'Agents'],
-    ['/settings/profile', 'Settings'],
+    ['/account/profile', 'Account'],
+    ['/settings/organization', 'Organization settings'],
   ] as const) {
     await page.evaluate((p) => window.history.pushState({}, '', p), path);
     await page.goto(path);
