@@ -13,6 +13,14 @@ stays TypeScript. Install it with `curl -fsSL https://hivenod.com/install.sh | s
   fixture `internal/actions/testdata/contract.json` is generated from the TypeScript actions
   (`scripts/go-contract.test.mjs`); after changing the TypeScript actions run
   `UPDATE_GO_CONTRACT=1 pnpm test:scripts`.
+- CLI version and old CLIs (item N9EEnCa1MzIw5UYfe70N): `MarkSeen` writes `update.Version` as
+  `cliVersion` with each presence stamp (dev builds write none). `packages/shared/src/cliversion.ts`
+  is the minimum-version-per-event-kind table; its copy `internal/actions/cliversions.json`
+  (`actions.EventMinVersion`) is kept equal by `scripts/cli-versions.test.mjs`
+  (`UPDATE_GO_CONTRACT=1 pnpm test:scripts` rewrites it). Add a row when a new event kind needs a
+  new CLI. `update.Updater.Notice` compares with `<site>/cli/bin/latest.json` at session start, at
+  most once a day (time kept in `~/.hivenod/update-check`), and the session pushes an info event;
+  `HIVENOD_NO_UPDATE_CHECK=1` turns it off. Tests use a fake latest.json, never the network.
 - The MCP surface is Go's own: a tool change is made here only.
   - `internal/mcpserver/surface.json` lists the tools (name, description, input schema) for
     `hivenod mcp` and `hivenod mcp --channel`. Edit it by hand, and add or remove the handler in
