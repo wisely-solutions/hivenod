@@ -52,6 +52,8 @@ type Client struct {
 	Creates *CreateLimiter
 	// WebURL is the Hivenod site (https://hivenod.com), for links to items.
 	WebURL string
+	// The channel session's presence identity (presence.go, item N0biX); "" outside one.
+	sessionID, hostID string
 }
 
 // Connect signs in with the token (tok "" = HIVENOD_TOKEN, then the saved pairing) and reads
@@ -416,6 +418,7 @@ func (c *Client) MarkSeen(ctx context.Context) error {
 		{Path: "lastSeenAt", Value: firestore.ServerTimestamp},
 		{Path: "seenHost", Value: clipRunes(host, 80)},
 	}
+	ups = append(ups, c.presenceFields()...)
 	// The CLI's own version, so the web app can tell when it is too old for an event (item N9EEn).
 	// A development build (no version stamped) writes none.
 	if v := update.Version; v != "" && v != "0.0.0" {
