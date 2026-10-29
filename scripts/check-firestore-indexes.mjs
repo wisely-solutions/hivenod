@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Index guard: every Firestore query in apps/web/src and packages/shared/src must be servable by
- * firestore.indexes.json (the emulator never checks; production does). The Go CLI's queries (cli/)
- * are not scanned.
+ * Index guard: every Firestore query in apps/web/src, packages/shared/src and the Go CLI (cli/, found
+ * with go/ast by scripts/go-query-scan) must be servable by firestore.indexes.json (the emulator
+ * never checks; production does). Needs the Go toolchain; no network.
  * Usage: node scripts/check-firestore-indexes.mjs   (exit 1 with file:line and the missing index)
  */
 import { readFileSync } from 'node:fs';
@@ -10,17 +10,27 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ALLOWLIST } from './firestore-index-allowlist.mjs';
 import { check, describeQuery } from './firestore-index-rules.mjs';
-import { scan } from './firestore-index-scan.mjs';
+import { scan, scanGo } from './firestore-index-scan.mjs';
 
 /**
  * @param {string} root
- * @param {{ config?: any, allowlist?: typeof ALLOWLIST, files?: string[] }} [opts]
+ * @param {{ config?: any, allowlist?: typeof ALLOWLIST, files?: string[], goFiles?: string[] }} [opts]
+ * `files` limits the TypeScript scan; the Go scan then runs only when `goFiles` is given.
  */
 export function guard(root, opts = {}) {
   const config =
     opts.config ?? JSON.parse(readFileSync(join(root, 'firestore.indexes.json'), 'utf8'));
   const allowlist = opts.allowlist ?? ALLOWLIST;
-  const { queries, unanalysable } = scan(root, { files: opts.files });
+  const ts =
+    opts.goFiles && !opts.files
+      ? { queries: [], unanalysable: [] }
+      : scan(root, { files: opts.files });
+  const go =
+    opts.files && !opts.goFiles
+      ? { queries: [], unanalysable: [] }
+      : scanGo(root, { goFiles: opts.goFiles });
+  const queries = [...ts.queries, ...go.queries];
+  const unanalysable = [...ts.unanalysable, ...go.unanalysable];
   const problems = [];
   const results = [];
   for (const q of queries) {

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { guard } from './check-firestore-indexes.mjs';
-import { check, plan } from './firestore-index-rules.mjs';
+import { check, describeQuery, plan } from './firestore-index-rules.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -322,10 +322,103 @@ export const r = query(collection(db, 'events'), orderBy(fs[0]![0]));
   });
 });
 
+describe('Go queries', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'idxguard-go-'));
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+  const goFixture = (name, src) => {
+    const abs = join(tmp, name);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, src);
+    return name;
+  };
+  const GO = (chain) => `package x
+
+func f() {
+	_ = db.Collection("workspaces/" + w + "/runs")${chain}.Documents(ctx)
+}
+`;
+  const withIndex = {
+    indexes: [
+      idx('runs', [
+        ['a', 'ASCENDING'],
+        ['b', 'ASCENDING'],
+      ]),
+    ],
+  };
+
+  it('fails a Go query that needs a composite index the config lacks, passes it with the index', () => {
+    const file = goFixture('g/q.go', GO('.Where("a", "==", x).Where("b", ">", y)'));
+    const bad = guard(tmp, { goFiles: [file], config: { indexes: [] }, allowlist: [] });
+    expect(bad.problems).toHaveLength(1);
+    expect(bad.problems[0]).toContain('g/q.go:4');
+    expect(bad.problems[0]).toContain("collection 'runs' where(a ==) where(b >)");
+    expect(bad.problems[0]).toContain('composite index on runs (a ASCENDING, b ASCENDING)');
+    const good = guard(tmp, { goFiles: [file], config: withIndex, allowlist: [] });
+    expect(good.problems).toEqual([]);
+    expect(good.results).toHaveLength(1);
+  });
+
+  it('reads orderBy, consts and path builders; skips unfiltered reads', () => {
+    const file = goFixture(
+      'g/o.go',
+      `package x
+
+import "cloud.google.com/go/firestore"
+
+const status = "status"
+
+func f() {
+	_ = db.Collection(base + "/runs").Where(status, "==", 1).OrderBy("at", firestore.Desc).Limit(3)
+	_ = db.Collection(actions.CalendarPaths.Busy(u)).Where("end", ">", t)
+	_ = db.Collection("runs").Documents(ctx)
+}
+`,
+    );
+    const r = guard(tmp, { goFiles: [file], config: { indexes: [] }, allowlist: [] });
+    expect(r.results.map((x) => describeQuery(x.shape))).toEqual([
+      "collection 'runs' where(status ==) orderBy(at desc)",
+      "collection 'busy' where(end >)",
+    ]);
+    expect(r.problems).toHaveLength(1);
+  });
+
+  it('reports non-literal Go queries as unanalysable unless allowlisted, and stale entries', () => {
+    const file = goFixture('g/d.go', GO('.Where(field, op, v)'));
+    const text = 'db.Collection("workspaces/"+w+"/runs").Where(field, op, v)';
+    const open = guard(tmp, { goFiles: [file], config: { indexes: [] }, allowlist: [] });
+    expect(open.problems.join('\n')).toMatch(/g\/d\.go:4 .*\n.*not a literal/);
+    const ok = guard(tmp, {
+      goFiles: [file],
+      config: { indexes: [] },
+      allowlist: [{ file, text, reason: 'x' }],
+    });
+    expect(ok.problems).toEqual([]);
+    const stale = guard(tmp, {
+      goFiles: [file],
+      config: { indexes: [] },
+      allowlist: [
+        { file, text, reason: 'x' },
+        { file, text: 'gone()', reason: 'x' },
+      ],
+    });
+    expect(stale.problems.join('\n')).toContain('allowlist entry no longer matches');
+  });
+});
+
 describe('the repository', () => {
   it('every Firestore query in apps/web and packages/shared has its index', () => {
     const { problems, results } = guard(root);
     expect(problems, problems.join('\n\n')).toEqual([]);
     expect(results.length).toBeGreaterThan(10);
+  });
+
+  it('scans the Go CLI queries and finds calendar (memberUid, end) in firestore.indexes.json', () => {
+    const { problems, results, unanalysable } = guard(root);
+    expect(problems).toEqual([]);
+    const go = results.filter((r) => r.file.startsWith('cli/'));
+    expect(go).toHaveLength(8);
+    const cal = go.find((r) => r.shape.group === 'calendar');
+    expect(cal?.result.via).toBe('composite');
+    expect(unanalysable.filter((u) => u.file.startsWith('cli/'))).toHaveLength(1);
   });
 });
