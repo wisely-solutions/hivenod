@@ -8,6 +8,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import {
+  NOW,
+  ago,
+  freezeClock,
   adminSet,
   expectNoHorizontalScroll,
   person,
@@ -18,8 +21,6 @@ import {
   workspaceOf,
 } from './helpers';
 
-const MIN = 60_000;
-const ago = (m: number) => new Date(Date.now() - m * MIN);
 const SHOTS = process.env.SHOTS_DIR;
 const THEMES = ['light', 'dark'] as const;
 
@@ -73,14 +74,14 @@ function itemDoc(uid: string, title: string, runId: string, order: number, extra
     createdBy: { type: 'human', id: uid },
     parentItemId: null,
     sourceRunId: null,
-    claim: { runId, agentUid: 'scout', heartbeatAt: new Date() },
+    claim: { runId, agentUid: 'scout', heartbeatAt: new Date(NOW) },
     progress: null,
     gate: null,
     triage: null,
     sendBackCount: 0,
     costEur: 0,
     order,
-    updatedAt: new Date(),
+    updatedAt: new Date(NOW),
     lastEventId: 'seed',
     ...extra,
   };
@@ -121,8 +122,12 @@ async function seed(page: Page) {
   );
   await adminSet(`${base}/projects/blog/items/i2`, itemDoc(uid, 'Draft the launch email', 'r2', 2));
   const p = (n: number) => String(n).padStart(2, '0');
-  return { hhmm: `${p(since.getHours())}:${p(since.getMinutes())}` };
+  return { hhmm: `${p(since.getUTCHours())}:${p(since.getUTCMinutes())}` };
 }
+
+test.beforeEach(async ({ page }) => {
+  await freezeClock(page);
+});
 
 test('a parked item shows Waiting on its card; the agent reads working 1 · waiting 1', async ({
   page,

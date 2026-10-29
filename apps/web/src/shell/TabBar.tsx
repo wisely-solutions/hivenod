@@ -5,6 +5,8 @@ import { useCapture } from '../capture/CaptureProvider';
 import { Icon } from '../ui/icon';
 import { useNeedsAll } from '../needs/data';
 import { NeedsBadge, needsLabel } from '../needs/NeedsBadge';
+import { Badge } from '../ui/badge';
+import { useWaitingThreads } from '../threads/data';
 import { TABS } from './nav';
 
 /** Hides while scrolling down, comes back on any scroll up (or near the top). */
@@ -38,6 +40,7 @@ export function TabBar({ hidden }: { hidden: boolean }) {
   // Every organization's Needs you (item 2YZRd), hidden until the count is final.
   const all = useNeedsAll();
   const needs = all.ready ? all.counts : { total: 0, onlyYou: 0 };
+  const waiting = useWaitingThreads() ?? 0;
   const capture = useCapture();
   return (
     <nav
@@ -71,7 +74,13 @@ export function TabBar({ hidden }: { hidden: boolean }) {
               <Link
                 to={t.to}
                 activeOptions={{ exact: t.to === '/' }}
-                aria-label={t.badge ? needsLabel(t.label, needs.total, needs.onlyYou) : t.label}
+                aria-label={
+                  t.badge
+                    ? needsLabel(t.label, needs.total, needs.onlyYou)
+                    : t.to === '/inbox' && waiting > 0
+                      ? `${t.label} ${waiting} waiting`
+                      : t.label
+                }
                 // The label comes first in the DOM (shown below the icon by flex-col-reverse), so
                 // the visible text reads "Needs you 5" like the start of the aria-label (axe
                 // label-content-name-mismatch at 390).
@@ -86,6 +95,11 @@ export function TabBar({ hidden }: { hidden: boolean }) {
                       onlyYou={needs.onlyYou}
                       className="absolute -right-3 -top-2"
                     />
+                  ) : null}
+                  {t.to === '/inbox' && waiting > 0 ? (
+                    <span aria-hidden data-inbox-badge className="absolute -right-3 -top-2">
+                      <Badge tone="gate" count={waiting} />
+                    </span>
                   ) : null}
                 </span>
               </Link>

@@ -102,6 +102,7 @@ Preview channels (your own testing only, never for Review): `pnpm deploy:preview
 pnpm lint && pnpm typecheck && pnpm test && pnpm test:scripts && pnpm build && pnpm size
 pnpm test:rules   # Firestore rules, emulator
 pnpm e2e:emu      # Playwright against the auth + firestore emulators
+pnpm e2e:midnight # day-bound specs (bell, parked, agentsettings, activity) with the clock at 00:05 and 23:55 UTC
 ```
 
 Time budget: the whole run must finish in `E2E_BUDGET_MIN` minutes (default 5; Playwright stops itself

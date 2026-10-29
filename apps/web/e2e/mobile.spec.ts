@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import {
@@ -10,6 +11,7 @@ import {
   uidOf,
   workspaceOf,
   fastTimers,
+  settle,
   UNDO_WAIT,
 } from './helpers';
 
@@ -554,4 +556,60 @@ test('phone board: one-row header, step chips with counts, first card high up (c
   await expect(page.getByLabel('Agent', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Status', { exact: true })).toBeVisible();
   await expectNoHorizontalScroll(page);
+});
+
+test('Inbox tab: badge equals the /inbox "wait for you" line, live, axe-clean (item k5KCcXfk)', async ({
+  page,
+}) => {
+  const { wid, uid } = await seed(page);
+  const thread = (state: string) => ({
+    memberUid: uid,
+    subjectId: null,
+    state,
+    waiting: null,
+    question: null,
+    title: `Thread ${state}`,
+    refs: [],
+    lastMessageAt: new Date('2026-01-05T10:00:00Z'),
+    fetchedBy: 'agent1',
+    urgent: false,
+    createdAt: new Date('2026-01-05T10:00:00Z'),
+    updatedAt: new Date('2026-01-05T10:00:00Z'),
+    lastEventId: 'seed',
+  });
+  const tp = (id: string) => `workspaces/${wid}/inboxThreads/${id}`;
+  await adminSet(tp('t1'), thread('needsYou'));
+  await adminSet(tp('t2'), thread('yourCall'));
+  await adminSet(tp('t3'), thread('done'));
+  await page.goto('/');
+  const tabs = page.getByRole('navigation', { name: 'Tabs' });
+  const inbox = tabs.getByRole('link', { name: /^Inbox/ });
+  await expect(inbox).toHaveAccessibleName('Inbox 2 waiting');
+  await expect(inbox.locator('[data-inbox-badge]')).toHaveText('2');
+  expect((await inbox.boundingBox())!.height).toBeGreaterThanOrEqual(56);
+  await expectNoHorizontalScroll(page);
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', scheme);
+    await settle(page);
+    const res = await new AxeBuilder({ page }).analyze();
+    expect(
+      res.violations.map((v) => `${scheme} ${v.id}: ${v.nodes.map((n) => n.html).join(' | ')}`),
+    ).toEqual([]);
+  }
+  await inbox.click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(page.getByText('2 threads wait for you')).toBeVisible();
+  await expect(inbox).toHaveAttribute('data-status', 'active');
+  await expectNoHorizontalScroll(page);
+  // Live: one thread is handled, the badge and the line follow; at zero the badge is gone.
+  await adminSet(tp('t1'), thread('done'));
+  await expect(page.getByText('1 thread waits for you')).toBeVisible();
+  await expect(inbox).toHaveAccessibleName('Inbox 1 waiting');
+  await adminSet(tp('t2'), thread('done'));
+  await expect(page.getByText('Nothing waits for you')).toBeVisible();
+  await expect(inbox).toHaveAccessibleName('Inbox');
+  await expect(inbox.locator('[data-inbox-badge]')).toHaveCount(0);
+  // Activity left the bar but is still in the palette.
+  await expect(tabs.getByRole('link', { name: 'Activity' })).toHaveCount(0);
 });

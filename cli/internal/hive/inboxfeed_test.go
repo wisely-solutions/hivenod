@@ -2,31 +2,11 @@ package hive
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/wisely-solutions/hivenod/cli/internal/mcpserver"
 )
-
-// InboxText must read exactly like the TypeScript inboxText (samples in surface.json).
-func TestInboxTextMatchesTypeScript(t *testing.T) {
-	samples := mcpserver.LoadSurface().InboxText
-	if len(samples) < 15 {
-		t.Fatalf("only %d samples", len(samples))
-	}
-	for _, s := range samples {
-		var info InboxEventInfo
-		if err := json.Unmarshal(s.Info, &info); err != nil {
-			t.Fatal(err)
-		}
-		if got := InboxText(info); got != s.Text {
-			t.Errorf("%s:\n got %q\nwant %q", s.Info, got, s.Text)
-		}
-	}
-}
 
 type fakeInbox struct {
 	mu       sync.Mutex

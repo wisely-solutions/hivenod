@@ -15,6 +15,7 @@ import { EmptyState, Skeleton } from '../ui/feedback';
 import { Input, Select } from '../ui/form';
 import { useInbox, useMyMessages, useMyRelations } from './data';
 import {
+  countWaitingThreads,
   DEFAULT_QUIET_DAYS,
   findSubjectRows,
   groupByArea,
@@ -105,7 +106,7 @@ export function InboxListPage() {
   const grouped = useMemo(() => groupByArea(shown, quietDays, now), [shown, quietDays, now]);
   const hasAreas = grouped.groups.some((g) => g.label !== null);
   const orgName = (wid: string) => orgs.find((o) => o.id === wid)?.name ?? '';
-  const waiting = rows.reduce((n, r) => n + r.waiting, 0);
+  const waiting = countWaitingThreads(rows);
 
   return (
     <div className="mx-auto w-full max-w-4xl">

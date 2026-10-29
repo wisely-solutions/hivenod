@@ -8,6 +8,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import {
+  NOW,
+  agoMs,
+  freezeClock,
   adminDoc,
   adminSetAll,
   expectNoHorizontalScroll,
@@ -20,7 +23,6 @@ import {
   type Person,
 } from './helpers';
 
-const MIN = 60_000;
 const rand = () => Math.random().toString(36).slice(2, 8);
 const SHOTS = process.env.SHOTS_DIR;
 
@@ -41,7 +43,7 @@ const item = (uid: string, title: string, stepId = 'review') => ({
   sendBackCount: 0,
   costEur: 0,
   order: 1,
-  updatedAt: new Date(Date.now() - 90 * MIN),
+  updatedAt: new Date(agoMs(90)),
   lastEventId: 'seed',
 });
 
@@ -87,7 +89,7 @@ async function seedBell(page: Page, who: Person = person('Jo Bell'), readIds: st
   const wid = await workspaceOf(who.email);
   const uid = await uidOf(who.email);
   const pid = `bl${rand()}`;
-  const now = Date.now();
+  const now = NOW;
   const kinds = ['gate', 'question', 'gate', 'sentBack', 'answer'] as const;
   const docs: Array<[string, Record<string, unknown>]> = [
     [`workspaces/${wid}/projects/${pid}`, { ...projectFields('Hive', uid), name: 'Hive' }],
@@ -95,7 +97,7 @@ async function seedBell(page: Page, who: Person = person('Jo Bell'), readIds: st
   TITLES.forEach((t, i) => {
     docs.push([`workspaces/${wid}/projects/${pid}/items/b${i}`, item(uid, t)]);
     // Two today, the rest yesterday and before: a day's worth of things that happened while away.
-    const at = now - (i < 2 ? (i + 1) * 30 * MIN : (i + 22) * 60 * MIN);
+    const at = i < 2 ? agoMs((i + 1) * 30) : agoMs((i + 22) * 60);
     docs.push([
       `users/${uid}/notifications/n${i}`,
       entry(wid, pid, `b${i}`, t, kinds[i]!, at, readIds.includes(`n${i}`) ? { readAt: now } : {}),
@@ -112,6 +114,10 @@ const readAt = async (uid: string, id: string) => {
   const f = d?.fields.readAt;
   return f && !('nullValue' in f) ? 'read' : 'unread';
 };
+
+test.beforeEach(async ({ page }) => {
+  await freezeClock(page);
+});
 
 test('signing in with 5 unread shows no pop-up; the bell says 5; open, read, mark all read', async ({
   page,
@@ -182,7 +188,7 @@ test('a live event while the app is open gives one toast and one bell entry', as
   await adminSetAll([
     [
       `users/${uid}/notifications/live1`,
-      entry(wid, pid, 'b4', 'Item focus view', 'gate', Date.now()),
+      entry(wid, pid, 'b4', 'Item focus view', 'gate', NOW + 1000),
     ],
   ]);
   await expect(toasts(page)).toHaveCount(1);
@@ -203,6 +209,7 @@ test('read state follows the person to another device', async ({ page, browser }
   test.setTimeout(90_000);
   const { uid, who } = await seedBell(page);
   const other = await newPerson(browser);
+  await freezeClock(other.ctx);
   try {
     await other.page.goto('/');
     await signIn(other.page, who);

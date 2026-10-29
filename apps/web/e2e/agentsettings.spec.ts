@@ -7,6 +7,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import {
+  NOW,
+  ago,
+  freezeClock,
   adminDoc,
   adminSet,
   expectNoHorizontalScroll,
@@ -18,8 +21,6 @@ import {
   settle,
 } from './helpers';
 
-const MIN = 60_000;
-const ago = (m: number) => new Date(Date.now() - m * MIN);
 const SHOTS = process.env.SHOTS_DIR;
 
 async function shot(page: Page, name: string) {
@@ -65,7 +66,7 @@ const launchPost = (uid: string) => ({
   sendBackCount: 0,
   costEur: 0,
   order: 1,
-  updatedAt: new Date(),
+  updatedAt: new Date(NOW),
   lastEventId: 'seed',
 });
 
@@ -118,6 +119,10 @@ async function seed(page: Page) {
   });
   return { wid, uid, base };
 }
+
+test.beforeEach(async ({ page }) => {
+  await freezeClock(page);
+});
 
 test('Agent settings: paused + Resume, guardrails saved, tokens and model shown', async ({
   page,

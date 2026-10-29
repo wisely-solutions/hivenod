@@ -6,6 +6,7 @@ import {
   eventText,
   findSubjectRows,
   formValues,
+  countWaitingThreads,
   groupByArea,
   isQuiet,
   subjectRows,
@@ -41,6 +42,22 @@ const thread = (id: string, over: Partial<InboxThread> & { at?: number } = {}): 
     updatedAt: ts(over.at ?? 0),
     ...over,
   } as unknown as InboxThread,
+});
+
+describe('countWaitingThreads', () => {
+  it('counts needsYou and yourCall threads across subjects, the Inbox tab and page line', () => {
+    const rows = subjectRows(
+      [subject('s1', 'A', 1)],
+      [
+        thread('t1', { subjectId: 's1', state: 'needsYou' }),
+        thread('t2', { subjectId: 's1', state: 'yourCall' }),
+        thread('t3', { subjectId: null, state: 'yourCall' }),
+        thread('t4', { subjectId: 's1', state: 'done' }),
+      ],
+    );
+    expect(countWaitingThreads(rows)).toBe(3);
+    expect(countWaitingThreads([])).toBe(0);
+  });
 });
 
 describe('subjects', () => {
