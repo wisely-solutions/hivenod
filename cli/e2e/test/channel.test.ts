@@ -464,6 +464,27 @@ d('hivenod mcp --channel: restarts on the same machine take over (item N0biX)', 
   });
 });
 
+d('hivenod mcp --channel: a busy session re-checks and takes over (item AXVvH)', () => {
+  it('A live on host 1, B busy on host 2: A stops, B gets the info event and the handover', async () => {
+    const { uid, token } = await newAgent();
+    const a = await session(token, undefined, undefined, undefined, { HIVENOD_HOST_ID: 'host-1' });
+    const b = await session(token, undefined, undefined, undefined, { HIVENOD_HOST_ID: 'host-2' });
+    expect((await b.next('info')).meta.code).toBe('busy');
+    // While A is live, B stays busy and never stamps presence.
+    await pause(2500);
+    expect(b.events.some((e) => e.meta.code === 'takeover')).toBe(false);
+    expect((await read(paths.agent(W, uid))).seenHostId).toBe('host-1');
+    await a.signal('SIGTERM');
+    await b.next('info', 2, 90_000); // busy, then the takeover
+    const take = b.events.filter((e) => e.meta.kind === 'info')[1]!;
+    expect(take.meta.code).toBe('takeover');
+    expect(take.content).toMatch(/The other session of this agent stopped/);
+    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'For the second machine' }) });
+    expect((await b.next('work')).meta.item_id).toBe('a');
+    expect((await read(paths.agent(W, uid))).seenHostId).toBe('host-2');
+  }, 120_000);
+});
+
 d('hivenod mcp --channel with max_items 3 (card cGSENsRF)', () => {
   const works = (s: Awaited<ReturnType<typeof session>>) =>
     s.events.filter((e) => e.meta.kind === 'work');
