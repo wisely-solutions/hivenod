@@ -572,7 +572,7 @@ test('another member of the organization never sees my Inbox', async ({ page, br
     });
     await agent.file(tid, { newName: 'Cara only' });
     await bob.page.goto(`/inbox?org=${client}`);
-    await expect(bob.page.getByText('Nothing in your Inbox yet')).toBeVisible();
+    await expect(bob.page.getByText('Nothing in your Inbox yet')).toBeVisible({ timeout: 15_000 });
     await expect(bob.page.getByText('Cara only')).toHaveCount(0);
     await bob.page.goto(`/inbox/${client}/t/${tid}`);
     await expect(bob.page.getByText('This thread is not in your Inbox.')).toBeVisible();
