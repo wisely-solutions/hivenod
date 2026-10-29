@@ -97,8 +97,8 @@ export interface DecisionCardHandle {
   approve(): void;
   edit(): void;
   reject(): void;
-  /** Ask for changes (key C); on a card that is not a proposal, nothing. */
-  ask?(): void;
+  /** Ask for changes (key C); false when this card can't (then C adds an item as usual). */
+  ask?(): boolean;
   /** The version before or after the one on show (keys [ and ]). */
   version?(step: -1 | 1): void;
 }
@@ -155,7 +155,7 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
       approve: () => inner.current?.approve(),
       edit: () => inner.current?.edit(),
       reject: () => inner.current?.reject(),
-      ask: () => inner.current?.ask?.(),
+      ask: () => inner.current?.ask?.() ?? false,
       version: (step) => inner.current?.version?.(step),
     }));
     const card =
@@ -401,10 +401,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
     const [pickedFor, setPickedFor] = useState(oKey);
     const viewN = Math.min(Math.max(1, picked ?? nv), nv);
     const view = versions.length ? versions[viewN - 1] : undefined;
-    const viewFields = useMemo(
-      () => view?.fields ?? shown?.data.fields ?? {},
-      [view, shown],
-    );
+    const viewFields = useMemo(() => view?.fields ?? shown?.data.fields ?? {}, [view, shown]);
     const eKey = shown ? editKey(wid, shown.id, viewN) : '';
     const fresh = () => (shown ? formValues(shown.data.type, viewFields) : {});
     const [editing, setEditing] = useState(() => getEdit(eKey)?.editing ?? false);
@@ -622,7 +619,9 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
         if (!pending && shown && !revising) setRejecting(true);
       },
       ask: () => {
-        if (!pending && shown && revisable && !revising && !full) setAsking(true);
+        if (pending || !shown || !revisable || revising || full) return false;
+        setAsking(true);
+        return true;
       },
       version: (step) => goVersion(viewN + step),
     }));

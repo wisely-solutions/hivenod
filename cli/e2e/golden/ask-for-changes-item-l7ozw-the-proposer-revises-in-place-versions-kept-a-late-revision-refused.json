@@ -1,0 +1,741 @@
+{
+  "calls": [
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "ima693e8933cbcc10d5ab87215",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "ite99cc81f9af467da003079e0"
+      }
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": true,
+      "out": {
+        "note": "Proposed. It waits for the person to approve, edit or reject it; nothing is carried out before.",
+        "outcomeId": "<id>",
+        "state": "proposed",
+        "threadId": "ite99cc81f9af467da003079e0",
+        "type": "reply"
+      }
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": false,
+      "out": "Nobody asked for changes on this outcome (or the person cancelled the request)."
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "ima693e8933cbcc10d5ab87215",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "teams",
+            "text": "Can we move the payments review to Thursday?",
+            "threadRef": "review-1"
+          }
+        ],
+        "next": "Waiting for the person to approve, edit or reject the proposed outcomes.",
+        "outcomes": [
+          {
+            "checks": [],
+            "confidence": "high",
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "text": "Hi Sam, thanks for flagging this. Thursday works for me. Best, Cara"
+            },
+            "note": "They asked to move it.",
+            "outcomeId": "<id>",
+            "result": null,
+            "revise": {
+              "chips": [
+                "shorter",
+                "availability"
+              ],
+              "instruction": "Mention 14:00 as a backup"
+            },
+            "state": "revising",
+            "type": "reply",
+            "versions": 1
+          }
+        ],
+        "question": null,
+        "state": "yourCall",
+        "subject": null,
+        "threadId": "ite99cc81f9af467da003079e0",
+        "timeline": [],
+        "title": "Can we move the payments review to Thursday?",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": false,
+      "out": "Outcome <id> is a reply; a revision keeps the type: propose a new outcome instead."
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": true,
+      "out": {
+        "note": "Version 2 proposed in place of the earlier one. The person sees what changed and approves the version they want; nothing is carried out before.",
+        "outcomeId": "<id>",
+        "state": "proposed",
+        "threadId": "ite99cc81f9af467da003079e0",
+        "type": "reply",
+        "version": 2
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "ima693e8933cbcc10d5ab87215",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "teams",
+            "text": "Can we move the payments review to Thursday?",
+            "threadRef": "review-1"
+          }
+        ],
+        "next": "Waiting for the person to approve, edit or reject the proposed outcomes.",
+        "outcomes": [
+          {
+            "checks": [
+              "Thu 14:00 free"
+            ],
+            "confidence": "medium",
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "text": "Hi Sam, Thursday 10:00 works; 14:00 is free too. Cara"
+            },
+            "note": "Shorter, with a backup.",
+            "outcomeId": "<id>",
+            "result": null,
+            "revise": null,
+            "state": "proposed",
+            "type": "reply",
+            "versions": 2
+          }
+        ],
+        "question": null,
+        "state": "yourCall",
+        "subject": null,
+        "threadId": "ite99cc81f9af467da003079e0",
+        "timeline": [],
+        "title": "Can we move the payments review to Thursday?",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": false,
+      "out": "This outcome was already decided (approved): your revision is not needed."
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "ima693e8933cbcc10d5ab87215",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "teams",
+            "text": "Can we move the payments review to Thursday?",
+            "threadRef": "review-1"
+          }
+        ],
+        "next": "Carry out the approved outcome exactly as approved (its fields, as the person left them), then report it with outcome_done.",
+        "outcomes": [
+          {
+            "checks": [
+              "Thu 14:00 free"
+            ],
+            "confidence": "medium",
+            "decision": {
+              "edited": false,
+              "reason": null
+            },
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "text": "Hi Sam, thanks for flagging this. Thursday works for me. Best, Cara"
+            },
+            "note": "Shorter, with a backup.",
+            "outcomeId": "<id>",
+            "result": null,
+            "revise": null,
+            "state": "approved",
+            "type": "reply",
+            "versions": 2
+          }
+        ],
+        "question": null,
+        "state": "yourCall",
+        "subject": null,
+        "threadId": "ite99cc81f9af467da003079e0",
+        "timeline": [],
+        "title": "Can we move the payments review to Thursday?",
+        "urgent": false,
+        "waiting": null
+      }
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      }
+    ],
+    "workspaces/w1/inboxThreads": [
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "e99cc81f9af467da003079e0"
+        ],
+        "state": "yourCall",
+        "subjectId": null,
+        "title": "Can we move the payments review to Thursday?",
+        "updatedAt": "<ts>",
+        "waiting": null
+      }
+    ],
+    "workspaces/w1/inboxMessages": [
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "teams",
+        "text": "Can we move the payments review to Thursday?",
+        "threadId": "ite99cc81f9af467da003079e0",
+        "threadRef": "review-1"
+      }
+    ],
+    "workspaces/w1/inboxOutcomes": [
+      {
+        "checks": [
+          "Thu 14:00 free"
+        ],
+        "confidence": "medium",
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "owner",
+          "edited": false,
+          "reason": null,
+          "version": 1
+        },
+        "executor": "<agent>",
+        "fields": {
+          "text": "Hi Sam, thanks for flagging this. Thursday works for me. Best, Cara"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "Shorter, with a backup.",
+        "proposedBy": "<agent>",
+        "result": null,
+        "revise": null,
+        "state": "approved",
+        "threadId": "ite99cc81f9af467da003079e0",
+        "type": "reply",
+        "updatedAt": "<ts>",
+        "versions": [
+          {
+            "asked": null,
+            "by": "<agent>",
+            "checks": [],
+            "confidence": "high",
+            "eventId": null,
+            "fields": {
+              "text": "Hi Sam, thanks for flagging this. Thursday works for me. Best, Cara"
+            },
+            "n": 1,
+            "note": "They asked to move it."
+          },
+          {
+            "asked": {
+              "chips": [
+                "shorter",
+                "availability"
+              ],
+              "instruction": "Mention 14:00 as a backup"
+            },
+            "by": "<agent>",
+            "checks": [
+              "Thu 14:00 free"
+            ],
+            "confidence": "medium",
+            "eventId": "<id>",
+            "fields": {
+              "text": "Hi Sam, Thursday 10:00 works; 14:00 is free too. Cara"
+            },
+            "n": 2,
+            "note": "Shorter, with a backup."
+          }
+        ]
+      }
+    ],
+    "workspaces/w1/inboxEvents": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "ima693e8933cbcc10d5ab87215",
+          "newThread": true,
+          "sender": "Sam Example",
+          "source": "teams"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "ite99cc81f9af467da003079e0",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "fields": {
+            "text": "Hi Sam, Thursday 10:00 works; 14:00 is free too. Cara"
+          },
+          "outcomeId": "<id>",
+          "type": "reply",
+          "version": 2
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "ite99cc81f9af467da003079e0",
+        "type": "outcome.revised"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "fields": {
+            "text": "Hi Sam, thanks for flagging this. Thursday works for me. Best, Cara"
+          },
+          "outcomeId": "<id>",
+          "type": "reply"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "ite99cc81f9af467da003079e0",
+        "type": "outcome.proposed"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "chips": [
+            "shorter",
+            "availability"
+          ],
+          "instruction": "Mention 14:00 as a backup",
+          "outcomeId": "<id>",
+          "type": "reply"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "ite99cc81f9af467da003079e0",
+        "type": "outcome.revise_requested"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "chips": [
+            "warmer"
+          ],
+          "instruction": null,
+          "outcomeId": "<id>",
+          "type": "reply"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "ite99cc81f9af467da003079e0",
+        "type": "outcome.revise_requested"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "edited": false,
+          "outcomeId": "<id>",
+          "type": "reply",
+          "version": 1
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "ite99cc81f9af467da003079e0",
+        "type": "outcome.approved"
+      }
+    ],
+    "workspaces/w1/projects": [
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      },
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      }
+    ],
+    "workspaces/w1/projects/p1/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      },
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": {
+          "approvals": {},
+          "rejections": {},
+          "stepId": "review"
+        },
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "waiting",
+        "stepId": "review",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects/p2/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ]
+  }
+}

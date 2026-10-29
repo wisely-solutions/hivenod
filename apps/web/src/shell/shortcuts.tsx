@@ -16,6 +16,11 @@ export interface Shortcut {
   label: string;
   group: string;
   run: () => void;
+  /**
+   * A screen's own use of a key that a global shortcut also has (Today's C, Ask for changes,
+   * over C, Add an item): the higher one wins; equal ones keep registration order.
+   */
+  priority?: number;
 }
 
 const SEQUENCE_MS = 1000;
@@ -49,7 +54,12 @@ export function createMatcher(getShortcuts: () => Shortcut[], now: () => number 
       if (hit) return hit;
     }
     pending = null;
-    const single = list.find((s) => s.keys.length === 1 && s.keys[0] === k);
+    const single = list
+      .filter((s) => s.keys.length === 1 && s.keys[0] === k)
+      .reduce<Shortcut | null>(
+        (best, s) => (best && (s.priority ?? 0) <= (best.priority ?? 0) ? best : s),
+        null,
+      );
     if (single) return single;
     if (list.some((s) => s.keys.length === 2 && s.keys[0] === k)) pending = { key: k, at: now() };
     return null;
@@ -186,10 +196,18 @@ export function useShortcut(def: Omit<Shortcut, 'run'> & { run: () => void }) {
     runRef.current = def.run;
   });
   const keysKey = def.keys.join('+');
-  const { id, label, group } = def;
+  const { id, label, group, priority } = def;
   useEffect(
-    () => api.register({ id, label, group, keys: keysKey.split('+'), run: () => runRef.current() }),
-    [api, id, label, group, keysKey],
+    () =>
+      api.register({
+        id,
+        label,
+        group,
+        priority,
+        keys: keysKey.split('+'),
+        run: () => runRef.current(),
+      }),
+    [api, id, label, group, keysKey, priority],
   );
 }
 

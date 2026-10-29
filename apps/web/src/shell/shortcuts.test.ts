@@ -55,4 +55,17 @@ describe('activation targets', () => {
     expect(isActivationTarget(el('d'))).toBe(false);
     expect(isActivationTarget(null)).toBe(false);
   });
+
+  it('a screen key with a priority wins over a global one; equal ones keep their order', () => {
+    const run = () => {};
+    const list: Shortcut[] = [
+      { id: 'capture', keys: ['c'], label: 'Add', group: 'g', run },
+      { id: 'today:ask', keys: ['c'], label: 'Ask', group: 'g', run, priority: 1 },
+      { id: 'one', keys: ['x'], label: 'One', group: 'g', run },
+      { id: 'two', keys: ['x'], label: 'Two', group: 'g', run },
+    ];
+    const press = createMatcher(() => list);
+    expect(press('c')?.id).toBe('today:ask');
+    expect(press('x')?.id).toBe('one');
+  });
 });
