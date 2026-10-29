@@ -192,7 +192,7 @@ panel and its phone sheet) and on the plan panel. It counts down on the button w
 before the request is written. While pending, a "Checking again…" strip sits on the proposal;
 then a result line: "Checked again 16:40 · still good", or the new version with its word diff
 (the versions switcher, "After a re-check"), or the agent's question. A re-check needs CLI
-`0.2.<n>` (`recheck` in `cliversion.ts`); the strip says when the home agent is older.
+`0.2.177` (`recheck` in `cliversion.ts`); the strip says when the home agent is older.
 
 ### Bookings (`reply_book`, item w9SAf)
 
