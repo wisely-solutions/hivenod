@@ -73,6 +73,10 @@ import {
   threadAfter,
   titleFrom,
   wakeThread,
+  proposePlan,
+  planThreadState,
+  planView,
+  type PlanInput,
   type ActionContext,
   type Actor,
   type OutcomeStateOf,
@@ -1752,6 +1756,387 @@ function build(): ContractCase[] {
   wake('not yet', { nowMs: NOW_MS - 5000 });
   wake('not a date', { thread: TH({ state: 'waiting', waiting: { on: 'them', until: null } }) });
   wake('not waiting', { thread: TH() });
+  // ---------- plans (item qwFAWxZM5xkcE7PPjAzi) ----------
+  const STEPS = [
+    {
+      type: 'reply',
+      fields: { text: ' Thursday works. ' },
+      note: ' Sam asked ',
+      confidence: 'high',
+    },
+    {
+      type: 'book',
+      fields: { start: '2026-11-05T10:00:00+01:00', end: '2026-11-05T11:00:00+01:00', with: 'Sam' },
+      checks: [' Thu 10:00-11:00 free '],
+    },
+    { type: 'approval', fields: { what: ' New price list ', detail: 'A 10 → 12' } },
+    { type: 'make_it_work', fields: { title: 'Update prices', project: 'Website' } },
+    { type: 'reply', fields: { text: 'Done.' } },
+  ];
+  const pp = (name: string, actor: Actor, input: Partial<Parameters<typeof proposePlan>[1]>) =>
+    act(
+      `proposePlan/${name}`,
+      'proposePlan',
+      actor,
+      {
+        threadId: 'it1',
+        thread: TH({ subjectId: 's1', fetchedBy: 'agentB' }),
+        note: '  Reply, book, then the prices. ',
+        confidence: 'medium',
+        steps: STEPS,
+        ...input,
+      },
+      proposePlan,
+    );
+  pp('five steps', AGENT, {});
+  pp('one step, no note', AGENT, { steps: [STEPS[0]!], note: undefined, confidence: undefined });
+  pp('own ids', AGENT, { planId: 'pl9', stepIds: ['s1', 's2', 's3', 's4', 's5'] });
+  pp('snooze and nudge', AGENT, {
+    steps: [
+      { type: 'snooze', fields: { until: '2026-11-03T09:00:00+01:00' } },
+      { type: 'nudge', fields: { text: 'Any news?' } },
+      { type: 'handover', fields: { to: 'Maria' } },
+      {
+        type: 'reply_book',
+        fields: {
+          text: 'Booked.',
+          start: '2026-11-05T10:00:00Z',
+          end: '2026-11-05T10:30:00Z',
+          with: 'Sam',
+        },
+      },
+    ],
+  });
+  pp('no steps', AGENT, { steps: [] });
+  pp('nine steps', AGENT, { steps: Array.from({ length: 9 }, () => STEPS[0]!) });
+  pp('not a plan type', AGENT, { steps: [STEPS[0]!, { type: 'no_reply', fields: {} }] });
+  pp('unknown type', AGENT, { steps: [{ type: 'launch', fields: {} }] });
+  pp('bad step fields', AGENT, { steps: [STEPS[0]!, { type: 'approval', fields: {} }] });
+  pp('step note too long', AGENT, { steps: [{ ...STEPS[0]!, note: 'n'.repeat(2001) }] });
+  pp('bad step confidence', AGENT, { steps: [{ ...STEPS[0]!, confidence: 'sure' }] });
+  pp('bad step checks', AGENT, { steps: [{ ...STEPS[0]!, checks: [' '] }] });
+  pp('plan note too long', AGENT, { note: 'n'.repeat(2001) });
+  pp('bad confidence', AGENT, { confidence: 'sure' });
+  pp('ids do not match', AGENT, { stepIds: ['s1', 's1', 's3', 's4', 's5'] });
+  pp('ignored thread', AGENT, { thread: TH({ state: 'ignored' }) });
+  pp('person refused', HUMAN, {});
+
+  /** A plan input: steps o1..oN with the given types and states. */
+  const PL = (
+    steps: [string, OutcomeStateOf['state'], Record<string, unknown>?][],
+    cursor: number,
+    state: PlanInput['plan']['state'] = 'active',
+  ): PlanInput => ({
+    planId: 'pl1',
+    plan: {
+      memberUid: 'joao',
+      threadId: 'it1',
+      steps: steps.map((_, i) => `o${i + 1}`),
+      cursor,
+      state,
+    },
+    outcomes: Object.fromEntries(
+      steps.map(([type, st, fields], i) => [
+        `o${i + 1}`,
+        OC({
+          type,
+          state: st,
+          fields: (fields ?? (type === 'reply' ? { text: 'x' } : {})) as Record<string, string>,
+          planId: 'pl1',
+          executor: type === 'approval' || type === 'snooze' ? null : 'agentA',
+        }),
+      ]),
+    ),
+  });
+  const SNOOZE = { until: '2026-11-03T09:00:00.000Z' };
+  const finP = (name: string, input: Partial<Parameters<typeof finishOutcome>[1]>) => {
+    const pl = input.plan;
+    const oid = input.outcomeId ?? (pl ? pl.plan.steps[pl.plan.cursor] : undefined) ?? 'o1';
+    fin(`plan/${name}`, AGENT, {
+      outcomeId: oid,
+      outcome: pl?.outcomes[oid] ?? OC({ planId: 'pl1' }),
+      ...input,
+    });
+  };
+  finP('first step done', {
+    plan: PL(
+      [
+        ['reply', 'approved'],
+        ['reply', 'approved'],
+      ],
+      0,
+      'proposed',
+    ),
+    result: { permalink: 'https://teams.example.com/m/2' },
+  });
+  finP('next step not approved', {
+    plan: PL(
+      [
+        ['reply', 'done'],
+        ['reply', 'approved'],
+        ['nudge', 'proposed', { text: 'y' }],
+      ],
+      1,
+    ),
+  });
+  finP('next step a gate', {
+    plan: PL(
+      [
+        ['reply', 'approved'],
+        ['approval', 'proposed', { what: 'x' }],
+        ['reply', 'approved'],
+      ],
+      0,
+    ),
+  });
+  finP('next a wait-until', {
+    plan: PL(
+      [
+        ['reply', 'approved'],
+        ['snooze', 'approved', SNOOZE],
+      ],
+      0,
+    ),
+  });
+  finP('last step done', {
+    plan: PL(
+      [
+        ['reply', 'done'],
+        ['approval', 'done', { what: 'x' }],
+        ['handover', 'approved', { to: 'M' }],
+      ],
+      2,
+    ),
+  });
+  finP('last after a gate and a skip', {
+    plan: PL(
+      [
+        ['reply', 'done'],
+        ['nudge', 'rejected', { text: 'y' }],
+        [
+          'book',
+          'approved',
+          { start: '2026-11-05T10:00:00.000Z', end: '2026-11-05T11:00:00.000Z' },
+        ],
+      ],
+      2,
+    ),
+  });
+  finP('failed blocks', {
+    plan: PL(
+      [
+        ['reply', 'done'],
+        ['reply', 'approved'],
+      ],
+      1,
+    ),
+    status: 'failed',
+    result: { error: 'Teams said 403' },
+  });
+  finP('build it started', {
+    plan: PL(
+      [
+        ['make_it_work', 'approved', { title: 'x' }],
+        ['reply', 'approved'],
+      ],
+      0,
+    ),
+    status: 'started',
+    result: { itemId: ' i9 ' },
+  });
+  finP('build it done after running', {
+    plan: PL(
+      [
+        ['make_it_work', 'running', { title: 'x' }],
+        ['reply', 'approved'],
+      ],
+      0,
+    ),
+    result: { itemId: 'i9', permalink: 'https://hivenod.com/p/x/i9' },
+  });
+  finP('started without item', {
+    plan: PL([['make_it_work', 'approved', { title: 'x' }]], 0),
+    status: 'started',
+  });
+  finP('started a reply', { plan: PL([['reply', 'approved']], 0), status: 'started' });
+  finP('started twice', {
+    plan: PL([['make_it_work', 'running', { title: 'x' }]], 0),
+    status: 'started',
+    result: { itemId: 'i9' },
+  });
+  finP('not its turn', {
+    plan: PL(
+      [
+        ['reply', 'proposed'],
+        ['reply', 'approved'],
+      ],
+      0,
+    ),
+    outcomeId: 'o2',
+  });
+  finP('blocked plan', { plan: PL([['reply', 'approved']], 0, 'blocked') });
+  finP('stopped plan', { plan: PL([['reply', 'approved']], 0, 'stopped') });
+  finP('without its plan', { plan: undefined, outcome: OC({ planId: 'pl1' }) });
+  finP('another plan', {
+    plan: { ...PL([['reply', 'approved']], 0), planId: 'pl2' },
+  });
+  fin('single started', AGENT, { status: 'started', result: { itemId: 'i9' } });
+  fin('single running', AGENT, { outcome: OC({ state: 'running' }) });
+  const wakeP = (name: string, plan: PlanInput) => wake(`plan/${name}`, { plan });
+  wakeP(
+    'wait-until done',
+    PL(
+      [
+        ['reply', 'done'],
+        ['snooze', 'approved', SNOOZE],
+        ['nudge', 'approved', { text: 'y' }],
+      ],
+      1,
+    ),
+  );
+  wakeP(
+    'last wait-until',
+    PL(
+      [
+        ['handover', 'done', { to: 'M' }],
+        ['snooze', 'approved', SNOOZE],
+      ],
+      1,
+    ),
+  );
+  wakeP('not a snooze', PL([['reply', 'approved']], 0));
+  wakeP('snooze not approved', PL([['snooze', 'proposed', SNOOZE]], 0));
+  wakeP('through', PL([['snooze', 'done', SNOOZE]], 1, 'done'));
+  wakeP('another thread', {
+    ...PL([['snooze', 'approved', SNOOZE]], 0),
+    plan: { ...PL([['snooze', 'approved', SNOOZE]], 0).plan, threadId: 'it2' },
+  });
+  const pts = (name: string, pl: PlanInput) =>
+    pure(
+      `planThreadState/${name}`,
+      'planThreadState',
+      { plan: pl.plan, outcomes: pl.outcomes },
+      (i) => planThreadState(i.plan, i.outcomes),
+    );
+  pts(
+    'proposed',
+    PL(
+      [
+        ['reply', 'proposed'],
+        ['reply', 'proposed'],
+      ],
+      0,
+      'proposed',
+    ),
+  );
+  pts('first approved', PL([['reply', 'approved']], 0));
+  pts(
+    'gate',
+    PL(
+      [
+        ['reply', 'done'],
+        ['approval', 'proposed', { what: 'x' }],
+      ],
+      1,
+    ),
+  );
+  pts('running', PL([['make_it_work', 'running', { title: 'x' }]], 0));
+  pts(
+    'wait until',
+    PL(
+      [
+        ['reply', 'done'],
+        ['snooze', 'approved', SNOOZE],
+      ],
+      1,
+    ),
+  );
+  pts(
+    'after a reply',
+    PL(
+      [
+        ['handover', 'done', { to: 'M' }],
+        ['reply', 'approved'],
+      ],
+      1,
+    ),
+  );
+  pts('failed', PL([['reply', 'failed']], 0, 'blocked'));
+  pts(
+    'all done',
+    PL(
+      [
+        ['reply', 'done'],
+        ['approval', 'done', { what: 'x' }],
+      ],
+      2,
+      'done',
+    ),
+  );
+  pts('only a gate done', PL([['approval', 'done', { what: 'x' }]], 1, 'done'));
+  pts('stopped', PL([['reply', 'rejected']], 0, 'stopped'));
+  pts('missing step', {
+    ...PL([['reply', 'done']], 1),
+    plan: { ...PL([['reply', 'done']], 1).plan, steps: ['o1', 'oX'] },
+  });
+  const pv = (name: string, pl: PlanInput) =>
+    pure(`planView/${name}`, 'planView', { plan: pl.plan, outcomes: pl.outcomes }, (i) => {
+      const v = planView(i.plan, i.outcomes);
+      return {
+        state: v.state,
+        cursor: v.cursor,
+        total: v.total,
+        through: v.through,
+        progress: v.progress,
+        steps: v.steps.map((s) => ({
+          number: s.number,
+          outcomeId: s.outcomeId,
+          type: s.type,
+          kind: s.kind,
+          label: s.label,
+          ui: s.ui,
+          atCursor: s.atCursor,
+        })),
+      };
+    });
+  pv(
+    'mixed',
+    PL(
+      [
+        ['reply', 'done'],
+        ['nudge', 'rejected', { text: 'y' }],
+        ['approval', 'proposed', { what: 'x' }],
+        ['reply', 'approved'],
+        ['make_it_work', 'revising', { title: 't' }],
+      ],
+      2,
+    ),
+  );
+  pv(
+    'running',
+    PL(
+      [
+        ['reply', 'approved'],
+        ['make_it_work', 'running', { title: 't' }],
+      ],
+      1,
+    ),
+  );
+  pv('blocked', PL([['reply', 'failed']], 0, 'blocked'));
+  pv(
+    'stopped',
+    PL(
+      [
+        ['reply', 'done'],
+        ['approval', 'rejected', { what: 'x' }],
+        ['reply', 'approved'],
+      ],
+      1,
+      'stopped',
+    ),
+  );
+  pv('done', PL([['reply', 'done']], 1, 'done'));
+  pv('missing step', { ...PL([['reply', 'proposed']], 0), outcomes: {} });
   const clean = (name: string, input: { type: string; fields: Record<string, unknown> }) =>
     pure(`cleanOutcomeFields/${name}`, 'cleanOutcomeFields', input, (i) =>
       cleanOutcomeFields(i.type, i.fields),

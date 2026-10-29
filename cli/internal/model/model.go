@@ -515,6 +515,22 @@ type InboxOutcome struct {
 	// Versions and Revise: Ask for changes (item L7OzWKMYZ1O2dX33Xkrj).
 	Versions []OutcomeVersion `firestore:"versions" json:"versions"`
 	Revise   *ReviseRequest   `firestore:"revise" json:"revise"`
+	// PlanID: a step of that plan (item qwFAWxZM5xkcE7PPjAzi); nil: a single outcome.
+	PlanID *string `firestore:"planId" json:"planId"`
+}
+
+// InboxPlan is workspaces/{w}/inboxPlans/{pid}: the order of a plan's steps (outcome ids) and
+// whose turn it is (cursor; len(steps) once every step is through).
+type InboxPlan struct {
+	MemberUID  string    `firestore:"memberUid" json:"memberUid"`
+	ThreadID   string    `firestore:"threadId" json:"threadId"`
+	ProposedBy string    `firestore:"proposedBy" json:"proposedBy"`
+	Steps      []string  `firestore:"steps" json:"steps"`
+	Cursor     int       `firestore:"cursor" json:"cursor"`
+	State      string    `firestore:"state" json:"state"`
+	Note       string    `firestore:"note" json:"note"`
+	Confidence *string   `firestore:"confidence" json:"confidence"`
+	CreatedAt  time.Time `firestore:"createdAt" json:"createdAt"`
 }
 
 // InboxRelation is workspaces/{w}/inboxRelations/{rid}: two related subjects (a < b).

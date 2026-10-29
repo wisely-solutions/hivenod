@@ -126,6 +126,19 @@ var runners = map[string]runner{
 	"finishOutcome":   act(FinishOutcome),
 	"reviseOutcome":   act(ReviseOutcome),
 	"wakeThread":      act(WakeThread),
+	"proposePlan":     act(ProposePlan),
+	"planThreadState": pure(func(in struct {
+		Plan     PlanState               `json:"plan"`
+		Outcomes map[string]OutcomeState `json:"outcomes"`
+	}) (any, error) {
+		return PlanThreadState(in.Plan, in.Outcomes)
+	}),
+	"planView": pure(func(in struct {
+		Plan     PlanState               `json:"plan"`
+		Outcomes map[string]OutcomeState `json:"outcomes"`
+	}) (any, error) {
+		return PlanView(in.Plan, in.Outcomes), nil
+	}),
 	"cleanOutcomeFields": pure(func(in struct {
 		Type   string         `json:"type"`
 		Fields map[string]any `json:"fields"`
