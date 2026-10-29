@@ -128,8 +128,15 @@ var runners = map[string]runner{
 	"recheckDone":       act(RecheckDone),
 	"answerInstruction": act(AnswerInstruction),
 	"suggestChips":      act(SuggestChips),
-	"wakeThread":        act(WakeThread),
-	"proposePlan":       act(ProposePlan),
+	// Thread summaries (item OE8FmrTaIxFVGcaeGG3N)
+	"writeSummary": act(WriteSummary),
+	"checkSummary": pure(func(in struct {
+		Summary any `json:"summary"`
+	}) (any, error) {
+		return CheckSummary(in.Summary)
+	}),
+	"wakeThread":  act(WakeThread),
+	"proposePlan": act(ProposePlan),
 	"planThreadState": pure(func(in struct {
 		Plan     PlanState               `json:"plan"`
 		Outcomes map[string]OutcomeState `json:"outcomes"`

@@ -28,6 +28,11 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
   takeover: '0.2.180',
   /** Inbox event: the member asked the home agent something on a thread (item w6O2KOw4ys70TQv9I1xD). */
   instruct: '0.2.184',
+  /**
+   * Thread summaries (item OE8FmrTaIxFVGcaeGG3N): thread_summary and the inbox reason summarize.
+   * An older CLI never writes a summary: the page says the agent's CLI is too old.
+   */
+  summary: '0.2.191',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */

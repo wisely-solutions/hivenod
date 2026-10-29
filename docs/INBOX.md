@@ -305,6 +305,63 @@ in `inbox.ts`.
 - **Batch size.** Approve plan and Reject plan with 8 steps (all bookings) fit in one batch: the
   rules tests run the worst case on the emulator (within Firestore's 20 reads per batch).
 
+### Summaries (item OE8FmrTaIxFVGcaeGG3N, slice 1)
+
+Every thread carries a summary written by its home agent, so the member reads one line, sees
+the recommendation and decides (`packages/shared/src/summary.ts`; the decision page that shows
+it comes in slice 2).
+
+```
+workspaces/{wid}/inboxSummaries/{tid}                  the current summary (doc id = thread id)
+workspaces/{wid}/inboxSummaryVersions/{tid}_{version}  each version, create-only; 20 kept
+inboxThreads/{tid}.summary = { version, at, headline, ask, answer, recAction, confidence }
+```
+
+Fields: `headline` (1-120, what the thread is), `ask` (≤200, the question while a proposal or
+person step waits, else null), `answer` (≤160), `recommendation` `{action ≤40, why ≤200}`,
+`confidence`, `bullets` (1-5 `{text ≤160, refs ≤3}`), `details` (markdown ≤6000), `visuals`
+(≤4), `noVisualWhy` (≤140), `refs` (≤30 `{kind message|attachment|step|event|link, id, label,
+url https|null}`), `basis` `{lastEventId, planCursor}` (what the agent had read), plus
+`memberUid`, `threadId`, `version`, `by`, `at`, `lastEventId`. Every key is stored (null when
+not given).
+
+Visuals are data, never pictures or markup, and are stored with every key of their kind:
+`bar`/`line`/`stacked_bar` `{title, caption, unit, x (2-24 labels ≤16), series (1-4, 2-4
+stacked; {name ≤30, values per x, number|null}), highlight (index|null), better up|down|null}`;
+`number` `{title, caption, value, unit, delta, trend (2-24 numbers|null), better}`; `flow`
+`{title, caption, nodes (2-8 {id ≤16, label ≤40, who agent|person|system|null, state
+done|now|next|changed|removed|null}), edges (≤10 {from, to, label}; [] = a straight sequence)}`;
+`before_after` `{title, caption, before/after {label ≤24|null, lines 1-6 ≤60}}`; `timeline`
+`{title, caption, events (2-12 {at ISO date or datetime, label ≤60, state
+done|now|next|risk|null})}`. Titles (≤80) and captions (≤200, the takeaway and alt text) and
+all labels are plain text. `image` and `image_pair` come with `thread_attach` (slice 4).
+
+**Writing it.** `thread_summary {threadId, baseVersion, summary}` (CLI `hivenod thread summary
+ID --file F|-`): the home agent only, as its last call after every inbox event that changed the
+thread. `baseVersion` is the version `thread_read` showed (0 for none); a summary that moved on
+is refused ("re-read"). One batch: the summary (version + 1), its version doc (the one 20 back
+deleted), the thread's mirror (it stamps `updatedAt`), one `summary.written` event `{version}`.
+`checkSummary` gives plain errors ("bullets: 6 bullets, at most 5", "visual 2: 25 points, at
+most 24"). **The visual rule:** at every person step (`ask` set) a summary has a visual or a
+`noVisualWhy`; the tool and the rules refuse one without either.
+
+**Freshness.** Fresh when `summary.at >= thread.updatedAt` (`summaryFreshness`); the home
+agent's channel sends the inbox reason `summarize` (lowest priority, once per change, never
+while other work on the thread is in flight) for an open thread that changed 3 minutes ago or
+more without a newer summary. `thread_read` returns `summary` (with `state` none, fresh or
+stale) and, for the home agent while it is not fresh, `summaryNext`; `inbox_list` rows carry
+`summary {version, headline, state}`. CLI minimum version: `summary` in `cliversion.ts`.
+
+**Rules.** Members read summaries and versions like the thread and never write them. Each
+document of the batch has its own budget of 1000 expressions, so the checks are spread: the
+summary doc checks the home agent, version + 1, its fields and bullets, the event, the version
+doc and the mirror; the mirror (thread update) equals the summary and checks its visuals
+(kinds, counts, plain titles and captions: the generated block "summary checks"); the version
+doc equals the summary's top fields and bounds its lists. Per-label texts, values per point
+and edge ends are `checkSummary`'s; the app reads summaries and versions through the zod
+schema. `packages/shared/rules/headroom-summary.test.ts` keeps each at 20 pad units or more
+with the heaviest summary.
+
 ## Areas and quiet subjects
 
 - **Area:** an optional tag on a subject (a client, a product, "admin"; at most 60 characters,

@@ -582,6 +582,8 @@
           "name": "Klarna refunds",
           "subjectId": "<id>"
         },
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
         "threadId": "it6db370644b61556467c3cd89",
         "timeline": [],
         "title": "Klarna refund stuck for order 12",

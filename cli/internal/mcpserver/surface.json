@@ -809,6 +809,184 @@
         }
       },
       {
+        "name": "thread_summary",
+        "description": "Write the summary of a thread you brought in (you are its home agent), as your LAST call after every inbox event that changed the thread (a message, a proposal or plan, a step done or failed, an answer, a send back, a re-check, a request): the person reads it first and decides from it. headline is the thing, not the process (one line); ask is the yes/no question while a proposal or person step waits (else leave it out); answer is the one-line state; recommendation {action, why} and confidence; 1-5 bullets of facts with numbers; details (markdown) for More detail. At every person step (an approval or a verification: whenever ask is set) include at least one visual when there is data (a chart), a UI change or a flow or sequence (a diagram: before_after, flow or timeline); if none fits, set noVisualWhy in one line. Visuals are data, never pictures or markup: bar, line, stacked_bar {title, caption, unit?, x: 2-24 labels, series: 1-4 {name, values per x}, highlight?, better?: up|down}; number {title, caption, value, unit?, delta?, trend?, better?}; flow {title, caption, nodes: 2-8 {id, label, who?: agent|person|system, state?: done|now|next|changed|removed}, edges?: {from, to, label?}}; before_after {title, caption, before: {label?, lines 1-6}, after: {...}}; timeline {title, caption, events: 2-12 {at: ISO date, label, state?: done|now|next|risk}}. At most 4. baseVersion is the summary version thread_read showed (0 when none): a summary that moved on is refused, re-read and write again.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "baseVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The summary version you read with thread_read (summary.version), 0 when it has none"
+            },
+            "summary": {
+              "type": "object",
+              "description": "The summary",
+              "properties": {
+                "headline": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "description": "What this thread is, in one line"
+                },
+                "ask": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "The question to the person, only while a proposal or person step waits"
+                },
+                "answer": {
+                  "type": "string",
+                  "maxLength": 160,
+                  "description": "The one-line answer or state"
+                },
+                "recommendation": {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40,
+                      "description": "e.g. Approve"
+                    },
+                    "why": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "why"
+                  ]
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                },
+                "bullets": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 5,
+                  "description": "Facts with numbers: texts (at most 160 characters) or {text, refs: up to 3 refs}",
+                  "items": {}
+                },
+                "details": {
+                  "type": "string",
+                  "maxLength": 6000,
+                  "description": "Markdown for More detail: what changed, checks, risks"
+                },
+                "visuals": {
+                  "type": "array",
+                  "maxItems": 4,
+                  "description": "Charts and diagrams (data, see the tool description)",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "bar",
+                          "line",
+                          "stacked_bar",
+                          "number",
+                          "flow",
+                          "before_after",
+                          "timeline"
+                        ]
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "caption": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "The takeaway (also the alt text)"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "title",
+                      "caption"
+                    ]
+                  }
+                },
+                "noVisualWhy": {
+                  "type": "string",
+                  "maxLength": 140,
+                  "description": "Why there is no visual, required when ask is set and there are none"
+                },
+                "refs": {
+                  "type": "array",
+                  "maxItems": 30,
+                  "description": "Things in the thread the summary points to",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "message",
+                          "attachment",
+                          "step",
+                          "event",
+                          "link"
+                        ]
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "description": "The message, attachment, step (outcome), event or link id"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "description": "https only; required for a link"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "id",
+                      "label"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "headline",
+                "bullets"
+              ]
+            }
+          },
+          "required": [
+            "threadId",
+            "baseVersion",
+            "summary"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "subject_relate",
         "description": "Propose that two subjects of the same person are related (the same client, project or problem seen from two sides), with an optional note saying how. It is a proposal: the person OKs or turns it down, and a link turned down is not proposed again. Related subjects show on each other's page and in subject_search.",
         "inputSchema": {
@@ -2674,6 +2852,184 @@
           "required": [
             "threadId",
             "chips"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "thread_summary",
+        "description": "Write the summary of a thread you brought in (you are its home agent), as your LAST call after every inbox event that changed the thread (a message, a proposal or plan, a step done or failed, an answer, a send back, a re-check, a request): the person reads it first and decides from it. headline is the thing, not the process (one line); ask is the yes/no question while a proposal or person step waits (else leave it out); answer is the one-line state; recommendation {action, why} and confidence; 1-5 bullets of facts with numbers; details (markdown) for More detail. At every person step (an approval or a verification: whenever ask is set) include at least one visual when there is data (a chart), a UI change or a flow or sequence (a diagram: before_after, flow or timeline); if none fits, set noVisualWhy in one line. Visuals are data, never pictures or markup: bar, line, stacked_bar {title, caption, unit?, x: 2-24 labels, series: 1-4 {name, values per x}, highlight?, better?: up|down}; number {title, caption, value, unit?, delta?, trend?, better?}; flow {title, caption, nodes: 2-8 {id, label, who?: agent|person|system, state?: done|now|next|changed|removed}, edges?: {from, to, label?}}; before_after {title, caption, before: {label?, lines 1-6}, after: {...}}; timeline {title, caption, events: 2-12 {at: ISO date, label, state?: done|now|next|risk}}. At most 4. baseVersion is the summary version thread_read showed (0 when none): a summary that moved on is refused, re-read and write again.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "baseVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The summary version you read with thread_read (summary.version), 0 when it has none"
+            },
+            "summary": {
+              "type": "object",
+              "description": "The summary",
+              "properties": {
+                "headline": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120,
+                  "description": "What this thread is, in one line"
+                },
+                "ask": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "The question to the person, only while a proposal or person step waits"
+                },
+                "answer": {
+                  "type": "string",
+                  "maxLength": 160,
+                  "description": "The one-line answer or state"
+                },
+                "recommendation": {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40,
+                      "description": "e.g. Approve"
+                    },
+                    "why": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "why"
+                  ]
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                },
+                "bullets": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 5,
+                  "description": "Facts with numbers: texts (at most 160 characters) or {text, refs: up to 3 refs}",
+                  "items": {}
+                },
+                "details": {
+                  "type": "string",
+                  "maxLength": 6000,
+                  "description": "Markdown for More detail: what changed, checks, risks"
+                },
+                "visuals": {
+                  "type": "array",
+                  "maxItems": 4,
+                  "description": "Charts and diagrams (data, see the tool description)",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "bar",
+                          "line",
+                          "stacked_bar",
+                          "number",
+                          "flow",
+                          "before_after",
+                          "timeline"
+                        ]
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "caption": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "description": "The takeaway (also the alt text)"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "title",
+                      "caption"
+                    ]
+                  }
+                },
+                "noVisualWhy": {
+                  "type": "string",
+                  "maxLength": 140,
+                  "description": "Why there is no visual, required when ask is set and there are none"
+                },
+                "refs": {
+                  "type": "array",
+                  "maxItems": 30,
+                  "description": "Things in the thread the summary points to",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "message",
+                          "attachment",
+                          "step",
+                          "event",
+                          "link"
+                        ]
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "description": "The message, attachment, step (outcome), event or link id"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 60
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "description": "https only; required for a link"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "id",
+                      "label"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "headline",
+                "bullets"
+              ]
+            }
+          },
+          "required": [
+            "threadId",
+            "baseVersion",
+            "summary"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },

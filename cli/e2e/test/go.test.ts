@@ -1042,6 +1042,101 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
     matchesGolden(r);
   }, 120_000);
 
+  it('summaries (item OE8Fm): the home agent writes versions, thread_read shows them, a stale base and a person step without a visual are refused', async () => {
+    const r = await scenario(async (call) => {
+      const t1 = out(
+        await call('inbox_add', {
+          source: 'teams',
+          sender: { name: 'Sam Example', handle: 'sam@example.com' },
+          text: 'Can we ship release 175 today?',
+          threadRef: 'rel-175',
+          receivedAt: '2026-10-28T09:00:00Z',
+        }),
+      ).threadId as string;
+      await call('thread_read', { threadId: t1 });
+      const summary = {
+        headline: 'Release 175: ship today?',
+        ask: 'Ship release 175 today?',
+        answer: 'All checks green; 2 changes, no migration',
+        recommendation: { action: 'Approve', why: 'Green and small' },
+        confidence: 'high',
+        bullets: [
+          '412 tests pass',
+          {
+            text: 'Check time 10 min',
+            refs: [{ kind: 'link', id: 'pr86', label: 'PR #86', url: 'https://example.com/pr/86' }],
+          },
+        ],
+        details: '## What changed\n- two fixes',
+        visuals: [
+          {
+            kind: 'bar',
+            title: 'Check time',
+            caption: 'Down from 14 to 10 minutes',
+            unit: 'min',
+            x: ['r173', 'r174', 'r175'],
+            series: [{ name: 'minutes', values: [14, 12.5, 10] }],
+            highlight: 2,
+            better: 'down',
+          },
+          {
+            kind: 'flow',
+            title: 'Plan',
+            caption: 'Ship is next',
+            nodes: [
+              { id: 'b', label: 'Build', who: 'agent', state: 'done' },
+              { id: 's', label: 'Ship it?', who: 'person', state: 'now' },
+            ],
+          },
+        ],
+      };
+      // A person step without a visual or a reason: refused.
+      await call('thread_summary', {
+        threadId: t1,
+        baseVersion: 0,
+        summary: { ...summary, visuals: [] },
+      });
+      await call('thread_summary', { threadId: t1, baseVersion: 0, summary });
+      // A stale base: refused; the right one writes v2.
+      await call('thread_summary', { threadId: t1, baseVersion: 0, summary });
+      await call('thread_summary', {
+        threadId: t1,
+        baseVersion: 1,
+        summary: { headline: 'Release 175 shipped', bullets: ['Live since 10:02'] },
+      });
+      await call('thread_read', { threadId: t1 });
+      await call('inbox_list', {});
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([true, true, false, true, false, true, true, true]);
+    expect(r.calls[1]).toMatchObject({
+      out: {
+        summary: null,
+        summaryNext: expect.stringContaining('thread_summary (baseVersion 0)'),
+      },
+    });
+    expect(r.calls[2]).toMatchObject({
+      ok: false,
+      out: expect.stringContaining('At a person step'),
+    });
+    expect(r.calls[3]).toMatchObject({ out: { version: 1 } });
+    expect(r.calls[4]).toMatchObject({ ok: false, out: expect.stringContaining('moved on to v1') });
+    expect(r.calls[6]).toMatchObject({
+      out: {
+        summary: {
+          version: 2,
+          state: 'fresh',
+          headline: 'Release 175 shipped',
+          ask: null,
+          bullets: [{ text: 'Live since 10:02', refs: [] }],
+          visuals: [],
+        },
+      },
+    });
+    expect((r.calls[6] as { out: Record<string, unknown> }).out.summaryNext).toBeUndefined();
+    matchesGolden(r);
+  }, 120_000);
+
   it('plans (item qwFAW): one call proposes, steps run in order, a gate waits for the person, Build it runs until done', async () => {
     const r = await scenario(async (call) => {
       const owner = as('owner');

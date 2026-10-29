@@ -959,6 +959,108 @@ const MUTATIONS = [
       ],
     ],
   ],
+  // Thread summaries (item OE8FmrTaIxFVGcaeGG3N).
+  [
+    'summary: any agent writes',
+    [
+      [
+        '          && t.fetchedBy == me() && d.memberUid == t.memberUid',
+        '          && d.memberUid == t.memberUid',
+      ],
+      [
+        'return r.fetchedBy == me() && s.lastEventId == d.lastEventId',
+        'return s.lastEventId == d.lastEventId',
+      ],
+    ],
+  ],
+  ['summary: version skip', [['&& d.version == prev + 1 &&', '&& d.version > prev &&']]],
+  [
+    'summary: without its version doc',
+    [['\n          && existsAfter(inboxSummaryVersionDoc(wid, tid, d.version))', '']],
+  ],
+  [
+    'summary: without the mirror',
+    [
+      [
+        "\n          && getAfter(inboxDoc(wid, 'inboxThreads', tid)).data.get('summary', {}).get('version', 0) == d.version;",
+        ';',
+      ],
+    ],
+  ],
+  [
+    'summary: 6 bullets',
+    [
+      [
+        'return l is list && l.size() >= 1 && l.size() <= 5',
+        'return l is list && l.size() >= 1 && l.size() <= 6',
+      ],
+      [
+        'd.bullets.size() >= 1 && d.bullets.size() <= 5',
+        'd.bullets.size() >= 1 && d.bullets.size() <= 6',
+      ],
+    ],
+  ],
+  [
+    'summary: 5 visuals',
+    [
+      ['return l.size() <= 4\n', 'return l.size() <= 5\n'],
+      ['d.visuals is list && d.visuals.size() <= 4', 'd.visuals is list && d.visuals.size() <= 5'],
+    ],
+  ],
+  [
+    'summary: unknown visual kind',
+    [
+      [
+        "return v.kind in ['bar', 'line', 'stacked_bar', 'number', 'flow', 'before_after', 'timeline']\n",
+        'return true\n',
+      ],
+    ],
+  ],
+  ['summary: chart with 25 points', [['v.x.size() >= 2 && v.x.size() <= 24', 'v.x.size() >= 2']]],
+  [
+    'summary: chart with 5 series',
+    [['v.series.size() >= 1 && v.series.size() <= 4', 'v.series.size() >= 1']],
+  ],
+  [
+    'summary: flow with 9 nodes',
+    [['v.nodes.size() >= 2 && v.nodes.size() <= 8', 'v.nodes.size() >= 2']],
+  ],
+  ['summary: html in a title', [["&& !v.matches('(?s).*<[a-zA-Z/!].*')", '']]],
+  [
+    'summary: ask with no visual and no reason',
+    [['(d.ask == null || d.visuals.size() > 0 || d.noVisualWhy != null)', 'true']],
+  ],
+  [
+    'summary: mirror differs',
+    [
+      [
+        "            && d.summary == {'version': s.version, 'at': s.at, 'headline': s.headline, 'ask': s.ask,\n                 'answer': s.answer, 'recAction': s.recommendation == null ? null : s.recommendation.action,\n                 'confidence': s.confidence}\n",
+        '',
+      ],
+    ],
+  ],
+  [
+    'summary: version doc differs',
+    [
+      [
+        '          && d.headline == s.headline && d.ask == s.ask && d.answer == s.answer\n          && d.recommendation == s.recommendation && d.confidence == s.confidence\n          && d.details == s.details && d.noVisualWhy == s.noVisualWhy && d.basis == s.basis\n',
+        '',
+      ],
+    ],
+  ],
+  [
+    'summary: version doc under any id',
+    [["return vid == d.threadId + '_' + string(d.version)\n          && ", 'return ']],
+  ],
+  [
+    'summary: deletes newer versions',
+    [
+      [
+        '\n          && resource.data.version <= getAfter(inboxSummaryDoc(wid, resource.data.threadId)).data.version - 20;',
+        ';',
+      ],
+    ],
+  ],
 ];
 
 // A search text that no longer matches (the rules were refactored) would check nothing: it is

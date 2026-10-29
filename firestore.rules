@@ -1136,6 +1136,107 @@ service cloud.firestore {
       function outcomeRequired() { return {'reply': ['text'], 'reply_book': ['text', 'start', 'end', 'with'], 'book': ['start', 'end', 'with'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'approval': ['what']}; }
       // END outcome registry
 
+      // ---------- summaries (item OE8FmrTaIxFVGcaeGG3N, packages/shared/src/summary.ts) ----------
+      // The thread's home agent alone writes its summary: version + 1 each time, one batch with
+      // the version doc (create-only, the same fields), the thread's mirror and one
+      // summary.written event. Members read it like the thread and never write it. At a person
+      // step (ask set) it shows a visual or says why there is none.
+      // BEGIN summary checks (generated from packages/shared/src/summary.ts by
+      // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)
+      function summaryPlain(v, max) { return str(v, 1, max) && !v.matches('(?s).*<[a-zA-Z/!].*'); }
+      function summaryBulletOk(b) {
+        return b.keys().hasOnly(['text', 'refs']) && str(b.text, 1, 160) && b.refs.size() <= 3;
+      }
+      function summaryBulletsOk(l) {
+        return l is list && l.size() >= 1 && l.size() <= 5
+          && (l.size() <= 0 || summaryBulletOk(l[0]))
+          && (l.size() <= 1 || summaryBulletOk(l[1]))
+          && (l.size() <= 2 || summaryBulletOk(l[2]))
+          && (l.size() <= 3 || summaryBulletOk(l[3]))
+          && (l.size() <= 4 || summaryBulletOk(l[4]));
+      }
+      function summaryVisualOk(v) {
+        return v.kind in ['bar', 'line', 'stacked_bar', 'number', 'flow', 'before_after', 'timeline']
+          && summaryPlain(v.title, 80) && summaryPlain(v.caption, 200)
+          && (v.kind in ['bar', 'line', 'stacked_bar'] ? v.x is list && v.x.size() >= 2 && v.x.size() <= 24
+              && v.series is list && v.series.size() >= 1 && v.series.size() <= 4 && (v.kind != 'stacked_bar' || v.series.size() >= 2)
+            : v.kind == 'number' ? v.value is number && (v.trend == null || v.trend.size() <= 24)
+            : v.kind == 'flow' ? v.nodes is list && v.nodes.size() >= 2 && v.nodes.size() <= 8 && v.edges.size() <= 10
+            : v.kind == 'before_after' ? v.before.lines.size() <= 6 && v.after.lines.size() <= 6
+            : v.events is list && v.events.size() >= 2 && v.events.size() <= 12);
+      }
+      function summaryVisualsOk(l) {
+        return l.size() <= 4
+          && (l.size() <= 0 || summaryVisualOk(l[0]))
+          && (l.size() <= 1 || summaryVisualOk(l[1]))
+          && (l.size() <= 2 || summaryVisualOk(l[2]))
+          && (l.size() <= 3 || summaryVisualOk(l[3]));
+      }
+      // END summary checks
+      function inboxSummaryDoc(wid, tid) { return inboxDoc(wid, 'inboxSummaries', tid); }
+      function inboxSummaryVersionDoc(wid, tid, v) { return inboxDoc(wid, 'inboxSummaryVersions', tid + '_' + string(v)); }
+      function inboxSummaryOk(wid, tid, d, prev) {
+        let t = get(inboxDoc(wid, 'inboxThreads', tid)).data;
+        return exactKeys(d, ['memberUid', 'threadId', 'version', 'by', 'at', 'headline', 'ask', 'answer',
+               'recommendation', 'confidence', 'bullets', 'details', 'visuals', 'noVisualWhy', 'refs',
+               'basis', 'lastEventId'])
+          && t.fetchedBy == me() && d.memberUid == t.memberUid && d.threadId == tid
+          && d.version == prev + 1 && d.by == me() && d.at == request.time
+          && str(d.headline, 1, 120) && strOrNull(d.ask, 200) && strOrNull(d.answer, 160)
+          && (d.recommendation == null
+            || (d.recommendation is map && exactKeys(d.recommendation, ['action', 'why'])
+              && str(d.recommendation.action, 1, 40) && str(d.recommendation.why, 1, 200)))
+          && (d.confidence == null || d.confidence in ['high', 'medium', 'low'])
+          && summaryBulletsOk(d.bullets)
+          && strOrNull(d.details, 6000)
+          && d.visuals is list && d.visuals.size() <= 4
+          && strOrNull(d.noVisualWhy, 140)
+          && (d.ask == null || d.visuals.size() > 0 || d.noVisualWhy != null)
+          && d.refs is list && d.refs.size() <= 30
+          && d.basis is map && exactKeys(d.basis, ['lastEventId', 'planCursor'])
+          && strOrNull(d.basis.lastEventId, 128) && (d.basis.planCursor == null || d.basis.planCursor is int)
+          && inboxTrackedThread(wid, d.lastEventId, ['summary.written'], d.memberUid, tid)
+          && inboxEv(wid, d.lastEventId).data.data.version == d.version
+          && existsAfter(inboxSummaryVersionDoc(wid, tid, d.version))
+          && getAfter(inboxDoc(wid, 'inboxThreads', tid)).data.get('summary', {}).get('version', 0) == d.version;
+      }
+
+      function inboxSummaryVersionOk(wid, vid, d) {
+        let s = getAfter(inboxSummaryDoc(wid, d.threadId)).data;
+        return vid == d.threadId + '_' + string(d.version)
+          && d.keys().hasOnly(['memberUid', 'threadId', 'version', 'by', 'at', 'headline', 'ask', 'answer',
+               'recommendation', 'confidence', 'bullets', 'details', 'visuals', 'noVisualWhy', 'refs',
+               'basis', 'lastEventId'])
+          && d.by == me() && d.at == request.time && s.at == request.time
+          && d.version == s.version && d.memberUid == s.memberUid && d.lastEventId == s.lastEventId
+          && d.headline == s.headline && d.ask == s.ask && d.answer == s.answer
+          && d.recommendation == s.recommendation && d.confidence == s.confidence
+          && d.details == s.details && d.noVisualWhy == s.noVisualWhy && d.basis == s.basis
+          && d.bullets is list && d.bullets.size() >= 1 && d.bullets.size() <= 5
+          && d.visuals is list && d.visuals.size() <= 4 && d.refs is list && d.refs.size() <= 30;
+      }
+
+      match /inboxSummaries/{tid} {
+        allow read: if inboxReader(wid, resource.data);
+        allow create: if isActiveAgent(wid) && inboxSummaryOk(wid, tid, request.resource.data, 0);
+        allow update: if isActiveAgent(wid) && inboxSummaryOk(wid, tid, request.resource.data, resource.data.version);
+        allow delete: if false;
+      }
+
+      // A version is a copy of the summary written in the same batch, under {tid}_{version}: its
+      // top fields equal the summary's; its bullets, visuals and refs are bounded (comparing the
+      // whole document would cost more than one document's expression budget; the app reads
+      // versions through the schema, like everything an agent writes).
+      // The writer deletes the one 20 versions back (20 are kept).
+      match /inboxSummaryVersions/{vid} {
+        allow read: if inboxReader(wid, resource.data);
+        allow create: if isActiveAgent(wid) && inboxSummaryVersionOk(wid, vid, request.resource.data);
+        allow delete: if isActiveAgent(wid)
+          && get(inboxDoc(wid, 'inboxThreads', resource.data.threadId)).data.fetchedBy == me()
+          && resource.data.version <= getAfter(inboxSummaryDoc(wid, resource.data.threadId)).data.version - 20;
+        allow update: if false;
+      }
+
       // ---------- plans (item qwFAWxZM5xkcE7PPjAzi, packages/shared/src/plans.ts) ----------
       // A plan orders outcomes (its steps) of one thread; `cursor` is the step whose turn it is.
       // Steps run strictly in order: a step is carried out (or, for a person step, decided) only
@@ -1313,7 +1414,7 @@ service cloud.firestore {
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.revised',
                   'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
                   'plan.proposed', 'outcome.started', 'thread.rechecked',
-                  'thread.instruction_answered', 'thread.chips_suggested']));
+                  'thread.instruction_answered', 'thread.chips_suggested', 'summary.written']));
         allow update, delete: if false;
       }
 
@@ -1368,7 +1469,10 @@ service cloud.firestore {
                request.resource.data.memberUid, tid)
           && inboxMessageIn(wid, request.resource.data.lastEventId, tid);
         allow update: if request.resource.data.updatedAt == request.time
-          && ((isActiveAgent(wid) && inboxThreadAgent(wid, tid, request.resource.data, resource.data))
+          // Summaries (item OE8FmrTaIxFVGcaeGG3N): the home agent's mirror of the summary it wrote.
+          && ((changed(['summary', 'updatedAt', 'lastEventId']) && isActiveAgent(wid)
+              && inboxSummaryMirrored(wid, tid, request.resource.data, resource.data))
+            || (isActiveAgent(wid) && inboxThreadAgent(wid, tid, request.resource.data, resource.data))
             || (inboxOwner(wid, resource.data) && inboxThreadOwner(wid, tid, request.resource.data, resource.data))
             || ((isActiveAgent(wid) || inboxOwner(wid, resource.data))
               && changed(['title', 'updatedAt', 'lastEventId'])
@@ -1393,6 +1497,19 @@ service cloud.firestore {
             || (isActiveAgent(wid) && inboxInstructionAnswered(wid, tid, request.resource.data, resource.data))
             || (isActiveAgent(wid) && inboxChipsSuggested(wid, tid, request.resource.data, resource.data)));
         allow delete: if false;
+
+        // The mirror equals the summary written in this batch (its event is this write's). The
+        // summary's visuals are checked here: each document of a batch has its own expression
+        // budget, and the summary's own rule has no room left for them.
+        function inboxSummaryMirrored(wid, tid, d, r) {
+          let s = getAfter(inboxSummaryDoc(wid, tid)).data;
+          return r.fetchedBy == me() && s.lastEventId == d.lastEventId
+            && d.summary == {'version': s.version, 'at': s.at, 'headline': s.headline, 'ask': s.ask,
+                 'answer': s.answer, 'recAction': s.recommendation == null ? null : s.recommendation.action,
+                 'confidence': s.confidence}
+            && inboxTrackedThread(wid, d.lastEventId, ['summary.written'], r.memberUid, tid)
+            && summaryVisualsOk(s.visuals);
+        }
 
         // One new instruction (its id is its event's), pending, by the member, with a text or a
         // chip; the others unchanged (at 20, exactly one goes); not while the last one (under 30

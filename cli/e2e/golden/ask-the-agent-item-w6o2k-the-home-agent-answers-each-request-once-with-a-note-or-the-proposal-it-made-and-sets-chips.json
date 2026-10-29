@@ -58,6 +58,8 @@
         "question": null,
         "state": "investigating",
         "subject": null,
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
         "threadId": "it4c3e7b4fb947ff7d15159877",
         "timeline": [],
         "title": "Looking forward to the review on Thursday.",
@@ -205,6 +207,8 @@
           "summarize",
           "recheck"
         ],
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
         "threadId": "it4c3e7b4fb947ff7d15159877",
         "timeline": [],
         "title": "Looking forward to the review on Thursday.",

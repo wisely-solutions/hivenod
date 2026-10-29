@@ -53,6 +53,8 @@
         "question": null,
         "state": "investigating",
         "subject": null,
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
         "threadId": "it90863b52d802ff177333eb8b",
         "timeline": [],
         "title": "Please sign off the price list by Friday noon.",
@@ -145,6 +147,8 @@
         },
         "state": "needsYou",
         "subject": null,
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
         "threadId": "it90863b52d802ff177333eb8b",
         "timeline": [
           {
@@ -237,6 +241,8 @@
         },
         "state": "yourCall",
         "subject": null,
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
         "threadId": "it90863b52d802ff177333eb8b",
         "timeline": [
           {

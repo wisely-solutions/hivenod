@@ -25,6 +25,8 @@ type fakeInbox struct {
 	rechecks []FeedRecheck
 	onQ      func([]FeedInstruct)
 	instrs   []FeedInstruct
+	onS      func([]FeedSummary)
+	sums     []FeedSummary
 	events   map[string]*FeedEvent
 	woken    []string
 	subs     int
@@ -65,6 +67,13 @@ func (f *fakeInbox) WatchInstructs(_ context.Context, on func([]FeedInstruct)) {
 	f.mu.Lock()
 	f.onQ = on
 	rows := f.instrs
+	f.mu.Unlock()
+	on(rows)
+}
+func (f *fakeInbox) WatchSummaries(_ context.Context, on func([]FeedSummary)) {
+	f.mu.Lock()
+	f.onS = on
+	rows := f.sums
 	f.mu.Unlock()
 	on(rows)
 }
@@ -605,4 +614,54 @@ func TestItemLink(t *testing.T) {
 	if p, i := ItemLinkParts("https://teams.example.com/m/1"); p != "" || i != "" {
 		t.Fatal(p, i)
 	}
+}
+
+func (r *feedRig) summaries(rows []FeedSummary) {
+	r.src.mu.Lock()
+	r.src.sums = rows
+	on := r.src.onS
+	r.src.mu.Unlock()
+	if on != nil {
+		on(rows)
+	}
+	r.settle()
+}
+
+// Summaries (item OE8FmrTaIxFVGcaeGG3N): a thread changed 3 minutes ago or more without a newer
+// summary gets one summarize event, at the lowest priority, once per change, never while other
+// work on it is in flight; a fresh summary frees the slot.
+func TestInboxFeedSummarize(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 3})
+	now := r.now.UnixMilli()
+	fresh := FeedSummary{ThreadID: "t2", MemberUID: "joao", Title: "Fresh", UpdatedAtMs: now - 600_000, SummaryAtMs: now - 600_000}
+	young := FeedSummary{ThreadID: "t3", MemberUID: "joao", Title: "Young", UpdatedAtMs: now - 60_000, SummaryAtMs: now - 600_000}
+	stale := FeedSummary{ThreadID: "t4", MemberUID: "joao", Title: "Stale", UpdatedAtMs: now - 200_000, SummaryAtMs: now - 600_000}
+	none := FeedSummary{ThreadID: "t5", MemberUID: "joao", Title: "None", UpdatedAtMs: now - 200_000}
+	r.src.mu.Lock()
+	r.src.sums = []FeedSummary{fresh, young, stale, none}
+	r.src.mu.Unlock()
+	r.feed.Start()
+	r.settle()
+	r.want("t4:summarize", "t5:summarize")
+	r.mu.Lock()
+	e := r.pushed[0]
+	r.mu.Unlock()
+	for _, w := range []string{"\"Stale\" (thread t4) changed since its summary", "thread_summary", "Change nothing else"} {
+		if !strings.Contains(e.Content, w) {
+			t.Fatalf("%q lacks %q", e.Content, w)
+		}
+	}
+	// The same rows again send nothing; a summary written frees the slots; t3 comes of age.
+	r.summaries([]FeedSummary{fresh, young, stale, none})
+	r.want("t4:summarize", "t5:summarize")
+	stale.SummaryAtMs, none.SummaryAtMs = stale.UpdatedAtMs, none.UpdatedAtMs
+	r.advance(3 * time.Minute)
+	r.summaries([]FeedSummary{fresh, young, stale, none})
+	r.want("t4:summarize", "t5:summarize", "t3:summarize")
+	// New work on a thread goes first; its summarize waits until that is out of flight.
+	r.event("e-t6", "inbox.added", map[string]any{"newThread": true})
+	r.set([]FeedThread{r.th("t6", nil)}, nil)
+	r.want("t4:summarize", "t5:summarize", "t3:summarize", "t6:new")
+	r.summaries([]FeedSummary{fresh, young, stale, none, {ThreadID: "t6", MemberUID: "joao", Title: "Thread t6", UpdatedAtMs: r.now.UnixMilli() - 600_000}})
+	r.want("t4:summarize", "t5:summarize", "t3:summarize", "t6:new")
 }

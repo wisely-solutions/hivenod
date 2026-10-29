@@ -43,6 +43,12 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome / plan: a person's H
   hivenod thread suggest-chips ID [CHIP]...
                            sets your quick chips for the thread (prepare_meeting, recheck,
                            follow_up, summarize, draft_reply; none clears them)
+  hivenod thread summary ID --file F|- [--base-version N]
+                           writes the thread's summary (you are its home agent) from a JSON
+                           file (- reads stdin): {headline, ask?, answer?, recommendation?,
+                           confidence?, bullets, details?, visuals?, noVisualWhy?, refs?};
+                           --base-version (or "baseVersion" in the file) is the version
+                           thread read showed, 0 for none
   hivenod subject list [--member UID]
                            the person's subjects, with threads waiting for them and open
   hivenod subject assign THREAD (--subject-id S | --name "Topic (client)") [--area "Client A"] [--label Sales]
@@ -87,7 +93,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file", "ref"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file", "ref", "file", "base-version"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
@@ -277,6 +283,41 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 		if len(checks) > 0 {
 			a["checks"] = anyList(checks)
 		}
+	case "thread summary":
+		tool = "thread_summary"
+		if id == "" || *str["file"] == "" {
+			return usage()
+		}
+		var b []byte
+		var err error
+		if *str["file"] == "-" {
+			b, err = io.ReadAll(os.Stdin)
+		} else {
+			b, err = os.ReadFile(*str["file"])
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "hivenod: %v\n", err)
+			return 1
+		}
+		var sum map[string]any
+		if err := json.Unmarshal(b, &sum); err != nil {
+			fmt.Fprintf(stderr, "hivenod: the summary file is not a JSON object: %v\n", err)
+			return 2
+		}
+		a["threadId"] = id
+		if bv, ok := sum["baseVersion"]; ok {
+			a["baseVersion"] = bv
+			delete(sum, "baseVersion")
+		}
+		if set["base-version"] {
+			n, err := strconv.Atoi(*str["base-version"])
+			if err != nil {
+				fmt.Fprintf(stderr, "hivenod: --base-version is a number\n")
+				return 2
+			}
+			a["baseVersion"] = float64(n)
+		}
+		a["summary"] = sum
 	case "plan propose":
 		tool = "plan_propose"
 		if id == "" || *str["steps-file"] == "" {

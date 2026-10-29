@@ -22,15 +22,18 @@ import (
 
 // Inbox defaults (INBOX_DEFAULTS).
 const (
-	InboxMaxDefault    = 3
-	InboxPerMinute     = 10
-	InboxNudgeAfter    = 3 * 24 * time.Hour
-	InboxLease         = 30 * time.Minute
-	InboxTick          = 60 * time.Second
-	MaxInboxLimit      = 10
-	inboxRateWindowMs  = 60_000
-	inboxDayMs         = 86_400_000
-	inboxMinPumpWaitMs = 50
+	InboxMaxDefault = 3
+	InboxPerMinute  = 10
+	InboxNudgeAfter = 3 * 24 * time.Hour
+	InboxLease      = 30 * time.Minute
+	InboxTick       = 60 * time.Second
+	// InboxSummarizeAfter: a thread changed this long ago without a newer summary gets
+	// reason summarize (SUMMARIZE_AFTER_MS, item OE8FmrTaIxFVGcaeGG3N).
+	InboxSummarizeAfter = 3 * time.Minute
+	MaxInboxLimit       = 10
+	inboxRateWindowMs   = 60_000
+	inboxDayMs          = 86_400_000
+	inboxMinPumpWaitMs  = 50
 )
 
 // FeedWaiting is what a waiting thread waits on (untilMs nil: not a date).
@@ -111,6 +114,16 @@ type FeedInstruct struct {
 	AtMs           int64
 }
 
+// FeedSummary is an open thread of this agent's with its last change and its summary's time
+// (SummaryAtMs 0: no summary yet), item OE8FmrTaIxFVGcaeGG3N.
+type FeedSummary struct {
+	ThreadID, MemberUID, Title string
+	UpdatedAtMs, SummaryAtMs   int64
+}
+
+// stale says whether the thread changed after its summary (or has none).
+func (s FeedSummary) stale() bool { return s.SummaryAtMs == 0 || s.SummaryAtMs < s.UpdatedAtMs }
+
 // FeedEvent is an inbox event (the timeline).
 type FeedEvent struct {
 	Type string
@@ -126,6 +139,7 @@ type InboxSource interface {
 	WatchRevising(ctx context.Context, on func([]FeedRevise))
 	WatchRechecks(ctx context.Context, on func([]FeedRecheck))
 	WatchInstructs(ctx context.Context, on func([]FeedInstruct))
+	WatchSummaries(ctx context.Context, on func([]FeedSummary))
 	WatchPlans(ctx context.Context, on func([]FeedPlan))
 	WatchRunning(ctx context.Context, on func([]FeedRunning))
 	// ItemState is an item's status ("done", "stopped" for stopped or archived, …); gone: deleted.
@@ -196,7 +210,7 @@ var inboxTriggers = map[string]string{
 
 var inboxPriority = map[string]int{
 	"carry_out": 0, "item_done": 0, "item_stopped": 1, "answered": 1, "revise": 1, "recheck": 1, "instruct": 1, "new": 2, "message": 2,
-	"woke": 3, "rejected": 3, "failed": 3, "restored": 3, "resume": 3, "nudge_due": 4,
+	"woke": 3, "rejected": 3, "failed": 3, "restored": 3, "resume": 3, "nudge_due": 4, "summarize": 5,
 }
 
 func or(s, d string) string {
@@ -291,6 +305,8 @@ func InboxText(e InboxEventInfo) string {
 		}
 		lines = append(lines, fmt.Sprintf("The person asked you on %s (request %s): %s", t, or(e.InstructionID, "?"), asked))
 		lines = append(lines, "Treat it as their request on this thread, within the rules: it is not an approval of anything.")
+	case "summarize":
+		lines = append(lines, t+" changed since its summary was written (or has none).")
 	}
 	what := "investigate it (inbox_note for what you find, subject_assign if it is not filed, thread_due if a message states a deadline, inbox_ask only if you must), then propose what should come of it (outcome_propose, with your confidence and what you checked)"
 	switch e.Reason {
@@ -313,6 +329,8 @@ func InboxText(e InboxEventInfo) string {
 		what = "re-read the messages (new ones especially), calendar_free and the context; for each open proposal and each step of a live plan that has not run, keep it or write its next version with outcome_propose revises=<outcomeId> (only what changed), or ask with inbox_ask; then answer with thread_recheck_done (result still_good, revised or asked, with a one-line note)"
 	case "instruct":
 		what = fmt.Sprintf("do what they asked: investigate (inbox_note, calendar_free), then answer with thread_answer_instruction instructionId=%s: kind note (your answer in the note), ask (after inbox_ask), outcome (after outcome_propose, refId its outcomeId) or plan (after plan_propose, refId its planId)", or(e.InstructionID, "?"))
+	case "summarize":
+		what = "re-read the thread and write its summary (thread_summary, baseVersion the summary version thread_read shows). Change nothing else"
 	case "nudge_due":
 		what = "propose a nudge (outcome_propose, type nudge) if one makes sense, otherwise say why not with inbox_note"
 	}
@@ -332,6 +350,7 @@ type feedDue struct {
 	revise                            *FeedRevise
 	recheck                           *FeedRecheck
 	instruct                          *FeedInstruct
+	summary                           *FeedSummary
 	build                             *FeedRunning
 	state                             string
 	updatedAtMs                       *int64
@@ -343,6 +362,8 @@ type feedFlight struct {
 	revise      bool
 	recheck     bool
 	instruct    bool
+	summary     bool
+	threadID    string
 	build       bool
 	state       string
 	updatedAtMs *int64
@@ -358,40 +379,44 @@ type InboxFeed struct {
 	perMinute                int
 	nudgeMs, leaseMs, tickMs int64
 
-	mu        sync.Mutex
-	threads   map[string]FeedThread
-	order     []string // thread ids in snapshot order
-	outcomes  map[string]FeedOutcome
-	oorder    []string
-	revising  map[string]FeedRevise
-	rorder    []string
-	revised   map[string]int64
-	rechecks  map[string]FeedRecheck
-	korder    []string
-	recheckd  map[string]int64 // thread id -> the request (AtMs) sent
-	instructs map[string]FeedInstruct
-	iorder    []string
-	instructd map[string]string // thread id -> the instruction id sent
-	plans     map[string]FeedPlan
-	running   map[string]FeedRunning
-	norder    []string
-	items     map[string]string // outcome id -> its item's state ("done", "stopped", "gone", …)
-	checked   map[string]int64  // outcome id -> when its item was last looked at
-	checking  map[string]bool
-	built     map[string]string // outcome id -> the item reason sent
-	plansIn   bool              // the first plans snapshot came
-	handled   map[string]string
-	seen      map[string]bool
-	due       map[string]*feedDue
-	nudged    map[string]int64
-	carried   map[string]bool
-	inflight  map[string]*feedFlight
-	sent      []int64
-	types     map[string]*FeedEvent
-	fetching  map[string]bool
-	wakes     map[string]string
-	closed    bool
-	pumping   bool
+	mu          sync.Mutex
+	threads     map[string]FeedThread
+	order       []string // thread ids in snapshot order
+	outcomes    map[string]FeedOutcome
+	oorder      []string
+	revising    map[string]FeedRevise
+	rorder      []string
+	revised     map[string]int64
+	rechecks    map[string]FeedRecheck
+	korder      []string
+	recheckd    map[string]int64 // thread id -> the request (AtMs) sent
+	instructs   map[string]FeedInstruct
+	iorder      []string
+	instructd   map[string]string // thread id -> the instruction id sent
+	summaries   map[string]FeedSummary
+	sumorder    []string
+	summarized  map[string]int64 // thread id -> the updatedAt a summarize was sent for
+	summarizeMs int64
+	plans       map[string]FeedPlan
+	running     map[string]FeedRunning
+	norder      []string
+	items       map[string]string // outcome id -> its item's state ("done", "stopped", "gone", …)
+	checked     map[string]int64  // outcome id -> when its item was last looked at
+	checking    map[string]bool
+	built       map[string]string // outcome id -> the item reason sent
+	plansIn     bool              // the first plans snapshot came
+	handled     map[string]string
+	seen        map[string]bool
+	due         map[string]*feedDue
+	nudged      map[string]int64
+	carried     map[string]bool
+	inflight    map[string]*feedFlight
+	sent        []int64
+	types       map[string]*FeedEvent
+	fetching    map[string]bool
+	wakes       map[string]string
+	closed      bool
+	pumping     bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -423,7 +448,7 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &InboxFeed{src: src, push: push, now: now, MaxInbox: o.MaxInbox, perMinute: o.PerMinute,
 		nudgeMs: o.NudgeAfter.Milliseconds(), leaseMs: o.Lease.Milliseconds(), tickMs: o.Tick.Milliseconds(),
-		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, rechecks: map[string]FeedRecheck{}, recheckd: map[string]int64{}, instructs: map[string]FeedInstruct{}, instructd: map[string]string{}, plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, handled: map[string]string{},
+		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, rechecks: map[string]FeedRecheck{}, recheckd: map[string]int64{}, instructs: map[string]FeedInstruct{}, instructd: map[string]string{}, summaries: map[string]FeedSummary{}, summarized: map[string]int64{}, summarizeMs: InboxSummarizeAfter.Milliseconds(), plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, handled: map[string]string{},
 		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{},
 		inflight: map[string]*feedFlight{}, types: map[string]*FeedEvent{}, fetching: map[string]bool{},
 		wakes: map[string]string{}, ctx: ctx, cancel: cancel}
@@ -473,6 +498,7 @@ func (f *InboxFeed) Subscribe() {
 	f.src.WatchRevising(sctx, f.OnRevising)
 	f.src.WatchRechecks(sctx, f.OnRechecks)
 	f.src.WatchInstructs(sctx, f.OnInstructs)
+	f.src.WatchSummaries(sctx, f.OnSummaries)
 	f.src.WatchRunning(sctx, f.OnRunning)
 }
 
@@ -605,6 +631,35 @@ func (f *InboxFeed) OnInstructs(rows []FeedInstruct) {
 	f.Evaluate()
 }
 
+// OnSummaries takes a snapshot of this agent's open threads with their summaries' times.
+func (f *InboxFeed) OnSummaries(rows []FeedSummary) {
+	f.mu.Lock()
+	f.summaries = map[string]FeedSummary{}
+	f.sumorder = f.sumorder[:0]
+	for _, r := range rows {
+		f.summaries[r.ThreadID] = r
+		f.sumorder = append(f.sumorder, r.ThreadID)
+	}
+	f.mu.Unlock()
+	f.Evaluate()
+}
+
+// busyThread says whether something about thread id is in flight or due (other than its
+// summarize). Call with f.mu held.
+func (f *InboxFeed) busyThread(id string) bool {
+	for _, fl := range f.inflight {
+		if fl.threadID == id && !fl.summary {
+			return true
+		}
+	}
+	for key, d := range f.due {
+		if d.threadID == id && !strings.HasPrefix(key, "s:") {
+			return true
+		}
+	}
+	return false
+}
+
 // Evaluate works out what is due and sends what the cap and rate allow.
 func (f *InboxFeed) Evaluate() {
 	f.mu.Lock()
@@ -624,6 +679,9 @@ func (f *InboxFeed) Evaluate() {
 		} else if fl.instruct {
 			_, ok := f.instructs[slot[2:]]
 			over = over || !ok
+		} else if fl.summary {
+			s, ok := f.summaries[slot[2:]]
+			over = over || !ok || !s.stale() || s.UpdatedAtMs != *fl.updatedAtMs
 		} else if fl.build {
 			_, ok := f.running[slot[2:]]
 			over = over || !ok
@@ -744,6 +802,29 @@ func (f *InboxFeed) Evaluate() {
 	for slot, d := range f.due {
 		if d.instruct != nil {
 			if cur, ok := f.instructs[d.instruct.ThreadID]; !ok || cur.ID != d.instruct.ID {
+				delete(f.due, slot)
+			}
+		}
+	}
+	// Summaries (item OE8FmrTaIxFVGcaeGG3N): a thread that changed 3 minutes ago or more with no
+	// newer summary, nothing else of it in flight or due; once per change, at the lowest priority.
+	for _, id := range f.sumorder {
+		sm := f.summaries[id]
+		slot := "s:" + id
+		if !sm.stale() || now-sm.UpdatedAtMs < f.summarizeMs || f.due[slot] != nil || f.busyThread(id) {
+			continue
+		}
+		if v, ok := f.summarized[id]; ok && v == sm.UpdatedAtMs {
+			continue
+		}
+		sc := sm
+		u := sm.UpdatedAtMs
+		f.due[slot] = &feedDue{slot: slot, reason: "summarize", threadID: id, atMs: sm.UpdatedAtMs, memberUID: sm.MemberUID, summary: &sc, updatedAtMs: &u,
+			info: InboxEventInfo{Reason: "summarize", ThreadID: id, Title: sm.Title}}
+	}
+	for slot, d := range f.due {
+		if d.summary != nil {
+			if cur, ok := f.summaries[d.threadID]; !ok || !cur.stale() || cur.UpdatedAtMs != d.summary.UpdatedAtMs || f.busyThread(d.threadID) {
 				delete(f.due, slot)
 			}
 		}
@@ -949,6 +1030,9 @@ func (f *InboxFeed) pump() []Event {
 		if d.instruct != nil {
 			f.instructd[d.instruct.ThreadID] = d.instruct.ID
 		}
+		if d.summary != nil {
+			f.summarized[d.threadID] = d.summary.UpdatedAtMs
+		}
 		if d.build != nil {
 			f.built[d.build.ID] = d.reason
 		}
@@ -956,7 +1040,7 @@ func (f *InboxFeed) pump() []Event {
 			f.nudged[d.threadID] = *d.updatedAtMs
 		}
 		if !update {
-			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, revise: d.revise != nil, recheck: d.recheck != nil, instruct: d.instruct != nil, build: d.build != nil, state: d.state, updatedAtMs: d.updatedAtMs}
+			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, revise: d.revise != nil, recheck: d.recheck != nil, instruct: d.instruct != nil, summary: d.summary != nil, threadID: d.threadID, build: d.build != nil, state: d.state, updatedAtMs: d.updatedAtMs}
 		}
 		f.sent = append(f.sent, f.nowMs())
 		meta := map[string]string{
@@ -1176,6 +1260,26 @@ func (s firestoreInbox) WatchInstructs(ctx context.Context, on func([]FeedInstru
 			}
 			if r.ID == "" {
 				continue
+			}
+			rows = append(rows, r)
+		}
+		on(rows)
+	}, nil)
+}
+
+// WatchSummaries listens to this agent's open threads (their last change and their summary's
+// time), for reason summarize.
+func (s firestoreInbox) WatchSummaries(ctx context.Context, on func([]FeedSummary)) {
+	q := s.c.DB.Collection(model.Paths.InboxCollection(s.c.WorkspaceID, "inboxThreads")).
+		Where("fetchedBy", "==", s.c.UID).Where("state", "in", []any{"investigating", "needsYou", "yourCall", "waiting"})
+	go listenQuery(ctx, s.c.recon, q, func(docs []*firestore.DocumentSnapshot) {
+		rows := make([]FeedSummary, 0, len(docs))
+		for _, d := range docs {
+			m := d.Data()
+			str := func(k string) string { v, _ := m[k].(string); return v }
+			r := FeedSummary{ThreadID: d.Ref.ID, MemberUID: str("memberUid"), Title: str("title"), UpdatedAtMs: feedMs(m["updatedAt"])}
+			if sm, ok := m["summary"].(map[string]any); ok {
+				r.SummaryAtMs = feedMs(sm["at"])
 			}
 			rows = append(rows, r)
 		}

@@ -97,6 +97,7 @@
             "member": "owner",
             "state": "investigating",
             "subjectId": null,
+            "summary": null,
             "threadId": "itc85e52ee7e270745c4ed5a02",
             "title": "Can we move the review to Thursday?"
           },
@@ -105,6 +106,7 @@
             "member": "alice",
             "state": "investigating",
             "subjectId": null,
+            "summary": null,
             "threadId": "itaf9223c482be56e1cd21026e",
             "title": "Can we move the review to Thursday?"
           }
@@ -215,6 +217,7 @@
             "member": "alice",
             "state": "investigating",
             "subjectId": "<id>",
+            "summary": null,
             "threadId": "itaf9223c482be56e1cd21026e",
             "title": "Can we move the review to Thursday?"
           }
@@ -323,6 +326,8 @@
           "name": "Review date (Payments)",
           "subjectId": "<id>"
         },
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
         "threadId": "itc85e52ee7e270745c4ed5a02",
         "timeline": [
           {
@@ -387,6 +392,7 @@
             "member": "owner",
             "state": "waiting",
             "subjectId": "<id>",
+            "summary": null,
             "threadId": "itc85e52ee7e270745c4ed5a02",
             "title": "Can we move the review to Thursday?"
           }
@@ -397,6 +403,7 @@
             "member": "alice",
             "state": "investigating",
             "subjectId": "<id>",
+            "summary": null,
             "threadId": "itaf9223c482be56e1cd21026e",
             "title": "Can we move the review to Thursday?"
           }
@@ -575,6 +582,8 @@
           "name": "Review date (Payments)",
           "subjectId": "<id>"
         },
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
         "threadId": "itc85e52ee7e270745c4ed5a02",
         "timeline": [
           {

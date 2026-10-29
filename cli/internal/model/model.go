@@ -463,6 +463,24 @@ type InboxThread struct {
 	Instructions   map[string]InboxInstruction `firestore:"instructions" json:"instructions"`
 	Instruct       *InboxInstruct              `firestore:"instruct" json:"instruct"`
 	SuggestedChips []string                    `firestore:"suggestedChips" json:"suggestedChips"`
+	// Summary is the top line of the thread's summary (item OE8FmrTaIxFVGcaeGG3N), mirrored by
+	// thread_summary; nil until the home agent writes one.
+	Summary *InboxThreadSummary `firestore:"summary" json:"summary"`
+	// UpdatedAt and LastEventID: the thread's last change (a summary is fresh when written at or
+	// after it).
+	UpdatedAt   *time.Time `firestore:"updatedAt" json:"updatedAt"`
+	LastEventID string     `firestore:"lastEventId" json:"lastEventId"`
+}
+
+// InboxThreadSummary is a thread's mirror of its summary (inboxSummaries/{tid}).
+type InboxThreadSummary struct {
+	Version    int64      `firestore:"version" json:"version"`
+	At         *time.Time `firestore:"at" json:"at"`
+	Headline   string     `firestore:"headline" json:"headline"`
+	Ask        *string    `firestore:"ask" json:"ask"`
+	Answer     *string    `firestore:"answer" json:"answer"`
+	RecAction  *string    `firestore:"recAction" json:"recAction"`
+	Confidence *string    `firestore:"confidence" json:"confidence"`
 }
 
 // InboxInstruction is one of a thread's instructions: a text or a chip, pending until the home

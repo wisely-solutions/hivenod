@@ -53,7 +53,7 @@ func (c *pipeClient) next() map[string]any {
 
 func TestServer(t *testing.T) {
 	sf := LoadSurface()
-	if len(sf.Plain.Tools) != 44 || len(sf.Channel.Tools) != 45 { // channel: no wait_for_work, plus park and unpark (item QjTTL); create_item (item DhsO9); calendar_upsert/delete/free (item w9SAf); 13 inbox tools (item 4PEHr); calendar_sync and calendar_mirror (item fJnu6); status (item AzveC); thread_due (item kt3E7); plan_propose (item qwFAW); thread_recheck_done (item bmNoI); thread_answer_instruction and thread_suggest_chips (item w6O2K)
+	if len(sf.Plain.Tools) != 45 || len(sf.Channel.Tools) != 46 { // channel: no wait_for_work, plus park and unpark (item QjTTL); create_item (item DhsO9); calendar_upsert/delete/free (item w9SAf); 13 inbox tools (item 4PEHr); calendar_sync and calendar_mirror (item fJnu6); status (item AzveC); thread_due (item kt3E7); plan_propose (item qwFAW); thread_recheck_done (item bmNoI); thread_answer_instruction and thread_suggest_chips (item w6O2K); thread_summary (item OE8Fm)
 		t.Fatalf("surface: %d plain, %d channel tools", len(sf.Plain.Tools), len(sf.Channel.Tools))
 	}
 	var spec ToolSpec

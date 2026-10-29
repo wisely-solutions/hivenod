@@ -313,6 +313,7 @@ func threadRow(id string, t model.InboxThread) map[string]any {
 	return map[string]any{
 		"threadId": id, "member": t.MemberUID, "state": t.State, "title": t.Title,
 		"subjectId": strOrNull(t.SubjectID), "lastMessageAt": isoMs(t.LastMessageAt),
+		"summary": summaryRow(t),
 	}
 }
 
@@ -589,6 +590,33 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 	}
 	if len(t.SuggestedChips) > 0 {
 		out["suggestedChips"] = t.SuggestedChips
+	}
+	// Summaries (item OE8FmrTaIxFVGcaeGG3N): the current one (its version is the baseVersion for
+	// thread_summary), and whether it is fresh.
+	doc, err := c.summaryDoc(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	state, base := summaryState(t), 0
+	if doc == nil {
+		out["summary"] = nil
+		state = "none"
+	} else {
+		s := summaryOut(doc).(map[string]any)
+		delete(s, "memberUid")
+		delete(s, "threadId")
+		s["state"] = state
+		out["summary"] = s
+		if v, ok := doc["version"].(int64); ok {
+			base = int(v)
+		}
+	}
+	if t.FetchedBy == c.UID && state != "fresh" {
+		word := "missing"
+		if state == "stale" {
+			word = "out of date (the thread changed since)"
+		}
+		out["summaryNext"] = fmt.Sprintf(SummaryNext, word, base)
 	}
 	return out, nil
 }

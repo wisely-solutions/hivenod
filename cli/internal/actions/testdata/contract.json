@@ -31209,6 +31209,2184 @@
         "existing": []
       },
       "output": { "error": "Give the source (for example google)" }
+    },
+    {
+      "name": "checkSummary/everything",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175  ",
+          "ask": " Ship it? ",
+          "answer": "Everything passed",
+          "recommendation": { "action": "Approve", "why": "Green and small" },
+          "confidence": "high",
+          "bullets": [
+            "  2 changes ",
+            { "text": "No migration", "refs": [{ "kind": "step", "id": "o3", "label": "Build" }] }
+          ],
+          "details": "  ## What changed\n- x  ",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+              "unit": "min",
+              "highlight": 2,
+              "better": "down"
+            },
+            {
+              "kind": "flow",
+              "title": "Plan",
+              "caption": "Build is next",
+              "nodes": [
+                { "id": "a", "label": "Shape", "who": "agent", "state": "done" },
+                { "id": "b", "label": "Approve", "who": "person", "state": "now" },
+                { "id": "c", "label": "Build" }
+              ],
+              "edges": [
+                { "from": "a", "to": "b" },
+                { "from": "b", "to": "c", "label": " yes " }
+              ]
+            },
+            {
+              "kind": "number",
+              "title": "Tests",
+              "caption": "412 pass",
+              "value": 412,
+              "delta": -0.5,
+              "trend": [400, 406, 412],
+              "better": "up"
+            },
+            {
+              "kind": "before_after",
+              "title": "Nav",
+              "caption": "Projects goes",
+              "before": { "lines": [" Today ", "Projects"] },
+              "after": { "label": "Now", "lines": ["Today"] }
+            }
+          ],
+          "noVisualWhy": "  ",
+          "refs": [
+            {
+              "kind": "link",
+              "id": "pr86",
+              "label": "PR #86",
+              "url": "https://github.com/x/y/pull/86"
+            }
+          ]
+        }
+      },
+      "output": {
+        "headline": "Release 175",
+        "ask": "Ship it?",
+        "answer": "Everything passed",
+        "recommendation": { "action": "Approve", "why": "Green and small" },
+        "confidence": "high",
+        "bullets": [
+          { "text": "2 changes", "refs": [] },
+          {
+            "text": "No migration",
+            "refs": [{ "kind": "step", "id": "o3", "label": "Build", "url": null }]
+          }
+        ],
+        "details": "## What changed\n- x",
+        "visuals": [
+          {
+            "kind": "bar",
+            "title": "Check time",
+            "caption": "Down from 14 to 10 minutes",
+            "unit": "min",
+            "x": ["r173", "r174", "r175"],
+            "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+            "highlight": 2,
+            "better": "down"
+          },
+          {
+            "kind": "flow",
+            "title": "Plan",
+            "caption": "Build is next",
+            "nodes": [
+              { "id": "a", "label": "Shape", "who": "agent", "state": "done" },
+              { "id": "b", "label": "Approve", "who": "person", "state": "now" },
+              { "id": "c", "label": "Build", "who": null, "state": null }
+            ],
+            "edges": [
+              { "from": "a", "to": "b", "label": null },
+              { "from": "b", "to": "c", "label": "yes" }
+            ]
+          },
+          {
+            "kind": "number",
+            "title": "Tests",
+            "caption": "412 pass",
+            "value": 412,
+            "unit": null,
+            "delta": -0.5,
+            "trend": [400, 406, 412],
+            "better": "up"
+          },
+          {
+            "kind": "before_after",
+            "title": "Nav",
+            "caption": "Projects goes",
+            "before": { "label": null, "lines": ["Today", "Projects"] },
+            "after": { "label": "Now", "lines": ["Today"] }
+          }
+        ],
+        "noVisualWhy": null,
+        "refs": [
+          {
+            "kind": "link",
+            "id": "pr86",
+            "label": "PR #86",
+            "url": "https://github.com/x/y/pull/86"
+          }
+        ]
+      }
+    },
+    {
+      "name": "checkSummary/minimal",
+      "action": "checkSummary",
+      "input": {
+        "summary": { "headline": "  Release 175: ship it?  ", "bullets": ["All checks green"] }
+      },
+      "output": {
+        "headline": "Release 175: ship it?",
+        "ask": null,
+        "answer": null,
+        "recommendation": null,
+        "confidence": null,
+        "bullets": [{ "text": "All checks green", "refs": [] }],
+        "details": null,
+        "visuals": [],
+        "noVisualWhy": null,
+        "refs": []
+      }
+    },
+    {
+      "name": "checkSummary/timeline and stacked",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "timeline",
+              "title": "Dates",
+              "caption": "Due Friday",
+              "events": [
+                { "at": "2026-10-29", "label": "Asked", "state": "done" },
+                { "at": "2026-10-31T17:00:30.5+01:00", "label": "Due", "state": "risk" }
+              ]
+            },
+            {
+              "kind": "stacked_bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [
+                { "name": "a", "values": [1, 2, 3] },
+                { "name": "b", "values": [3, 2, 1] }
+              ]
+            },
+            {
+              "kind": "flow",
+              "title": "Plan",
+              "caption": "Build is next",
+              "nodes": [
+                { "id": "a", "label": "Shape", "who": "agent", "state": "done" },
+                { "id": "b", "label": "Approve", "who": "person", "state": "now" },
+                { "id": "c", "label": "Build" }
+              ]
+            }
+          ]
+        }
+      },
+      "output": {
+        "headline": "Release 175: ship it?",
+        "ask": null,
+        "answer": null,
+        "recommendation": null,
+        "confidence": null,
+        "bullets": [{ "text": "All checks green", "refs": [] }],
+        "details": null,
+        "visuals": [
+          {
+            "kind": "timeline",
+            "title": "Dates",
+            "caption": "Due Friday",
+            "events": [
+              { "at": "2026-10-29", "label": "Asked", "state": "done" },
+              { "at": "2026-10-31T17:00:30.5+01:00", "label": "Due", "state": "risk" }
+            ]
+          },
+          {
+            "kind": "stacked_bar",
+            "title": "Check time",
+            "caption": "Down from 14 to 10 minutes",
+            "unit": null,
+            "x": ["r173", "r174", "r175"],
+            "series": [
+              { "name": "a", "values": [1, 2, 3] },
+              { "name": "b", "values": [3, 2, 1] }
+            ],
+            "highlight": null,
+            "better": null
+          },
+          {
+            "kind": "flow",
+            "title": "Plan",
+            "caption": "Build is next",
+            "nodes": [
+              { "id": "a", "label": "Shape", "who": "agent", "state": "done" },
+              { "id": "b", "label": "Approve", "who": "person", "state": "now" },
+              { "id": "c", "label": "Build", "who": null, "state": null }
+            ],
+            "edges": []
+          }
+        ],
+        "noVisualWhy": null,
+        "refs": []
+      }
+    },
+    {
+      "name": "checkSummary/a reason instead of a visual",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "noVisualWhy": "Text only"
+        }
+      },
+      "output": {
+        "headline": "Release 175: ship it?",
+        "ask": "Ship it?",
+        "answer": null,
+        "recommendation": null,
+        "confidence": null,
+        "bullets": [{ "text": "All checks green", "refs": [] }],
+        "details": null,
+        "visuals": [],
+        "noVisualWhy": "Text only",
+        "refs": []
+      }
+    },
+    {
+      "name": "checkSummary/refused/not an object",
+      "action": "checkSummary",
+      "input": { "summary": "Release 175" },
+      "output": { "error": "summary: an object" }
+    },
+    {
+      "name": "checkSummary/refused/no headline",
+      "action": "checkSummary",
+      "input": { "summary": { "bullets": ["x"] } },
+      "output": { "error": "headline: required" }
+    },
+    {
+      "name": "checkSummary/refused/long headline",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "bullets": ["All checks green"]
+        }
+      },
+      "output": { "error": "headline: at most 120 characters" }
+    },
+    {
+      "name": "checkSummary/refused/unknown field",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "zeta": 1,
+          "colour": "red"
+        }
+      },
+      "output": { "error": "summary: unknown field \"colour\"" }
+    },
+    {
+      "name": "checkSummary/refused/no bullets",
+      "action": "checkSummary",
+      "input": { "summary": { "headline": "H" } },
+      "output": { "error": "bullets: required (1 to 5)" }
+    },
+    {
+      "name": "checkSummary/refused/zero bullets",
+      "action": "checkSummary",
+      "input": { "summary": { "headline": "  Release 175: ship it?  ", "bullets": [] } },
+      "output": { "error": "bullets: 0 bullets, at least 1" }
+    },
+    {
+      "name": "checkSummary/refused/six bullets",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["a", "b", "c", "d", "e", "f"]
+        }
+      },
+      "output": { "error": "bullets: 6 bullets, at most 5" }
+    },
+    {
+      "name": "checkSummary/refused/long bullet",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": [
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          ]
+        }
+      },
+      "output": { "error": "bullet 1 text: at most 160 characters" }
+    },
+    {
+      "name": "checkSummary/refused/bullet not text",
+      "action": "checkSummary",
+      "input": { "summary": { "headline": "  Release 175: ship it?  ", "bullets": [42] } },
+      "output": { "error": "bullet 1: an object" }
+    },
+    {
+      "name": "checkSummary/refused/four bullet refs",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": [{ "text": "a", "refs": [1, 2, 3, 4] }]
+        }
+      },
+      "output": { "error": "bullet 1: 4 refs, at most 3" }
+    },
+    {
+      "name": "checkSummary/refused/bad confidence",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "confidence": "sure"
+        }
+      },
+      "output": { "error": "confidence: one of high, medium, low" }
+    },
+    {
+      "name": "checkSummary/refused/recommendation without why",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "recommendation": { "action": "Approve" }
+        }
+      },
+      "output": { "error": "recommendation why: required" }
+    },
+    {
+      "name": "checkSummary/refused/long details",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "details": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      },
+      "output": { "error": "details: at most 6000 characters" }
+    },
+    {
+      "name": "checkSummary/refused/ask not text",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": 3
+        }
+      },
+      "output": { "error": "ask: a text" }
+    },
+    {
+      "name": "checkSummary/refused/five visuals",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            },
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            },
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            },
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            },
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visuals: 5 visuals, at most 4" }
+    },
+    {
+      "name": "checkSummary/refused/visuals not a list",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": { "kind": "bar" }
+        }
+      },
+      "output": { "error": "visuals: a list" }
+    },
+    {
+      "name": "checkSummary/refused/pie",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "pie",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        }
+      },
+      "output": {
+        "error": "visual 1 kind: one of bar, line, stacked_bar, number, flow, before_after, timeline"
+      }
+    },
+    {
+      "name": "checkSummary/refused/image comes later",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [{ "kind": "image", "title": "T", "caption": "C" }]
+        }
+      },
+      "output": {
+        "error": "visual 1 kind: one of bar, line, stacked_bar, number, flow, before_after, timeline"
+      }
+    },
+    {
+      "name": "checkSummary/refused/no kind",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [{ "title": "T" }]
+        }
+      },
+      "output": { "error": "visual 1 kind: required" }
+    },
+    {
+      "name": "checkSummary/refused/svg",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+              "svg": "<svg/>"
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1: unknown field \"svg\"" }
+    },
+    {
+      "name": "checkSummary/refused/html title",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": "<b>Check</b>",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 title: plain text only (no HTML)" }
+    },
+    {
+      "name": "checkSummary/refused/empty caption",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 caption: required" }
+    },
+    {
+      "name": "checkSummary/refused/25 points",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            },
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": [
+                "d0",
+                "d1",
+                "d2",
+                "d3",
+                "d4",
+                "d5",
+                "d6",
+                "d7",
+                "d8",
+                "d9",
+                "d10",
+                "d11",
+                "d12",
+                "d13",
+                "d14",
+                "d15",
+                "d16",
+                "d17",
+                "d18",
+                "d19",
+                "d20",
+                "d21",
+                "d22",
+                "d23",
+                "d24"
+              ],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 2: 25 points, at most 24" }
+    },
+    {
+      "name": "checkSummary/refused/1 point",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["a"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1: 1 points, at least 2" }
+    },
+    {
+      "name": "checkSummary/refused/long x label",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["a", "xxxxxxxxxxxxxxxxx", "c"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 x 2: at most 16 characters" }
+    },
+    {
+      "name": "checkSummary/refused/no series",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": []
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1: 0 series, at least 1" }
+    },
+    {
+      "name": "checkSummary/refused/stacked with one series",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "stacked_bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1: 1 series, at least 2" }
+    },
+    {
+      "name": "checkSummary/refused/five series",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [
+                { "name": "s0", "values": [1, 2, 3] },
+                { "name": "s1", "values": [1, 2, 3] },
+                { "name": "s2", "values": [1, 2, 3] },
+                { "name": "s3", "values": [1, 2, 3] },
+                { "name": "s4", "values": [1, 2, 3] }
+              ]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1: 5 series, at most 4" }
+    },
+    {
+      "name": "checkSummary/refused/values short",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "m", "values": [1, 2] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 series 1: 2 values for 3 points" }
+    },
+    {
+      "name": "checkSummary/refused/value text",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "m", "values": [1, "2", 3] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 series 1 value 2: a number, at most 1000000000000 either way" }
+    },
+    {
+      "name": "checkSummary/refused/value huge",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "m", "values": [1, 2000000000000, 3] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 series 1 value 2: a number, at most 1000000000000 either way" }
+    },
+    {
+      "name": "checkSummary/refused/series html name",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "<i>m", "values": [1, 2, 3] }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 series 1 name: plain text only (no HTML)" }
+    },
+    {
+      "name": "checkSummary/refused/highlight out",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+              "highlight": 3
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 highlight: an index of x, 0 to 2" }
+    },
+    {
+      "name": "checkSummary/refused/highlight half",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+              "highlight": 1.5
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 highlight: an index of x, 0 to 2" }
+    },
+    {
+      "name": "checkSummary/refused/bad better",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+              "better": "more"
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 better: one of up, down" }
+    },
+    {
+      "name": "checkSummary/refused/number without value",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [{ "kind": "number", "title": "T", "caption": "C" }]
+        }
+      },
+      "output": { "error": "visual 1 value: required" }
+    },
+    {
+      "name": "checkSummary/refused/short trend",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [{ "kind": "number", "title": "T", "caption": "C", "value": 1, "trend": [1] }]
+        }
+      },
+      "output": { "error": "visual 1 trend: 1 points, at least 2" }
+    },
+    {
+      "name": "checkSummary/refused/trend gap",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            { "kind": "number", "title": "T", "caption": "C", "value": 1, "trend": [1, null] }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 trend 2: required" }
+    },
+    {
+      "name": "checkSummary/refused/one node",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "flow",
+              "title": "Plan",
+              "caption": "Build is next",
+              "nodes": [{ "id": "a", "label": "A" }],
+              "edges": []
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1: 1 nodes, at least 2" }
+    },
+    {
+      "name": "checkSummary/refused/nine nodes",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "flow",
+              "title": "Plan",
+              "caption": "Build is next",
+              "nodes": [
+                { "id": "n0", "label": "N" },
+                { "id": "n1", "label": "N" },
+                { "id": "n2", "label": "N" },
+                { "id": "n3", "label": "N" },
+                { "id": "n4", "label": "N" },
+                { "id": "n5", "label": "N" },
+                { "id": "n6", "label": "N" },
+                { "id": "n7", "label": "N" },
+                { "id": "n8", "label": "N" }
+              ],
+              "edges": []
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1: 9 nodes, at most 8" }
+    },
+    {
+      "name": "checkSummary/refused/node twice",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "flow",
+              "title": "Plan",
+              "caption": "Build is next",
+              "nodes": [
+                { "id": "a", "label": "A" },
+                { "id": "a", "label": "B" }
+              ],
+              "edges": []
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 node 2 id: \"a\" is used twice" }
+    },
+    {
+      "name": "checkSummary/refused/node script",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "flow",
+              "title": "Plan",
+              "caption": "Build is next",
+              "nodes": [
+                { "id": "a", "label": "<script>x</script>" },
+                { "id": "b", "label": "B" }
+              ],
+              "edges": []
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 node 1 label: plain text only (no HTML)" }
+    },
+    {
+      "name": "checkSummary/refused/node robot",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "flow",
+              "title": "Plan",
+              "caption": "Build is next",
+              "nodes": [
+                { "id": "a", "label": "A", "who": "robot" },
+                { "id": "b", "label": "B" }
+              ],
+              "edges": []
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 node 1 who: one of agent, person, system" }
+    },
+    {
+      "name": "checkSummary/refused/edge to nowhere",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "flow",
+              "title": "Plan",
+              "caption": "Build is next",
+              "nodes": [
+                { "id": "a", "label": "Shape", "who": "agent", "state": "done" },
+                { "id": "b", "label": "Approve", "who": "person", "state": "now" },
+                { "id": "c", "label": "Build" }
+              ],
+              "edges": [{ "from": "a", "to": "z" }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 edge 1 to: no node \"z\"" }
+    },
+    {
+      "name": "checkSummary/refused/edge from nowhere",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "flow",
+              "title": "Plan",
+              "caption": "Build is next",
+              "nodes": [
+                { "id": "a", "label": "Shape", "who": "agent", "state": "done" },
+                { "id": "b", "label": "Approve", "who": "person", "state": "now" },
+                { "id": "c", "label": "Build" }
+              ],
+              "edges": [{ "from": "q", "to": "z" }]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 edge 1 from: no node \"q\"" }
+    },
+    {
+      "name": "checkSummary/refused/eleven edges",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "flow",
+              "title": "Plan",
+              "caption": "Build is next",
+              "nodes": [
+                { "id": "a", "label": "Shape", "who": "agent", "state": "done" },
+                { "id": "b", "label": "Approve", "who": "person", "state": "now" },
+                { "id": "c", "label": "Build" }
+              ],
+              "edges": [
+                { "from": "a", "to": "b" },
+                { "from": "a", "to": "b" },
+                { "from": "a", "to": "b" },
+                { "from": "a", "to": "b" },
+                { "from": "a", "to": "b" },
+                { "from": "a", "to": "b" },
+                { "from": "a", "to": "b" },
+                { "from": "a", "to": "b" },
+                { "from": "a", "to": "b" },
+                { "from": "a", "to": "b" },
+                { "from": "a", "to": "b" }
+              ]
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1: 11 edges, at most 10" }
+    },
+    {
+      "name": "checkSummary/refused/side without lines",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "before_after",
+              "title": "B",
+              "caption": "C",
+              "before": { "lines": [] },
+              "after": { "lines": ["x"] }
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 before: 0 lines, at least 1" }
+    },
+    {
+      "name": "checkSummary/refused/no after",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            { "kind": "before_after", "title": "B", "caption": "C", "before": { "lines": ["x"] } }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 after: an object" }
+    },
+    {
+      "name": "checkSummary/refused/long side label",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "before_after",
+              "title": "B",
+              "caption": "C",
+              "before": {
+                "label": "xxxxxxxxxxxxxxxxxxxxxxxxx",
+                "lines": ["yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"]
+              },
+              "after": { "lines": ["x"] }
+            }
+          ]
+        }
+      },
+      "output": { "error": "visual 1 before label: at most 24 characters" }
+    },
+    {
+      "name": "checkSummary/refused/friday",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "timeline",
+              "title": "T",
+              "caption": "C",
+              "events": [
+                { "at": "2026-10-29", "label": "a" },
+                { "at": "Friday", "label": "b" }
+              ]
+            }
+          ]
+        }
+      },
+      "output": {
+        "error": "visual 1 event 2 at: an ISO date (2026-10-29) or date and time (2026-10-29T14:00Z)"
+      }
+    },
+    {
+      "name": "checkSummary/refused/month 13",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "visuals": [
+            {
+              "kind": "timeline",
+              "title": "T",
+              "caption": "C",
+              "events": [
+                { "at": "2026-13-01", "label": "a" },
+                { "at": "2026-10-30", "label": "b" }
+              ]
+            }
+          ]
+        }
+      },
+      "output": {
+        "error": "visual 1 event 1 at: an ISO date (2026-10-29) or date and time (2026-10-29T14:00Z)"
+      }
+    },
+    {
+      "name": "checkSummary/refused/link without url",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "refs": [{ "kind": "link", "id": "x", "label": "X" }]
+        }
+      },
+      "output": { "error": "ref 1 url: required for a link" }
+    },
+    {
+      "name": "checkSummary/refused/javascript url",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "refs": [{ "kind": "link", "id": "x", "label": "X", "url": "javascript:alert(1)" }]
+        }
+      },
+      "output": { "error": "ref 1 url: an https link" }
+    },
+    {
+      "name": "checkSummary/refused/http url",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "refs": [{ "kind": "message", "id": "x", "label": "X", "url": "http://x.y" }]
+        }
+      },
+      "output": { "error": "ref 1 url: an https link" }
+    },
+    {
+      "name": "checkSummary/refused/bad ref kind",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "refs": [{ "kind": "file", "id": "x", "label": "X" }]
+        }
+      },
+      "output": { "error": "ref 1 kind: one of message, attachment, step, event, link" }
+    },
+    {
+      "name": "checkSummary/refused/ref without id",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "refs": [{ "kind": "event", "label": "X" }]
+        }
+      },
+      "output": { "error": "ref 1 id: required" }
+    },
+    {
+      "name": "checkSummary/refused/31 refs",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "refs": [
+            { "kind": "event", "id": "e0", "label": "E" },
+            { "kind": "event", "id": "e1", "label": "E" },
+            { "kind": "event", "id": "e2", "label": "E" },
+            { "kind": "event", "id": "e3", "label": "E" },
+            { "kind": "event", "id": "e4", "label": "E" },
+            { "kind": "event", "id": "e5", "label": "E" },
+            { "kind": "event", "id": "e6", "label": "E" },
+            { "kind": "event", "id": "e7", "label": "E" },
+            { "kind": "event", "id": "e8", "label": "E" },
+            { "kind": "event", "id": "e9", "label": "E" },
+            { "kind": "event", "id": "e10", "label": "E" },
+            { "kind": "event", "id": "e11", "label": "E" },
+            { "kind": "event", "id": "e12", "label": "E" },
+            { "kind": "event", "id": "e13", "label": "E" },
+            { "kind": "event", "id": "e14", "label": "E" },
+            { "kind": "event", "id": "e15", "label": "E" },
+            { "kind": "event", "id": "e16", "label": "E" },
+            { "kind": "event", "id": "e17", "label": "E" },
+            { "kind": "event", "id": "e18", "label": "E" },
+            { "kind": "event", "id": "e19", "label": "E" },
+            { "kind": "event", "id": "e20", "label": "E" },
+            { "kind": "event", "id": "e21", "label": "E" },
+            { "kind": "event", "id": "e22", "label": "E" },
+            { "kind": "event", "id": "e23", "label": "E" },
+            { "kind": "event", "id": "e24", "label": "E" },
+            { "kind": "event", "id": "e25", "label": "E" },
+            { "kind": "event", "id": "e26", "label": "E" },
+            { "kind": "event", "id": "e27", "label": "E" },
+            { "kind": "event", "id": "e28", "label": "E" },
+            { "kind": "event", "id": "e29", "label": "E" },
+            { "kind": "event", "id": "e30", "label": "E" }
+          ]
+        }
+      },
+      "output": { "error": "refs: 31 refs, at most 30" }
+    },
+    {
+      "name": "checkSummary/refused/long reason",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "noVisualWhy": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      },
+      "output": { "error": "noVisualWhy: at most 140 characters" }
+    },
+    {
+      "name": "checkSummary/refused/ask without visual or reason",
+      "action": "checkSummary",
+      "input": {
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?"
+        }
+      },
+      "output": {
+        "error": "At a person step add a visual or say why there is none: a chart for data, before/after or a flow for a change, or noVisualWhy in one line."
+      }
+    },
+    {
+      "name": "writeSummary/first",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": null,
+        "baseVersion": 0,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxSummaries/it1",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "version": 1,
+              "by": "agentA",
+              "at": { "__hive": "serverTime" },
+              "headline": "Release 175: ship it?",
+              "ask": "Ship it?",
+              "answer": null,
+              "recommendation": { "action": "Approve", "why": "Green" },
+              "confidence": "high",
+              "bullets": [{ "text": "All checks green", "refs": [] }],
+              "details": null,
+              "visuals": [
+                {
+                  "kind": "bar",
+                  "title": "Check time",
+                  "caption": "Down from 14 to 10 minutes",
+                  "unit": null,
+                  "x": ["r173", "r174", "r175"],
+                  "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+                  "highlight": null,
+                  "better": null
+                }
+              ],
+              "noVisualWhy": null,
+              "refs": [],
+              "basis": { "lastEventId": "ev9", "planCursor": 3 },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxSummaryVersions/it1_1",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "version": 1,
+              "by": "agentA",
+              "at": { "__hive": "serverTime" },
+              "headline": "Release 175: ship it?",
+              "ask": "Ship it?",
+              "answer": null,
+              "recommendation": { "action": "Approve", "why": "Green" },
+              "confidence": "high",
+              "bullets": [{ "text": "All checks green", "refs": [] }],
+              "details": null,
+              "visuals": [
+                {
+                  "kind": "bar",
+                  "title": "Check time",
+                  "caption": "Down from 14 to 10 minutes",
+                  "unit": null,
+                  "x": ["r173", "r174", "r175"],
+                  "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+                  "highlight": null,
+                  "better": null
+                }
+              ],
+              "noVisualWhy": null,
+              "refs": [],
+              "basis": { "lastEventId": "ev9", "planCursor": 3 },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "summary": {
+                "version": 1,
+                "at": { "__hive": "serverTime" },
+                "headline": "Release 175: ship it?",
+                "ask": "Ship it?",
+                "answer": null,
+                "recAction": "Approve",
+                "confidence": "high"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "summary.written",
+              "data": { "version": 1 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "version": 1
+      }
+    },
+    {
+      "name": "writeSummary/next",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": { "version": 4 },
+        "baseVersion": 4,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": { "lastEventId": null, "planCursor": null }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxSummaries/it1",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "version": 5,
+              "by": "agentA",
+              "at": { "__hive": "serverTime" },
+              "headline": "Release 175: ship it?",
+              "ask": "Ship it?",
+              "answer": null,
+              "recommendation": { "action": "Approve", "why": "Green" },
+              "confidence": "high",
+              "bullets": [{ "text": "All checks green", "refs": [] }],
+              "details": null,
+              "visuals": [
+                {
+                  "kind": "bar",
+                  "title": "Check time",
+                  "caption": "Down from 14 to 10 minutes",
+                  "unit": null,
+                  "x": ["r173", "r174", "r175"],
+                  "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+                  "highlight": null,
+                  "better": null
+                }
+              ],
+              "noVisualWhy": null,
+              "refs": [],
+              "basis": { "lastEventId": null, "planCursor": null },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxSummaryVersions/it1_5",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "version": 5,
+              "by": "agentA",
+              "at": { "__hive": "serverTime" },
+              "headline": "Release 175: ship it?",
+              "ask": "Ship it?",
+              "answer": null,
+              "recommendation": { "action": "Approve", "why": "Green" },
+              "confidence": "high",
+              "bullets": [{ "text": "All checks green", "refs": [] }],
+              "details": null,
+              "visuals": [
+                {
+                  "kind": "bar",
+                  "title": "Check time",
+                  "caption": "Down from 14 to 10 minutes",
+                  "unit": null,
+                  "x": ["r173", "r174", "r175"],
+                  "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+                  "highlight": null,
+                  "better": null
+                }
+              ],
+              "noVisualWhy": null,
+              "refs": [],
+              "basis": { "lastEventId": null, "planCursor": null },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "summary": {
+                "version": 5,
+                "at": { "__hive": "serverTime" },
+                "headline": "Release 175: ship it?",
+                "ask": "Ship it?",
+                "answer": null,
+                "recAction": "Approve",
+                "confidence": "high"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "summary.written",
+              "data": { "version": 5 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "version": 5
+      }
+    },
+    {
+      "name": "writeSummary/twenty first drops the first",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": { "version": 20 },
+        "baseVersion": 20,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxSummaries/it1",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "version": 21,
+              "by": "agentA",
+              "at": { "__hive": "serverTime" },
+              "headline": "Release 175: ship it?",
+              "ask": "Ship it?",
+              "answer": null,
+              "recommendation": { "action": "Approve", "why": "Green" },
+              "confidence": "high",
+              "bullets": [{ "text": "All checks green", "refs": [] }],
+              "details": null,
+              "visuals": [
+                {
+                  "kind": "bar",
+                  "title": "Check time",
+                  "caption": "Down from 14 to 10 minutes",
+                  "unit": null,
+                  "x": ["r173", "r174", "r175"],
+                  "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+                  "highlight": null,
+                  "better": null
+                }
+              ],
+              "noVisualWhy": null,
+              "refs": [],
+              "basis": { "lastEventId": "ev9", "planCursor": 3 },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxSummaryVersions/it1_21",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "version": 21,
+              "by": "agentA",
+              "at": { "__hive": "serverTime" },
+              "headline": "Release 175: ship it?",
+              "ask": "Ship it?",
+              "answer": null,
+              "recommendation": { "action": "Approve", "why": "Green" },
+              "confidence": "high",
+              "bullets": [{ "text": "All checks green", "refs": [] }],
+              "details": null,
+              "visuals": [
+                {
+                  "kind": "bar",
+                  "title": "Check time",
+                  "caption": "Down from 14 to 10 minutes",
+                  "unit": null,
+                  "x": ["r173", "r174", "r175"],
+                  "series": [{ "name": "minutes", "values": [14, 12.5, null] }],
+                  "highlight": null,
+                  "better": null
+                }
+              ],
+              "noVisualWhy": null,
+              "refs": [],
+              "basis": { "lastEventId": "ev9", "planCursor": 3 },
+              "lastEventId": "id01"
+            }
+          },
+          { "kind": "delete", "path": "workspaces/w1/inboxSummaryVersions/it1_1" },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "summary": {
+                "version": 21,
+                "at": { "__hive": "serverTime" },
+                "headline": "Release 175: ship it?",
+                "ask": "Ship it?",
+                "answer": null,
+                "recAction": "Approve",
+                "confidence": "high"
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "summary.written",
+              "data": { "version": 21 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "version": 21
+      }
+    },
+    {
+      "name": "writeSummary/without a recommendation",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": null,
+        "baseVersion": 0,
+        "summary": { "headline": "  Release 175: ship it?  ", "bullets": ["All checks green"] },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxSummaries/it1",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "version": 1,
+              "by": "agentA",
+              "at": { "__hive": "serverTime" },
+              "headline": "Release 175: ship it?",
+              "ask": null,
+              "answer": null,
+              "recommendation": null,
+              "confidence": null,
+              "bullets": [{ "text": "All checks green", "refs": [] }],
+              "details": null,
+              "visuals": [],
+              "noVisualWhy": null,
+              "refs": [],
+              "basis": { "lastEventId": "ev9", "planCursor": 3 },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxSummaryVersions/it1_1",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "version": 1,
+              "by": "agentA",
+              "at": { "__hive": "serverTime" },
+              "headline": "Release 175: ship it?",
+              "ask": null,
+              "answer": null,
+              "recommendation": null,
+              "confidence": null,
+              "bullets": [{ "text": "All checks green", "refs": [] }],
+              "details": null,
+              "visuals": [],
+              "noVisualWhy": null,
+              "refs": [],
+              "basis": { "lastEventId": "ev9", "planCursor": 3 },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "summary": {
+                "version": 1,
+                "at": { "__hive": "serverTime" },
+                "headline": "Release 175: ship it?",
+                "ask": null,
+                "answer": null,
+                "recAction": null,
+                "confidence": null
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": null,
+              "type": "summary.written",
+              "data": { "version": 1 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "version": 1
+      }
+    },
+    {
+      "name": "writeSummary/stale base",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": { "version": 3 },
+        "baseVersion": 2,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": {
+        "error": "The summary moved on to v3: re-read the thread (thread_read), then write it with baseVersion 3."
+      }
+    },
+    {
+      "name": "writeSummary/base for none",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": null,
+        "baseVersion": 1,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": { "error": "This thread has no summary yet: write it with baseVersion 0." }
+    },
+    {
+      "name": "writeSummary/negative base",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": null,
+        "baseVersion": -1,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": {
+        "error": "baseVersion: the summary version you read (thread_read), 0 when there is none."
+      }
+    },
+    {
+      "name": "writeSummary/half base",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": null,
+        "baseVersion": 0.5,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": {
+        "error": "baseVersion: the summary version you read (thread_read), 0 when there is none."
+      }
+    },
+    {
+      "name": "writeSummary/no base",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": null,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": {
+        "error": "baseVersion: the summary version you read (thread_read), 0 when there is none."
+      }
+    },
+    {
+      "name": "writeSummary/bad summary",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": null,
+        "baseVersion": 0,
+        "summary": { "headline": "" },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": { "error": "headline: required" }
+    },
+    {
+      "name": "writeSummary/long basis",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": null,
+        "baseVersion": 0,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": {
+          "lastEventId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "planCursor": null
+        }
+      },
+      "output": { "error": "basis lastEventId: at most 128 characters" }
+    },
+    {
+      "name": "writeSummary/not the home agent",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": null,
+        "baseVersion": 0,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": {
+        "error": "Only the thread's home agent (the one that brought it in) writes its summary."
+      }
+    },
+    {
+      "name": "writeSummary/person refused",
+      "action": "writeSummary",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"]
+        },
+        "current": null,
+        "baseVersion": 0,
+        "summary": {
+          "headline": "  Release 175: ship it?  ",
+          "bullets": ["All checks green"],
+          "ask": "Ship it?",
+          "recommendation": { "action": "Approve", "why": "Green" },
+          "confidence": "high",
+          "visuals": [
+            {
+              "kind": "bar",
+              "title": " Check time ",
+              "caption": "Down from 14 to 10 minutes",
+              "x": ["r173", "r174", "r175"],
+              "series": [{ "name": "minutes", "values": [14, 12.5, null] }]
+            }
+          ]
+        },
+        "basis": { "lastEventId": "ev9", "planCursor": 3 }
+      },
+      "output": { "error": "Only agents can do this" }
     }
   ]
 }
