@@ -52,12 +52,14 @@ export const CONFIDENCE: Record<OutcomeConfidence, { word: string; bars: number 
  * thread that is not urgent and not due within 7 days, as its only open proposal.
  */
 export function isTidyUp(
-  o: Pick<InboxOutcome, 'type' | 'confidence'>,
+  o: Pick<InboxOutcome, 'type' | 'confidence'> & { planId?: string | null },
   t: Pick<InboxThread, 'urgent' | 'due'>,
   openOnThread: number,
   now: number,
 ): boolean {
   const type = outcomeType(o.type);
+  // A plan's step is decided in its plan (item qwFAWxZM5xkcE7PPjAzi), never in a tidy-up batch.
+  if (o.planId) return false;
   if (!type?.batchable || o.confidence !== 'high' || openOnThread !== 1 || t.urgent) return false;
   const due = t.due ? t.due.toMillis() : null;
   return due === null || due > now + 7 * DAY;

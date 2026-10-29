@@ -508,6 +508,27 @@ last event id it handled (`lastEventId`):
   off: edit it yourself or pick another outcome. What the member typed (an edit, the open box,
   the version on show) is kept for the tab, so a remount never drops it: Send sends exactly
   what is on screen.
+- **Plans** (item qwFAWxZM5xkcE7PPjAzi, slice 4; `apps/web/src/threads/PlanPanel.tsx`): a
+  thread's plans sit at the top of the agent panel (live ones; done and stopped ones after the
+  notes). A plan is a numbered checklist: per step a circle in its state's colour (`planView`
+  states), a kind icon (agent action, or your approval), a one-line title from its fields
+  (`stepTitle`), a state pill and a ⋯ menu (Move up, Move down, Add my approval before/after,
+  Remove step) for the steps that have not started; those steps also drag by their handle. One
+  step is open at a time (by default the one waiting for the member). An agent step not yet
+  approved opens the usual proposal (versions, Edit, **Approve step**, Ask for changes; Remove
+  step replaces Reject). An approval step at its turn has **Approve** and **Not approved**
+  (the plan stops); before its turn it says it waits. A failed step offers **Retry**, **Skip**
+  and **Stop plan**. Above: the plan's note, confidence, "Plan · N steps", what is done,
+  approved and still needs the member, a progress bar and **Approve plan** (agent steps only).
+  Below: **Add an approval step** and **Reject plan**. Every decision counts down with Undo
+  (one countdown per plan). A plan's steps never show as single proposals. If the thread's home
+  agent reports a CLI older than `EVENT_MIN_VERSION.plan` (0.2.171), a notice asks for
+  `hivenod update` before approving. On a phone the plan is in the bottom sheet ("k of N done")
+  with one main button (Approve plan, Approve step k for a gate, Review step k, Retry step k),
+  Reject plan (×) and a ⋯ menu (Add an approval step, Stop plan).
+- **Today and plans (until slice 5):** a thread whose proposals are plan steps shows "A plan
+  waits for you" on its row and an **Open plan** card that opens the thread; plan steps never
+  join a tidy-up batch.
 - **Make it work** (the member's own): `makeItemFromThread` creates a Hivenod item with
   `createItem`, the member as its creator, in one of their projects of the thread's
   organization, and links it on the thread's timeline with a `thread.itemMade` event in the

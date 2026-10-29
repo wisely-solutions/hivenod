@@ -35,13 +35,17 @@ export function DecisionRow({
   const first = entry.proposals?.[0];
   const band = bandOf(t, now);
   const rank = rankText(t, band, now);
+  // A plan (item qwFAWxZM5xkcE7PPjAzi): its steps are decided on the thread page.
+  const planned = entry.proposals?.some((p) => p.data.planId) ?? false;
   const summary = asked
     ? `${sender ? `${sender.split(' ')[0]} asks: ` : 'Asks: '}${t.question?.text ?? ''}`
-    : first
-      ? `${proposalSentence(first.data.type, first.data.fields)}${
-          (entry.proposals?.length ?? 0) > 1 ? ` · +${entry.proposals!.length - 1} more` : ''
-        }`
-      : '';
+    : planned
+      ? 'A plan waits for you: open it to decide its steps'
+      : first
+        ? `${proposalSentence(first.data.type, first.data.fields)}${
+            (entry.proposals?.length ?? 0) > 1 ? ` · +${entry.proposals!.length - 1} more` : ''
+          }`
+        : '';
   return (
     <motion.li
       layout={reduced ? false : 'position'}

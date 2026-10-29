@@ -10,6 +10,7 @@ import {
   inboxMessageSchema,
   inboxOutcomeSchema,
   inboxPaths,
+  inboxPlanSchema,
   inboxRelationSchema,
   inboxSubjectSchema,
   inboxThreadSchema,
@@ -42,6 +43,12 @@ const threadMessagesQuery = (wid: string, uid: string, tid: string) =>
 const threadOutcomesQuery = (wid: string, uid: string, tid: string) =>
   query(
     collection(db, `workspaces/${wid}/inboxOutcomes`),
+    where('memberUid', '==', uid),
+    where('threadId', '==', tid),
+  );
+const threadPlansQuery = (wid: string, uid: string, tid: string) =>
+  query(
+    collection(db, `workspaces/${wid}/inboxPlans`),
     where('memberUid', '==', uid),
     where('threadId', '==', tid),
   );
@@ -174,7 +181,7 @@ export function useMyRelations(uid: string, wids: readonly string[], enabled = t
   );
 }
 
-/** One thread with its messages, outcomes and events. */
+/** One thread with its messages, outcomes, plans and events. */
 export function useThread(wid: string, tid: string, uid: string) {
   // Someone else's thread is refused: say so at once, not after the sign-in retries.
   const thread = useLiveDoc(inboxPaths.thread(wid, tid), inboxThreadSchema, { failFast: true });
@@ -190,9 +197,11 @@ export function useThread(wid: string, tid: string, uid: string) {
     inboxOutcomeSchema,
   );
   const events = useLiveQuery(`ie:${k}`, () => threadEventsQuery(wid, uid, tid), inboxEventSchema);
+  // Plans (item qwFAWxZM5xkcE7PPjAzi): their steps are among the outcomes above.
+  const plans = useLiveQuery(`ip:${k}`, () => threadPlansQuery(wid, uid, tid), inboxPlanSchema);
   const sid = thread.state === 'ready' ? (thread.data?.subjectId ?? null) : null;
   const subject = useLiveDoc(sid ? inboxPaths.subject(wid, sid) : null, inboxSubjectSchema);
-  return { thread, messages, outcomes, events, subject };
+  return { thread, messages, outcomes, events, plans, subject };
 }
 
 /** One subject with its threads and its timeline events. */

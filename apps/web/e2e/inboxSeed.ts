@@ -18,8 +18,12 @@ import {
   inboxMessageKey,
   inboxPaths,
   inboxThreadKey,
+  finishOutcome,
   proposeOutcome,
+  proposePlan,
   reviseOutcome,
+  type PlanInput,
+  type PlanStepInput,
   type ActionContext,
   type ActionPlan,
   type OutcomeStateOf,
@@ -153,6 +157,37 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
     },
     async due(tid: string, due: string | null, reason?: string) {
       await run(dueThread(ctx, { threadId: tid, thread: await thread(tid), due, reason }));
+    },
+    /** Plans (item qwFAWxZM5xkcE7PPjAzi): one call proposes the steps, as plan_propose does. */
+    async plan(tid: string, steps: PlanStepInput[], note = '') {
+      const p = proposePlan(ctx, { threadId: tid, thread: await thread(tid), steps, note });
+      await run(p);
+      return { planId: p.planId, stepIds: p.stepIds };
+    },
+    /** Reports the plan step at its turn done, failed or started (outcome_done). */
+    async finishStep(
+      pid: string,
+      status: 'done' | 'failed' | 'started',
+      result: { error?: string; itemId?: string } = {},
+    ) {
+      const plan = (await getDoc(doc(db, inboxPaths.plan(wid, pid)))).data() as PlanInput['plan'];
+      const outcomes: Record<string, OutcomeStateOf> = {};
+      for (const id of plan.steps)
+        outcomes[id] = (
+          await getDoc(doc(db, inboxPaths.outcome(wid, id)))
+        ).data() as OutcomeStateOf;
+      const oid = plan.steps[plan.cursor]!;
+      await run(
+        finishOutcome(ctx, {
+          outcomeId: oid,
+          outcome: outcomes[oid]!,
+          thread: await thread(plan.threadId),
+          status,
+          result,
+          plan: { planId: pid, plan, outcomes },
+        }),
+      );
+      return oid;
     },
     cal: (memberUid: string, events: Parameters<typeof calendarUpsert>[1]['events']) =>
       run(calendarUpsert(ctx, { memberUid, events })),

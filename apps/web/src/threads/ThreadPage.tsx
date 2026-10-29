@@ -54,6 +54,7 @@ import { AgentPanel } from './AgentPanel';
 import { BriefingBar } from './BriefingBar';
 import { Conversation } from './Conversation';
 import { useMySubjects, useThread } from './data';
+import { planInputOf, planWaits } from './plan';
 import { LabelChip } from './labels';
 import { timeline } from './logic';
 import { BackLink, errorText, StateChip } from './parts';
@@ -82,7 +83,7 @@ export function ThreadPage() {
   const { session, actionContext, run } = useReady();
   const navigate = useNavigate();
   const uid = session.me.uid;
-  const { thread, messages, outcomes, events, subject } = useThread(wid, tid, uid);
+  const { thread, messages, outcomes, events, plans, subject } = useThread(wid, tid, uid);
   const agents = useLiveCollection(`workspaces/${wid}/agents`, agentSchema);
   const all = useNeedsAll();
   const wide = useWide();
@@ -157,8 +158,14 @@ export function ThreadPage() {
   );
   const open = (o: (typeof allOutcomes)[number]) =>
     o.data.state === 'proposed' || o.data.state === 'revising';
-  const proposed = allOutcomes.filter(open);
-  const decided = allOutcomes.filter((o) => !open(o));
+  // A plan's steps show in its checklist (item qwFAWxZM5xkcE7PPjAzi), not as single outcomes.
+  const single = allOutcomes.filter((o) => !o.data.planId);
+  const proposed = single.filter(open);
+  const decided = single.filter((o) => !open(o));
+  const planRows = (plans.state === 'ready' ? plans.data : []).sort(
+    (a, b) => b.data.createdAt.toMillis() - a.data.createdAt.toMillis(),
+  );
+  const planDecides = planRows.some((p) => planWaits(planInputOf(p, allOutcomes)));
   const subjectName = subject.state === 'ready' ? (subject.data?.name ?? '') : '';
   const closed = t.state === 'done' || t.state === 'ignored';
   const urgent = t.urgent === true;
@@ -172,7 +179,9 @@ export function ThreadPage() {
   const org = all.orgs.find((o) => o.wid === wid);
   const due = t.due ? t.due.toMillis() : null;
   const deciding =
-    proposed.length > 0 || (t.state === 'needsYou' && !!t.question && !t.question.answer);
+    proposed.length > 0 ||
+    planDecides ||
+    (t.state === 'needsYou' && !!t.question && !t.question.answer);
 
   async function act(make: () => Pick<ActionPlan, 'ops'>) {
     setError(null);
@@ -254,6 +263,8 @@ export function ThreadPage() {
       thread={{ id: tid, data: t }}
       proposals={proposed}
       decided={decided}
+      plans={planRows}
+      outcomes={allOutcomes}
       notes={notes}
       messages={msgs}
       now={now}
