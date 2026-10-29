@@ -133,8 +133,9 @@ emulators through `scripts/emu-exec.mjs`, the same way as the e2e: every port is
 otherwise any free ones), written into a generated firebase.json, and handed to the tests through
 `FIRESTORE_EMULATOR_HOST` / `FIREBASE_AUTH_EMULATOR_HOST`. Each run also has its own TMPDIR (the emulator
 hub's locator file). So worktrees and a release on main run side by side: there is no machine-wide
-emulator lock any more. Only one run of `test:rules:mutate` per worktree at a time: it rewrites that
-worktree's `firestore.rules` while it runs.
+emulator lock any more. `test:rules:mutate` mutates a temp copy of
+`firestore.rules` (handed to the suite as `HIVE_RULES_FILE`) and never edits the tracked file, so an interrupted
+run leaves nothing behind; every mutation edit is tagged `/*MUTATED*/` and `test:scripts` fails on a leftover.
 
 `pnpm install` prints an EBADENGINE warning: the Firebase web SDK 13 declares Node >=24.12, the VM runs
 Node 22. It is harmless for the build, tests and deploy (checked); the repo's own `engines` stays `>=22`.

@@ -44,7 +44,7 @@ export async function runOrgDelete(
     await deleteOrg(ctx, flagged);
     notify(`${name} was deleted.`);
   } catch {
-    notify(`Deleting ${name} stopped. Open Settings > Organization and choose Continue.`);
+    notify(`Deleting ${name} stopped. Open Organization settings and choose Continue.`);
     throw new Error('delete stopped');
   } finally {
     running.delete(wid);

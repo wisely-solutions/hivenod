@@ -48,6 +48,9 @@ type ChannelOptions struct {
 	StatusCheck time.Duration
 	// StatusMinute: the length of a minute for the status interval (tests shorten it; default 60 s).
 	StatusMinute time.Duration
+	// UpdateNotice returns a text when a newer hivenod exists ("" otherwise); the session tells
+	// it once as an info event (item N9EEn). Nil: no check.
+	UpdateNotice func(ctx context.Context) string
 }
 
 // StatusEveryRefresh: a project's status interval is read again after this long (item AzveC).
@@ -536,6 +539,13 @@ func (s *Session) Start(ctx context.Context) error {
 		s.mu.Unlock()
 		s.info(Message(err)+" One live session per agent: this session gets no handovers from Hivenod. Its tools still work on items you claim yourself.", "busy")
 		return nil
+	}
+	if s.o.UpdateNotice != nil {
+		go func() {
+			if msg := s.o.UpdateNotice(s.ctx); msg != "" {
+				s.info(msg, "update")
+			}
+		}()
 	}
 	go func() {
 		t := time.NewTicker(s.o.Presence)

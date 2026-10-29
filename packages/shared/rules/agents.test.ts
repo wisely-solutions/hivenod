@@ -105,6 +105,27 @@ describe('agent scoping and revocation', () => {
     await denied(updateDoc(ref, { lastSeenAt: serverTimestamp(), seenHost: 'x'.repeat(81) }));
     await denied(updateDoc(ref, { lastSeenAt: serverTimestamp(), seenHost: 5 }));
   });
+  it('allows the agent to write its own CLI version with presence; ATTACK: not long, not a number, not without presence, not another agent', async () => {
+    const a = as(AGENTS.a);
+    const ref = doc(a.db, paths.agent(W, AGENTS.a));
+    await ok(
+      updateDoc(ref, { lastSeenAt: serverTimestamp(), seenHost: 'laptop', cliVersion: '0.2.170' }),
+    );
+    await denied(updateDoc(ref, { lastSeenAt: serverTimestamp(), cliVersion: 'x'.repeat(41) }));
+    await denied(updateDoc(ref, { lastSeenAt: serverTimestamp(), cliVersion: 5 }));
+    await denied(updateDoc(ref, { cliVersion: '0.2.170' }));
+    await denied(
+      updateDoc(doc(a.db, paths.agent(W, AGENTS.star)), {
+        lastSeenAt: serverTimestamp(),
+        cliVersion: '9.9.9',
+      }),
+    );
+    // A member (not the agent) cannot forge it either.
+    for (const who of ['alice', 'bob']) {
+      const m = as(who);
+      await denied(updateDoc(doc(m.db, paths.agent(W, AGENTS.a)), { cliVersion: '9.9.9' }));
+    }
+  });
   it('ATTACK: denies an agent widening its own projectIds or un-revoking', async () => {
     const a = as(AGENTS.a);
     await denied(updateDoc(doc(a.db, paths.agent(W, AGENTS.a)), { projectIds: '*' }));

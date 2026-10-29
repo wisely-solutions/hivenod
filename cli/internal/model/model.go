@@ -55,6 +55,7 @@ type Agent struct {
 	LastSeenAt       *time.Time  `firestore:"lastSeenAt" json:"lastSeenAt"`
 	SignedOutAt      *time.Time  `firestore:"signedOutAt" json:"signedOutAt"`
 	SeenHost         *string     `firestore:"seenHost" json:"seenHost"`
+	CLIVersion       *string     `firestore:"cliVersion" json:"cliVersion"`
 	TokenHint        string      `firestore:"tokenHint" json:"tokenHint"`
 	PreviousAgentUID *string     `firestore:"previousAgentUid" json:"previousAgentUid"`
 	Guardrails       *Guardrails `firestore:"guardrails" json:"guardrails"`

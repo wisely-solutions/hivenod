@@ -1,12 +1,30 @@
 // Rules mutation check: weakens one security rule at a time and asserts the rules suite
 // catches it (at least one test fails). Proves the deny tests fail for the right reason.
 // MUTATE_ONLY="name,name" limits the run. Run inside the emulator:  pnpm test:rules:mutate   (from the repo root)
-import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { assertWellFormed } from './mutate-lib.mjs';
+// The tracked firestore.rules is NEVER edited: each mutation is written to a temp copy (under TMPDIR,
+// which scripts/emu-exec.mjs gives this run) and the rules suite reads it through HIVE_RULES_FILE. An
+// interrupted run therefore cannot leave weakened rules behind (SIGINT/SIGTERM/SIGHUP only clean the temp dir).
+import { spawn } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { applyEdits, assertWellFormed } from './mutate-lib.mjs';
 
 const RULES = new URL('../../../firestore.rules', import.meta.url);
 const original = readFileSync(RULES, 'utf8');
+const tmp = mkdtempSync(join(tmpdir(), 'hive-mutate-'));
+const TEMP_RULES = join(tmp, 'firestore.rules');
+let child = null;
+const cleanup = () => rmSync(tmp, { recursive: true, force: true });
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(sig, () => {
+    if (child) child.kill('SIGTERM');
+    cleanup();
+    process.exit(130);
+  });
+}
+process.on('exit', cleanup);
 
 /** [name, find, replace] — `find` must occur in the rules (all occurrences are replaced). */
 const AGENT_TYPES = "'item.claimed', 'item.released', 'item.completed', 'item.updated',";
@@ -15,6 +33,19 @@ const AGENT_TYPES = "'item.claimed', 'item.released', 'item.completed', 'item.up
  * replaced). Where a promise is enforced by two independent layers, the mutation removes both.
  */
 const MUTATIONS = [
+  [
+    'agent cliVersion unbounded',
+    [["&& strOrNull(request.resource.data.get('cliVersion', null), 40))", '&& true)']],
+  ],
+  [
+    'cliVersion without presence',
+    [
+      [
+        "&& request.resource.data.lastSeenAt == request.time\n            && strOrNull(request.resource.data.get('seenHost', null), 80)",
+        "&& strOrNull(request.resource.data.get('seenHost', null), 80)",
+      ],
+    ],
+  ],
   [
     'agents may decide',
     [
@@ -742,33 +773,32 @@ const MUTATIONS = [
 // reported as a STALE failure with its name, and the rest of the suite still runs.
 const isStale = (edits) => edits.find(([find, rep]) => !original.includes(find) || find === rep);
 
-const runSuite = (verbose = false) => {
-  try {
+const runSuite = (rulesFile, verbose = false) =>
+  new Promise((resolve) => {
     // MUTATE_FILES="rules/inbox.test.ts" runs only those test files (a quick check of new mutations).
     const files = process.env.MUTATE_FILES?.split(',').map((f) => f.trim()) ?? [];
-    execFileSync(
-      'npx',
-      ['vitest', 'run', '-c', 'vitest.rules.config.ts', '--reporter=dot', ...files],
-      {
-        cwd: new URL('..', import.meta.url),
-        stdio: 'pipe',
-      },
-    );
-    return true;
-  } catch (e) {
-    if (verbose)
-      console.error(
-        String(e.stdout ?? '')
-          .split('\n')
-          .slice(-40)
-          .join('\n'),
-      );
-    return false;
-  }
-};
+    // MUTATE_SUITE_CMD replaces the vitest command (a seam for the script tests).
+    const [cmd, ...args] = process.env.MUTATE_SUITE_CMD
+      ? ['sh', '-c', process.env.MUTATE_SUITE_CMD]
+      : ['npx', 'vitest', 'run', '-c', 'vitest.rules.config.ts', '--reporter=dot', ...files];
+    let out = '';
+    child = spawn(cmd, args, {
+      cwd: fileURLToPath(new URL('..', import.meta.url)),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, HIVE_RULES_FILE: rulesFile },
+    });
+    child.stdout.on('data', (d) => (out += d));
+    child.stderr.on('data', (d) => (out += d));
+    child.on('close', (code) => {
+      child = null;
+      if (code !== 0 && verbose) console.error(out.split('\n').slice(-40).join('\n'));
+      resolve(code === 0);
+    });
+  });
 assertWellFormed(MUTATIONS);
 // The suite must pass on the unmutated rules, or "a test failed" proves nothing.
-if (!runSuite(true)) {
+writeFileSync(TEMP_RULES, original);
+if (!(await runSuite(TEMP_RULES, true))) {
   console.error('The rules suite fails on the unmutated rules: fix it before mutating.');
   process.exit(2);
 }
@@ -776,7 +806,7 @@ if (!runSuite(true)) {
 // MUTATE_ONLY="name one,name two" runs just those mutations (the full run takes about 2 hours).
 const only = process.env.MUTATE_ONLY?.split(',').map((n) => n.trim());
 const results = [];
-try {
+{
   for (const [name, edits] of MUTATIONS) {
     if (only && !only.includes(name)) continue;
     const missing = isStale(edits);
@@ -785,16 +815,11 @@ try {
       console.log(`STALE     ${name}: ${JSON.stringify(missing[0].slice(0, 80))}`);
       continue;
     }
-    writeFileSync(
-      RULES,
-      edits.reduce((src, [find, rep]) => src.split(find).join(rep), original),
-    );
-    const caught = !runSuite();
+    writeFileSync(TEMP_RULES, applyEdits(original, edits));
+    const caught = !(await runSuite(TEMP_RULES));
     results.push([name, caught ? 'caught' : 'SURVIVED']);
     console.log(`${caught ? 'caught  ' : 'SURVIVED'}  ${name}`);
   }
-} finally {
-  writeFileSync(RULES, original);
 }
 const bad = results.filter(([, r]) => r !== 'caught');
 console.log(`\n${results.length - bad.length}/${results.length} mutations caught`);

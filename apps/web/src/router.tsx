@@ -13,7 +13,7 @@ import { useRouterState } from '@tanstack/react-router';
 import { getAuthHint, useAuthHint } from './auth/hint';
 import { LoadingMark } from './components/Loading';
 import { SignInPage } from './pages/SignInPage';
-import { isSettingsTab, type SettingsTab } from './pages/settingsTabs';
+import { isAccountTab, isOrgTab, settingsTarget, type SettingsTab } from './pages/settingsTabs';
 import { MotionProvider } from './ui/motion';
 
 // Firebase Auth and Firestore are most of the app's weight. They load only for people who may be
@@ -107,29 +107,50 @@ const kitRoute = createRoute({
   path: '/kit',
   component: lazyRouteComponent(() => import('./kit/KitPage')),
 });
-// Settings is one page with tabs. The old Me pages forward to the matching tab.
+// Settings is split (item icVly): Account (/account/<tab>, under the avatar) and Organization
+// settings (/settings/<tab>). Old addresses, the Me pages included, forward to the right tab.
+const toSettings = (tab: string | undefined) => {
+  const t = settingsTarget(tab);
+  return t.to === '/account/$tab'
+    ? redirect({ to: '/account/$tab', params: { tab: t.tab }, replace: true })
+    : redirect({ to: '/settings/$tab', params: { tab: t.tab }, replace: true });
+};
+const accountRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/account',
+  beforeLoad: () => {
+    throw toSettings('profile');
+  },
+});
+const accountTabRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/account/$tab',
+  beforeLoad: ({ params }) => {
+    if (!isAccountTab(params.tab)) throw toSettings(params.tab);
+  },
+  component: lazyRouteComponent(() => import('./pages/SettingsPage'), 'AccountPage'),
+});
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
   beforeLoad: () => {
-    throw redirect({ to: '/settings/$tab', params: { tab: 'profile' }, replace: true });
+    throw toSettings(undefined);
   },
 });
 const settingsTabRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/$tab',
   beforeLoad: ({ params }) => {
-    if (!isSettingsTab(params.tab))
-      throw redirect({ to: '/settings/$tab', params: { tab: 'profile' }, replace: true });
+    if (!isOrgTab(params.tab)) throw toSettings(params.tab);
   },
-  component: lazyRouteComponent(() => import('./pages/SettingsPage'), 'SettingsPage'),
+  component: lazyRouteComponent(() => import('./pages/SettingsPage'), 'OrgSettingsPage'),
 });
 const legacyMe = (path: string, tab: SettingsTab) =>
   createRoute({
     getParentRoute: () => rootRoute,
     path,
     beforeLoad: () => {
-      throw redirect({ to: '/settings/$tab', params: { tab }, replace: true });
+      throw toSettings(tab);
     },
   });
 const meRoute = legacyMe('/me', 'profile');
@@ -305,6 +326,8 @@ export const router = createRouter({
   routeTree: rootRoute.addChildren([
     indexRoute,
     kitRoute,
+    accountRoute,
+    accountTabRoute,
     settingsRoute,
     settingsTabRoute,
     meRoute,

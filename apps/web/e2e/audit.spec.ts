@@ -21,12 +21,12 @@ const ROUTES: Array<[string, string]> = [
   ['activity', '/activity'],
   ['agents', '/agents'],
   ['agent', '/agents/scout'],
-  ['settings-profile', '/settings/profile'],
+  ['settings-profile', '/account/profile'],
   ['settings-organization', '/settings/organization'],
   ['settings-members', '/settings/members'],
   ['settings-groups', '/settings/groups'],
   ['settings-projects', '/settings/projects'],
-  ['settings-notifications', '/settings/notifications'],
+  ['settings-notifications', '/account/notifications'],
   ['kit', '/kit'],
 ];
 

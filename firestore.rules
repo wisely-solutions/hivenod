@@ -704,9 +704,11 @@ service cloud.firestore {
             && request.resource.data.revokedAt == request.time
             && tracked(wid, request.resource.data.lastEventId, ['agent.revoked']))
           || (signedIn() && aid == me() && isActiveAgent(wid)
-            && changed(['lastSeenAt', 'seenHost'])
+            && changed(['lastSeenAt', 'seenHost', 'cliVersion'])
             && request.resource.data.lastSeenAt == request.time
-            && strOrNull(request.resource.data.get('seenHost', null), 80))
+            && strOrNull(request.resource.data.get('seenHost', null), 80)
+            // The CLI's own version (item N9EEn), shown on cards and the agent page.
+            && strOrNull(request.resource.data.get('cliVersion', null), 40))
           // Presence: the agent's `hive run` session stopped (shown offline at once).
           || (signedIn() && aid == me() && isActiveAgent(wid)
             && changed(['signedOutAt'])

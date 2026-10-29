@@ -42,7 +42,7 @@ test('every main screen says Hivenod, never Hive', async ({ page }) => {
     ['/activity', /^Activity · Hivenod$/],
     ['/insights', /· Hivenod$/],
     ['/agents', /· Hivenod$/],
-    ['/settings/profile', /· Hivenod$/],
+    ['/account/profile', /· Hivenod$/],
   ] as const) {
     await page.goto(path);
     await expect(page).toHaveTitle(title, { timeout: 20_000 });

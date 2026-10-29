@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func site(t *testing.T, version string, bin []byte, sum string, sideSum string) *httptest.Server {
@@ -96,5 +97,54 @@ func TestVersionHelpers(t *testing.T) {
 	Commit = ""
 	if Line() != "hivenod 0.1.5" {
 		t.Fatal(Line())
+	}
+}
+
+func TestNotice(t *testing.T) {
+	Version = "0.1.10"
+	dir := t.TempDir()
+	hits := 0
+	mux := http.NewServeMux()
+	latest := "0.1.12"
+	mux.HandleFunc("/cli/bin/latest.json", func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		json.NewEncoder(w).Encode(Manifest{Version: latest})
+	})
+	s := httptest.NewServer(mux) // a fake latest.json; never the network
+	defer s.Close()
+	u := &Updater{Site: s.URL}
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+
+	msg := u.Notice(context.Background(), dir, now)
+	if !strings.Contains(msg, "0.1.12") || !strings.Contains(msg, "hivenod update") {
+		t.Fatalf("%q", msg)
+	}
+	// Within a day: no new check, no repeat.
+	if m := u.Notice(context.Background(), dir, now.Add(23*time.Hour)); m != "" || hits != 1 {
+		t.Fatalf("repeated: %q hits=%d", m, hits)
+	}
+	// After a day: tells again.
+	if m := u.Notice(context.Background(), dir, now.Add(25*time.Hour)); m == "" || hits != 2 {
+		t.Fatalf("not repeated after a day: %q hits=%d", m, hits)
+	}
+	// Up to date: silent, but the check counts.
+	latest = "0.1.10"
+	if m := u.Notice(context.Background(), dir, now.Add(60*time.Hour)); m != "" || hits != 3 {
+		t.Fatalf("up to date said %q hits=%d", m, hits)
+	}
+	// Unreachable: silent and not counted.
+	dir2 := t.TempDir()
+	dead := &Updater{Site: "http://127.0.0.1:1"}
+	if m := dead.Notice(context.Background(), dir2, now); m != "" {
+		t.Fatal(m)
+	}
+	if _, err := os.Stat(filepath.Join(dir2, NoticeFile)); err == nil {
+		t.Fatal("a failed check was recorded")
+	}
+	// A development build says nothing and asks nothing.
+	Version = "0.0.0"
+	before := hits
+	if m := u.Notice(context.Background(), t.TempDir(), now); m != "" || hits != before {
+		t.Fatal("dev build checked")
 	}
 }

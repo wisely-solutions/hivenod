@@ -145,6 +145,15 @@ proposed it to change it. It works on the types with text: `reply`, `reply_book`
    revises: that ends the request, and the agent's late revision is refused ("already decided").
    Reject needs `proposed` (Cancel first).
 
+**An agent on an older CLI never sees `revise`** (item N9EEnCa1MzIw5UYfe70N). The channel only
+pushes event kinds its CLI knows, so such an agent stays silent and the card would sit on
+"Revising…". The CLI writes its version as `cliVersion` on the agent's presence stamp (an agent
+writes only its own, `firestore.rules`), and `packages/shared/src/cliversion.ts` lists the minimum
+version per event kind (`revise` needs 0.2.163). While a revise is pending, the Revising strip
+shows "<agent> needs a Hivenod update to do this… run `hivenod update`" when the reported version
+is below the minimum. An agent that reports no version (a CLI from before this existed) gets no
+hint, because it may be new enough. The member can Cancel the request at any time.
+
 An agent that can't make the change (the time asked for is taken, say) says why with
 `inbox_ask` on the thread; the outcome stays `revising` until the member cancels or sends.
 
