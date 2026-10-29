@@ -724,6 +724,91 @@
         }
       },
       {
+        "name": "thread_answer_instruction",
+        "description": "Answer the person's request on a thread (inbox event reason instruct: they asked you something on it, as text or a chip). Do what they asked within the rules: investigate, then answer with kind note (the answer itself, in the note: a summary, a briefing), ask (after inbox_ask, when you need them), outcome (after outcome_propose: refId is its outcomeId) or plan (after plan_propose: refId is its planId). Nothing outward happens without their approval of an outcome. Only the thread's home agent answers, once per request.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "instructionId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The request's id (instruction_id of the event)"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "note",
+                "ask",
+                "outcome",
+                "plan"
+              ],
+              "description": "note, ask, outcome or plan"
+            },
+            "refId": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "The outcomeId (kind outcome) or planId (kind plan) you proposed"
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "Your answer for the person (required for kind note), in a few lines"
+            }
+          },
+          "required": [
+            "threadId",
+            "instructionId",
+            "kind"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "thread_suggest_chips",
+        "description": "Suggest up to 5 quick chips for a thread you brought in: the person sees them (at most 3, yours first) above the \"Ask the agent\" box. Chips: prepare_meeting, recheck, follow_up, summarize, draft_reply. Replaces your earlier list; [] clears it. Only the thread's home agent.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "chips": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "prepare_meeting",
+                  "recheck",
+                  "follow_up",
+                  "summarize",
+                  "draft_reply"
+                ]
+              },
+              "maxItems": 5,
+              "description": "The chips, in the order to show them"
+            }
+          },
+          "required": [
+            "threadId",
+            "chips"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "subject_relate",
         "description": "Propose that two subjects of the same person are related (the same client, project or problem seen from two sides), with an optional note saying how. It is a proposal: the person OKs or turns it down, and a link turned down is not proposed again. Related subjects show on each other's page and in subject_search.",
         "inputSchema": {
@@ -2504,6 +2589,91 @@
           "required": [
             "threadId",
             "result"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "thread_answer_instruction",
+        "description": "Answer the person's request on a thread (inbox event reason instruct: they asked you something on it, as text or a chip). Do what they asked within the rules: investigate, then answer with kind note (the answer itself, in the note: a summary, a briefing), ask (after inbox_ask, when you need them), outcome (after outcome_propose: refId is its outcomeId) or plan (after plan_propose: refId is its planId). Nothing outward happens without their approval of an outcome. Only the thread's home agent answers, once per request.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "instructionId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The request's id (instruction_id of the event)"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "note",
+                "ask",
+                "outcome",
+                "plan"
+              ],
+              "description": "note, ask, outcome or plan"
+            },
+            "refId": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "The outcomeId (kind outcome) or planId (kind plan) you proposed"
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "Your answer for the person (required for kind note), in a few lines"
+            }
+          },
+          "required": [
+            "threadId",
+            "instructionId",
+            "kind"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "thread_suggest_chips",
+        "description": "Suggest up to 5 quick chips for a thread you brought in: the person sees them (at most 3, yours first) above the \"Ask the agent\" box. Chips: prepare_meeting, recheck, follow_up, summarize, draft_reply. Replaces your earlier list; [] clears it. Only the thread's home agent.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "chips": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "prepare_meeting",
+                  "recheck",
+                  "follow_up",
+                  "summarize",
+                  "draft_reply"
+                ]
+              },
+              "maxItems": 5,
+              "description": "The chips, in the order to show them"
+            }
+          },
+          "required": [
+            "threadId",
+            "chips"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },

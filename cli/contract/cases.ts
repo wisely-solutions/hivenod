@@ -70,6 +70,8 @@ import {
   proposeOutcome,
   reviseOutcome,
   recheckDone,
+  answerInstruction,
+  suggestChips,
   retitleThread,
   threadAfter,
   titleFrom,
@@ -1929,6 +1931,70 @@ function build(): ContractCase[] {
   });
   rdone('not the home agent', OTHER, {});
   rdone('person refused', HUMAN, {});
+  // ---------- Ask the agent (item w6O2KOw4ys70TQv9I1xD) ----------
+  const IN_PENDING = TH({
+    subjectId: 's1',
+    state: 'waiting',
+    instructions: {
+      i1: { state: 'pending', at: ts(NOW_MS - 60_000) },
+      i0: { state: 'answered', at: ts(NOW_MS - 120_000) },
+    },
+    instruct: { state: 'pending', id: 'i1', at: ts(NOW_MS - 60_000) },
+  });
+  const ans = (
+    name: string,
+    actor: Actor,
+    input: Partial<Parameters<typeof answerInstruction>[1]>,
+  ) =>
+    act(
+      `answerInstruction/${name}`,
+      'answerInstruction',
+      actor,
+      {
+        threadId: 'it1',
+        thread: IN_PENDING,
+        instructionId: 'i1',
+        kind: 'note',
+        refId: null,
+        note: '  The meeting is with Sam at 10:00. ',
+        ...input,
+      },
+      answerInstruction,
+    );
+  ans('a note', AGENT, {});
+  ans('an outcome', AGENT, { kind: 'outcome', refId: ' o9 ', note: null });
+  ans('a plan', AGENT, { kind: 'plan', refId: 'pl1' });
+  ans('a question', AGENT, { kind: 'ask', note: undefined });
+  ans('an older one', AGENT, {
+    thread: TH({
+      ...IN_PENDING,
+      instructions: { ...IN_PENDING.instructions, i2: { state: 'pending', at: ts(NOW_MS) } },
+      instruct: { state: 'pending', id: 'i2', at: ts(NOW_MS) },
+    }),
+  });
+  ans('a note without text', AGENT, { note: '  ' });
+  ans('an outcome without its id', AGENT, { kind: 'outcome', note: null });
+  ans('a question with an id', AGENT, { kind: 'ask', refId: 'o1' });
+  ans('bad kind', AGENT, { kind: 'shrug' });
+  ans('long note', AGENT, { note: 'x'.repeat(501) });
+  ans('unknown', AGENT, { instructionId: 'zz' });
+  ans('answered already', AGENT, { instructionId: 'i0' });
+  ans('not the home agent', OTHER, {});
+  ans('person refused', HUMAN, {});
+  const chips = (name: string, actor: Actor, list: unknown) =>
+    act(
+      `suggestChips/${name}`,
+      'suggestChips',
+      actor,
+      { threadId: 'it1', thread: IN_PENDING, chips: list as string[] },
+      suggestChips,
+    );
+  chips('two', AGENT, ['summarize', 'recheck']);
+  chips('none', AGENT, []);
+  chips('unknown chip', AGENT, ['dance']);
+  chips('twice', AGENT, ['follow_up', 'follow_up']);
+  chips('six', AGENT, ['prepare_meeting', 'recheck', 'follow_up', 'summarize', 'draft_reply', 'x']);
+  chips('not the home agent', OTHER, ['summarize']);
   const finP = (name: string, input: Partial<Parameters<typeof finishOutcome>[1]>) => {
     const pl = input.plan;
     const oid = input.outcomeId ?? (pl ? pl.plan.steps[pl.plan.cursor] : undefined) ?? 'o1';

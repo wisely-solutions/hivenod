@@ -335,6 +335,22 @@ type ThreadState struct {
 	Waiting   *Waiting `json:"waiting"`
 	// Recheck: the member's last re-check request (item bmNoIvvqKCdAorLSShE9); nil: none.
 	Recheck *ThreadRecheck `json:"recheck,omitempty"`
+	// Instructions and Instruct: Ask the agent (item w6O2KOw4ys70TQv9I1xD).
+	Instructions map[string]ThreadInstruction `json:"instructions,omitempty"`
+	Instruct     *ThreadInstruct              `json:"instruct,omitempty"`
+}
+
+// ThreadInstruction is what the actions need of an instruction.
+type ThreadInstruction struct {
+	State string     `json:"state"`
+	At    *time.Time `json:"at,omitempty"`
+}
+
+// ThreadInstruct is what the actions need of a thread's latest instruction.
+type ThreadInstruct struct {
+	State string     `json:"state"`
+	ID    string     `json:"id"`
+	At    *time.Time `json:"at,omitempty"`
 }
 
 // ThreadRecheck is what the actions need of a thread's recheck.
@@ -394,6 +410,15 @@ func ThreadStateFrom(t model.InboxThread) ThreadState {
 	}
 	if t.Recheck != nil {
 		s.Recheck = &ThreadRecheck{State: t.Recheck.State, RequestedAt: t.Recheck.RequestedAt}
+	}
+	if len(t.Instructions) > 0 {
+		s.Instructions = map[string]ThreadInstruction{}
+		for id, in := range t.Instructions {
+			s.Instructions[id] = ThreadInstruction{State: in.State, At: in.At}
+		}
+	}
+	if t.Instruct != nil {
+		s.Instruct = &ThreadInstruct{State: t.Instruct.State, ID: t.Instruct.ID, At: t.Instruct.At}
 	}
 	if s.Refs == nil {
 		s.Refs = []string{}
@@ -1490,4 +1515,127 @@ func RecheckDone(ctx Ctx, in RecheckDoneInput) (RecheckDoneResult, error) {
 		return ops
 	}, "")
 	return RecheckDoneResult{Plan: pl, Checked: checked}, nil
+}
+
+// ---------- Ask the agent (item w6O2KOw4ys70TQv9I1xD) ----------
+
+// InstructChips are INSTRUCT_CHIPS; InstructAnswers are INSTRUCT_ANSWERS.
+var (
+	InstructChips   = []string{"prepare_meeting", "recheck", "follow_up", "summarize", "draft_reply"}
+	InstructAnswers = []string{"note", "ask", "outcome", "plan"}
+)
+
+// InboxMaxInstructNote and InboxMaxSuggestedChips are INBOX_LIMITS.instructNote and .suggestedChips.
+const (
+	InboxMaxInstructNote   = 500
+	InboxMaxSuggestedChips = 5
+)
+
+// AnswerInstructionInput is answerInstruction's input (thread_answer_instruction).
+type AnswerInstructionInput struct {
+	ThreadID      string      `json:"threadId"`
+	Thread        ThreadState `json:"thread"`
+	InstructionID string      `json:"instructionId"`
+	Kind          string      `json:"kind"`
+	RefID         *string     `json:"refId"`
+	Note          *string     `json:"note"`
+}
+
+func trimmedOrNil(v *string) *string {
+	if v == nil {
+		return nil
+	}
+	if t := jsTrim(*v); t != "" {
+		return &t
+	}
+	return nil
+}
+
+// AnswerInstruction is answerInstruction: the home agent answers the member's instruction once,
+// with a note (its text), a question it asked, or the outcome or plan it proposed (refId).
+func AnswerInstruction(ctx Ctx, in AnswerInstructionInput) (plan.Plan, error) {
+	if err := RequireAgent(ctx); err != nil {
+		return plan.Plan{}, err
+	}
+	t := in.Thread
+	if t.FetchedBy != ctx.Actor.ID {
+		return plan.Plan{}, fail("Only the thread's home agent (the one that brought it in) answers the person's request.")
+	}
+	ins, ok := t.Instructions[in.InstructionID]
+	if !ok {
+		return plan.Plan{}, fail("There is no request " + in.InstructionID + " on this thread.")
+	}
+	if ins.State != "pending" {
+		return plan.Plan{}, fail("This request was answered already.")
+	}
+	if !inList(in.Kind, InstructAnswers...) {
+		return plan.Plan{}, fail("The kind is " + strings.Join(InstructAnswers, ", ") + ".")
+	}
+	ref := trimmedOrNil(in.RefID)
+	note := trimmedOrNil(in.Note)
+	if note != nil && jsLen(*note) > InboxMaxInstructNote {
+		return plan.Plan{}, fail(tooLong("The note", InboxMaxInstructNote))
+	}
+	if in.Kind == "note" && note == nil {
+		return plan.Plan{}, fail("Answer with a note: give its text.")
+	}
+	refKind := in.Kind == "outcome" || in.Kind == "plan"
+	if refKind != (ref != nil) {
+		if refKind {
+			return plan.Plan{}, fail("Give the " + in.Kind + " id you proposed (refId).")
+		}
+		return plan.Plan{}, fail("Only an outcome or plan answer has a refId.")
+	}
+	latest := t.Instruct != nil && t.Instruct.ID == in.InstructionID
+	id := in.InstructionID
+	return InboxPlan(ctx, "thread.instruction_answered", t.MemberUID, sp(in.ThreadID), t.SubjectID,
+		map[string]any{"instructionId": id, "kind": in.Kind, "refId": strOrNil(ref), "note": strOrNil(note)},
+		func(eventID string) []plan.Op {
+			d := map[string]any{
+				"instructions." + id + ".state":  "answered",
+				"instructions." + id + ".answer": map[string]any{"kind": in.Kind, "refId": strOrNil(ref), "note": strOrNil(note), "at": ServerTime()},
+			}
+			if latest {
+				d["instruct.state"] = "done"
+			}
+			return []plan.Op{upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), d, eventID)}
+		}, ""), nil
+}
+
+// SuggestChipsInput is suggestChips' input (thread_suggest_chips).
+type SuggestChipsInput struct {
+	ThreadID string      `json:"threadId"`
+	Thread   ThreadState `json:"thread"`
+	Chips    []string    `json:"chips"`
+}
+
+// SuggestChips is suggestChips: the home agent sets the chips it suggests (0-5, once each).
+func SuggestChips(ctx Ctx, in SuggestChipsInput) (plan.Plan, error) {
+	if err := RequireAgent(ctx); err != nil {
+		return plan.Plan{}, err
+	}
+	t := in.Thread
+	if t.FetchedBy != ctx.Actor.ID {
+		return plan.Plan{}, fail("Only the thread's home agent (the one that brought it in) suggests its chips.")
+	}
+	if len(in.Chips) > InboxMaxSuggestedChips {
+		return plan.Plan{}, fail("At most " + strconv.Itoa(InboxMaxSuggestedChips) + " chips.")
+	}
+	seen := map[string]bool{}
+	for _, c := range in.Chips {
+		if !inList(c, InstructChips...) {
+			return plan.Plan{}, fail("A chip is one of " + strings.Join(InstructChips, ", ") + ".")
+		}
+	}
+	for _, c := range in.Chips {
+		if seen[c] {
+			return plan.Plan{}, fail("Each chip is listed once.")
+		}
+		seen[c] = true
+	}
+	chips := append([]string{}, in.Chips...)
+	return InboxPlan(ctx, "thread.chips_suggested", t.MemberUID, sp(in.ThreadID), t.SubjectID,
+		map[string]any{"chips": chips}, func(eventID string) []plan.Op {
+			return []plan.Op{upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{"suggestedChips": chips}, eventID)}
+		}, ""), nil
 }

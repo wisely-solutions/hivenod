@@ -22862,6 +22862,825 @@
       "output": { "error": "Only agents can do this" }
     },
     {
+      "name": "answerInstruction/a note",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "note",
+        "refId": null,
+        "note": "  The meeting is with Sam at 10:00. "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "instructions.i1.state": "answered",
+              "instructions.i1.answer": {
+                "kind": "note",
+                "refId": null,
+                "note": "The meeting is with Sam at 10:00.",
+                "at": { "__hive": "serverTime" }
+              },
+              "instruct.state": "done",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.instruction_answered",
+              "data": {
+                "instructionId": "i1",
+                "kind": "note",
+                "refId": null,
+                "note": "The meeting is with Sam at 10:00."
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "answerInstruction/an outcome",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "outcome",
+        "refId": " o9 ",
+        "note": null
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "instructions.i1.state": "answered",
+              "instructions.i1.answer": {
+                "kind": "outcome",
+                "refId": "o9",
+                "note": null,
+                "at": { "__hive": "serverTime" }
+              },
+              "instruct.state": "done",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.instruction_answered",
+              "data": { "instructionId": "i1", "kind": "outcome", "refId": "o9", "note": null },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "answerInstruction/a plan",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "plan",
+        "refId": "pl1",
+        "note": "  The meeting is with Sam at 10:00. "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "instructions.i1.state": "answered",
+              "instructions.i1.answer": {
+                "kind": "plan",
+                "refId": "pl1",
+                "note": "The meeting is with Sam at 10:00.",
+                "at": { "__hive": "serverTime" }
+              },
+              "instruct.state": "done",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.instruction_answered",
+              "data": {
+                "instructionId": "i1",
+                "kind": "plan",
+                "refId": "pl1",
+                "note": "The meeting is with Sam at 10:00."
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "answerInstruction/a question",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "ask",
+        "refId": null
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "instructions.i1.state": "answered",
+              "instructions.i1.answer": {
+                "kind": "ask",
+                "refId": null,
+                "note": null,
+                "at": { "__hive": "serverTime" }
+              },
+              "instruct.state": "done",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.instruction_answered",
+              "data": { "instructionId": "i1", "kind": "ask", "refId": null, "note": null },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "answerInstruction/an older one",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } },
+            "i2": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1800000000000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i2",
+            "at": { "__hive": "timestamp", "ms": 1800000000000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "note",
+        "refId": null,
+        "note": "  The meeting is with Sam at 10:00. "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "instructions.i1.state": "answered",
+              "instructions.i1.answer": {
+                "kind": "note",
+                "refId": null,
+                "note": "The meeting is with Sam at 10:00.",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.instruction_answered",
+              "data": {
+                "instructionId": "i1",
+                "kind": "note",
+                "refId": null,
+                "note": "The meeting is with Sam at 10:00."
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "answerInstruction/a note without text",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "note",
+        "refId": null,
+        "note": "  "
+      },
+      "output": { "error": "Answer with a note: give its text." }
+    },
+    {
+      "name": "answerInstruction/an outcome without its id",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "outcome",
+        "refId": null,
+        "note": null
+      },
+      "output": { "error": "Give the outcome id you proposed (refId)." }
+    },
+    {
+      "name": "answerInstruction/a question with an id",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "ask",
+        "refId": "o1",
+        "note": "  The meeting is with Sam at 10:00. "
+      },
+      "output": { "error": "Only an outcome or plan answer has a refId." }
+    },
+    {
+      "name": "answerInstruction/bad kind",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "shrug",
+        "refId": null,
+        "note": "  The meeting is with Sam at 10:00. "
+      },
+      "output": { "error": "The kind is note, ask, outcome, plan." }
+    },
+    {
+      "name": "answerInstruction/long note",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "note",
+        "refId": null,
+        "note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "output": { "error": "The note is at most 500 characters." }
+    },
+    {
+      "name": "answerInstruction/unknown",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "zz",
+        "kind": "note",
+        "refId": null,
+        "note": "  The meeting is with Sam at 10:00. "
+      },
+      "output": { "error": "There is no request zz on this thread." }
+    },
+    {
+      "name": "answerInstruction/answered already",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i0",
+        "kind": "note",
+        "refId": null,
+        "note": "  The meeting is with Sam at 10:00. "
+      },
+      "output": { "error": "This request was answered already." }
+    },
+    {
+      "name": "answerInstruction/not the home agent",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "note",
+        "refId": null,
+        "note": "  The meeting is with Sam at 10:00. "
+      },
+      "output": {
+        "error": "Only the thread's home agent (the one that brought it in) answers the person's request."
+      }
+    },
+    {
+      "name": "answerInstruction/person refused",
+      "action": "answerInstruction",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "instructionId": "i1",
+        "kind": "note",
+        "refId": null,
+        "note": "  The meeting is with Sam at 10:00. "
+      },
+      "output": { "error": "Only agents can do this" }
+    },
+    {
+      "name": "suggestChips/two",
+      "action": "suggestChips",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "chips": ["summarize", "recheck"]
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "suggestedChips": ["summarize", "recheck"],
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.chips_suggested",
+              "data": { "chips": ["summarize", "recheck"] },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "suggestChips/none",
+      "action": "suggestChips",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "chips": []
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "suggestedChips": [],
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "thread.chips_suggested",
+              "data": { "chips": [] },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "suggestChips/unknown chip",
+      "action": "suggestChips",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "chips": ["dance"]
+      },
+      "output": {
+        "error": "A chip is one of prepare_meeting, recheck, follow_up, summarize, draft_reply."
+      }
+    },
+    {
+      "name": "suggestChips/twice",
+      "action": "suggestChips",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "chips": ["follow_up", "follow_up"]
+      },
+      "output": { "error": "Each chip is listed once." }
+    },
+    {
+      "name": "suggestChips/six",
+      "action": "suggestChips",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "chips": ["prepare_meeting", "recheck", "follow_up", "summarize", "draft_reply", "x"]
+      },
+      "output": { "error": "At most 5 chips." }
+    },
+    {
+      "name": "suggestChips/not the home agent",
+      "action": "suggestChips",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null,
+          "instructions": {
+            "i1": { "state": "pending", "at": { "__hive": "timestamp", "ms": 1799999940000 } },
+            "i0": { "state": "answered", "at": { "__hive": "timestamp", "ms": 1799999880000 } }
+          },
+          "instruct": {
+            "state": "pending",
+            "id": "i1",
+            "at": { "__hive": "timestamp", "ms": 1799999940000 }
+          }
+        },
+        "chips": ["summarize"]
+      },
+      "output": {
+        "error": "Only the thread's home agent (the one that brought it in) suggests its chips."
+      }
+    },
+    {
       "name": "finishOutcome/plan/first step done",
       "action": "finishOutcome",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },

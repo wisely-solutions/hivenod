@@ -37,6 +37,12 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome / plan: a person's H
   hivenod thread recheck-done ID still_good|revised|asked [--note N]
                            answers the person's re-check request (after outcome propose
                            --revises or inbox ask, for revised and asked)
+  hivenod thread answer-instruction ID INSTRUCTION note|ask|outcome|plan [--ref R] [--note N]
+                           answers the person's request on the thread (--ref: the outcome or
+                           plan you proposed; --note: your answer, required for note)
+  hivenod thread suggest-chips ID [CHIP]...
+                           sets your quick chips for the thread (prepare_meeting, recheck,
+                           follow_up, summarize, draft_reply; none clears them)
   hivenod subject list [--member UID]
                            the person's subjects, with threads waiting for them and open
   hivenod subject assign THREAD (--subject-id S | --name "Topic (client)") [--area "Client A"] [--label Sales]
@@ -81,7 +87,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file", "ref"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
@@ -193,6 +199,18 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 		}
 		tool, a["threadId"], a["result"] = "thread_recheck_done", id, pos[1]
 		opt(a, "note", "note")
+	case "thread answer-instruction":
+		if id == "" || len(pos) != 3 {
+			return usage()
+		}
+		tool, a["threadId"], a["instructionId"], a["kind"] = "thread_answer_instruction", id, pos[1], pos[2]
+		opt(a, "refId", "ref")
+		opt(a, "note", "note")
+	case "thread suggest-chips":
+		if id == "" {
+			return usage()
+		}
+		tool, a["threadId"], a["chips"] = "thread_suggest_chips", id, anyList(pos[1:])
 	case "subject search":
 		tool = "subject_search"
 		a["query"] = strings.Join(pos, " ")

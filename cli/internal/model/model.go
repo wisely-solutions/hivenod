@@ -453,6 +453,38 @@ type InboxThread struct {
 	Due *time.Time `firestore:"due" json:"due"`
 	// Recheck is the member's last re-check request and its answer (nil: never asked).
 	Recheck *InboxRecheck `firestore:"recheck" json:"recheck"`
+	// Instructions are the member's requests by id (Ask the agent, item w6O2KOw4ys70TQv9I1xD),
+	// at most 20; Instruct is the latest one and whether it waits; SuggestedChips are this
+	// agent's chips for the thread.
+	Instructions   map[string]InboxInstruction `firestore:"instructions" json:"instructions"`
+	Instruct       *InboxInstruct              `firestore:"instruct" json:"instruct"`
+	SuggestedChips []string                    `firestore:"suggestedChips" json:"suggestedChips"`
+}
+
+// InboxInstruction is one of a thread's instructions: a text or a chip, pending until the home
+// agent answers with thread_answer_instruction.
+type InboxInstruction struct {
+	Text   *string                 `firestore:"text" json:"text"`
+	Chip   *string                 `firestore:"chip" json:"chip"`
+	By     string                  `firestore:"by" json:"by"`
+	At     *time.Time              `firestore:"at" json:"at"`
+	State  string                  `firestore:"state" json:"state"`
+	Answer *InboxInstructionAnswer `firestore:"answer" json:"answer"`
+}
+
+// InboxInstructionAnswer is how the home agent answered: kind note, ask, outcome or plan.
+type InboxInstructionAnswer struct {
+	Kind  string     `firestore:"kind" json:"kind"`
+	RefID *string    `firestore:"refId" json:"refId"`
+	Note  *string    `firestore:"note" json:"note"`
+	At    *time.Time `firestore:"at" json:"at"`
+}
+
+// InboxInstruct is a thread's latest instruction: pending until answered.
+type InboxInstruct struct {
+	State string     `firestore:"state" json:"state"`
+	ID    string     `firestore:"id" json:"id"`
+	At    *time.Time `firestore:"at" json:"at"`
 }
 
 // InboxRecheck is a thread's recheck (item bmNoIvvqKCdAorLSShE9): pending until the home agent
