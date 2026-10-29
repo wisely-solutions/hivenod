@@ -331,14 +331,13 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
         className={cn('mt-4 rounded-panel border-2 p-4 shadow-e1 sm:p-5', CARD[top.tone])}
       >
         <p
-          data-kicker=""
           className={cn(
             'font-mono text-12 font-semibold uppercase tracking-[0.08em] [overflow-wrap:anywhere]',
             KICKER[top.tone],
           )}
         >
           <span aria-hidden>{MARK[top.tone]} </span>
-          {top.kicker}
+          <span data-kicker="">{top.kicker}</span>
         </p>
         <h2
           data-headline=""

@@ -77,13 +77,18 @@ export function SummaryVersions({
         }
         footer={
           shown ? (
-            <Button
-              variant="secondary"
-              onClick={() => setPicked(null)}
-              leading={<Icon icon={ChevronLeft} size={15} />}
-            >
-              All versions
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setPicked(null)}
+                leading={<Icon icon={ChevronLeft} size={15} />}
+              >
+                All versions
+              </Button>
+              <Button variant="secondary" onClick={() => setOpen(false)}>
+                Close
+              </Button>
+            </>
           ) : (
             <Button variant="secondary" onClick={() => setOpen(false)}>
               Close
