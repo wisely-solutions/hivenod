@@ -615,7 +615,7 @@ export function groupByState(
   ).map((x) => x.id);
   g.needs.sort((a, b) => ranked.indexOf(`${a.wid}/${a.id}`) - ranked.indexOf(`${b.wid}/${b.id}`));
   const latest = (a: SubjectRow, b: SubjectRow) =>
-    b.lastAt - a.lastAt || a.name.localeCompare(b.name);
+    b.activityAt - a.activityAt || a.name.localeCompare(b.name);
   g.working.sort(latest);
   g.waiting.sort(latest);
   g.recent.sort((a, b) => b.activityAt - a.activityAt || a.name.localeCompare(b.name));

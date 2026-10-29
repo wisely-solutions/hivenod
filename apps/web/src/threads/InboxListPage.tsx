@@ -81,6 +81,12 @@ function usePhone(): boolean {
   );
 }
 
+/** "now", "5 min", "3 h", "2 d". */
+const age = (ms: number, now: number) => {
+  const l = waitLabel(ms, now);
+  return l === 'just now' ? 'now' : l;
+};
+
 /** The thread that puts a subject in its group (the one its row speaks for). */
 function leadThread(r: SubjectRow, now: number): ThreadRow | undefined {
   const mine = r.threads.filter((t) => forMember(t.data.state));
@@ -297,7 +303,11 @@ export function InboxListPage() {
     <SubjectItem
       key={`${r.wid}/${r.id ?? ''}`}
       row={r}
-      org={scope ? null : { name: orgName(r.wid), color: orgColor(r.wid, colorOrgs) }}
+      org={
+        scope || orgs.length < 2
+          ? null
+          : { name: orgName(r.wid), color: orgColor(r.wid, colorOrgs) }
+      }
       uid={uid}
       ask={askOf(r)}
       now={now}
@@ -414,7 +424,7 @@ export function InboxListPage() {
                         data-thread={t.id}
                         className="flex min-h-12 items-center gap-3 rounded-card border border-line bg-surface px-4 py-2 transition-colors hov:bg-canvas foc:outline-2 foc:outline-focus"
                       >
-                        {scope ? null : (
+                        {scope || orgs.length < 2 ? null : (
                           <span
                             aria-hidden
                             className="size-2 shrink-0 rounded-full"
@@ -426,8 +436,8 @@ export function InboxListPage() {
                         </span>
                         <UrgentMark on={t.data.urgent} />
                         <StateChip state={t.data.state} />
-                        <span className="w-12 shrink-0 text-right text-12 text-text-3 max-sm:hidden">
-                          {waitLabel(t.data.lastMessageAt.toMillis(), now)}
+                        <span className="w-12 shrink-0 whitespace-nowrap text-right text-12 text-text-3 max-sm:hidden">
+                          {age(t.data.lastMessageAt.toMillis(), now)}
                         </span>
                       </Link>
                     </li>
@@ -525,7 +535,7 @@ function SubjectItem({
     <li
       data-subject={row.id ?? 'unfiled'}
       className={cn(
-        'relative flex items-center gap-3 rounded-card border border-l-4 bg-surface px-3.5 py-2.5 transition-colors hov:bg-canvas',
+        'relative flex items-center gap-x-3 gap-y-1.5 rounded-card border border-l-4 bg-surface px-3.5 py-2.5 transition-colors hov:bg-canvas max-sm:flex-wrap',
         row.waiting > 0
           ? urgent
             ? 'border-line border-l-sendback'
@@ -558,7 +568,7 @@ function SubjectItem({
         </h2>
         {ask ? <p className="truncate text-13 text-text-2">{ask}</p> : null}
       </div>
-      <div className="relative z-[1] flex shrink-0 items-center gap-1.5">
+      <div className="relative z-[1] flex shrink-0 items-center gap-1.5 empty:hidden max-sm:order-last max-sm:basis-full max-sm:flex-wrap">
         {row.area ? (
           <Badge tone="neutral" className="max-sm:hidden">
             {row.area}
@@ -578,8 +588,8 @@ function SubjectItem({
         ) : null}
       </div>
       {chip}
-      <span className="w-12 shrink-0 text-right text-12 tabular-nums text-text-3 max-sm:hidden">
-        {row.activityAt ? waitLabel(row.activityAt, now) : ''}
+      <span className="w-12 shrink-0 whitespace-nowrap text-right text-12 tabular-nums text-text-3 max-sm:hidden">
+        {row.activityAt ? age(row.activityAt, now) : ''}
       </span>
     </li>
   );
