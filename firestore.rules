@@ -1151,15 +1151,15 @@ service cloud.firestore {
                 && request.resource.data.memberUid == me()
                 && request.resource.data.type in ['thread.titled', 'thread.answered', 'thread.ignored',
                   'thread.closed', 'thread.restored', 'thread.moved', 'thread.itemMade', 'outcome.approved',
-                  'outcome.rejected', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area', 'subject.label',
+                  'outcome.rejected', 'outcome.revise_requested', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area', 'subject.label',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged', 'thread.due'])
                 && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))
             || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(wid, request.resource.data.memberUid)
                 && request.resource.data.type in ['inbox.added', 'thread.filed', 'thread.note',
-                  'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.done',
-                  'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due']));
+                  'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.revised',
+                  'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due']));
         allow update, delete: if false;
       }
 
@@ -1341,13 +1341,20 @@ service cloud.firestore {
           && inboxEv(wid, request.resource.data.lastEventId).data.data.outcomeId == oid;
         allow update: if request.resource.data.updatedAt == request.time
           && inboxTrackedThread(wid, request.resource.data.lastEventId,
-               ['outcome.approved', 'outcome.rejected', 'outcome.done', 'outcome.failed'],
+               ['outcome.approved', 'outcome.rejected', 'outcome.done', 'outcome.failed',
+                'outcome.revise_requested', 'outcome.revised'],
                resource.data.memberUid, resource.data.threadId)
           && inboxEv(wid, request.resource.data.lastEventId).data.data.outcomeId == oid
-          && ((inboxOwner(wid, resource.data) && inboxDecide(request.resource.data, resource.data,
-                 inboxEv(wid, request.resource.data.lastEventId).data.type))
-            || (isActiveAgent(wid) && inboxCarriedOut(request.resource.data, resource.data,
-                 inboxEv(wid, request.resource.data.lastEventId).data.type)));
+          && ((inboxOwner(wid, resource.data)
+                && (inboxDecide(request.resource.data, resource.data,
+                      inboxEv(wid, request.resource.data.lastEventId).data.type)
+                  || inboxReviseAsk(request.resource.data, resource.data,
+                      inboxEv(wid, request.resource.data.lastEventId).data.type)))
+            || (isActiveAgent(wid)
+                && (inboxCarriedOut(request.resource.data, resource.data,
+                      inboxEv(wid, request.resource.data.lastEventId).data.type)
+                  || inboxRevised(request.resource.data, resource.data,
+                      inboxEv(wid, request.resource.data.lastEventId).data.type))));
         allow delete: if false;
 
         function inboxProposalOk(wid, d, t) {
@@ -1355,19 +1362,80 @@ service cloud.firestore {
             && d.executor == (d.type in outcomeImmediate() ? null : t.fetchedBy);
         }
         // The member approves (fields may be edited; an immediate type is done at once) or rejects.
+        // Approving also works while the agent revises (it ends the request: revise is cleared,
+        // so the agent's late revision is refused), and names the version approved, if any.
         function inboxDecide(d, r, type) {
-          return r.state == 'proposed'
-            && exactKeys(d.decision, ['byUid', 'at', 'edited', 'reason'])
+          return type in ['outcome.approved', 'outcome.rejected']
+            && d.decision.keys().hasAll(['byUid', 'at', 'edited', 'reason'])
             && d.decision.byUid == me() && d.decision.at == request.time
             && ((type == 'outcome.approved'
-                && changed(['state', 'fields', 'decision', 'updatedAt', 'lastEventId'])
+                && r.state in ['proposed', 'revising']
+                && d.decision.keys().hasOnly(['byUid', 'at', 'edited', 'reason', 'version'])
+                && changed(['state', 'fields', 'decision', 'revise', 'updatedAt', 'lastEventId'])
+                && d.get('revise', null) == null
                 && inboxFieldsOk(r.type, d.fields)
                 && d.state == (r.type in outcomeImmediate() ? 'done' : 'approved')
-                && d.decision.edited is bool && d.decision.reason == null)
+                && d.decision.edited is bool && d.decision.reason == null
+                && (d.decision.get('version', null) == null
+                  || (d.decision.version is int && d.decision.version >= 1
+                    && d.decision.version <= r.get('versions', []).size())))
               || (type == 'outcome.rejected'
+                && r.state == 'proposed'
+                && exactKeys(d.decision, ['byUid', 'at', 'edited', 'reason'])
                 && changed(['state', 'decision', 'updatedAt', 'lastEventId'])
                 && d.state == 'rejected' && d.decision.edited == false
                 && strOrNull(d.decision.reason, 1000)));
+        }
+        // Ask for changes (item L7OzWKMYZ1O2dX33Xkrj): the member asks the proposing agent for a
+        // new version (chips and/or 1-500 characters, below 10 versions), or takes it back. The
+        // thread is not touched and nothing is rejected.
+        function inboxReviseAsk(d, r, type) {
+          return type == 'outcome.revise_requested'
+            && changed(['state', 'revise', 'updatedAt', 'lastEventId'])
+            && r.type in ['reply', 'reply_book', 'nudge', 'handover', 'make_it_work']
+            && ((r.state == 'proposed' && d.state == 'revising'
+                && exactKeys(d.revise, ['instruction', 'chips', 'byUid', 'at'])
+                && d.revise.byUid == me() && d.revise.at == request.time
+                && (d.revise.instruction == null || str(d.revise.instruction, 1, 500))
+                && d.revise.chips is list && d.revise.chips.size() <= 4
+                && d.revise.chips.hasOnly(['shorter', 'formal', 'warmer', 'availability'])
+                && d.revise.chips.toSet().size() == d.revise.chips.size()
+                && (d.revise.instruction != null || d.revise.chips.size() > 0)
+                && r.get('versions', []).size() < 10)
+              || (r.state == 'revising' && d.state == 'proposed' && d.revise == null));
+        }
+        // The agent that proposed it writes the next version: same type, a proposal's fields,
+        // the request cleared, and the versions append-only (the first revision keeps the
+        // original as v1), at most 10. The top-level fields are the latest version's.
+        function inboxRevised(d, r, type) {
+          return type == 'outcome.revised'
+            && r.state == 'revising' && d.state == 'proposed'
+            && r.proposedBy == me()
+            && changed(['state', 'fields', 'note', 'confidence', 'checks', 'versions', 'revise',
+                        'updatedAt', 'lastEventId'])
+            && d.revise == null
+            && inboxFieldsOk(r.type, d.fields)
+            && str(d.note, 0, 2000)
+            && (d.confidence == null || d.confidence in ['high', 'medium', 'low'])
+            && d.checks is list && d.checks.size() <= 6
+            && inboxVersionsAppended(d, r);
+        }
+        function inboxVersionsAppended(d, r) {
+          let prev = r.get('versions', []);
+          let n = d.versions.size();
+          let last = d.versions[n - 1];
+          return d.versions is list
+            && n == (prev.size() == 0 ? 2 : prev.size() + 1) && n <= 10
+            && (prev.size() == 0
+              ? d.versions[0] == {'n': 1, 'fields': r.fields, 'note': r.note,
+                  'confidence': r.get('confidence', null), 'checks': r.get('checks', []),
+                  'by': r.proposedBy, 'eventId': null, 'asked': null}
+              : d.versions[0:prev.size()] == prev)
+            && exactKeys(last, ['n', 'fields', 'note', 'confidence', 'checks', 'by', 'eventId', 'asked'])
+            && last.n == n && last.fields == d.fields && last.note == d.note
+            && last.confidence == d.confidence && last.checks == d.checks
+            && last.by == me() && last.eventId == d.lastEventId
+            && last.asked == {'instruction': r.revise.instruction, 'chips': r.revise.chips};
         }
         // Its executor reports an approved outcome as done or failed.
         function inboxCarriedOut(d, r, type) {
