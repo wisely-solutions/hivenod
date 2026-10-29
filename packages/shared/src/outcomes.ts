@@ -14,6 +14,11 @@
  */
 
 import { ActionError } from './actions';
+import type { ThreadState } from './inbox';
+
+/** How sure the agent is of a proposed outcome (item kt3E7u9EliL3q2veDDI0). */
+export const OUTCOME_CONFIDENCE = ['high', 'medium', 'low'] as const;
+export type OutcomeConfidence = (typeof OUTCOME_CONFIDENCE)[number];
 
 export type OutcomeFieldKind = 'text' | 'line' | 'datetime' | 'boolean';
 export interface OutcomeField {
@@ -348,4 +353,17 @@ export function outcomeGuide(which: 'single' | 'plan' = 'single'): string {
       return `${k}: ${t.description} Fields: ${fs}.`;
     })
     .join('\n');
+}
+
+/** The thread's state once an outcome of `type` is done. */
+export function threadAfter(
+  type: string,
+  fields: Readonly<Record<string, string | boolean>>,
+): { state: ThreadState; waiting: { on: WaitingOn; until: Date | null } | null } {
+  const t = outcomeType(type);
+  if (!t) throw new ActionError(`Unknown outcome type ${type}.`);
+  if (t.after.state !== 'waiting') return { state: t.after.state, waiting: null };
+  const f = t.untilField;
+  const until = f && typeof fields[f] === 'string' ? new Date(fields[f]) : null;
+  return { state: 'waiting', waiting: { on: t.after.waitingOn!, until } };
 }

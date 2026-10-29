@@ -33,12 +33,23 @@ import {
 } from './actions';
 import {
   cleanOutcomeFields,
+  OUTCOME_CONFIDENCE,
+  threadAfter,
+  outcomeKind,
+  PLAN_TYPES,
   SINGLE_TYPES,
   OutcomeFieldError,
   outcomeType,
   type WaitingOn,
 } from './outcomes';
 import { calendarEventId, calendarUpsert } from './calendar';
+import {
+  PLAN_LIMITS,
+  planThreadState,
+  type PlanOutcomeOf,
+  type PlanState,
+  type PlanStateOf,
+} from './plans';
 import { timestamp } from './schema';
 
 // ---------- shapes ----------
@@ -91,6 +102,9 @@ export const INBOX_EVENT_TYPES = [
   'outcome.revised',
   'outcome.done',
   'outcome.failed',
+  // plans (item qwFAWxZM5xkcE7PPjAzi): the agent proposes, starts a Build it step
+  'plan.proposed',
+  'outcome.started',
   // agents and the member
   'thread.titled',
   'thread.flagged',
@@ -105,6 +119,12 @@ export const INBOX_EVENT_TYPES = [
   'outcome.approved',
   'outcome.rejected',
   'outcome.revise_requested',
+  'plan.approved',
+  'plan.rejected',
+  'plan.edited',
+  'plan.retried',
+  'plan.skipped',
+  'plan.stopped',
   'subject.created',
   'subject.renamed',
   'subject.merged',
@@ -176,10 +196,6 @@ export const REVISABLE_TYPES: readonly string[] = [
   'handover',
   'make_it_work',
 ];
-
-/** How sure the agent is of a proposed outcome (item kt3E7u9EliL3q2veDDI0). */
-export const OUTCOME_CONFIDENCE = ['high', 'medium', 'low'] as const;
-export type OutcomeConfidence = (typeof OUTCOME_CONFIDENCE)[number];
 
 const by = z.object({ type: z.enum(['human', 'agent']), id: z.string() });
 
@@ -381,8 +397,19 @@ export type OutcomeStateOf = Pick<
   'memberUid' | 'threadId' | 'type' | 'fields' | 'state' | 'executor'
 > &
   Partial<
-    Pick<InboxOutcome, 'proposedBy' | 'note' | 'confidence' | 'checks' | 'versions' | 'revise'>
+    Pick<
+      InboxOutcome,
+      'proposedBy' | 'note' | 'confidence' | 'checks' | 'versions' | 'revise' | 'planId'
+    >
   >;
+/** What the plan actions need of a plan (a listener's data). */
+export type PlanOf = PlanStateOf & { memberUid: string; threadId: string };
+/** A plan with its steps' outcomes (by id), as the plan actions take it. */
+export interface PlanInput {
+  planId: string;
+  plan: PlanOf;
+  outcomes: Readonly<Record<string, OutcomeStateOf>>;
+}
 
 // ---------- ids ----------
 
@@ -514,6 +541,91 @@ const upd = (path: string, data: Record<string, unknown>, eventId: string): Writ
   path,
   data: { ...data, updatedAt: SERVER_TIME, lastEventId: eventId },
 });
+
+// ---------- plans (item qwFAWxZM5xkcE7PPjAzi) ----------
+
+/** The plan of a plan step, checked against the step. */
+function planFor(pl: PlanInput | undefined, o: OutcomeStateOf, oid: string): PlanInput {
+  need(pl !== undefined, 'This outcome is a step of a plan: give its plan.');
+  need(pl!.planId === o.planId, `Outcome ${oid} is a step of plan ${o.planId}, not ${pl!.planId}.`);
+  need(
+    pl!.plan.threadId === o.threadId && pl!.plan.steps.includes(oid),
+    `Outcome ${oid} is not a step of plan ${pl!.planId}.`,
+  );
+  return pl!;
+}
+interface PlanNext {
+  plan: PlanOf;
+  outcomes: Record<string, PlanOutcomeOf>;
+}
+/** The plan after a change: step states, cursor, state, steps. */
+function nextPlan(
+  pl: PlanInput,
+  change: {
+    outcomes?: Readonly<Record<string, Partial<PlanOutcomeOf>>>;
+    cursor?: number;
+    state?: PlanState;
+    steps?: string[];
+  },
+): PlanNext {
+  const outcomes: Record<string, PlanOutcomeOf> = { ...pl.outcomes };
+  for (const [id, c] of Object.entries(change.outcomes ?? {}))
+    outcomes[id] = { ...(outcomes[id] as PlanOutcomeOf), ...c };
+  const steps = change.steps ?? [...pl.plan.steps];
+  const cursor = change.cursor ?? pl.plan.cursor;
+  const state: PlanState =
+    change.state ??
+    (cursor >= steps.length
+      ? 'done'
+      : cursor !== pl.plan.cursor && pl.plan.state === 'proposed'
+        ? 'active'
+        : pl.plan.state);
+  return { plan: { ...pl.plan, steps, cursor, state }, outcomes };
+}
+/** Step `oid` takes `state`; `through`: its turn is over and the cursor moves on. */
+function advance(pl: PlanInput, oid: string, state: PlanOutcomeOf['state'], through: boolean) {
+  return nextPlan(pl, {
+    outcomes: { [oid]: { state } },
+    ...(through ? { cursor: pl.plan.cursor + 1 } : {}),
+  });
+}
+/** The writes of a plan change: the plan (when it changed) and the thread's state. */
+function planWrites(
+  ctx: ActionContext,
+  pl: PlanInput,
+  next: PlanNext,
+  forceState: PlanState | null,
+  eventId: string,
+): WriteOp[] {
+  const plan = forceState ? { ...next.plan, state: forceState } : next.plan;
+  const d: Record<string, unknown> = {};
+  if (plan.cursor !== pl.plan.cursor) d.cursor = plan.cursor;
+  if (plan.state !== pl.plan.state) d.state = plan.state;
+  if (JSON.stringify(plan.steps) !== JSON.stringify(pl.plan.steps)) d.steps = plan.steps;
+  return [
+    ...(Object.keys(d).length
+      ? [upd(inboxPaths.plan(ctx.workspaceId, pl.planId), d, eventId)]
+      : []),
+    upd(
+      inboxPaths.thread(ctx.workspaceId, pl.plan.threadId),
+      { ...planThreadState(plan, next.outcomes) },
+      eventId,
+    ),
+  ];
+}
+const PLAN_LIVE: readonly PlanState[] = ['proposed', 'active', 'blocked'];
+function livePlan(pl: PlanInput) {
+  need(
+    PLAN_LIVE.includes(pl.plan.state),
+    `This plan is ${pl.plan.state === 'done' ? 'done' : 'stopped'}.`,
+  );
+}
+/** Whether the step at the cursor has started (being carried out, running or failed). */
+function cursorStarted(pl: PlanInput): boolean {
+  const id = pl.plan.steps[pl.plan.cursor];
+  const st = id !== undefined ? pl.outcomes[id]?.state : undefined;
+  return st === 'approved' || st === 'running' || st === 'failed';
+}
 
 // ---------- agents ----------
 
@@ -897,22 +1009,142 @@ export function proposeOutcome(
   return { ...p, outcomeId };
 }
 
-/** The thread's state once an outcome of `type` is done. */
-export function threadAfter(
-  type: string,
-  fields: Readonly<Record<string, string | boolean>>,
-): { state: ThreadState; waiting: { on: WaitingOn; until: Date | null } | null } {
-  const t = outcomeType(type);
-  if (!t) throw new ActionError(`Unknown outcome type ${type}.`);
-  if (t.after.state !== 'waiting') return { state: t.after.state, waiting: null };
-  const f = t.untilField;
-  const until = f && typeof fields[f] === 'string' ? new Date(fields[f]) : null;
-  return { state: 'waiting', waiting: { on: t.after.waitingOn!, until } };
+/** One step of a proposed plan: an outcome of a plan type. */
+export interface PlanStepInput {
+  type: string;
+  fields: Readonly<Record<string, unknown>>;
+  note?: string;
+  confidence?: string | null;
+  checks?: readonly string[] | null;
+}
+
+/**
+ * An agent proposes a plan (plan_propose, item qwFAWxZM5xkcE7PPjAzi): 1-8 ordered steps, each an
+ * outcome of a plan type, all in one batch with the plan and one plan.proposed event, so the
+ * member never sees half a plan. The steps run in order once approved; an `approval` step is a
+ * gate the member decides at its turn. Like a single proposal, the thread goes to Your call.
+ */
+export function proposePlan(
+  ctx: ActionContext,
+  input: {
+    threadId: string;
+    thread: ThreadStateOf;
+    note?: string;
+    confidence?: string | null;
+    steps: readonly PlanStepInput[];
+    planId?: string;
+    stepIds?: readonly string[];
+  },
+): ActionPlan & { planId: string; stepIds: string[] } {
+  requireAgent(ctx);
+  const t = input.thread;
+  liveThread(t);
+  need(
+    Array.isArray(input.steps) &&
+      input.steps.length >= 1 &&
+      input.steps.length <= PLAN_LIMITS.steps,
+    `A plan has 1 to ${PLAN_LIMITS.steps} steps.`,
+  );
+  const note = (input.note ?? '').trim();
+  need(note.length <= PLAN_LIMITS.note, tooLong('The note', PLAN_LIMITS.note));
+  const conf = input.confidence ?? null;
+  need(
+    conf === null || (OUTCOME_CONFIDENCE as readonly string[]).includes(conf),
+    'The confidence is high, medium or low.',
+  );
+  const steps = input.steps.map((st, i) => {
+    const n = `Step ${i + 1}`;
+    need(
+      (PLAN_TYPES as readonly string[]).includes(st.type),
+      `${n}: ${st.type} is not a plan step. Plan steps: ${PLAN_TYPES.join(', ')}.`,
+    );
+    let fields: Record<string, string | boolean>;
+    try {
+      fields = cleanOutcomeFields(st.type, st.fields ?? {});
+    } catch (e) {
+      if (e instanceof OutcomeFieldError) throw new ActionError(`${n}: ${e.message}`);
+      throw e;
+    }
+    const sn = (st.note ?? '').trim();
+    need(
+      sn.length <= INBOX_LIMITS.outcomeNote,
+      `${n}: ${tooLong('the note', INBOX_LIMITS.outcomeNote)}`,
+    );
+    const sc = st.confidence ?? null;
+    need(
+      sc === null || (OUTCOME_CONFIDENCE as readonly string[]).includes(sc),
+      `${n}: the confidence is high, medium or low.`,
+    );
+    const checks = cleanLines('checks', st.checks, INBOX_LIMITS.checks, INBOX_LIMITS.check);
+    return { type: st.type, fields, note: sn, conf: sc, checks };
+  });
+  const planId = input.planId ?? nid(ctx);
+  const stepIds = input.stepIds ? [...input.stepIds] : steps.map(() => nid(ctx));
+  need(
+    stepIds.length === steps.length && new Set(stepIds).size === stepIds.length,
+    'One distinct id per step.',
+  );
+  const p = inboxPlan(
+    ctx,
+    'plan.proposed',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { planId, steps: stepIds, types: steps.map((st) => st.type) },
+    (eventId) => [
+      ...steps.map((st, i): WriteOp => ({
+        kind: 'set',
+        path: inboxPaths.outcome(ctx.workspaceId, stepIds[i]!),
+        data: {
+          memberUid: t.memberUid,
+          threadId: input.threadId,
+          type: st.type,
+          fields: st.fields,
+          state: 'proposed',
+          note: st.note,
+          ...(st.conf !== null ? { confidence: st.conf } : {}),
+          ...(st.checks.length > 0 ? { checks: st.checks } : {}),
+          proposedBy: ctx.actor.id,
+          executor: outcomeType(st.type)!.executor === 'agent' ? t.fetchedBy : null,
+          decision: null,
+          result: null,
+          planId,
+          createdAt: SERVER_TIME,
+          updatedAt: SERVER_TIME,
+          lastEventId: eventId,
+        },
+      })),
+      {
+        kind: 'set',
+        path: inboxPaths.plan(ctx.workspaceId, planId),
+        data: {
+          memberUid: t.memberUid,
+          threadId: input.threadId,
+          proposedBy: ctx.actor.id,
+          steps: stepIds,
+          cursor: 0,
+          state: 'proposed',
+          note,
+          ...(conf !== null ? { confidence: conf } : {}),
+          createdAt: SERVER_TIME,
+          updatedAt: SERVER_TIME,
+          lastEventId: eventId,
+        },
+      },
+      upd(
+        inboxPaths.thread(ctx.workspaceId, input.threadId),
+        { state: 'yourCall', waiting: null },
+        eventId,
+      ),
+    ],
+  );
+  return { ...p, planId, stepIds };
 }
 
 /**
  * The executing agent reports an approved outcome (outcome_done): done (the thread moves to the
- * type's after-state) or failed (the thread goes back to investigating).
+ * type's after-state) or failed (the thread goes back to investigating). A plan step
+ * (item qwFAWxZM5xkcE7PPjAzi) is reported only at its turn: done moves the plan to the next
+ * step, failed blocks the plan (the member retries, skips or stops), and `started` (Build it:
+ * the item is made, with its id) leaves the step running until the item is Done.
  */
 export function finishOutcome(
   ctx: ActionContext,
@@ -920,24 +1152,31 @@ export function finishOutcome(
     outcomeId: string;
     outcome: OutcomeStateOf;
     thread: ThreadStateOf;
-    status: 'done' | 'failed';
+    status: 'done' | 'failed' | 'started';
     result?: {
       text?: string | null;
       permalink?: string | null;
       itemId?: string | null;
       error?: string | null;
     };
+    /** The plan, when the outcome is a plan step. */
+    plan?: PlanInput;
   },
 ): ActionPlan {
   requireAgent(ctx);
   const o = input.outcome;
+  const planned = o.planId !== undefined && o.planId !== null;
   need(
-    o.state === 'approved',
-    o.state === 'proposed'
+    o.state === 'approved' || (planned && o.state === 'running' && input.status !== 'started'),
+    o.state === 'proposed' || o.state === 'revising'
       ? 'Not approved: nothing is carried out before the person approves it.'
       : `This outcome is ${o.state} already.`,
   );
   need(o.executor === ctx.actor.id, 'Only the agent that carries this outcome out reports it.');
+  need(
+    input.status !== 'started' || planned,
+    'Only a plan step can be started (status started is for Build it).',
+  );
   const r = input.result ?? {};
   const text = r.text?.trim() || null;
   need(
@@ -957,6 +1196,49 @@ export function finishOutcome(
     tooLong('The error', INBOX_LIMITS.reason),
   );
   if (input.status === 'failed') need(error !== null, 'Say what went wrong (result.error).');
+  const result = { text, permalink, itemId, error, by: ctx.actor.id, at: SERVER_TIME };
+  if (planned) {
+    const pl = planFor(input.plan, o, input.outcomeId);
+    need(
+      pl.plan.state === 'proposed' || pl.plan.state === 'active',
+      `This plan is ${pl.plan.state}: its steps are not carried out.`,
+    );
+    need(
+      pl.plan.steps[pl.plan.cursor] === input.outcomeId,
+      'Not its turn: a plan step is carried out only once the steps before it are done.',
+    );
+    if (input.status === 'started') {
+      need(
+        outcomeType(o.type)?.after.waitingOn === 'item',
+        `A ${o.type} step is reported done or failed, not started.`,
+      );
+      need(itemId !== null, 'Give the item you made (result.itemId).');
+    }
+    const state =
+      input.status === 'started' ? 'running' : input.status === 'done' ? 'done' : 'failed';
+    const next = advance(pl, input.outcomeId, state, input.status === 'done');
+    return inboxPlan(
+      ctx,
+      input.status === 'started'
+        ? 'outcome.started'
+        : input.status === 'done'
+          ? 'outcome.done'
+          : 'outcome.failed',
+      { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
+      {
+        outcomeId: input.outcomeId,
+        type: o.type,
+        planId: pl.planId,
+        permalink,
+        itemId,
+        ...(error ? { error } : {}),
+      },
+      (eventId) => [
+        upd(inboxPaths.outcome(ctx.workspaceId, input.outcomeId), { state, result }, eventId),
+        ...planWrites(ctx, pl, next, input.status === 'failed' ? 'blocked' : null, eventId),
+      ],
+    );
+  }
   const after =
     input.status === 'done'
       ? threadAfter(o.type, o.fields)
@@ -969,10 +1251,7 @@ export function finishOutcome(
     (eventId) => [
       upd(
         inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
-        {
-          state: input.status,
-          result: { text, permalink, itemId, error, by: ctx.actor.id, at: SERVER_TIME },
-        },
+        { state: input.status, result },
         eventId,
       ),
       upd(inboxPaths.thread(ctx.workspaceId, o.threadId), after, eventId),
@@ -980,16 +1259,56 @@ export function finishOutcome(
   );
 }
 
-/** A snoozed thread whose date has come wakes up (thread_wake). */
+/**
+ * A snoozed thread whose date has come wakes up (thread_wake). When its plan waits at a
+ * wait-until step (an approved snooze at the cursor), that step is done and the plan moves on.
+ */
 export function wakeThread(
   ctx: ActionContext,
-  input: { threadId: string; thread: ThreadStateOf; nowMs: number },
+  input: { threadId: string; thread: ThreadStateOf; nowMs: number; plan?: PlanInput },
 ): ActionPlan {
   requireAgent(ctx);
   const t = input.thread;
   const until = t.state === 'waiting' ? (t.waiting?.until ?? null) : null;
   need(until !== null, 'This thread is not waiting for a date.');
   need(until!.toMillis() <= input.nowMs, 'Not yet: it waits until its date.');
+  const pl = input.plan;
+  const sid = pl ? pl.plan.steps[pl.plan.cursor] : undefined;
+  const step = sid !== undefined ? pl!.outcomes[sid] : undefined;
+  if (pl && sid !== undefined && step) {
+    need(pl.plan.threadId === input.threadId, `Plan ${pl.planId} is not on this thread.`);
+    need(
+      (pl.plan.state === 'proposed' || pl.plan.state === 'active') &&
+        step.state === 'approved' &&
+        step.type === 'snooze',
+      'This plan is not waiting until a date.',
+    );
+    const next = advance(pl, sid, 'done', true);
+    return inboxPlan(
+      ctx,
+      'thread.woke',
+      { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+      { planId: pl.planId, outcomeId: sid },
+      (eventId) => [
+        upd(
+          inboxPaths.outcome(ctx.workspaceId, sid),
+          {
+            state: 'done',
+            result: {
+              text: null,
+              permalink: null,
+              itemId: null,
+              error: null,
+              by: ctx.actor.id,
+              at: SERVER_TIME,
+            },
+          },
+          eventId,
+        ),
+        ...planWrites(ctx, pl, next, null, eventId),
+      ],
+    );
+  }
   return inboxPlan(
     ctx,
     'thread.woke',
@@ -1138,6 +1457,8 @@ export function approveOutcome(
      * Approving while the agent revises ends the request; its late revision is then refused.
      */
     version?: number;
+    /** The plan, when the outcome is a plan step (item qwFAWxZM5xkcE7PPjAzi). */
+    plan?: PlanInput;
   },
 ): ActionPlan {
   const o = input.outcome;
@@ -1146,6 +1467,18 @@ export function approveOutcome(
     o.state === 'proposed' || o.state === 'revising',
     'Only a proposed outcome can be approved.',
   );
+  // A plan step: an agent step may be approved any time before it runs (it still runs only at
+  // its turn); a person step (approval) only at its turn, and passing it moves the plan on.
+  const pl = o.planId ? planFor(input.plan, o, input.outcomeId) : null;
+  const gate = pl !== null && outcomeKind(o.type) === 'human';
+  if (pl) {
+    livePlan(pl);
+    if (gate)
+      need(
+        pl.plan.steps[pl.plan.cursor] === input.outcomeId,
+        'Not its turn yet: you decide this approval once the steps before it are done.',
+      );
+  }
   const versions = o.versions ?? [];
   let base = o.fields;
   if (input.version !== undefined) {
@@ -1167,7 +1500,8 @@ export function approveOutcome(
     }
   }
   const edited = JSON.stringify(sorted(fields)) !== JSON.stringify(sorted(base));
-  const immediate = outcomeType(o.type)?.executor === 'none';
+  // In a plan only the gate takes effect on approval; a wait-until step waits for its turn.
+  const immediate = pl ? gate : outcomeType(o.type)?.executor === 'none';
   const approval = inboxPlan(
     ctx,
     'outcome.approved',
@@ -1178,6 +1512,7 @@ export function approveOutcome(
       edited,
       ...(edited ? { fields } : {}),
       ...(version !== null ? { version } : {}),
+      ...(pl ? { planId: pl.planId } : {}),
     },
     (eventId) => [
       upd(
@@ -1196,7 +1531,16 @@ export function approveOutcome(
         },
         eventId,
       ),
-      ...(immediate
+      ...(pl
+        ? planWrites(
+            ctx,
+            pl,
+            advance(pl, input.outcomeId, immediate ? 'done' : 'approved', gate),
+            null,
+            eventId,
+          )
+        : []),
+      ...(immediate && !pl
         ? [
             upd(
               inboxPaths.thread(ctx.workspaceId, o.threadId),
@@ -1207,7 +1551,7 @@ export function approveOutcome(
         : []),
     ],
   );
-  if (o.type !== 'reply_book') return approval;
+  if (o.type !== 'reply_book' && o.type !== 'book') return approval;
   // The booking goes into the member's calendar in the same batch (Inbox item w9SAf).
   const booking = bookingPlan(ctx, input.outcomeId, o.memberUid, fields);
   return { eventId: approval.eventId, ops: [...approval.ops, ...booking.ops] };
@@ -1267,6 +1611,8 @@ export function rejectOutcome(
     reason?: string;
     /** Other proposals of the thread still wait for the member. */
     othersPending: boolean;
+    /** The plan, when the outcome is a plan step (item qwFAWxZM5xkcE7PPjAzi). */
+    plan?: PlanInput;
   },
 ): ActionPlan {
   const o = input.outcome;
@@ -1277,6 +1623,38 @@ export function rejectOutcome(
     reason === null || reason.length <= INBOX_LIMITS.reason,
     tooLong('The reason', INBOX_LIMITS.reason),
   );
+  if (o.planId) {
+    // Not approved, on a gate at its turn: the plan stops and the agent re-plans. An agent step
+    // is removed from the plan instead (editPlan), or the whole plan rejected (rejectPlan).
+    const pl = planFor(input.plan, o, input.outcomeId);
+    livePlan(pl);
+    need(
+      outcomeKind(o.type) === 'human',
+      'Remove this step from the plan instead, or reject the whole plan.',
+    );
+    need(
+      pl.plan.steps[pl.plan.cursor] === input.outcomeId,
+      'Not its turn yet: you decide this approval once the steps before it are done.',
+    );
+    const next = advance(pl, input.outcomeId, 'rejected', false);
+    return inboxPlan(
+      ctx,
+      'outcome.rejected',
+      { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
+      { outcomeId: input.outcomeId, type: o.type, reason, planId: pl.planId },
+      (eventId) => [
+        upd(
+          inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
+          {
+            state: 'rejected',
+            decision: { byUid: ctx.actor.id, at: SERVER_TIME, edited: false, reason },
+          },
+          eventId,
+        ),
+        ...planWrites(ctx, pl, next, 'stopped', eventId),
+      ],
+    );
+  }
   const back = !input.othersPending && input.thread.state === 'yourCall';
   return inboxPlan(
     ctx,
@@ -1302,6 +1680,311 @@ export function rejectOutcome(
           ]
         : []),
     ],
+  );
+}
+
+// ---------- plans: the member's decisions (item qwFAWxZM5xkcE7PPjAzi) ----------
+
+function planScope(pl: PlanInput, thread: ThreadStateOf) {
+  return { memberUid: pl.plan.memberUid, threadId: pl.plan.threadId, subjectId: thread.subjectId };
+}
+const decisionBy = (ctx: ActionContext, reason: string | null) => ({
+  byUid: ctx.actor.id,
+  at: SERVER_TIME,
+  edited: false,
+  reason,
+});
+
+/**
+ * Approve plan: every proposed agent step is approved at the version on show, unedited. Person
+ * steps stay gates; steps being revised keep waiting for their new version. Nothing runs early:
+ * each step is still carried out only at its turn.
+ */
+export function approvePlan(
+  ctx: ActionContext,
+  input: PlanInput & { thread: ThreadStateOf },
+): ActionPlan {
+  const pl = input;
+  owner(ctx, pl.plan.memberUid);
+  livePlan(pl);
+  const ids = pl.plan.steps.filter((id) => {
+    const o = pl.outcomes[id];
+    need(o !== undefined, `Step ${id} of the plan is not loaded.`);
+    return o!.state === 'proposed' && outcomeKind(o!.type) === 'agent';
+  });
+  need(ids.length > 0, 'No step waits for your approval.');
+  const changes = Object.fromEntries(ids.map((id) => [id, { state: 'approved' as const }]));
+  const next = nextPlan(pl, {
+    outcomes: changes,
+    ...(pl.plan.state === 'proposed' ? { state: 'active' as const } : {}),
+  });
+  const bookings = ids
+    .filter((id) => ['reply_book', 'book'].includes(pl.outcomes[id]!.type))
+    .map((id) => bookingPlan(ctx, id, pl.plan.memberUid, pl.outcomes[id]!.fields));
+  const p = inboxPlan(
+    ctx,
+    'plan.approved',
+    planScope(pl, input.thread),
+    { planId: pl.planId, approved: ids },
+    (eventId) => [
+      ...ids.map((id) => {
+        const n = pl.outcomes[id]!.versions?.length ?? 0;
+        return upd(
+          inboxPaths.outcome(ctx.workspaceId, id),
+          {
+            state: 'approved',
+            decision: { ...decisionBy(ctx, null), ...(n > 0 ? { version: n } : {}) },
+          },
+          eventId,
+        );
+      }),
+      ...planWrites(ctx, pl, next, null, eventId),
+    ],
+  );
+  return { eventId: p.eventId, ops: [...p.ops, ...bookings.flatMap((b) => b.ops)] };
+}
+
+/** Reject plan: every step not started is rejected, the plan stops and the agent re-plans. */
+export function rejectPlan(
+  ctx: ActionContext,
+  input: PlanInput & { thread: ThreadStateOf; reason?: string | null },
+): ActionPlan {
+  const pl = input;
+  owner(ctx, pl.plan.memberUid);
+  livePlan(pl);
+  const reason = input.reason?.trim() || null;
+  need(
+    reason === null || reason.length <= INBOX_LIMITS.reason,
+    tooLong('The reason', INBOX_LIMITS.reason),
+  );
+  const ids = pl.plan.steps.filter((id, i) => {
+    const st = pl.outcomes[id]?.state;
+    const started = i === pl.plan.cursor && cursorStarted(pl);
+    return !started && (st === 'proposed' || st === 'revising' || st === 'approved');
+  });
+  const next = nextPlan(pl, {
+    outcomes: Object.fromEntries(ids.map((id) => [id, { state: 'rejected' as const }])),
+  });
+  return inboxPlan(
+    ctx,
+    'plan.rejected',
+    planScope(pl, input.thread),
+    { planId: pl.planId, rejected: ids, reason },
+    (eventId) => [
+      ...ids.map((id) =>
+        upd(
+          inboxPaths.outcome(ctx.workspaceId, id),
+          {
+            state: 'rejected',
+            decision: decisionBy(ctx, reason),
+            ...(pl.outcomes[id]!.state === 'revising' ? { revise: null } : {}),
+          },
+          eventId,
+        ),
+      ),
+      ...planWrites(ctx, pl, next, 'stopped', eventId),
+    ],
+  );
+}
+
+export type PlanEdit =
+  /** Move the step at `from` to `to` (both not started). */
+  | { op: 'move'; from: number; to: number }
+  /** Remove the step at `index` (not started): it is rejected ("removed"). */
+  | { op: 'remove'; index: number }
+  /** Add a person-approval step at `index` (from the first step not started on). */
+  | {
+      op: 'add';
+      index: number;
+      fields: Readonly<Record<string, unknown>>;
+      outcomeId?: string;
+    };
+
+/**
+ * Edit plan (plan.edited): reorder or remove steps that have not started, or add an approval
+ * step. The steps already through (and the one being carried out) never move.
+ */
+export function editPlan(
+  ctx: ActionContext,
+  input: PlanInput & { thread: ThreadStateOf; edit: PlanEdit },
+): ActionPlan & { outcomeId?: string } {
+  const pl = input;
+  owner(ctx, pl.plan.memberUid);
+  livePlan(pl);
+  const steps = [...pl.plan.steps];
+  const first = pl.plan.cursor + (cursorStarted(pl) ? 1 : 0);
+  const free = (i: number, end = steps.length) => Number.isInteger(i) && i >= first && i < end;
+  const e = input.edit;
+  const scope = planScope(pl, input.thread);
+  if (e.op === 'move') {
+    need(free(e.from) && free(e.to), 'Only steps that have not started move.');
+    need(e.from !== e.to, 'The step is already there.');
+    const [id] = steps.splice(e.from, 1);
+    steps.splice(e.to, 0, id!);
+    const next = nextPlan(pl, { steps });
+    return inboxPlan(
+      ctx,
+      'plan.edited',
+      scope,
+      { planId: pl.planId, op: 'move', from: e.from, to: e.to },
+      (eventId) => planWrites(ctx, pl, next, null, eventId),
+    );
+  }
+  if (e.op === 'remove') {
+    need(free(e.index), 'Only a step that has not started can be removed.');
+    need(steps.length > 1, 'This is the only step: reject the plan instead.');
+    const [id] = steps.splice(e.index, 1);
+    const o = pl.outcomes[id!];
+    need(o !== undefined, `Step ${id} of the plan is not loaded.`);
+    const next = nextPlan(pl, { steps, outcomes: { [id!]: { state: 'rejected' } } });
+    return inboxPlan(
+      ctx,
+      'plan.edited',
+      scope,
+      { planId: pl.planId, op: 'remove', index: e.index, outcomeId: id },
+      (eventId) => [
+        upd(
+          inboxPaths.outcome(ctx.workspaceId, id!),
+          {
+            state: 'rejected',
+            decision: decisionBy(ctx, 'removed'),
+            ...(o!.state === 'revising' ? { revise: null } : {}),
+          },
+          eventId,
+        ),
+        ...planWrites(ctx, pl, next, null, eventId),
+      ],
+    );
+  }
+  need(e.op === 'add', 'An edit moves, removes or adds a step.');
+  need(steps.length < PLAN_LIMITS.steps, `A plan has at most ${PLAN_LIMITS.steps} steps.`);
+  need(free(e.index, steps.length + 1), 'Add it after the steps that have started.');
+  let fields: Record<string, string | boolean>;
+  try {
+    fields = cleanOutcomeFields('approval', e.fields);
+  } catch (err) {
+    if (err instanceof OutcomeFieldError) throw new ActionError(err.message);
+    throw err;
+  }
+  const oid = e.outcomeId ?? nid(ctx);
+  steps.splice(e.index, 0, oid);
+  const outcome: PlanOutcomeOf = { type: 'approval', fields, state: 'proposed' };
+  const next = nextPlan(
+    {
+      ...pl,
+      outcomes: {
+        ...pl.outcomes,
+        [oid]: {
+          ...outcome,
+          memberUid: pl.plan.memberUid,
+          threadId: pl.plan.threadId,
+          executor: null,
+        },
+      },
+    },
+    { steps },
+  );
+  const p = inboxPlan(
+    ctx,
+    'plan.edited',
+    scope,
+    { planId: pl.planId, op: 'add', index: e.index, outcomeId: oid },
+    (eventId) => [
+      {
+        kind: 'set',
+        path: inboxPaths.outcome(ctx.workspaceId, oid),
+        data: {
+          memberUid: pl.plan.memberUid,
+          threadId: pl.plan.threadId,
+          type: 'approval',
+          fields,
+          state: 'proposed',
+          note: '',
+          proposedBy: ctx.actor.id,
+          executor: null,
+          decision: null,
+          result: null,
+          planId: pl.planId,
+          createdAt: SERVER_TIME,
+          updatedAt: SERVER_TIME,
+          lastEventId: eventId,
+        },
+      },
+      ...planWrites(ctx, pl, next, null, eventId),
+    ],
+  );
+  return { ...p, outcomeId: oid };
+}
+
+/** The failed step at the cursor, for Retry and Skip. */
+function failedStep(pl: PlanInput): string {
+  need(pl.plan.state === 'blocked', 'This plan is not blocked.');
+  const id = pl.plan.steps[pl.plan.cursor];
+  need(id !== undefined && pl.outcomes[id]?.state === 'failed', 'No step of this plan failed.');
+  return id!;
+}
+
+/** Retry a failed step: it is approved again and carried out again; the plan goes on. */
+export function retryPlanStep(
+  ctx: ActionContext,
+  input: PlanInput & { thread: ThreadStateOf },
+): ActionPlan {
+  const pl = input;
+  owner(ctx, pl.plan.memberUid);
+  const id = failedStep(pl);
+  const next = nextPlan(pl, { outcomes: { [id]: { state: 'approved' } }, state: 'active' });
+  return inboxPlan(
+    ctx,
+    'plan.retried',
+    planScope(pl, input.thread),
+    { planId: pl.planId, outcomeId: id },
+    (eventId) => [
+      upd(inboxPaths.outcome(ctx.workspaceId, id), { state: 'approved', result: null }, eventId),
+      ...planWrites(ctx, pl, next, null, eventId),
+    ],
+  );
+}
+
+/** Skip a failed step: it is set aside (rejected) and the plan moves to the next step. */
+export function skipPlanStep(
+  ctx: ActionContext,
+  input: PlanInput & { thread: ThreadStateOf },
+): ActionPlan {
+  const pl = input;
+  owner(ctx, pl.plan.memberUid);
+  const id = failedStep(pl);
+  const cursor = pl.plan.cursor + 1;
+  const next = nextPlan(pl, {
+    outcomes: { [id]: { state: 'rejected' } },
+    cursor,
+    state: cursor >= pl.plan.steps.length ? 'done' : 'active',
+  });
+  return inboxPlan(
+    ctx,
+    'plan.skipped',
+    planScope(pl, input.thread),
+    { planId: pl.planId, outcomeId: id },
+    (eventId) => [
+      upd(inboxPaths.outcome(ctx.workspaceId, id), { state: 'rejected' }, eventId),
+      ...planWrites(ctx, pl, next, null, eventId),
+    ],
+  );
+}
+
+/** Stop plan: nothing more of it runs; the thread goes back to the agent. */
+export function stopPlan(
+  ctx: ActionContext,
+  input: PlanInput & { thread: ThreadStateOf },
+): ActionPlan {
+  const pl = input;
+  owner(ctx, pl.plan.memberUid);
+  livePlan(pl);
+  return inboxPlan(
+    ctx,
+    'plan.stopped',
+    planScope(pl, input.thread),
+    { planId: pl.planId },
+    (eventId) => planWrites(ctx, pl, nextPlan(pl, {}), 'stopped', eventId),
   );
 }
 
