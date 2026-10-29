@@ -66,6 +66,10 @@ export interface SubjectRow {
   name: string;
   /** The subject's area or tag; null: none. */
   area: string | null;
+  /** The subject's label (the kind of request); null: none. */
+  label: string | null;
+  /** True while the label is the agent's guess, not confirmed by the person yet. */
+  labelSuggested: boolean;
   /** Latest message on any of its threads (ms); the subject's creation when it has none. */
   activityAt: number;
   /** Threads waiting for the member (Needs you, Your call). */
@@ -105,6 +109,8 @@ export function subjectRows(
       id: s.id,
       name: s.data.name,
       area: s.data.area?.trim() || null,
+      label: s.data.label?.trim() || null,
+      labelSuggested: Boolean(s.data.label?.trim()) && s.data.labelSuggested === true,
       activityAt: ms(s.data.createdAt),
       waiting: 0,
       open: 0,
@@ -122,6 +128,8 @@ export function subjectRows(
         id: null,
         name: 'Not filed yet',
         area: null,
+        label: null,
+        labelSuggested: false,
         activityAt: 0,
         waiting: 0,
         open: 0,
@@ -267,6 +275,7 @@ const SHOWN = new Set<string>([
   'subject.merged',
   'subject.split',
   'subject.area',
+  'subject.label',
   'thread.flagged',
   'thread.due',
   'relation.proposed',
@@ -353,6 +362,8 @@ export function eventText(e: Pick<InboxEvent, 'type' | 'data' | 'actor'>): strin
       return `You merged “${String(d.fromName ?? '')}” into this subject`;
     case 'subject.split':
       return `You split this subject off “${String(d.fromName ?? '')}”`;
+    case 'subject.label':
+      return d.label ? `You set the label to “${String(d.label)}”` : 'You cleared the label';
     case 'subject.area':
       return d.area ? `You set the area to “${String(d.area)}”` : 'You cleared the area';
     case 'thread.flagged':
@@ -484,4 +495,29 @@ export function groupByArea(
     (a, b) => (a.key === '' ? 1 : 0) - (b.key === '' ? 1 : 0) || a.key.localeCompare(b.key),
   );
   return { groups, quiet };
+}
+
+/** The label filter's options: each label on a row (case-blind, first spelling wins) with its count. */
+export function labelCounts(
+  rows: readonly SubjectRow[],
+): Array<{ key: string; label: string; count: number }> {
+  const by = new Map<string, { key: string; label: string; count: number }>();
+  for (const r of rows) {
+    if (!r.label) continue;
+    const key = r.label.toLowerCase();
+    const e = by.get(key);
+    if (e) e.count++;
+    else by.set(key, { key, label: r.label, count: 1 });
+  }
+  return [...by.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Rows whose label is one of `keys` (lowercased labels); no keys: all rows. */
+export function filterByLabels<T extends { label: string | null }>(
+  rows: readonly T[],
+  keys: ReadonlySet<string>,
+): T[] {
+  return keys.size === 0
+    ? [...rows]
+    : rows.filter((r) => r.label && keys.has(r.label.toLowerCase()));
 }

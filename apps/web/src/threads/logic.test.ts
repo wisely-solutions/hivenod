@@ -10,7 +10,9 @@ import {
   formValues,
   countWaitingThreads,
   groupByArea,
+  filterByLabels,
   isQuiet,
+  labelCounts,
   subjectRows,
   timeline,
   waitingText,
@@ -257,5 +259,54 @@ describe('areas and quiet subjects', () => {
     expect(confidenceText('medium')).toBe('Likely');
     expect(confidenceText('low')).toBe('Unsure');
     expect(confidenceText(undefined)).toBeNull();
+  });
+});
+
+describe('labels (item YaOErIjeIFG8Y3EvZuIp)', () => {
+  const labelled = (id: string, label: string | null, suggested?: boolean) => {
+    const s = subject(id, id);
+    Object.assign(s.data, { label, labelSuggested: suggested });
+    return s;
+  };
+  it('rows carry the label and whether it is still a suggestion', () => {
+    const rows = subjectRows(
+      [labelled('a', 'Sales', true), labelled('b', 'Support', false), labelled('c', null, true)],
+      [],
+    );
+    const by = Object.fromEntries(rows.map((r) => [r.id, r]));
+    expect(by.a).toMatchObject({ label: 'Sales', labelSuggested: true });
+    expect(by.b).toMatchObject({ label: 'Support', labelSuggested: false });
+    expect(by.c).toMatchObject({ label: null, labelSuggested: false });
+  });
+  it('counts labels case-blind and filters by them, combined with nothing else', () => {
+    const rows = subjectRows(
+      [
+        labelled('a', 'Sales'),
+        labelled('b', 'sales'),
+        labelled('c', 'Support'),
+        labelled('d', null),
+      ],
+      [],
+    );
+    expect(labelCounts(rows)).toEqual([
+      { key: 'sales', label: 'Sales', count: 2 },
+      { key: 'support', label: 'Support', count: 1 },
+    ]);
+    expect(filterByLabels(rows, new Set()).length).toBe(4);
+    expect(
+      filterByLabels(rows, new Set(['sales']))
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(['a', 'b']);
+    expect(filterByLabels(rows, new Set(['sales', 'support'])).length).toBe(3);
+  });
+  it('the timeline names a label change', () => {
+    expect(
+      eventText({
+        type: 'subject.label',
+        actor: { type: 'human', id: 'u', name: 'U' },
+        data: { label: 'Sales' },
+      } as never),
+    ).toBe('You set the label to “Sales”');
   });
 });

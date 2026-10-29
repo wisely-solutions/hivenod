@@ -4,6 +4,7 @@ import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
 import { motion, useReducedMotion } from '../ui/motion';
 import { waitLabel } from '../inbox/logic';
+import { LabelBadge } from '../threads/labels';
 import type { NeedsEntry } from './logic';
 import { WhoTag } from './WhoTag';
 
@@ -58,6 +59,9 @@ export function ThreadRow({
         {text ? <span className="line-clamp-2 text-14 text-text-2">{text}</span> : null}
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-12 text-text-2">
           <WhoTag who={entry.who} />
+          {entry.label ? (
+            <LabelBadge label={entry.label.label} suggested={entry.label.suggested} />
+          ) : null}
           {entry.urgent ? (
             <Badge tone="sendback">
               <TriangleAlert size={10} aria-hidden /> Urgent
