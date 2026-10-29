@@ -1261,8 +1261,19 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       // which would decide the hand-out order instead of the id tiebreak. Far future: after the i1 seed.
       const tie = Timestamp.fromMillis(4_000_000_000_000);
       await put({
-        [I('u1')]: itemDoc({ stepId: 'intake', status: 'queued', shape: null, title: 'Fix typo', updatedAt: tie }),
-        [I('old')]: itemDoc({ stepId: 'intake', status: 'queued', title: 'Old item', updatedAt: tie }),
+        [I('u1')]: itemDoc({
+          stepId: 'intake',
+          status: 'queued',
+          shape: null,
+          title: 'Fix typo',
+          updatedAt: tie,
+        }),
+        [I('old')]: itemDoc({
+          stepId: 'intake',
+          status: 'queued',
+          title: 'Old item',
+          updatedAt: tie,
+        }),
       });
       await call('list_work', {});
       const { runId } = out(await call('claim', { itemId: 'u1' })) as { runId: string };
