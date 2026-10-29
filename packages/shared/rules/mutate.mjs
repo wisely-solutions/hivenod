@@ -774,6 +774,99 @@ const MUTATIONS = [
         '&& exactKeys(d.decision',
       ],
     ],
+  ], // Re-check (item bmNoIvvqKCdAorLSShE9).
+  [
+    'recheck: another member asks',
+    [['(inboxOwner(wid, resource.data) && inboxRecheckAsked(', '(inboxRecheckAsked(']],
+  ],
+  [
+    'recheck: ask while pending',
+    [["|| r.recheck.requestedAt + duration.value(30, 'm') <= request.time)", '|| true)']],
+  ],
+  [
+    'recheck: ask with nothing open',
+    [
+      [
+        "return changed(['recheck', 'updatedAt', 'lastEventId'])\n            && r.state in ['yourCall', 'waiting']",
+        "return changed(['recheck', 'updatedAt', 'lastEventId'])",
+      ],
+    ],
+  ],
+  ['recheck: forged request', [["&& d.recheck.state == 'pending' && d.recheck.by == me()", '']]],
+  ['recheck: any agent answers', [['            && r.fetchedBy == me()\n', '']]],
+  [
+    'recheck: answered twice',
+    [
+      [
+        "&& r.get('recheck', null) != null && r.recheck.state == 'pending'\n            && exactKeys(d.recheck",
+        '&& exactKeys(d.recheck',
+      ],
+    ],
+  ],
+  [
+    'recheck: result not its event',
+    [['\n            && inboxEv(wid, d.lastEventId).data.data.result == d.recheck.result;', ';']],
+  ],
+  [
+    'recheck: answer rewrites the request',
+    [['&& d.recheck.by == r.recheck.by && d.recheck.requestedAt == r.recheck.requestedAt', '']],
+  ],
+  ['recheck: unbounded note', [['strOrNull(d.recheck.note, 500)', 'true']]],
+  [
+    'recheck: checkedAt without the answer',
+    [
+      [
+        "\n            && getAfter(inboxDoc(wid, 'inboxThreads', r.threadId)).data.lastEventId == d.lastEventId",
+        '',
+      ],
+    ],
+  ],
+  [
+    'recheck: checkedAt on a decided outcome',
+    [
+      [
+        "data.lastEventId == d.lastEventId\n            && (r.state == 'proposed'",
+        'data.lastEventId == d.lastEventId\n            && (true',
+      ],
+    ],
+  ],
+  [
+    'recheck: checkedAt or revise at the cursor',
+    [['&& !inboxAtCursor(get(inboxPlanDoc(wid, r.planId)).data, oid)', '']],
+  ],
+  [
+    'recheck: checkedAt with any result',
+    [["&& e.data.data.result == 'still_good' && oid in e.data.data.checked", '']],
+  ],
+  [
+    'recheck: checkedAt with other changes',
+    [["changed(['checkedAt', 'updatedAt', 'lastEventId'])", 'true']],
+  ],
+  [
+    'recheck: unasked revise without a request',
+    [
+      [
+        "return t.get('recheck', null) != null && t.recheck.state == 'pending' && t.fetchedBy == me()",
+        'return true',
+      ],
+    ],
+  ],
+  [
+    'recheck: unasked revise by another agent',
+    [["&& t.recheck.state == 'pending' && t.fetchedBy == me()", "&& t.recheck.state == 'pending'"]],
+  ],
+  [
+    'recheck: revised step keeps its approval',
+    [["&& (r.state == 'approved' ? d.decision == null : d.decision == r.decision)", '']],
+  ],
+  [
+    'recheck: unasked version with an ask',
+    [
+      [
+        "&& last.asked == (r.state == 'revising'\n              ? {'instruction': r.revise.instruction, 'chips': r.revise.chips} : null);",
+        ';',
+      ],
+    ],
   ],
 ];
 

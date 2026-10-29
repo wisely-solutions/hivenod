@@ -3,5 +3,6 @@
   "plan": "0.2.171",
   "item_done": "0.2.174",
   "item_stopped": "0.2.174",
-  "takeover": "0.2.175"
+  "recheck": "0.2.177",
+  "takeover": "0.2.180"
 }

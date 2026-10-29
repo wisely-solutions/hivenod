@@ -688,6 +688,42 @@
         }
       },
       {
+        "name": "thread_recheck_done",
+        "description": "Answer a re-check (inbox event reason recheck: the person asked you to check a thread again). First re-read the thread (thread_read), its new messages, calendar_free and the context. Then: result still_good if every open proposal and unrun plan step stands (they are marked \"checked again\"); revised once you wrote new versions with outcome_propose revises=<id> for what changed; asked once you asked the person with inbox_ask. Only the thread's home agent answers, once per request.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "result": {
+              "type": "string",
+              "enum": [
+                "still_good",
+                "revised",
+                "asked"
+              ],
+              "description": "still_good, revised or asked"
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "What you checked or changed, in one line, for the person"
+            }
+          },
+          "required": [
+            "threadId",
+            "result"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "subject_relate",
         "description": "Propose that two subjects of the same person are related (the same client, project or problem seen from two sides), with an optional note saying how. It is a proposal: the person OKs or turns it down, and a link turned down is not proposed again. Related subjects show on each other's page and in subject_search.",
         "inputSchema": {
@@ -846,7 +882,7 @@
               }
             },
             "revises": {
-              "description": "The outcome id the person asked changes for: your proposal becomes its next version (same thread and type)",
+              "description": "The outcome id the person asked changes for, or (on a re-check) an open proposal of the thread that changed: your proposal becomes its next version (same thread and type)",
               "type": "string",
               "minLength": 1
             }
@@ -2440,6 +2476,42 @@
         }
       },
       {
+        "name": "thread_recheck_done",
+        "description": "Answer a re-check (inbox event reason recheck: the person asked you to check a thread again). First re-read the thread (thread_read), its new messages, calendar_free and the context. Then: result still_good if every open proposal and unrun plan step stands (they are marked \"checked again\"); revised once you wrote new versions with outcome_propose revises=<id> for what changed; asked once you asked the person with inbox_ask. Only the thread's home agent answers, once per request.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "result": {
+              "type": "string",
+              "enum": [
+                "still_good",
+                "revised",
+                "asked"
+              ],
+              "description": "still_good, revised or asked"
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 500,
+              "description": "What you checked or changed, in one line, for the person"
+            }
+          },
+          "required": [
+            "threadId",
+            "result"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "subject_relate",
         "description": "Propose that two subjects of the same person are related (the same client, project or problem seen from two sides), with an optional note saying how. It is a proposal: the person OKs or turns it down, and a link turned down is not proposed again. Related subjects show on each other's page and in subject_search.",
         "inputSchema": {
@@ -2598,7 +2670,7 @@
               }
             },
             "revises": {
-              "description": "The outcome id the person asked changes for: your proposal becomes its next version (same thread and type)",
+              "description": "The outcome id the person asked changes for, or (on a re-check) an open proposal of the thread that changed: your proposal becomes its next version (same thread and type)",
               "type": "string",
               "minLength": 1
             }

@@ -39,6 +39,12 @@ dispatch, route and give back; the sub-agents do the work.
    and type): apply only what was asked, keep the rest, and do not reject it or start a new
    outcome. If the change can't be made (the asked time is taken), say why with `inbox_ask` on
    the thread.
+   When the person asks for a re-check (`reason="recheck"`), route it to the thread's sub-agent
+   (or start one): re-read the thread (`thread_read`), the new messages, `calendar_free` and the
+   context. For each open proposal and each plan step that has not run, keep it, or write its
+   next version with `outcome_propose` `revises=<outcomeId>` (only what changed), or ask with
+   `inbox_ask`. Then answer once with `thread_recheck_done` (`still_good`, `revised` or `asked`,
+   with a one-line note of what you checked or changed).
    **Plans.** When the answer has more than one action, or needs the person's OK on the way,
    the sub-agent proposes a plan in one call (`plan_propose`): ordered steps (reply, book,
    make_it_work as "Build it", handover, snooze as "wait until", nudge, approval). Put an

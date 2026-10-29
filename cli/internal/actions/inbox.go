@@ -333,6 +333,14 @@ type ThreadState struct {
 	FetchedBy string   `json:"fetchedBy"`
 	Refs      []string `json:"refs"`
 	Waiting   *Waiting `json:"waiting"`
+	// Recheck: the member's last re-check request (item bmNoIvvqKCdAorLSShE9); nil: none.
+	Recheck *ThreadRecheck `json:"recheck,omitempty"`
+}
+
+// ThreadRecheck is what the actions need of a thread's recheck.
+type ThreadRecheck struct {
+	State       string     `json:"state"`
+	RequestedAt *time.Time `json:"requestedAt,omitempty"`
 }
 
 // OutcomeState is what an action needs of an outcome (OutcomeStateOf).
@@ -383,6 +391,9 @@ func ThreadStateFrom(t model.InboxThread) ThreadState {
 	s := ThreadState{MemberUID: t.MemberUID, SubjectID: t.SubjectID, State: t.State, FetchedBy: t.FetchedBy, Refs: t.Refs}
 	if t.Waiting != nil {
 		s.Waiting = &Waiting{On: t.Waiting.On, Until: t.Waiting.Until}
+	}
+	if t.Recheck != nil {
+		s.Recheck = &ThreadRecheck{State: t.Recheck.State, RequestedAt: t.Recheck.RequestedAt}
 	}
 	if s.Refs == nil {
 		s.Refs = []string{}
@@ -1099,6 +1110,8 @@ type ReviseInput struct {
 	Note       *string        `json:"note"`
 	Confidence *string        `json:"confidence"`
 	Checks     []string       `json:"checks"`
+	// Plan: a plan step's plan (on a re-check an approved step that has not run may be revised).
+	Plan *PlanInput `json:"plan,omitempty"`
 }
 
 // ReviseResult is the plan plus the new version's number.
@@ -1120,9 +1133,26 @@ func ReviseOutcome(ctx Ctx, in ReviseInput) (ReviseResult, error) {
 	if in.Type != nil && *in.Type != o.Type {
 		return ReviseResult{}, fail("Outcome " + in.OutcomeID + " is a " + o.Type + "; a revision keeps the type: propose a new outcome instead.")
 	}
-	if o.State != "revising" {
+	// Re-check (item bmNoIvvqKCdAorLSShE9): the home agent may revise an open proposal unasked.
+	rechecking := in.Thread.Recheck != nil && in.Thread.Recheck.State == "pending" && in.Thread.FetchedBy == ctx.Actor.ID
+	unasked := false
+	if rechecking {
+		if o.State == "proposed" {
+			unasked = true
+		} else if o.State == "approved" && o.PlanID != nil {
+			pl, err := planFor(in.Plan, o, in.OutcomeID)
+			if err != nil {
+				return ReviseResult{}, err
+			}
+			unasked = Recheckable(in.OutcomeID, o, &pl.Plan)
+		}
+	}
+	if o.State != "revising" && !unasked {
 		if o.State == "proposed" {
 			return ReviseResult{}, fail("Nobody asked for changes on this outcome (or the person cancelled the request).")
+		}
+		if o.State == "approved" && o.PlanID != nil && rechecking {
+			return ReviseResult{}, fail("This step has started (it is its turn): it cannot be revised now.")
 		}
 		return ReviseResult{}, fail("This outcome was already decided (" + o.State + "): your revision is not needed.")
 	}
@@ -1166,7 +1196,7 @@ func ReviseOutcome(ctx Ctx, in ReviseInput) (ReviseResult, error) {
 	}
 	version := len(prior) + 1
 	var asked *ReviseAsk
-	if o.Revise != nil {
+	if o.State == "revising" && o.Revise != nil {
 		asked = &ReviseAsk{Instruction: o.Revise.Instruction, Chips: o.Revise.Chips}
 	}
 	p := InboxPlan(ctx, "outcome.revised", o.MemberUID, sp(o.ThreadID), in.Thread.SubjectID, map[string]any{"outcomeId": in.OutcomeID, "type": o.Type, "version": version, "fields": fields}, func(eventID string) []plan.Op {
@@ -1175,12 +1205,15 @@ func ReviseOutcome(ctx Ctx, in ReviseInput) (ReviseResult, error) {
 			list = append(list, versionDoc(v))
 		}
 		list = append(list, versionDoc(OutcomeVersion{N: version, Fields: fields, Note: note, Confidence: in.Confidence, Checks: checks, By: ctx.Actor.ID, EventID: &eventID, Asked: asked}))
-		return []plan.Op{
-			upd(model.Paths.InboxOutcome(ctx.WorkspaceID, in.OutcomeID), map[string]any{
-				"state": "proposed", "fields": fields, "note": note, "confidence": strOrNil(in.Confidence),
-				"checks": checks, "versions": list, "revise": nil,
-			}, eventID),
+		d := map[string]any{
+			"state": "proposed", "fields": fields, "note": note, "confidence": strOrNil(in.Confidence),
+			"checks": checks, "versions": list, "revise": nil,
 		}
+		if o.State == "approved" {
+			// An approved plan step revised on a re-check needs the member's approval again.
+			d["decision"] = nil
+		}
+		return []plan.Op{upd(model.Paths.InboxOutcome(ctx.WorkspaceID, in.OutcomeID), d, eventID)}
 	}, "")
 	return ReviseResult{Plan: p, Version: version}, nil
 }
@@ -1360,4 +1393,101 @@ func WakeThread(ctx Ctx, in WakeInput) (plan.Plan, error) {
 	return InboxPlan(ctx, "thread.woke", t.MemberUID, sp(in.ThreadID), t.SubjectID, map[string]any{}, func(eventID string) []plan.Op {
 		return []plan.Op{upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{"state": "investigating", "waiting": nil}, eventID)}
 	}, ""), nil
+}
+
+// ---------- Re-check (item bmNoIvvqKCdAorLSShE9) ----------
+
+// RecheckResults are RECHECK_RESULTS.
+var RecheckResults = []string{"still_good", "revised", "asked"}
+
+// InboxMaxRecheckNote is INBOX_LIMITS.recheckNote.
+const InboxMaxRecheckNote = 500
+
+// Recheckable is recheckable: an open proposal, or an approved step of a live plan that has not
+// run (not at the cursor, where it is being carried out).
+func Recheckable(oid string, o OutcomeState, p *PlanState) bool {
+	if o.State == "proposed" {
+		return true
+	}
+	if o.State != "approved" || o.PlanID == nil || p == nil {
+		return false
+	}
+	return inList(p.State, "proposed", "active", "blocked") && contains(p.Steps, oid) &&
+		!(p.Cursor < len(p.Steps) && p.Steps[p.Cursor] == oid)
+}
+
+// RecheckDoneInput is recheckDone's input (thread_recheck_done).
+type RecheckDoneInput struct {
+	ThreadID string                  `json:"threadId"`
+	Thread   ThreadState             `json:"thread"`
+	Result   string                  `json:"result"`
+	Note     *string                 `json:"note"`
+	Outcomes map[string]OutcomeState `json:"outcomes"`
+	Plans    map[string]PlanState    `json:"plans"`
+}
+
+// RecheckDoneResult is the plan plus the outcomes stamped still good.
+type RecheckDoneResult struct {
+	plan.Plan
+	Checked []string `json:"checked"`
+}
+
+// RecheckDone is recheckDone: the home agent answers the member's re-check request; still_good
+// stamps checkedAt on every open proposal and unrun live-plan step of the thread.
+func RecheckDone(ctx Ctx, in RecheckDoneInput) (RecheckDoneResult, error) {
+	if err := RequireAgent(ctx); err != nil {
+		return RecheckDoneResult{}, err
+	}
+	t := in.Thread
+	if t.FetchedBy != ctx.Actor.ID {
+		return RecheckDoneResult{}, fail("Only the thread's home agent (the one that brought it in) answers a re-check.")
+	}
+	if t.Recheck == nil || t.Recheck.State != "pending" {
+		return RecheckDoneResult{}, fail("Nobody asked to re-check this thread.")
+	}
+	if !inList(in.Result, RecheckResults...) {
+		return RecheckDoneResult{}, fail("The result is " + strings.Join(RecheckResults, ", ") + ".")
+	}
+	var note *string
+	if in.Note != nil {
+		if n := jsTrim(*in.Note); n != "" {
+			note = &n
+		}
+	}
+	if note != nil && jsLen(*note) > InboxMaxRecheckNote {
+		return RecheckDoneResult{}, fail(tooLong("The note", InboxMaxRecheckNote))
+	}
+	checked := []string{}
+	if in.Result == "still_good" {
+		ids := make([]string, 0, len(in.Outcomes))
+		for id := range in.Outcomes {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			o := in.Outcomes[id]
+			if o.ThreadID != in.ThreadID {
+				continue
+			}
+			var p *PlanState
+			if o.PlanID != nil {
+				if pl, ok := in.Plans[*o.PlanID]; ok {
+					p = &pl
+				}
+			}
+			if Recheckable(id, o, p) {
+				checked = append(checked, id)
+			}
+		}
+	}
+	pl := InboxPlan(ctx, "thread.rechecked", t.MemberUID, sp(in.ThreadID), t.SubjectID, map[string]any{"result": in.Result, "note": strOrNil(note), "checked": checked}, func(eventID string) []plan.Op {
+		ops := []plan.Op{upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{
+			"recheck.state": "done", "recheck.result": in.Result, "recheck.note": strOrNil(note), "recheck.at": ServerTime(),
+		}, eventID)}
+		for _, id := range checked {
+			ops = append(ops, upd(model.Paths.InboxOutcome(ctx.WorkspaceID, id), map[string]any{"checkedAt": ServerTime()}, eventID))
+		}
+		return ops
+	}, "")
+	return RecheckDoneResult{Plan: pl, Checked: checked}, nil
 }

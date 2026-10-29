@@ -1304,14 +1304,14 @@ service cloud.firestore {
                   'outcome.rejected', 'outcome.revise_requested', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area', 'subject.label',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged', 'thread.due', 'plan.approved', 'plan.rejected', 'plan.edited',
-                  'plan.retried', 'plan.skipped', 'plan.stopped'])
+                  'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested'])
                 && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))
             || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(wid, request.resource.data.memberUid)
                 && request.resource.data.type in ['inbox.added', 'thread.filed', 'thread.note',
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.revised',
                   'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
-                  'plan.proposed', 'outcome.started']));
+                  'plan.proposed', 'outcome.started', 'thread.rechecked']));
         allow update, delete: if false;
       }
 
@@ -1381,8 +1381,38 @@ service cloud.firestore {
             || ((isActiveAgent(wid) || inboxOwner(wid, resource.data))
               && changed(['due', 'updatedAt', 'lastEventId'])
               && (request.resource.data.due == null || request.resource.data.due is timestamp)
-              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.due'], resource.data.memberUid, tid)));
+              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.due'], resource.data.memberUid, tid))
+            // Re-check (item bmNoIvvqKCdAorLSShE9): the member asks, the home agent answers.
+            || (inboxOwner(wid, resource.data) && inboxRecheckAsked(wid, tid, request.resource.data, resource.data))
+            || (isActiveAgent(wid) && inboxRecheckAnswered(wid, tid, request.resource.data, resource.data)));
         allow delete: if false;
+
+        // Only on a thread with something open, and not while a request (under 30 minutes old)
+        // waits for the agent.
+        function inboxRecheckAsked(wid, tid, d, r) {
+          return changed(['recheck', 'updatedAt', 'lastEventId'])
+            && r.state in ['yourCall', 'waiting']
+            && (r.get('recheck', null) == null || r.recheck.state == 'done'
+              || r.recheck.requestedAt + duration.value(30, 'm') <= request.time)
+            && exactKeys(d.recheck, ['state', 'by', 'requestedAt', 'result', 'note', 'at'])
+            && d.recheck.state == 'pending' && d.recheck.by == me()
+            && d.recheck.requestedAt == request.time
+            && d.recheck.result == null && d.recheck.note == null && d.recheck.at == null
+            && inboxTrackedThread(wid, d.lastEventId, ['thread.recheck_requested'], me(), tid);
+        }
+        // Only the home agent, only a pending request, with the result its event names.
+        function inboxRecheckAnswered(wid, tid, d, r) {
+          return changed(['recheck', 'updatedAt', 'lastEventId'])
+            && r.fetchedBy == me()
+            && r.get('recheck', null) != null && r.recheck.state == 'pending'
+            && exactKeys(d.recheck, ['state', 'by', 'requestedAt', 'result', 'note', 'at'])
+            && d.recheck.state == 'done'
+            && d.recheck.by == r.recheck.by && d.recheck.requestedAt == r.recheck.requestedAt
+            && d.recheck.result in ['still_good', 'revised', 'asked']
+            && strOrNull(d.recheck.note, 500) && d.recheck.at == request.time
+            && inboxTrackedThread(wid, d.lastEventId, ['thread.rechecked'], r.memberUid, tid)
+            && inboxEv(wid, d.lastEventId).data.data.result == d.recheck.result;
+        }
 
         function inboxThreadAgent(wid, tid, d, r) {
           return (changed(['refs', 'lastMessageAt', 'state', 'waiting', 'updatedAt', 'lastEventId'])
@@ -1529,10 +1559,27 @@ service cloud.firestore {
           && inboxEv(wid, request.resource.data.lastEventId).data.data.outcomeId == oid)
           || inboxStepCreate(wid, oid, request.resource.data);
         allow update: if request.resource.data.updatedAt == request.time
-          && (resource.data.get('planId', null) != null
-            ? request.resource.data.get('planId', null) == resource.data.planId
-              && inboxStepUpdate(wid, oid, request.resource.data, resource.data)
-            : inboxSingleUpdate(wid, oid));
+          && (inboxChecked(wid, oid, request.resource.data, resource.data)
+            || (resource.data.get('planId', null) != null
+              ? request.resource.data.get('planId', null) == resource.data.planId
+                && inboxStepUpdate(wid, oid, request.resource.data, resource.data)
+              : inboxSingleUpdate(wid, oid)));
+
+        // Re-check "still good" (item bmNoIvvqKCdAorLSShE9): the home agent stamps checkedAt on an
+        // open proposal or an unrun live-plan step, in the batch that answers the thread's request.
+        function inboxChecked(wid, oid, d, r) {
+          let e = inboxEv(wid, d.lastEventId);
+          return isActiveAgent(wid)
+            && changed(['checkedAt', 'updatedAt', 'lastEventId'])
+            && d.checkedAt == request.time
+            && inboxTrackedThread(wid, d.lastEventId, ['thread.rechecked'], r.memberUid, r.threadId)
+            && e.data.data.result == 'still_good' && oid in e.data.data.checked
+            && getAfter(inboxDoc(wid, 'inboxThreads', r.threadId)).data.lastEventId == d.lastEventId
+            && (r.state == 'proposed'
+              || (r.state == 'approved' && r.get('planId', null) != null
+                && inboxPlanLive(get(inboxPlanDoc(wid, r.planId)).data)
+                && !inboxAtCursor(get(inboxPlanDoc(wid, r.planId)).data, oid)));
+        }
         allow delete: if false;
 
         function inboxSingleUpdate(wid, oid) {
@@ -1549,7 +1596,7 @@ service cloud.firestore {
             || (isActiveAgent(wid)
                 && (inboxCarriedOut(request.resource.data, resource.data,
                       inboxEv(wid, request.resource.data.lastEventId).data.type)
-                  || inboxRevised(request.resource.data, resource.data,
+                  || inboxRevised(wid, oid, request.resource.data, resource.data,
                       inboxEv(wid, request.resource.data.lastEventId).data.type))));
         }
 
@@ -1592,7 +1639,7 @@ service cloud.firestore {
               // Ask for changes works on a step as on a single outcome.
               ? e.data.outcomeId == oid
                 && ((inboxOwner(wid, r) && inboxReviseAsk(d, r, e.type))
-                  || (isActiveAgent(wid) && inboxRevised(d, r, e.type)))
+                  || (isActiveAgent(wid) && inboxRevised(wid, oid, d, r, e.type)))
               : e.data.planId == r.planId
                 && (e.type == 'plan.approved' ? oid in e.data.approved
                   : e.type == 'plan.rejected' ? oid in e.data.rejected
@@ -1721,12 +1768,16 @@ service cloud.firestore {
         // The agent that proposed it writes the next version: same type, a proposal's fields,
         // the request cleared, and the versions append-only (the first revision keeps the
         // original as v1), at most 10. The top-level fields are the latest version's.
-        function inboxRevised(d, r, type) {
+        // On a re-check the home agent revises unasked: an open proposal, or an approved step of
+        // a live plan that has not run (its approval is cleared: the member approves it again).
+        function inboxRevised(wid, oid, d, r, type) {
           return type == 'outcome.revised'
-            && r.state == 'revising' && d.state == 'proposed'
+            && (r.state == 'revising' || inboxRecheckRevise(wid, oid, r))
+            && d.state == 'proposed'
             && r.proposedBy == me()
             && changed(['state', 'fields', 'note', 'confidence', 'checks', 'versions', 'revise',
-                        'updatedAt', 'lastEventId'])
+                        'decision', 'updatedAt', 'lastEventId'])
+            && (r.state == 'approved' ? d.decision == null : d.decision == r.decision)
             && d.revise == null
             && inboxFieldsOk(r.type, d.fields)
             && str(d.note, 0, 2000)
@@ -1749,7 +1800,16 @@ service cloud.firestore {
             && last.n == n && last.fields == d.fields && last.note == d.note
             && last.confidence == d.confidence && last.checks == d.checks
             && last.by == me() && last.eventId == d.lastEventId
-            && last.asked == {'instruction': r.revise.instruction, 'chips': r.revise.chips};
+            && last.asked == (r.state == 'revising'
+              ? {'instruction': r.revise.instruction, 'chips': r.revise.chips} : null);
+        }
+        function inboxRecheckRevise(wid, oid, r) {
+          let t = get(inboxDoc(wid, 'inboxThreads', r.threadId)).data;
+          return t.get('recheck', null) != null && t.recheck.state == 'pending' && t.fetchedBy == me()
+            && (r.state == 'proposed'
+              || (r.state == 'approved' && r.get('planId', null) != null
+                && inboxPlanLive(get(inboxPlanDoc(wid, r.planId)).data)
+                && !inboxAtCursor(get(inboxPlanDoc(wid, r.planId)).data, oid)));
         }
         // Its executor reports an approved outcome as done or failed.
         function inboxCarriedOut(d, r, type) {

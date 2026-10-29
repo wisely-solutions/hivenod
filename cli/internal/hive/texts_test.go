@@ -2,9 +2,9 @@ package hive
 
 import (
 	"bytes"
-	"strings"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 

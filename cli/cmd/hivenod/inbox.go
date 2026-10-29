@@ -34,6 +34,9 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome / plan: a person's H
                            marks a thread urgent (the person is pinged at once), or not with --off
   hivenod thread due ID ISO [--reason R] | hivenod thread due ID --clear
                            sets the deadline a message states (ISO 8601 with its offset), or clears it
+  hivenod thread recheck-done ID still_good|revised|asked [--note N]
+                           answers the person's re-check request (after outcome propose
+                           --revises or inbox ask, for revised and asked)
   hivenod subject list [--member UID]
                            the person's subjects, with threads waiting for them and open
   hivenod subject assign THREAD (--subject-id S | --name "Topic (client)") [--area "Client A"] [--label Sales]
@@ -52,7 +55,8 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome / plan: a person's H
                           [--confidence high|medium|low] [--check C]... [--revises OUTCOME]
                            proposes an outcome (types: ` + outcomeTypeList() + `);
                            --check: what you verified, up to 6; --revises: the person
-                           asked for changes, so this is that outcome's next version
+                           asked for changes (or a re-check found it changed), so this is
+                           that outcome's next version
   hivenod plan propose THREAD --steps-file F|- [--note N] [--confidence high|medium|low]
                            proposes a plan: 1-8 ordered steps from a JSON file (- reads
                            stdin), either [{type, fields, note?, confidence?, checks?}, ...]
@@ -183,6 +187,12 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 			a["due"] = pos[1]
 		}
 		opt(a, "reason", "reason")
+	case "thread recheck-done":
+		if id == "" || len(pos) != 2 {
+			return usage()
+		}
+		tool, a["threadId"], a["result"] = "thread_recheck_done", id, pos[1]
+		opt(a, "note", "note")
 	case "subject search":
 		tool = "subject_search"
 		a["query"] = strings.Join(pos, " ")

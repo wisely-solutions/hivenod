@@ -157,6 +157,43 @@ hint, because it may be new enough. The member can Cancel the request at any tim
 An agent that can't make the change (the time asked for is taken, say) says why with
 `inbox_ask` on the thread; the outcome stays `revising` until the member cancels or sends.
 
+### Re-check and "May be out of date" (item bmNoIvvqKCdAorLSShE9)
+
+A proposal decided or drafted earlier can go stale: days later there is new availability, a new
+message, new facts. The member can ask the thread's home agent to run its checks again.
+
+1. **The member asks** (`requestRecheck`, event `thread.recheck_requested`, member): only on a
+   thread in `yourCall` or `waiting` (something open), and not while an earlier request (under 30
+   minutes old) still waits. The thread gets
+   `recheck: {state: 'pending', by, requestedAt, result: null, note: null, at: null}`. Nothing else
+   changes: the proposals stay as they are and the member can still approve them.
+2. **The home agent gets a `recheck` inbox event** (priority 1, like `revise`; a listener on
+   `fetchedBy == me` and `recheck.state == 'pending'`, one event per request). It re-reads the
+   thread, the new messages, `calendar_free` and the context, then for each open proposal
+   (`proposed`) and each step of a live plan that has not run (`approved`, not at the cursor:
+   `recheckable`) it either keeps it, or writes its next version with `outcome_propose
+revises=<id>` (allowed unasked while the request is pending; the version's `asked` is null;
+   an approved plan step goes back to `proposed`, its `decision` cleared, so the member approves
+   it again), or asks with `inbox_ask`.
+3. **The agent answers** with `thread_recheck_done(threadId, result, note?)` (`recheckDone`, event
+   `thread.rechecked` with `{result, note, checked}`): `still_good` also stamps `checkedAt` on
+   every recheckable outcome of the thread in the same batch; `revised` and `asked` only close the
+   request. The thread's `recheck` becomes `{state: 'done', result, note, at}`. Once per request.
+
+**"May be out of date"** is computed in the browser (`packages/shared/src/stale.ts`), nothing is
+stored. An open proposal or unrun step is flagged when its slot (`fields.start`) has passed, when
+the thread's `lastMessageAt` is after it was written or last checked, or when that was more than
+24 hours ago ("written": the newest of `createdAt`, `checkedAt`, the last version while proposed,
+the approval of an approved step). The chip says why on hover or tap and has **Re-check** next to
+it. Nothing runs by itself.
+
+**The UI.** Re-check is in the proposal's Other menu (the Today card, the thread page's agent
+panel and its phone sheet) and on the plan panel. It counts down on the button with Undo (5 s)
+before the request is written. While pending, a "Checking again…" strip sits on the proposal;
+then a result line: "Checked again 16:40 · still good", or the new version with its word diff
+(the versions switcher, "After a re-check"), or the agent's question. A re-check needs CLI
+`0.2.177` (`recheck` in `cliversion.ts`); the strip says when the home agent is older.
+
 ### Bookings (`reply_book`, item w9SAf)
 
 Approving a `reply_book` outcome also books the meeting, in the same batch: `approveOutcome`
@@ -312,6 +349,10 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
   - add notes, ask questions and propose outcomes. The executor is fixed by the rules;
   - revise an outcome they proposed while the member asks for changes (`revising`): same type,
     a proposal's fields, the versions append-only, at most 10;
+  - (the home agent only) answer a pending re-check once (`thread.rechecked`, its result named
+    by the event), stamp `checkedAt` on open proposals and unrun live-plan steps in that batch
+    (still good only), and while it is pending revise its open proposals, or an unrun approved
+    step (clearing its approval), unasked;
   - wake a thread whose date has passed;
   - report outcomes they carry out, but only after approval;
   - retitle threads.
@@ -320,6 +361,8 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
   - approve, edit and reject outcomes, approve a chosen version (also while revising);
   - ask the proposing agent for changes (chips and/or 1-500 characters, below 10 versions) and
     cancel that;
+  - ask the home agent to re-check a thread in Your call or waiting (not again while a request
+    under 30 minutes old waits);
   - ignore, close and bring back threads;
   - move threads between subjects;
   - rename, merge and split subjects.
@@ -333,28 +376,29 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
   the member's OK.
 - **Tracking:** every inbox write is tracked in `inboxEvents`, never in the organization-wide
   `events`, which every member can read.
-- **Tests:** `packages/shared/rules/inbox.test.ts`, `inboxrevise.test.ts`, `inboxrelations.test.ts` and `plans.test.ts`. The `inbox: …` and `plans: …` mutations in
+- **Tests:** `packages/shared/rules/inbox.test.ts`, `inboxrevise.test.ts`, `inboxrecheck.test.ts`, `inboxrelations.test.ts` and `plans.test.ts`. The `inbox: …`, `recheck: …` and `plans: …` mutations in
   `packages/shared/rules/mutate.mjs` are all caught.
 
 ## Agent tools (MCP and Go CLI)
 
-| Tool              | CLI                          | What it does                                                                                                                     |
-| ----------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `inbox_add`       | `hivenod inbox add`          | Brings a message in. It's for `member`, by default the person who connected the agent. Repeats are reported as duplicates.       |
-| `inbox_list`      | `hivenod inbox list`         | Lists what agents have to do: `toWork`, `toCarryOut` (approved outcomes this agent carries out) and `toWake`.                    |
-| `thread_read`     | `hivenod thread read ID`     | Shows one thread: messages, subject, outcomes and decisions, notes and Q&A, and what to do next.                                 |
-| `subject_list`    | `hivenod subject list`       | Lists a member's subjects, with how many threads wait for them and how many are open.                                            |
-| `subject_assign`  | `hivenod subject assign ID`  | Files or moves a thread under an existing subject or a new one. A matching name reuses the existing subject.                     |
-| `subject_search`  | `hivenod subject search …`   | Finds a member's subjects by name, people, channel and thread text, with filters (see "Finding subjects").                       |
-| `subject_relate`  | `hivenod subject relate A B` | Proposes two subjects as related, with a note. The member OKs or turns it down.                                                  |
-| `inbox_note`      | `hivenod inbox note ID`      | Adds an investigation note to the timeline.                                                                                      |
-| `inbox_ask`       | `hivenod inbox ask ID`       | Asks the member a question. The thread waits in Needs you.                                                                       |
-| `outcome_propose` | `hivenod outcome propose ID` | Proposes an outcome of a type from the registry, with its fields. With `revises` (`--revises OID`): that outcome's next version. |
-| `plan_propose`    | `hivenod plan propose ID`    | Proposes a plan: 1-8 ordered steps in one call (`--steps-file F`, `-` for stdin). See "Plans: the agent side".                   |
-| `outcome_done`    | `hivenod outcome done OID`   | The executor reports an approved outcome as done or failed; a Build it plan step as `started` (with its `itemId`) first.         |
-| `thread_wake`     | `hivenod thread wake ID`     | Wakes a snoozed thread whose date has come.                                                                                      |
-| `thread_flag`     | `hivenod thread flag ID`     | Marks a thread urgent (or not, `urgent: false` / `--off`): the notifier pings the member at once, whatever the quiet hours.      |
-| `thread_due`      | `hivenod thread due ID ISO`  | Sets the deadline a message states (ISO 8601 with its offset), or clears it (`due: null` / `--clear`). Today ranks by it.        |
+| Tool                  | CLI                                     | What it does                                                                                                                                                                |
+| --------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inbox_add`           | `hivenod inbox add`                     | Brings a message in. It's for `member`, by default the person who connected the agent. Repeats are reported as duplicates.                                                  |
+| `inbox_list`          | `hivenod inbox list`                    | Lists what agents have to do: `toWork`, `toCarryOut` (approved outcomes this agent carries out) and `toWake`.                                                               |
+| `thread_read`         | `hivenod thread read ID`                | Shows one thread: messages, subject, outcomes and decisions, notes and Q&A, and what to do next.                                                                            |
+| `subject_list`        | `hivenod subject list`                  | Lists a member's subjects, with how many threads wait for them and how many are open.                                                                                       |
+| `subject_assign`      | `hivenod subject assign ID`             | Files or moves a thread under an existing subject or a new one. A matching name reuses the existing subject.                                                                |
+| `subject_search`      | `hivenod subject search …`              | Finds a member's subjects by name, people, channel and thread text, with filters (see "Finding subjects").                                                                  |
+| `subject_relate`      | `hivenod subject relate A B`            | Proposes two subjects as related, with a note. The member OKs or turns it down.                                                                                             |
+| `inbox_note`          | `hivenod inbox note ID`                 | Adds an investigation note to the timeline.                                                                                                                                 |
+| `inbox_ask`           | `hivenod inbox ask ID`                  | Asks the member a question. The thread waits in Needs you.                                                                                                                  |
+| `outcome_propose`     | `hivenod outcome propose ID`            | Proposes an outcome of a type from the registry, with its fields. With `revises` (`--revises OID`): that outcome's next version.                                            |
+| `plan_propose`        | `hivenod plan propose ID`               | Proposes a plan: 1-8 ordered steps in one call (`--steps-file F`, `-` for stdin). See "Plans: the agent side".                                                              |
+| `outcome_done`        | `hivenod outcome done OID`              | The executor reports an approved outcome as done or failed; a Build it plan step as `started` (with its `itemId`) first.                                                    |
+| `thread_wake`         | `hivenod thread wake ID`                | Wakes a snoozed thread whose date has come.                                                                                                                                 |
+| `thread_flag`         | `hivenod thread flag ID`                | Marks a thread urgent (or not, `urgent: false` / `--off`): the notifier pings the member at once, whatever the quiet hours.                                                 |
+| `thread_due`          | `hivenod thread due ID ISO`             | Sets the deadline a message states (ISO 8601 with its offset), or clears it (`due: null` / `--clear`). Today ranks by it.                                                   |
+| `thread_recheck_done` | `hivenod thread recheck-done ID RESULT` | Answers the member's re-check: `still_good` (stamps the open proposals), `revised` (after `outcome_propose revises`) or `asked` (after `inbox_ask`), with an optional note. |
 
 ### Decision data (item kt3E7u9EliL3q2veDDI0)
 
@@ -440,6 +484,10 @@ first. (In Claude Code, the plugin's `hivenod` skill runs each thread in a backg
   `state == 'revising'`). The text carries the chips and the instruction and says to revise
   with `outcome_propose revises=<id>`: apply only what was asked, keep the rest, never reject or
   start a new outcome. One event per request; a new request after a cancel is a new event.
+- **Re-check** (`recheck`) goes to the home agent while the thread's `recheck.state` is
+  `pending` (a listener: `fetchedBy == me`, `recheck.state == 'pending'`). One event per request
+  (`requestedAt`); a later request after the answer is a new event. The text says to re-read, keep
+  or revise each open proposal and unrun step, or ask, then answer with `thread_recheck_done`.
 - **A nudge due** (`nudge_due`) also goes to the home agent: the thread has waited on them for
   `nudgeAfter` (3 days) since its last change. Noting why not (`inbox_note`) restarts the wait.
 - **Carrying out an approved outcome** (`carry_out`, with `outcome_id` and `outcome_type`) goes
