@@ -16,6 +16,19 @@ const AGENT_TYPES = "'item.claimed', 'item.released', 'item.completed', 'item.up
  */
 const MUTATIONS = [
   [
+    'agent cliVersion unbounded',
+    [["&& strOrNull(request.resource.data.get('cliVersion', null), 40))", '&& true)']],
+  ],
+  [
+    'cliVersion without presence',
+    [
+      [
+        "&& request.resource.data.lastSeenAt == request.time\n            && strOrNull(request.resource.data.get('seenHost', null), 80)",
+        "&& strOrNull(request.resource.data.get('seenHost', null), 80)",
+      ],
+    ],
+  ],
+  [
     'agents may decide',
     [
       [

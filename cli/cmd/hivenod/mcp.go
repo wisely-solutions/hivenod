@@ -12,6 +12,7 @@ import (
 	"github.com/wisely-solutions/hivenod/cli/internal/credentials"
 	"github.com/wisely-solutions/hivenod/cli/internal/hive"
 	"github.com/wisely-solutions/hivenod/cli/internal/mcpserver"
+	"github.com/wisely-solutions/hivenod/cli/internal/update"
 )
 
 // MaxItemsLimit is the highest max_items accepted.
@@ -104,6 +105,10 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 			StatusMinute: msEnv("HIVENOD_STATUS_MINUTE_MS"),
 			Inbox: hive.InboxOptions{MaxInbox: maxInbox, PerMinute: int(msEnv("HIVENOD_INBOX_PER_MIN") / time.Millisecond),
 				NudgeAfter: msEnv("HIVENOD_INBOX_NUDGE_MS"), Lease: msEnv("HIVENOD_INBOX_LEASE_MS"), Tick: msEnv("HIVENOD_INBOX_TICK_MS")}}
+		if cfg.WebURL != "" && os.Getenv("HIVENOD_NO_UPDATE_CHECK") == "" {
+			u := &update.Updater{Site: cfg.WebURL}
+			opts.UpdateNotice = func(c context.Context) string { return u.Notice(c, credentials.Home(), time.Now()) }
+		}
 		srv.OnInitialized = func() {
 			c, err := lazy.Get(ctx)
 			if err == nil {
