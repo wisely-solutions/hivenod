@@ -500,6 +500,16 @@ type InboxSubject struct {
 	Name      string `firestore:"name" json:"name"`
 	// Area is the optional area or tag (nil: none).
 	Area *string `firestore:"area" json:"area"`
+	// Label is the optional label (the kind of request); LabelSuggested is true while it is the
+	// agent's guess; LabelBy is "agent" or "member".
+	Label          *string `firestore:"label" json:"label"`
+	LabelSuggested bool    `firestore:"labelSuggested" json:"labelSuggested"`
+	LabelBy        *string `firestore:"labelBy" json:"labelBy"`
+}
+
+// InboxLabels is workspaces/{w}/inboxConfig/labels: the workspace's label list.
+type InboxLabels struct {
+	Labels []string `firestore:"labels" json:"labels"`
 }
 
 // InboxEvent is workspaces/{w}/inboxEvents/{eid}.

@@ -489,6 +489,19 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 	}, nil
 }
 
+// labelList is the workspace's label list: the admin's document, else the defaults.
+func (c *Client) labelList(ctx context.Context) ([]string, error) {
+	var l model.InboxLabels
+	ok, err := c.getDoc(ctx, model.Paths.InboxLabels(c.WorkspaceID), &l)
+	if err != nil {
+		return nil, err
+	}
+	if !ok || len(l.Labels) == 0 {
+		return append([]string(nil), actions.DefaultInboxLabels...), nil
+	}
+	return l.Labels, nil
+}
+
 // SubjectList lists a person's subjects (subject_list).
 func (c *Client) SubjectList(ctx context.Context, given string) (map[string]any, error) {
 	member, err := c.inboxMember(ctx, given)
@@ -529,11 +542,13 @@ func (c *Client) SubjectList(ctx context.Context, given string) (map[string]any,
 	type row struct {
 		id, name     string
 		area         *string
+		label        *string
+		suggested    bool
 		forYou, open int
 	}
 	rows := make([]row, 0, len(subs))
 	for _, s := range subs {
-		rows = append(rows, row{s.ID, s.Data.Name, s.Data.Area, count(s.ID, []string{"needsYou", "yourCall"}), count(s.ID, threadOpen)})
+		rows = append(rows, row{s.ID, s.Data.Name, s.Data.Area, s.Data.Label, s.Data.Label != nil && s.Data.LabelSuggested, count(s.ID, []string{"needsYou", "yourCall"}), count(s.ID, threadOpen)})
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		a, b := rows[i], rows[j]
@@ -550,13 +565,17 @@ func (c *Client) SubjectList(ctx context.Context, given string) (map[string]any,
 	})
 	out := make([]any, len(rows))
 	for i, r := range rows {
-		out[i] = map[string]any{"subjectId": r.id, "name": r.name, "area": strOrNull(r.area), "forYou": r.forYou, "open": r.open}
+		out[i] = map[string]any{"subjectId": r.id, "name": r.name, "area": strOrNull(r.area), "label": strOrNull(r.label), "labelSuggested": r.suggested, "forYou": r.forYou, "open": r.open}
 	}
-	return map[string]any{"member": member, "subjects": out, "unfiled": unfiled}, nil
+	labels, err := c.labelList(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"member": member, "subjects": out, "unfiled": unfiled, "labels": labels}, nil
 }
 
 // SubjectAssign files a thread under an existing or a new subject (subject_assign).
-func (c *Client) SubjectAssign(ctx context.Context, id string, subjectID, name, area *string) (map[string]any, error) {
+func (c *Client) SubjectAssign(ctx context.Context, id string, subjectID, name, area, label *string) (map[string]any, error) {
 	if (subjectID == nil) == (name == nil) {
 		return nil, Errf("Give either subjectId (an existing subject) or name (a new one).")
 	}
@@ -565,6 +584,7 @@ func (c *Client) SubjectAssign(ctx context.Context, id string, subjectID, name, 
 		return nil, err
 	}
 	target := subjectID
+	var existing *actions.ExistingLabel
 	if target != nil {
 		var s model.InboxSubject
 		ok, err := c.getDoc(ctx, model.Paths.InboxSubject(c.WorkspaceID, *target), &s)
@@ -574,6 +594,7 @@ func (c *Client) SubjectAssign(ctx context.Context, id string, subjectID, name, 
 		if !ok || s.MemberUID != t.MemberUID {
 			return nil, Errf(fmt.Sprintf("Subject %s not found among this person's subjects (see subject_list).", *target))
 		}
+		existing = &actions.ExistingLabel{Label: s.Label, LabelBy: s.LabelBy}
 	} else {
 		want := strings.ToLower(actions.Collapse(*name))
 		subs, err := listInbox[model.InboxSubject](ctx, c, "inboxSubjects", "memberUid", "==", t.MemberUID)
@@ -584,11 +605,19 @@ func (c *Client) SubjectAssign(ctx context.Context, id string, subjectID, name, 
 		for _, s := range subs {
 			if strings.ToLower(s.Data.Name) == want {
 				target = &s.ID
+				existing = &actions.ExistingLabel{Label: s.Data.Label, LabelBy: s.Data.LabelBy}
 				break
 			}
 		}
 	}
-	in := actions.AssignSubjectInput{ThreadID: id, Thread: actions.ThreadStateFrom(t), Area: area}
+	in := actions.AssignSubjectInput{ThreadID: id, Thread: actions.ThreadStateFrom(t), Area: area, Existing: existing}
+	if label != nil {
+		labels, err := c.labelList(ctx)
+		if err != nil {
+			return nil, err
+		}
+		in.Label, in.Labels = label, labels
+	}
 	if target != nil {
 		in.SubjectID = target
 	} else {
@@ -614,7 +643,14 @@ func (c *Client) SubjectAssign(ctx context.Context, id string, subjectID, name, 
 	if res.Created {
 		note = fmt.Sprintf("Filed under a new subject \"%s\".", subjectName)
 	}
-	return map[string]any{"threadId": id, "subjectId": res.SubjectID, "name": subjectName, "created": res.Created, "note": note}, nil
+	out := map[string]any{"threadId": id, "subjectId": res.SubjectID, "name": subjectName, "created": res.Created, "note": note}
+	if label != nil {
+		out["labelApplied"] = res.LabelApplied
+		if !res.LabelApplied {
+			out["labelNote"] = "The subject already has a label, so yours was not applied."
+		}
+	}
+	return out, nil
 }
 
 func (c *Client) threadAction(ctx context.Context, id string, build func(actions.ThreadState) (plan.Plan, error)) error {

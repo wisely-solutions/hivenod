@@ -115,6 +115,14 @@
       "tool": "subject_list",
       "ok": true,
       "out": {
+        "labels": [
+          "Sales",
+          "Support",
+          "Billing",
+          "Partnership",
+          "Internal",
+          "Other"
+        ],
         "member": "owner",
         "subjects": [],
         "unfiled": 1
@@ -600,11 +608,21 @@
       "tool": "subject_list",
       "ok": true,
       "out": {
+        "labels": [
+          "Sales",
+          "Support",
+          "Billing",
+          "Partnership",
+          "Internal",
+          "Other"
+        ],
         "member": "alice",
         "subjects": [
           {
             "area": null,
             "forYou": 0,
+            "label": null,
+            "labelSuggested": false,
             "name": "review date (payments)",
             "open": 1,
             "subjectId": "<id>"

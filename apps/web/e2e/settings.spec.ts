@@ -60,17 +60,20 @@ test('every tab opens, is axe clean and fits the screen', async ({ page }) => {
   await enter(page, 'Tabi Tabs');
   await page.goto('/settings/profile');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  await expect(page.getByRole('tablist', { name: 'Settings' }).getByRole('tab')).toHaveCount(6);
+  await expect(page.getByRole('tablist', { name: 'Settings' }).getByRole('tab')).toHaveCount(7);
   for (const [label, heading] of [
     ['Profile', 'Profile'],
     ['Organization', 'Organization'],
     ['Members', 'Members'],
     ['Groups', 'Groups'],
     ['Projects', 'Projects'],
+    ['Inbox labels', 'Inbox labels'],
     ['Notifications', 'Notifications'],
   ] as const) {
     await tab(page, label).click();
-    await expect(page).toHaveURL(new RegExp(`/settings/${label.toLowerCase()}$`));
+    await expect(page).toHaveURL(
+      new RegExp(`/settings/${label === 'Inbox labels' ? 'labels' : label.toLowerCase()}$`),
+    );
     await expect(
       page.getByRole('heading', { name: heading, level: 2, exact: true }).first(),
     ).toBeVisible();

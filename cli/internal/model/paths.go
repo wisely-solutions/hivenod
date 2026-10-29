@@ -45,6 +45,8 @@ func (pathBuilders) DeleteEventID(kind, docID string) string { return "del-" + k
 func (pathBuilders) InboxSubject(w, s string) string {
 	return "workspaces/" + w + "/inboxSubjects/" + s
 }
+// InboxLabels is the workspace's label list (inboxPaths.labels).
+func (pathBuilders) InboxLabels(w string) string { return "workspaces/" + w + "/inboxConfig/labels" }
 func (pathBuilders) InboxThread(w, t string) string { return "workspaces/" + w + "/inboxThreads/" + t }
 func (pathBuilders) InboxMessage(w, m string) string {
 	return "workspaces/" + w + "/inboxMessages/" + m

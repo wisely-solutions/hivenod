@@ -90,11 +90,14 @@ const indexRoute = createRoute({
     who?: 'mine' | 'shared';
     /** One organization of the cross-organization list. */
     org?: string;
+    /** One subject label (item YaOErIjeIFG8Y3EvZuIp): only Inbox threads with it. */
+    label?: string;
   } => ({
     ...(typeof s.sel === 'string' && s.sel ? { sel: s.sel } : {}),
     ...(s.f === 'approvals' || s.f === 'questions' || s.f === 'findings' ? { f: s.f } : {}),
     ...(s.who === 'mine' || s.who === 'shared' ? { who: s.who } : {}),
     ...(typeof s.org === 'string' && s.org ? { org: s.org } : {}),
+    ...(typeof s.label === 'string' && s.label ? { label: s.label } : {}),
   }),
   component: IndexPage,
 });

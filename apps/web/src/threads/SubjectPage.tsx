@@ -19,6 +19,7 @@ import { Dialog, useToast } from '../ui/overlay';
 import { useMySubjects, useSubject } from './data';
 import { eventText, forMember, sortThreads, timeline } from './logic';
 import { BackLink, errorText, Section, StateChip, UrgentMark, when } from './parts';
+import { LabelChip } from './labels';
 import { RelatedSubjects } from './RelatedSubjects';
 
 export function SubjectPage() {
@@ -144,6 +145,9 @@ export function SubjectPage() {
         {waiting > 0 ? `${waiting} waiting for you · ` : ''}
         {rows.length} thread{rows.length === 1 ? '' : 's'}
       </p>
+      <div className="mt-2">
+        <LabelChip wid={wid} subjectId={sid} subject={s} withAdd />
+      </div>
       {editingArea ? (
         <form
           className="mt-3 flex flex-wrap items-end gap-2"

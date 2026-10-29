@@ -9,11 +9,13 @@
 import {
   canEditAgentSettings,
   groupSchema,
+  inboxSubjectSchema,
   inboxThreadSchema,
   memberProfileSchema,
   paths,
   projectSchema,
   workspaceSchema,
+  type InboxSubject,
   type InboxThread,
   type Item,
   type MemberProfile,
@@ -45,7 +47,7 @@ import {
   useShellData,
 } from '../shell/data';
 import { myProjectsQuery } from '../shell/queries';
-import { myThreadsQuery } from '../threads/data';
+import { mySubjectsQuery, myThreadsQuery } from '../threads/data';
 import { buildNeeds, countNeeds, type Needs, type OrgInput } from './logic';
 
 export interface NeedsAll {
@@ -101,7 +103,22 @@ function useExtras(wid: string, uid: string) {
       synced: true,
     }),
   );
-  return { groups, names, threads };
+  const subjects = usePart<InboxSubject>(
+    useLiveQuery(
+      `needs-subjects:${wid}:${uid}`,
+      () => mySubjectsQuery(wid, uid),
+      inboxSubjectSchema,
+    ),
+  );
+  const subjectLabels = useMemo(() => {
+    const by: Record<string, { label: string; suggested: boolean }> = {};
+    for (const s of subjects.rows) {
+      const label = s.data.label?.trim();
+      if (label) by[s.id] = { label, suggested: s.data.labelSuggested === true };
+    }
+    return by;
+  }, [subjects.rows]);
+  return { groups, names, threads, subjectLabels };
 }
 
 /** The organization on screen: the shell already listens to its projects and items. */
@@ -110,7 +127,7 @@ function CurrentOrg({ onOrg }: { onOrg: (wid: string, s: OrgState) => void }) {
   const shell = useShellData();
   const wid = session.workspaceId;
   const uid = session.me.uid;
-  const { groups, names, threads } = useExtras(wid, uid);
+  const { groups, names, threads, subjectLabels } = useExtras(wid, uid);
   const input = useMemo<OrgInput>(
     () => ({
       wid,
@@ -124,9 +141,10 @@ function CurrentOrg({ onOrg }: { onOrg: (wid: string, s: OrgState) => void }) {
       proposals: shell.proposals,
       groups: groups.rows,
       threads: threads.rows,
+      subjectLabels,
       names,
     }),
-    [wid, session, shell, groups.rows, threads.rows, names],
+    [wid, session, shell, groups.rows, threads.rows, subjectLabels, names],
   );
   const settled = !shell.loading && shell.needsSettled && threads.done;
   useEffect(() => onOrg(wid, { input, settled }), [wid, input, settled, onOrg]);
@@ -159,7 +177,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
   const [questions, questionsState, setQs] = useFeedRows<Message>();
   const [proposals, , setProposals] = useFeedRows<StepProposal>();
   const { items, suggestions } = useMemo(() => splitSuggestions(openRows), [openRows]);
-  const { groups, names, threads } = useExtras(wid, uid);
+  const { groups, names, threads, subjectLabels } = useExtras(wid, uid);
 
   const input = useMemo<OrgInput | null>(
     () =>
@@ -176,6 +194,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
             proposals,
             groups: groups.rows,
             threads: threads.rows,
+            subjectLabels,
             names,
           }
         : null,
@@ -191,6 +210,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
       proposals,
       groups.rows,
       threads.rows,
+      subjectLabels,
       names,
     ],
   );

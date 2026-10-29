@@ -35,6 +35,7 @@ import { Icon } from '../ui/icon';
 import { Dialog, useToast } from '../ui/overlay';
 import { useMySubjects, useThread } from './data';
 import { eventText, timeline } from './logic';
+import { LabelChip } from './labels';
 import { OutcomeCard } from './OutcomeCard';
 import { BackLink, errorText, Section, SourceTag, StateChip, when } from './parts';
 
@@ -140,6 +141,11 @@ export function ThreadPage() {
         {subjectName ? `${subjectName} · ` : 'Not filed yet · '}
         Brought in by {agentName(t.fetchedBy)} · last message {when(t.lastMessageAt.toMillis())}
       </p>
+      {t.subjectId && subject.state === 'ready' && subject.data?.label ? (
+        <div className="mt-2">
+          <LabelChip wid={wid} subjectId={t.subjectId} subject={subject.data} />
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <MoveControl

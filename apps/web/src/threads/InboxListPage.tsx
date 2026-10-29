@@ -17,11 +17,14 @@ import { useInbox, useMyMessages, useMyRelations } from './data';
 import {
   countWaitingThreads,
   DEFAULT_QUIET_DAYS,
+  filterByLabels,
   findSubjectRows,
   groupByArea,
+  labelCounts,
   subjectRows,
   type SubjectRow,
 } from './logic';
+import { LabelChip } from './labels';
 import { StateChip, UrgentMark, when } from './parts';
 
 const DAYS = [
@@ -67,12 +70,13 @@ export function InboxListPage() {
   const [hasOpen, setHasOpen] = useState(false);
   const [days, setDays] = useState(0);
   const [quietDays, setQuietDays] = useState(loadQuietDays);
+  const [labelKeys, setLabelKeys] = useState<ReadonlySet<string>>(() => new Set());
   const finding = q.trim().length > 0 || waitingForMe || hasOpen || days > 0;
   const messages = useMyMessages(uid, wids, finding);
   const relations = useMyRelations(uid, wids, finding);
   const [now] = useState(() => Date.now());
   const rows = useMemo(() => subjectRows(inbox.subjects, inbox.threads), [inbox]);
-  const shown = useMemo(
+  const found = useMemo(
     () =>
       finding
         ? findSubjectRows(
@@ -103,6 +107,15 @@ export function InboxListPage() {
       now,
     ],
   );
+  // The label filter combines with everything above (organization, find, area grouping).
+  const labelOptions = useMemo(() => labelCounts(found), [found]);
+  const shown = useMemo(() => filterByLabels(found, labelKeys), [found, labelKeys]);
+  const toggleLabel = (key: string) =>
+    setLabelKeys((cur) => {
+      const next = new Set(cur);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const grouped = useMemo(() => groupByArea(shown, quietDays, now), [shown, quietDays, now]);
   const hasAreas = grouped.groups.some((g) => g.label !== null);
   const orgName = (wid: string) => orgs.find((o) => o.id === wid)?.name ?? '';
@@ -177,6 +190,26 @@ export function InboxListPage() {
         />
       </div>
 
+      {labelOptions.length > 0 || labelKeys.size > 0 ? (
+        <div role="group" aria-label="Label" className="mb-4 flex flex-wrap items-center gap-2">
+          {[
+            ...labelOptions,
+            ...[...labelKeys]
+              .filter((k) => !labelOptions.some((o) => o.key === k))
+              .map((k) => ({ key: k, label: k, count: 0 })),
+          ].map((o) => (
+            <FilterChip
+              key={o.key}
+              pressed={labelKeys.has(o.key)}
+              onClick={() => toggleLabel(o.key)}
+              data-label-filter={o.key}
+            >
+              {o.label} · {o.count}
+            </FilterChip>
+          ))}
+        </div>
+      ) : null}
+
       {inbox.state === 'error' ? (
         <p role="alert" className="mb-3 text-14 text-sendback">
           Inbox could not be loaded. Check your connection and try again.
@@ -219,6 +252,7 @@ export function InboxListPage() {
                     key={`${r.wid}/${r.id ?? ''}`}
                     row={r}
                     org={scope ? '' : orgName(r.wid)}
+                    uid={uid}
                   />
                 ))}
               </ul>
@@ -235,6 +269,7 @@ export function InboxListPage() {
                     key={`${r.wid}/${r.id ?? ''}`}
                     row={r}
                     org={scope ? '' : orgName(r.wid)}
+                    uid={uid}
                   />
                 ))}
               </ul>
@@ -250,14 +285,17 @@ function FilterChip({
   pressed,
   onClick,
   children,
+  ...rest
 }: {
   pressed: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  'data-label-filter'?: string;
 }) {
   return (
     <button
       type="button"
+      {...rest}
       aria-pressed={pressed}
       onClick={onClick}
       className={cn(
@@ -275,7 +313,7 @@ function FilterChip({
 /** At most this many threads under a subject in the list; the subject page has them all. */
 const SHOWN_THREADS = 4;
 
-function SubjectCard({ row, org }: { row: SubjectRow; org: string }) {
+function SubjectCard({ row, org, uid }: { row: SubjectRow; org: string; uid: string }) {
   const more = row.threads.length - SHOWN_THREADS;
   return (
     <li
@@ -300,6 +338,18 @@ function SubjectCard({ row, org }: { row: SubjectRow; org: string }) {
           )}
         </h2>
         {row.area ? <Badge tone="neutral">{row.area}</Badge> : null}
+        {row.id && row.label ? (
+          <LabelChip
+            wid={row.wid}
+            subjectId={row.id}
+            subject={{
+              memberUid: uid,
+              name: row.name,
+              label: row.label,
+              labelSuggested: row.labelSuggested,
+            }}
+          />
+        ) : null}
         {row.waiting > 0 ? <Badge tone="gate">{row.waiting} for you</Badge> : null}
         <span className="text-13 text-text-2">
           {org ? `${org} · ` : ''}

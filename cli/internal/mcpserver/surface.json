@@ -523,7 +523,7 @@
       },
       {
         "name": "subject_list",
-        "description": "A person's Inbox subjects: lasting, well-named topics that collect every thread about them, from any source and sender (e.g. \"Klarna refunds (M&S Payments)\"), with their area (if any), how many threads wait for the person and how many are open. Read them before subject_assign and reuse the one a thread belongs to; make a new one only for a new topic.",
+        "description": "A person's Inbox subjects: lasting, well-named topics that collect every thread about them, from any source and sender (e.g. \"Klarna refunds (M&S Payments)\"), with their area and label (if any; labelSuggested is true while the person has not confirmed it), the labels the person's organization offers (labels), how many threads wait for the person and how many are open. Read them before subject_assign and reuse the one a thread belongs to; make a new one only for a new topic.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -542,7 +542,7 @@
       },
       {
         "name": "subject_assign",
-        "description": "File a thread under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. \"Grafana access (Pairpoint)\"). A name that matches an existing subject reuses it. Give exactly one of the two. Also moves a thread to a better subject. Optional area: the area or tag of the subject (a client, a product, \"admin\"), which the Inbox groups subjects by; set it when you file under a new subject, or to correct one (empty clears it). Reuse the areas subject_list shows rather than inventing near-twins.",
+        "description": "File a thread under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. \"Grafana access (Pairpoint)\"). A name that matches an existing subject reuses it. Give exactly one of the two. Also moves a thread to a better subject. Optional area: the area or tag of the subject (a client, a product, \"admin\"), which the Inbox groups subjects by; set it when you file under a new subject, or to correct one (empty clears it). Reuse the areas subject_list shows rather than inventing near-twins. Optional label: the kind of request, exactly one of the labels subject_list returns (Sales, Support, … by default; matched ignoring case, an unknown one is refused with the allowed values). On every new subject suggest exactly one label; use Other if none fits. The person confirms or changes it. It is applied only to a new subject or one with no label yet; a label the person confirmed is never changed.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -566,6 +566,12 @@
               "description": "The subject's area or tag (a client, a product, \"admin\"); empty clears it",
               "type": "string",
               "maxLength": 60
+            },
+            "label": {
+              "description": "One of the labels from subject_list (e.g. Sales); shown to the person as a suggestion",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
             }
           },
           "required": [
@@ -2161,7 +2167,7 @@
       },
       {
         "name": "subject_list",
-        "description": "A person's Inbox subjects: lasting, well-named topics that collect every thread about them, from any source and sender (e.g. \"Klarna refunds (M&S Payments)\"), with their area (if any), how many threads wait for the person and how many are open. Read them before subject_assign and reuse the one a thread belongs to; make a new one only for a new topic.",
+        "description": "A person's Inbox subjects: lasting, well-named topics that collect every thread about them, from any source and sender (e.g. \"Klarna refunds (M&S Payments)\"), with their area and label (if any; labelSuggested is true while the person has not confirmed it), the labels the person's organization offers (labels), how many threads wait for the person and how many are open. Read them before subject_assign and reuse the one a thread belongs to; make a new one only for a new topic.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2180,7 +2186,7 @@
       },
       {
         "name": "subject_assign",
-        "description": "File a thread under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. \"Grafana access (Pairpoint)\"). A name that matches an existing subject reuses it. Give exactly one of the two. Also moves a thread to a better subject. Optional area: the area or tag of the subject (a client, a product, \"admin\"), which the Inbox groups subjects by; set it when you file under a new subject, or to correct one (empty clears it). Reuse the areas subject_list shows rather than inventing near-twins.",
+        "description": "File a thread under a subject of its person: an existing one (subjectId, from subject_list) or a new one (name: the topic, then the client or area, and who when it helps, e.g. \"Grafana access (Pairpoint)\"). A name that matches an existing subject reuses it. Give exactly one of the two. Also moves a thread to a better subject. Optional area: the area or tag of the subject (a client, a product, \"admin\"), which the Inbox groups subjects by; set it when you file under a new subject, or to correct one (empty clears it). Reuse the areas subject_list shows rather than inventing near-twins. Optional label: the kind of request, exactly one of the labels subject_list returns (Sales, Support, … by default; matched ignoring case, an unknown one is refused with the allowed values). On every new subject suggest exactly one label; use Other if none fits. The person confirms or changes it. It is applied only to a new subject or one with no label yet; a label the person confirmed is never changed.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2204,6 +2210,12 @@
               "description": "The subject's area or tag (a client, a product, \"admin\"); empty clears it",
               "type": "string",
               "maxLength": 60
+            },
+            "label": {
+              "description": "One of the labels from subject_list (e.g. Sales); shown to the person as a suggestion",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 30
             }
           },
           "required": [

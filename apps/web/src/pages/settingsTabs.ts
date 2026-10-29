@@ -4,6 +4,7 @@ export const SETTINGS_TABS = [
   'members',
   'groups',
   'projects',
+  'labels',
   'notifications',
 ] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
@@ -14,6 +15,7 @@ export const SETTINGS_LABELS: Record<SettingsTab, string> = {
   members: 'Members',
   groups: 'Groups',
   projects: 'Projects',
+  labels: 'Inbox labels',
   notifications: 'Notifications',
 };
 
