@@ -184,3 +184,67 @@ export function isRulesApi503(output) {
   const text = String(output ?? '');
   return /firebaserules\.googleapis\.com/.test(text) && /\b503\b/.test(text);
 }
+
+/** Firestore rules API answered 409: the `cloud.firestore` release already exists. */
+export function isRules409(output) {
+  return /releases\/cloud\.firestore.{0,40}already exists/i.test(String(output ?? ''));
+}
+
+/**
+ * What to do after a failed `firebase deploy --only firestore`.
+ * - 503 from the rules API: retry (after 60 s), at most `max503` times.
+ * - 409 "already exists": success when the live ruleset's source equals the local one
+ *   (`remoteMatches === true`); otherwise retry `max409` time(s), then fail.
+ * - anything else: fail.
+ * @param {{output: string, retries503: number, retries409: number, remoteMatches?: boolean,
+ *   max503?: number, max409?: number}} s
+ * @returns {'retry' | 'success' | 'fail'}
+ */
+export function rulesDeployDecision({
+  output,
+  retries503,
+  retries409,
+  remoteMatches,
+  max503 = 2,
+  max409 = 1,
+}) {
+  if (isRulesApi503(output)) return retries503 < max503 ? 'retry' : 'fail';
+  if (isRules409(output)) {
+    if (remoteMatches === true) return 'success';
+    return retries409 < max409 ? 'retry' : 'fail';
+  }
+  return 'fail';
+}
+
+const normRules = (s) =>
+  String(s ?? '')
+    .replace(/\r\n/g, '\n')
+    .trim();
+
+/**
+ * Does the live `cloud.firestore` release point at a ruleset whose source equals `localSource`?
+ * `getJson(url)` does an authorised GET and returns the parsed body (injected, so tests mock it).
+ * Any failure counts as "no match".
+ */
+export async function liveRulesMatch({ project, localSource, getJson }) {
+  try {
+    const base = 'https://firebaserules.googleapis.com/v1';
+    const rel = await getJson(`${base}/projects/${project}/releases/cloud.firestore`);
+    if (!rel?.rulesetName) return false;
+    const set = await getJson(`${base}/${rel.rulesetName}`);
+    const files = set?.source?.files ?? [];
+    return files.some((f) => normRules(f.content) === normRules(localSource));
+  } catch {
+    return false;
+  }
+}
+
+/** The ordered steps of a production deploy, for logs and DEPLOY_DRY_RUN=1. */
+export function deployPlan(project, commit = 'HEAD') {
+  const msg = `commit ${String(commit).slice(0, 7)}`;
+  return [
+    'build (pnpm build) and stamp version.json',
+    `step 1/2 rules+indexes: firebase deploy --only firestore --project ${project} (503: retry after 60 s, up to 2x; 409 already exists: compare live ruleset with firestore.rules, match = success, else retry once after 60 s)`,
+    `step 2/2 hosting: firebase deploy --only hosting --message "${msg}" --project ${project}`,
+  ];
+}
