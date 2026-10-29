@@ -23,7 +23,9 @@ const OPTIONS = { apiKey: 'fake', projectId: 'hive-board-43be' };
 async function enter(page: Page, who: ReturnType<typeof person>) {
   await page.goto('/');
   await signIn(page, who);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => workspaceOf(who.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   return { wid: await workspaceOf(who.email), uid: await uidOf(who.email) };
 }
@@ -158,10 +160,12 @@ test('an admin deletes the organization: everything goes, the agent is cut off, 
   const mp = maxSide.page;
   await mp.goto('/');
   await signIn(mp, max);
-  await expect(mp.getByRole('heading', { name: 'Hi Max' })).toBeVisible({ timeout: 20_000 });
+  await expect(mp.getByRole('heading', { name: /^Good \w+, Max$/ })).toBeVisible({
+    timeout: 20_000,
+  });
   await mp.goto(link);
   await mp.getByRole('button', { name: 'Join organization' }).click();
-  await expect(mp.getByRole('heading', { name: 'Hi Max' })).toBeVisible();
+  await expect(mp.getByRole('heading', { name: /^Good \w+, Max$/ })).toBeVisible();
   const maxOwn = await workspaceOf(max.email);
   expect(maxOwn).toBe(wid);
 

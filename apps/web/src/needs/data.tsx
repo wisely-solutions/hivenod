@@ -9,12 +9,14 @@
 import {
   canEditAgentSettings,
   groupSchema,
+  inboxOutcomeSchema,
   inboxSubjectSchema,
   inboxThreadSchema,
   memberProfileSchema,
   paths,
   projectSchema,
   workspaceSchema,
+  type InboxOutcome,
   type InboxSubject,
   type InboxThread,
   type Item,
@@ -22,7 +24,7 @@ import {
   type Message,
   type StepProposal,
 } from '@hive/shared';
-import { collection, query } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import {
   createContext,
   useCallback,
@@ -62,6 +64,8 @@ export interface NeedsAll {
   names: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /** Every organization's Needs-you feeds have answered (no patience). */
   settled: boolean;
+  /** Each organization's inputs (threads in every state, open proposals), for the Today page. */
+  inputs: readonly OrgInput[];
 }
 
 const Ctx = createContext<NeedsAll | null>(null);
@@ -103,6 +107,21 @@ function useExtras(wid: string, uid: string) {
       synced: true,
     }),
   );
+  // The member's open proposals (item kt3E7): a Your-call thread with none left is not waiting,
+  // and the Today page shows them on the decision card.
+  const proposals = usePart<InboxOutcome>(
+    useLiveQuery(
+      `needs-proposals:${wid}:${uid}`,
+      () =>
+        query(
+          collection(db, `workspaces/${wid}/inboxOutcomes`),
+          where('memberUid', '==', uid),
+          where('state', '==', 'proposed'),
+        ),
+      inboxOutcomeSchema,
+      { synced: true },
+    ),
+  );
   const subjects = usePart<InboxSubject>(
     useLiveQuery(
       `needs-subjects:${wid}:${uid}`,
@@ -118,7 +137,7 @@ function useExtras(wid: string, uid: string) {
     }
     return by;
   }, [subjects.rows]);
-  return { groups, names, threads, subjectLabels };
+  return { groups, names, threads, proposals, subjectLabels };
 }
 
 /** The organization on screen: the shell already listens to its projects and items. */
@@ -127,7 +146,7 @@ function CurrentOrg({ onOrg }: { onOrg: (wid: string, s: OrgState) => void }) {
   const shell = useShellData();
   const wid = session.workspaceId;
   const uid = session.me.uid;
-  const { groups, names, threads, subjectLabels } = useExtras(wid, uid);
+  const { groups, names, threads, proposals, subjectLabels } = useExtras(wid, uid);
   const input = useMemo<OrgInput>(
     () => ({
       wid,
@@ -141,12 +160,13 @@ function CurrentOrg({ onOrg }: { onOrg: (wid: string, s: OrgState) => void }) {
       proposals: shell.proposals,
       groups: groups.rows,
       threads: threads.rows,
+      openOutcomes: proposals.rows,
       subjectLabels,
       names,
     }),
-    [wid, session, shell, groups.rows, threads.rows, subjectLabels, names],
+    [wid, session, shell, groups.rows, threads.rows, proposals.rows, subjectLabels, names],
   );
-  const settled = !shell.loading && shell.needsSettled && threads.done;
+  const settled = !shell.loading && shell.needsSettled && threads.done && proposals.done;
   useEffect(() => onOrg(wid, { input, settled }), [wid, input, settled, onOrg]);
   useEffect(() => () => onOrg(wid, null), [wid, onOrg]);
   return null;
@@ -177,7 +197,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
   const [questions, questionsState, setQs] = useFeedRows<Message>();
   const [proposals, , setProposals] = useFeedRows<StepProposal>();
   const { items, suggestions } = useMemo(() => splitSuggestions(openRows), [openRows]);
-  const { groups, names, threads, subjectLabels } = useExtras(wid, uid);
+  const { groups, names, threads, proposals: open, subjectLabels } = useExtras(wid, uid);
 
   const input = useMemo<OrgInput | null>(
     () =>
@@ -194,6 +214,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
             proposals,
             groups: groups.rows,
             threads: threads.rows,
+            openOutcomes: open.rows,
             subjectLabels,
             names,
           }
@@ -210,6 +231,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
       proposals,
       groups.rows,
       threads.rows,
+      open.rows,
       subjectLabels,
       names,
     ],
@@ -221,6 +243,7 @@ function OtherOrg({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgStat
     (!role ||
       (projectsDone &&
         threads.done &&
+        open.done &&
         projects.every((p) => answered(itemsState[p.id]) && answered(questionsState[p.id]))));
   useEffect(() => {
     // Removed from it (or it is gone): it simply drops out of the list.
@@ -292,6 +315,7 @@ export function NeedsAllProvider({ children }: { children: ReactNode }) {
       orgs: inputs.map((i) => ({ wid: i.wid, name: i.name })),
       names: Object.fromEntries(inputs.map((i) => [i.wid, i.names])),
       settled,
+      inputs,
     };
   }, [order, states, uid, pending, patient, shell.needsReady]);
   return (

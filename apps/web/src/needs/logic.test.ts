@@ -1,4 +1,4 @@
-import type { Group, InboxThread, Item, Message, Project } from '@hive/shared';
+import type { Group, InboxOutcome, InboxThread, Item, Message, Project } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
 import type { Row } from '../lib/live';
 import {
@@ -11,6 +11,7 @@ import {
   filterNeeds,
   groupsOf,
   orderNeeds,
+  orderToday,
   parseScope,
   whoLabel,
   type NeedsEntry,
@@ -99,6 +100,7 @@ function org(wid: string, over: Partial<OrgInput> = {}): OrgInput {
     adminUids: [],
     groups: [],
     threads: [],
+    openOutcomes: [],
     names: { ana: 'Ana', ben: 'Ben', cy: 'Cy', me: 'Me' },
     projects: [],
     items: {},
@@ -108,6 +110,24 @@ function org(wid: string, over: Partial<OrgInput> = {}): OrgInput {
 }
 
 const row = <T>(id: string, data: T): Row<T> => ({ id, data }) as Row<T>;
+function outcome(threadId: string, type: string, over: Partial<InboxOutcome> = {}): InboxOutcome {
+  return {
+    memberUid: 'me',
+    threadId,
+    type,
+    fields: {},
+    state: 'proposed',
+    note: '',
+    proposedBy: 'agent',
+    executor: null,
+    decision: null,
+    result: null,
+    createdAt: ts(100),
+    updatedAt: ts(100),
+    lastEventId: 'e',
+    ...over,
+  } as unknown as InboxOutcome;
+}
 
 describe('buildNeeds: rows of every organization', () => {
   const a = org('wa', {
@@ -118,6 +138,7 @@ describe('buildNeeds: rows of every organization', () => {
     projects: [row('pb', project('Site', { deciderUids: ['me', 'ana'] }))],
     items: { pb: [row('i2', item({ title: 'Shared', updatedAt: ts(500) } as Partial<Item>))] },
     threads: [row('t1', thread()), row('t2', thread({ state: 'done' }))],
+    openOutcomes: [row('o1', outcome('t1', 'reply'))],
   });
   const c = org('wc', {
     projects: [row('pc', project('Ops', { deciderUids: ['me', 'ana', 'ben'], groupIds: ['g1'] }))],
@@ -301,14 +322,63 @@ describe('kind filter', () => {
   });
 });
 
+describe('Today (item kt3E7): proposals, tidy-ups and the stack order', () => {
+  const NOW = 10 * 86_400_000;
+  const H = 3_600_000;
+  it('Your call with no open proposal is not listed; a lone sure ignore is a tidy-up', () => {
+    const o = org('w', {
+      threads: [
+        row('carrying', thread()),
+        row('tidy', thread()),
+        row('two', thread()),
+        row('ask', thread({ state: 'needsYou' })),
+      ],
+      openOutcomes: [
+        row('o1', outcome('tidy', 'ignore', { confidence: 'high' })),
+        row('o2', outcome('two', 'ignore', { confidence: 'high' })),
+        row('o3', outcome('two', 'reply', { createdAt: ts(50) as never })),
+        row('o4', outcome('carrying', 'reply', { state: 'approved' })),
+      ],
+    });
+    const n = buildNeeds([o], 'me', NOW);
+    expect(n.todo.map((e) => e.key).sort()).toEqual(['t:w:ask', 't:w:tidy', 't:w:two']);
+    const by = Object.fromEntries(n.todo.map((e) => [e.key, e]));
+    expect(by['t:w:tidy']!.tidy).toBe(true);
+    expect(by['t:w:two']!.tidy).toBe(false);
+    expect(by['t:w:two']!.proposals!.map((p) => p.id)).toEqual(['o3', 'o2']);
+  });
+
+  it('band-1 threads, urgent project entries, band-2 threads, then the rest oldest first', () => {
+    const t = (key: string, over: Partial<InboxThread>, since: number) =>
+      e({ key, kind: 'thread', since, thread: { id: key, data: thread(over) } });
+    const list = [
+      e({ key: 'project-old', since: 1 }),
+      t('ask', { state: 'needsYou' }, 5),
+      e({ key: 'project-urgent', urgent: true, since: 9 }),
+      t('due-3d', { due: ts(NOW + 72 * H) as never }, 8),
+      t('due-2h', { due: ts(NOW + 2 * H) as never }, 7),
+      t('urgent', { urgent: true }, 6),
+      { ...t('tidy', {}, 0), tidy: true },
+    ];
+    expect(orderToday(list, NOW).map((x) => x.key)).toEqual([
+      'due-2h',
+      'urgent',
+      'project-urgent',
+      'due-3d',
+      'project-old',
+      'ask',
+    ]);
+  });
+});
+
 describe('label filter (item YaOErIjeIFG8Y3EvZuIp)', () => {
   const o = org('wb', {
     projects: [row('pb', project('Site', { deciderUids: ['me'] }))],
     items: { pb: [row('i2', item({ title: 'An item' } as Partial<Item>))] },
     threads: [
-      row('t1', thread({ subjectId: 's1' } as never)),
-      row('t2', thread({ subjectId: 's2' } as never)),
-      row('t3', thread({ subjectId: 's3' } as never)),
+      row('t1', thread({ subjectId: 's1', state: 'needsYou' } as never)),
+      row('t2', thread({ subjectId: 's2', state: 'needsYou' } as never)),
+      row('t3', thread({ subjectId: 's3', state: 'needsYou' } as never)),
     ],
     subjectLabels: {
       s1: { label: 'Sales', suggested: true },

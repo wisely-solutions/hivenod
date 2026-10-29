@@ -49,6 +49,7 @@ export function InboxRow({
   swipeable,
   select,
   who,
+  org,
   onOpen,
   onSwipe,
   onLongPress,
@@ -65,6 +66,8 @@ export function InboxRow({
   select?: { show: boolean; checked: boolean; onToggle: (shift: boolean) => void };
   /** Who else can act on it: "Only you" or "You or others · <names>" (item 2YZRd). */
   who?: Who;
+  /** The organization's name, when the member is in several (the Today stack mixes them). */
+  org?: string;
   onOpen: () => void;
   onSwipe: (action: 'approve' | 'iterate') => void;
   onLongPress: () => void;
@@ -190,6 +193,7 @@ export function InboxRow({
               label={stuck ? 'Agents are stuck' : KIND_LABEL[entry.kind]}
             />
             <span className="min-w-0 flex-1 truncate">
+              {org ? `${org} · ` : ''}
               {project.emoji} {project.name} · {pathStep?.name ?? step?.name ?? 'Step'}
             </span>
             <span className="shrink-0 tabular-nums">{waitLabel(entry.since, now)}</span>

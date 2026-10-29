@@ -82,7 +82,9 @@ test('agents fill the calendar; another organization shows only as busy', async 
   const me = person('Cara Calendar');
   await page.goto('/');
   await signIn(page, me);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => workspaceOf(me.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   const wid = await workspaceOf(me.email);
   const uid = await uidOf(me.email);

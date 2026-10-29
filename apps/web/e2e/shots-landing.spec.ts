@@ -32,7 +32,9 @@ const PID = 'website';
 async function seedDemo(page: Page) {
   await page.goto('/');
   await signIn(page, demo);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(demo.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
@@ -279,7 +281,9 @@ test('landing screenshots from the demo organization', async ({ browser }, info)
   const p2 = await phone.newPage();
   await p2.goto('/');
   await signIn(p2, demo);
-  await expect(p2.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    p2.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await p2.goto(`/p/${PID}?item=rewrite`);
   await expect(p2.getByRole('heading', { name: 'Pricing page rewrite' })).toBeVisible({
     timeout: 20_000,

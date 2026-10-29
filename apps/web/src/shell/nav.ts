@@ -4,9 +4,9 @@ import {
   CalendarDays,
   ChartNoAxesColumn,
   FolderKanban,
-  Inbox,
   Mails,
   Settings,
+  Sun,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -24,7 +24,8 @@ export interface NavEntry {
 }
 
 export const NAV: NavEntry[] = [
-  { to: '/', label: 'Needs you', icon: Inbox, badge: true, key: 'n' },
+  // Today (item kt3E7) replaced Needs you: same route, badge and `g n`.
+  { to: '/', label: 'Today', icon: Sun, badge: true, key: 'n' },
   { to: '/inbox', label: 'Inbox', icon: Mails, key: 'm' },
   { to: '/projects', label: 'All projects', icon: FolderKanban, key: 'p' },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays, key: 'c' },

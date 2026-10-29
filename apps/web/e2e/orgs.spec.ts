@@ -50,7 +50,9 @@ test('an admin adds a member to a project; the member sees nothing until then', 
   // The admin starts an organization with two projects, one the member will never be given.
   await page.goto('/');
   await signIn(page, admin);
-  await expect(page.getByRole('heading', { name: 'Hi Ada' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^Good \w+, Ada$/ })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect
     .poll(() => workspaceOf(admin.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
@@ -73,7 +75,7 @@ test('an admin adds a member to a project; the member sees nothing until then', 
   await mp.goto(link);
   await signIn(mp, member);
   await mp.getByRole('button', { name: 'Join organization' }).click();
-  await expect(mp.getByRole('heading', { name: 'Hi Max' })).toBeVisible();
+  await expect(mp.getByRole('heading', { name: /^Good \w+, Max$/ })).toBeVisible();
 
   // Max sees no projects at all, and says so.
   await mp.goto('/projects');
@@ -132,7 +134,9 @@ test('the last admin cannot be demoted or removed; promoting a second admin free
   const member = person('Max Member');
   await page.goto('/');
   await signIn(page, admin);
-  await expect(page.getByRole('heading', { name: 'Hi Ada' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^Good \w+, Ada$/ })).toBeVisible({
+    timeout: 20_000,
+  });
 
   await page.goto('/me/members');
   await page.getByRole('button', { name: 'Invite', exact: true }).click();
@@ -144,7 +148,7 @@ test('the last admin cannot be demoted or removed; promoting a second admin free
   await maxSide.page.goto(link);
   await signIn(maxSide.page, member);
   await maxSide.page.getByRole('button', { name: 'Join organization' }).click();
-  await expect(maxSide.page.getByRole('heading', { name: 'Hi Max' })).toBeVisible();
+  await expect(maxSide.page.getByRole('heading', { name: /^Good \w+, Max$/ })).toBeVisible();
 
   // Alone as admin: her role and her remove button are locked.
   await expect(page.getByText('Max Member', { exact: true })).toBeVisible();
@@ -172,7 +176,9 @@ test('a member can leave the organization; the only admin cannot', async ({ page
   const member = person('Max Member');
   await page.goto('/');
   await signIn(page, admin);
-  await expect(page.getByRole('heading', { name: 'Hi Ada' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^Good \w+, Ada$/ })).toBeVisible({
+    timeout: 20_000,
+  });
 
   await page.goto('/me/members');
   await page.getByRole('button', { name: 'Invite', exact: true }).click();
@@ -185,7 +191,7 @@ test('a member can leave the organization; the only admin cannot', async ({ page
   await mp.goto(link);
   await signIn(mp, member);
   await mp.getByRole('button', { name: 'Join organization' }).click();
-  await expect(mp.getByRole('heading', { name: 'Hi Max' })).toBeVisible();
+  await expect(mp.getByRole('heading', { name: /^Good \w+, Max$/ })).toBeVisible();
 
   // Ada is the only admin: she cannot leave.
   await page.goto('/settings/organization');
@@ -218,7 +224,9 @@ test('one person, several organizations: create, switch, and keep their projects
   const who = person('Sam Several');
   await page.goto('/');
   await signIn(page, who);
-  await expect(page.getByRole('heading', { name: 'Hi Sam' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^Good \w+, Sam$/ })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect.poll(() => workspaceOf(who.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   const first = await workspaceOf(who.email);
   const uid = await uidOf(who.email);
@@ -268,7 +276,9 @@ test('the chosen organization stays through reloads, a second tab and profile wr
   const who = person('Kim Keeper');
   await page.goto('/');
   await signIn(page, who);
-  await expect(page.getByRole('heading', { name: 'Hi Kim' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^Good \w+, Kim$/ })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect.poll(() => workspaceOf(who.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   const first = await workspaceOf(who.email);
 
@@ -307,7 +317,9 @@ test('a Personal organization made by the operator command shows in the switcher
   const pat = person('Pia Personal');
   await page.goto('/');
   await signIn(page, pat);
-  await expect(page.getByRole('heading', { name: 'Hi Pia' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^Good \w+, Pia$/ })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect.poll(() => workspaceOf(pat.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   const wid = await workspaceOf(pat.email);
   const uid = await uidOf(pat.email);

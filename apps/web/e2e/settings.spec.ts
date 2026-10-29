@@ -17,7 +17,9 @@ async function enter(page: Page, name: string) {
   const who = person(name);
   await page.goto('/');
   await signIn(page, who);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => workspaceOf(who.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   return { who, wid: await workspaceOf(who.email), uid: await uidOf(who.email) };
 }

@@ -23,7 +23,9 @@ test('cold cache + unreachable Firestore: every main screen offers Retry, then r
   await fastTimers(page, { undo: false, unreachable: true });
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
@@ -125,7 +127,9 @@ test('cold cache + unreachable Firestore: nothing is queued and the profile surv
   await fastTimers(page, { undo: false, unreachable: true });
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
@@ -175,7 +179,9 @@ test('cold cache + unreachable Firestore: nothing is queued and the profile surv
   // The server is back: the real organization loads and the profile on the server is untouched.
   await page.unroute(FIRESTORE);
   await stuck.getByRole('button', { name: 'Retry' }).click();
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('unreachable')).toHaveCount(0);
   expect(await pendingMutations(page)).toBe(0);
   expect((await adminDoc(`users/${uid}`))!.fields).toEqual(server);

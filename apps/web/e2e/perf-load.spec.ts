@@ -61,7 +61,7 @@ async function observe(page: Page) {
         w.__m.seen = t;
         requestAnimationFrame(() => setTimeout(() => (w.__m.shell = performance.now()), 0));
       }
-      if (!w.__m.heading && /^Hi /.test(document.querySelector('h1')?.textContent ?? ''))
+      if (!w.__m.heading && /^Good /.test(document.querySelector('h1')?.textContent ?? ''))
         w.__m.heading = t;
       if (!w.__m.item && /Item number 1/.test(document.body?.innerText ?? '')) w.__m.item = t;
     };
@@ -219,7 +219,9 @@ test('first load on a throttled phone', async ({ page, browser }, info) => {
   const owner = person('Marta');
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');

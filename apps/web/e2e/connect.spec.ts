@@ -86,7 +86,9 @@ async function asMember(page: Page, name: string) {
   const me = person(name);
   await page.goto('/');
   await signIn(page, me);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   const wid = await expect
     .poll(() => workspaceOf(me.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('')
@@ -314,7 +316,9 @@ for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/');
     await signIn(page, person('Tess Template'));
-    await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+    await expect(
+      page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+    ).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     const list = page.getByRole('region', { name: 'Get started' });
     await expect(

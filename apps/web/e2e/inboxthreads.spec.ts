@@ -217,7 +217,9 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
   const me = person('Cara Inbox');
   await page.goto('/');
   await signIn(page, me);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => workspaceOf(me.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   const wid = await workspaceOf(me.email);
   const uid = await uidOf(me.email);
@@ -458,7 +460,9 @@ test('Inbox: subjects group by area; a quiet subject folds away and comes back',
   const me = person('Dora Areas');
   await page.goto('/');
   await signIn(page, me);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => workspaceOf(me.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   const wid = await workspaceOf(me.email);
   const uid = await uidOf(me.email);
@@ -549,13 +553,17 @@ test('another member of the organization never sees my Inbox', async ({ page, br
   const cara = person('Cara Private');
   await page.goto('/');
   await signIn(page, cara);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   const caraUid = await uidOf(cara.email);
   const bob = await newPerson(browser);
   const bobP = person('Bob Other');
   await bob.page.goto('/');
   await signIn(bob.page, bobP);
-  await expect(bob.page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    bob.page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(bobP.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');

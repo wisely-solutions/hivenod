@@ -31,8 +31,10 @@ test('every main screen says Hivenod, never Hive', async ({ page }) => {
   expect(await oldNameOn(page)).toEqual([]);
 
   await signIn(page, person('Rena Rename'));
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
-  await expect(page).toHaveTitle(/Needs you · Hivenod$/);
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(page).toHaveTitle(/Today · Hivenod$/);
   expect(await oldNameOn(page)).toEqual([]);
 
   for (const [path, title] of [

@@ -147,7 +147,9 @@ test('Inbox labels: suggested by the agent, confirmed or changed, filtered, edit
   const me = person('Lena Labels');
   await page.goto('/');
   await signIn(page, me);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => workspaceOf(me.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   const wid = await workspaceOf(me.email);
   const uid = await uidOf(me.email);
@@ -233,11 +235,16 @@ test('Inbox labels: suggested by the agent, confirmed or changed, filtered, edit
     await expect(page.getByText('Offer the 10% discount?')).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('[data-label-chip="Sales"]')).toBeVisible();
     await expect(page.locator('[data-label-chip="Billing"]')).toBeVisible();
+    // The filters fold into a button on Today (item kt3E7).
+    await page.getByRole('button', { name: /^Filters/ }).click();
     await page.getByLabel('Filter by label').selectOption({ label: 'Billing (1)' });
+    await page.keyboard.press('Escape');
     await expect(page.getByText('Offer the 10% discount?')).toHaveCount(0);
     await expect(page.getByText('Reset the password?')).toBeVisible();
     await look(page, 'today', info.project.name);
+    await page.getByRole('button', { name: /^Filters/ }).click();
     await page.getByLabel('Filter by label').selectOption({ label: 'All labels' });
+    await page.keyboard.press('Escape');
     await expect(page.getByText('Offer the 10% discount?')).toBeVisible();
 
     // The subject page: add a label to a subject that has none.

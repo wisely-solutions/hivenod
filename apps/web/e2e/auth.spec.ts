@@ -58,7 +58,7 @@ test('sign in, get an organization, invite someone, they join and land in a grou
   // 1. First sign-in creates the profile and the organization.
   await page.goto('/');
   await signIn(page, olivia, 'Continue with Google', { ui: true });
-  await expect(page.getByRole('heading', { name: 'Hi Olivia' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, Olivia$/ })).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Olivia’s organization, switch organization' }),
   ).toBeVisible();
@@ -85,7 +85,7 @@ test('sign in, get an organization, invite someone, they join and land in a grou
   await signIn(mp, max, 'Continue with Google', { ui: true });
   await expect(mp.getByRole('heading', { name: /Join / })).toBeVisible();
   await mp.getByRole('button', { name: 'Join organization' }).click();
-  await expect(mp.getByRole('heading', { name: 'Hi Max' })).toBeVisible();
+  await expect(mp.getByRole('heading', { name: /^Good \w+, Max$/ })).toBeVisible();
 
   // 4. The owner sees Max and adds him to a new group "Product".
   await expect(page.getByText('Max Member', { exact: true })).toBeVisible();
@@ -127,7 +127,9 @@ test.describe('invite states', () => {
   async function makeInvite(page: Page, owner: ReturnType<typeof person>, invitee: string) {
     await page.goto('/');
     await signIn(page, owner, 'Continue with Google', { ui: true });
-    await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+    ).toBeVisible();
     await page.goto('/me/members');
     await page.getByRole('button', { name: 'Invite', exact: true }).click();
     await page.getByLabel('Email').fill(invitee);
@@ -183,7 +185,7 @@ test('profile: theme choice sticks across reloads, name and organization can be 
   await page.goto('/');
   await signIn(page, who, 'Continue with Google', { ui: true });
   // Signed in and the profile + workspace exist; navigating earlier drops the not-yet-persisted session.
-  await expect(page.getByRole('heading', { name: 'Hi Tess' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, Tess$/ })).toBeVisible();
   await page.goto('/me'); // forwards to Settings > Profile
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   await expect(page).toHaveURL(/\/settings\/profile$/);

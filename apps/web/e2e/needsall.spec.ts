@@ -74,7 +74,9 @@ async function seed(page: Page) {
   await fastTimers(page);
   await page.goto('/');
   await signIn(page, me);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => workspaceOf(me.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   const wa = await workspaceOf(me.email);
   const uid = await uidOf(me.email);
@@ -133,6 +135,22 @@ async function seed(page: Page) {
     updatedAt: now,
     lastEventId: 'seed',
   });
+  // Your call means a proposal waits (item kt3E7: a thread with none left is not listed).
+  await adminSet(`workspaces/${wb}/inboxOutcomes/o1`, {
+    memberUid: uid,
+    threadId: 't1',
+    type: 'reply',
+    fields: { text: 'Paid, thanks.' },
+    state: 'proposed',
+    note: '',
+    proposedBy: 'agent1',
+    executor: 'agent1',
+    decision: null,
+    result: null,
+    createdAt: now,
+    updatedAt: now,
+    lastEventId: 'seed',
+  });
 
   await adminSet(`workspaces/${wc}/groups/g1`, {
     name: 'Product team',
@@ -172,28 +190,29 @@ const stepOf = async (wid: string, pid: string, iid: string) =>
 test('rows of all three organizations, tagged, grouped, filtered and counted', async ({ page }) => {
   test.setTimeout(90_000);
   const { wb } = await seed(page);
-  const list = page.getByRole('list', { name: 'Needs you' });
   for (const t of ['Alpha solo post', 'Beta shared page', 'Gamma group runbook', 'Invoice from'])
     await expect(row(page, t)).toBeVisible();
 
   // Tags: a sole decider and the member's own thread are Only you; shared gates name the others.
   await expect(row(page, 'Alpha solo post')).toContainText('Only you');
-  await expect(row(page, 'Invoice from')).toContainText('Only you');
-  await expect(row(page, 'Invoice from')).toContainText('Urgent');
+  // The member's own urgent thread leads the Today stack as the decision card (item kt3E7).
+  const card = page.locator('[data-decision-card]');
+  await expect(card).toHaveAttribute('aria-label', /Invoice from/);
+  await expect(card).toContainText('Urgent');
   await expect(row(page, 'Beta shared page')).toContainText('You or others · Ana');
   await expect(row(page, 'Gamma group runbook')).toContainText('You or others · Product team');
 
-  // Grouped by organization, then project (Inbox threads are a group of their own).
-  for (const org of ['Acme', 'Beta Co', 'Gamma Ltd'])
-    await expect(list.getByRole('heading', { name: org, exact: true })).toBeVisible();
-  await expect(list.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
+  // One ranked stack (item kt3E7): each row names its organization.
+  await expect(row(page, 'Alpha solo post')).toContainText('Acme');
+  await expect(row(page, 'Beta shared page')).toContainText('Beta Co');
+  await expect(row(page, 'Gamma group runbook')).toContainText('Gamma Ltd');
+  await expect(card).toContainText('Beta Co');
 
   // The counter counts everything, the Only-you part apart (sidebar on desktop, tab on phones).
-  await expect(
-    page.locator('[aria-label="Needs you 4 waiting, 2 only you"]').first(),
-  ).toBeAttached();
+  await expect(page.locator('[aria-label="Today 4 waiting, 2 only you"]').first()).toBeAttached();
 
-  // Only me · Shared · All.
+  // Only me · Shared · All, in the Filters popover.
+  await page.getByRole('button', { name: /^Filters/ }).click();
   const who = page.getByRole('group', { name: 'Who can act' });
   await who.getByRole('button', { name: /Only me/ }).click();
   await expect(page).toHaveURL(/who=mine/);
@@ -248,9 +267,7 @@ test('bulk approve across organizations, with Undo on the button', async ({ page
   await expect.poll(() => stepOf(wb, pb, 'b1'), { timeout: 15_000 }).toBe('publish');
   await expect.poll(() => stepOf(wc, pc, 'c1'), { timeout: 15_000 }).toBe('publish');
   await expect(page.getByText('1 thing needs you.')).toBeVisible({ timeout: 15_000 });
-  await expect(
-    page.locator('[aria-label="Needs you 1 waiting, 1 only you"]').first(),
-  ).toBeAttached();
+  await expect(page.locator('[aria-label="Today 1 waiting, 1 only you"]').first()).toBeAttached();
 });
 
 test('a row of another organization opens there', async ({ page }) => {

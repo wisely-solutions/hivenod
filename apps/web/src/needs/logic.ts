@@ -7,8 +7,16 @@
  * that needs everyone, the member's own Inbox thread), or "You or others · <names>" when any one of
  * several people (or a group, shown by its name) can.
  */
-import { splitDeciders, type Group, type InboxThread, type Project } from '@hive/shared';
+import {
+  splitDeciders,
+  type Group,
+  type InboxOutcome,
+  type InboxThread,
+  type Project,
+} from '@hive/shared';
 import type { Row } from '../lib/live';
+import { bandOf, type Band } from '../threads/logic';
+import { isTidyUp } from '../today/logic';
 import {
   buildInbox,
   isStuckHold,
@@ -26,6 +34,8 @@ export interface OrgInput extends Omit<InboxInput, 'uid'> {
   groups: readonly Row<Group>[];
   /** The member's Inbox threads (any state; only Needs you and Your call are listed). */
   threads: readonly Row<InboxThread>[];
+  /** The member's open outcome proposals (inboxOutcomes at `proposed`), item kt3E7. */
+  openOutcomes: readonly Row<InboxOutcome>[];
   /** The labels of the member's subjects, by subject id (subjects without one are left out). */
   subjectLabels?: Readonly<Record<string, { label: string; suggested: boolean }>>;
   /** Display names of the organization's members, by uid. */
@@ -52,6 +62,10 @@ export interface NeedsEntry {
   entry?: InboxEntry;
   /** Inbox threads at Needs you or Your call. */
   thread?: Row<InboxThread>;
+  /** A thread's open proposals, oldest first (item kt3E7). */
+  proposals?: Row<InboxOutcome>[];
+  /** A thread whose one proposal is a tidy-up: it goes to the tidy-ups card, not the stack. */
+  tidy?: boolean;
   /** The label of the thread's subject, if it has one (item YaOErIjeIFG8Y3EvZuIp). */
   label?: { label: string; suggested: boolean };
 }
@@ -148,7 +162,7 @@ const groupRefs = (groups: readonly Row<Group>[]) =>
   groups.map((g) => ({ id: g.id, name: g.data.name, memberUids: g.data.memberUids }));
 
 /** Every organization's Needs you, merged and ordered. */
-export function buildNeeds(orgs: readonly OrgInput[], uid: string): Needs {
+export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.now()): Needs {
   const todo: NeedsEntry[] = [];
   const suggestions: NeedsEntry[] = [];
   const waiting: NeedsEntry[] = [];
@@ -173,6 +187,18 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string): Needs {
     for (const t of o.threads) {
       if (t.data.memberUid !== uid) continue;
       if (!(THREAD_NEEDS as readonly string[]).includes(t.data.state)) continue;
+      const proposals = o.openOutcomes
+        .filter((p) => p.data.threadId === t.id && p.data.state === 'proposed')
+        .sort(
+          (a, b) =>
+            a.data.createdAt.toMillis() - b.data.createdAt.toMillis() || (a.id < b.id ? -1 : 1),
+        );
+      // Your call with nothing left to decide: approved, the agent carries it out.
+      if (t.data.state === 'yourCall' && proposals.length === 0) continue;
+      const tidy =
+        t.data.state === 'yourCall' &&
+        proposals.length === 1 &&
+        isTidyUp(proposals[0]!.data, t.data, 1, now);
       todo.push({
         key: `t:${o.wid}:${t.id}`,
         wid: o.wid,
@@ -185,6 +211,8 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string): Needs {
         who: { only: true },
         group: 'inbox',
         thread: t,
+        proposals,
+        tidy,
         ...(t.data.subjectId && o.subjectLabels?.[t.data.subjectId]
           ? { label: o.subjectLabels[t.data.subjectId] }
           : {}),
@@ -332,4 +360,36 @@ export function countKinds(list: readonly NeedsEntry[]): Record<InboxFilter, num
   const n = { all: list.length, approvals: 0, questions: 0, findings: 0 };
   for (const e of list) n[kindGroup(e)] += 1;
   return n;
+}
+
+/** A thread entry's rank band (design 3.5); project entries have none. */
+export function entryBand(e: NeedsEntry, now: number): Band | null {
+  return e.thread ? bandOf(e.thread.data, now) : null;
+}
+
+/**
+ * The Today stack's order (item kt3E7, design 2.1): band-1 threads, urgent project entries,
+ * band-2 threads, then everything else (band-3/4 threads and the other project entries) oldest
+ * first. In bands 1 and 2 the earlier due date first. Tidy-ups are not part of it.
+ */
+export function orderToday(list: readonly NeedsEntry[], now: number): NeedsEntry[] {
+  const tier = (e: NeedsEntry) => {
+    const b = entryBand(e, now);
+    if (b === 1) return 0;
+    if (b === null && e.urgent) return 1;
+    if (b === 2) return 2;
+    return 3;
+  };
+  const due = (e: NeedsEntry) => e.thread?.data.due?.toMillis() ?? Infinity;
+  return list
+    .filter((e) => !e.tidy)
+    .map((e, i) => ({ e, i, t: tier(e) }))
+    .sort(
+      (a, b) =>
+        a.t - b.t ||
+        (a.t === 0 || a.t === 2 ? due(a.e) - due(b.e) : 0) ||
+        a.e.since - b.e.since ||
+        a.i - b.i,
+    )
+    .map((x) => x.e);
 }

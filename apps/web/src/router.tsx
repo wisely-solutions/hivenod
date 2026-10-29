@@ -210,6 +210,9 @@ const inboxSubjectRoute = createRoute({
 const inboxThreadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/inbox/$wid/t/$tid',
+  // ?from=today (or calendar): opened from the Today stack, the decision view (item kt3E7).
+  validateSearch: (s: Record<string, unknown>): { from?: 'today' | 'calendar' } =>
+    s.from === 'today' || s.from === 'calendar' ? { from: s.from } : {},
   component: lazyRouteComponent(() => import('./threads/ThreadPage'), 'ThreadPage'),
 });
 const activityRoute = createRoute({

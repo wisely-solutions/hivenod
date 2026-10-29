@@ -260,7 +260,7 @@ function Confidence({ value }: { value: InboxOutcome['confidence'] }) {
   );
 }
 
-function FieldView({
+export function FieldView({
   name,
   field,
   value,

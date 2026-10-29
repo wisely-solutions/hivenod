@@ -30,7 +30,9 @@ async function seed(page: Page) {
   const owner = person('Rita Realtime');
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
@@ -108,7 +110,9 @@ test('a silently dropped connection shows Reconnecting within ~10 s, and clears 
 }) => {
   await seed(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible();
   await expect(page.getByTestId('reconnecting')).toHaveCount(0);
 
   // Block every request to the Firestore host (the emulator here), as a network that stops answering.
@@ -137,7 +141,9 @@ test('an idle signed-in page logs no console errors or failed requests over 10 s
     if (r.status() >= 400) bad.push(`${r.status()}: ${r.url()}`);
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /^Hi / })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible();
   bad.length = 0;
   await page.waitForTimeout(10_000); // several heartbeats
   expect(bad).toEqual([]);

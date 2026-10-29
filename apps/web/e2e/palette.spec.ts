@@ -10,7 +10,9 @@ const SHOTS = process.env.SHOT_DIR ?? '/tmp';
 async function enter(page: Page) {
   await page.goto('/');
   await signIn(page, person('Pat Palette'));
-  await expect(page.getByRole('heading', { name: /^Hi Pat/ })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^Good \w+, Pat/ })).toBeVisible({
+    timeout: 20_000,
+  });
 }
 
 async function runCommand(page: Page, query: string) {
@@ -84,7 +86,9 @@ test('an item row opens the item, an agent row highlights the agent, Back never 
   const owner = person('Pat Palette');
   await page.goto('/');
   await signIn(page, owner);
-  await expect(page.getByRole('heading', { name: /^Hi Pat/ })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^Good \w+, Pat/ })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
@@ -125,14 +129,14 @@ test('an item row opens the item, an agent row highlights the agent, Back never 
     lastEventId: 'seed',
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /^Hi Pat/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, Pat/ })).toBeVisible();
   await page.waitForTimeout(500);
 
   await runCommand(page, 'Palette target');
   await expect(page).toHaveURL(/\/p\/blog\?item=i1/);
   await expect(page.getByRole('article', { name: /Palette target item/ })).toBeVisible();
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /^Hi Pat/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good \w+, Pat/ })).toBeVisible();
   await page.waitForTimeout(500);
 
   await runCommand(page, 'Scoutbot');
