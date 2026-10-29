@@ -434,7 +434,9 @@ test('questions are answered inline and the answer is saved', async ({ page }) =
     lastEventId: 'seed',
   });
   await expect(page.getByText('1 thing needs you.')).toBeVisible();
+  await page.getByRole('button', { name: /^Filters/ }).click();
   await page.getByRole('button', { name: 'Questions 1' }).click();
+  await page.keyboard.press('Escape');
   const detail = await openRow(page, 'Research brief');
   await detail.getByLabel('Your reply').fill('Developers');
   await detail.getByRole('button', { name: 'Reply', exact: true }).click();
@@ -706,6 +708,8 @@ test('the Needs-you filter fits at 390 and 320 without the control or the page s
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/');
+    // The filters fold into a button (item kt3E7).
+    await page.getByRole('button', { name: /^Filters/ }).click();
     const group = page.getByRole('group', { name: 'Filter' });
     await expect(group).toBeVisible();
     const m = await group.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));

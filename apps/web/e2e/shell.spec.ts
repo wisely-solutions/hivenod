@@ -27,7 +27,7 @@ test('the shell frames the app and has no accessibility violations', async ({ pa
     await expect(tabs).toBeVisible();
     await expect(tabs.getByRole('link')).toHaveCount(4);
     await expect(tabs.getByRole('link').or(tabs.getByRole('button'))).toHaveText([
-      /^Needs you/,
+      /^Today/,
       /^Inbox/,
       '',
       /^All projects/,
@@ -45,7 +45,7 @@ test('the shell frames the app and has no accessibility violations', async ({ pa
   } else {
     const side = page.getByRole('complementary', { name: 'Main' });
     await expect(side).toBeVisible();
-    for (const name of ['Needs you', 'All projects', 'Decision insights', 'Activity', 'Agents']) {
+    for (const name of ['Today', 'All projects', 'Decision insights', 'Activity', 'Agents']) {
       await expect(side.getByRole('link', { name })).toBeVisible();
     }
     await expect(side.getByText('0 agents working · 0 idle')).toBeVisible();
