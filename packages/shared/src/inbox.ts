@@ -23,6 +23,7 @@ import { z } from 'zod';
 import {
   ActionError,
   arrayUnion,
+  DELETE_FIELD,
   nid,
   requireAgent,
   requireHuman,
@@ -106,6 +107,9 @@ export const INBOX_EVENT_TYPES = [
   'outcome.started',
   // Re-check (item bmNoIvvqKCdAorLSShE9): the home agent reports what it found
   'thread.rechecked',
+  // Ask the agent (item w6O2KOw4ys70TQv9I1xD): the home agent answers, suggests chips
+  'thread.instruction_answered',
+  'thread.chips_suggested',
   // agents and the member
   'thread.titled',
   'thread.flagged',
@@ -121,6 +125,7 @@ export const INBOX_EVENT_TYPES = [
   'outcome.rejected',
   'outcome.revise_requested',
   'thread.recheck_requested',
+  'thread.instructed',
   'plan.approved',
   'plan.rejected',
   'plan.edited',
@@ -181,7 +186,51 @@ export const INBOX_LIMITS = {
   versions: 10,
   /** Re-check: the agent's note on what it found, in characters. */
   recheckNote: 500,
+  /** Ask the agent: an instruction's characters, the instructions a thread keeps, the chips an agent suggests, its answer's note. */
+  instruction: 500,
+  instructions: 20,
+  suggestedChips: 5,
+  instructNote: 500,
 } as const;
+
+/**
+ * Ask the agent (item w6O2KOw4ys70TQv9I1xD): the quick chips. `recheck` asks for a Re-check
+ * (requestRecheck); the others are sent as an instruction with that chip.
+ */
+export const INSTRUCT_CHIPS = [
+  'prepare_meeting',
+  'recheck',
+  'follow_up',
+  'summarize',
+  'draft_reply',
+] as const;
+export type InstructChip = (typeof INSTRUCT_CHIPS)[number];
+/** The chips an instruction may carry (Re-check has its own request). */
+export const INSTRUCTION_CHIPS = INSTRUCT_CHIPS.filter((c) => c !== 'recheck') as Exclude<
+  InstructChip,
+  'recheck'
+>[];
+export const INSTRUCT_CHIP_LABELS: Record<InstructChip, string> = {
+  prepare_meeting: 'Prepare for the meeting',
+  recheck: 'Re-check',
+  follow_up: 'Follow up',
+  summarize: 'Summarize',
+  draft_reply: 'Draft a reply',
+};
+/** What each chip asks the agent (its inbox event says this). */
+export const INSTRUCT_CHIP_TEXT: Record<InstructChip, string> = {
+  prepare_meeting:
+    'Prepare me for the meeting on this thread: who, what it is about, what to bring or decide.',
+  recheck: 'Check this thread again.',
+  follow_up: 'They have not answered: propose a follow-up (a nudge) if one makes sense.',
+  summarize: 'Summarize this thread: where it stands, what was agreed, what is open.',
+  draft_reply: 'Draft a reply to their last message.',
+};
+/** How the home agent answered an instruction. */
+export const INSTRUCT_ANSWERS = ['note', 'ask', 'outcome', 'plan'] as const;
+export type InstructAnswer = (typeof INSTRUCT_ANSWERS)[number];
+/** An instruction the agent has not answered after this long: the member may ask again. */
+export const INSTRUCT_RETRY_MS = 30 * 60_000;
 
 /**
  * Re-check (item bmNoIvvqKCdAorLSShE9): what the home agent found when the member asked it to
@@ -291,11 +340,43 @@ export const inboxThreadSchema = z.object({
     })
     .nullable()
     .optional(),
+  /**
+   * Ask the agent (item w6O2KOw4ys70TQv9I1xD): the member's instructions by id (the event that
+   * made each), at most 20 kept; append-only, each answered once by the home agent.
+   */
+  instructions: z
+    .record(
+      z.string(),
+      z.object({
+        text: z.string().max(INBOX_LIMITS.instruction).nullable(),
+        chip: z.enum(INSTRUCT_CHIPS).nullable(),
+        by: z.string(),
+        at: timestamp,
+        state: z.enum(['pending', 'answered']),
+        answer: z
+          .object({
+            kind: z.enum(INSTRUCT_ANSWERS),
+            refId: z.string().nullable(),
+            note: z.string().max(INBOX_LIMITS.instructNote).nullable(),
+            at: timestamp,
+          })
+          .nullable(),
+      }),
+    )
+    .optional(),
+  /** The latest instruction and whether it waits for the agent (its listener queries this). */
+  instruct: z
+    .object({ state: z.enum(['pending', 'done']), id: z.string(), at: timestamp })
+    .nullable()
+    .optional(),
+  /** Chips the home agent suggests for this thread (thread_suggest_chips), at most 5. */
+  suggestedChips: z.array(z.enum(INSTRUCT_CHIPS)).max(INBOX_LIMITS.suggestedChips).optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
 });
 export type InboxThread = z.infer<typeof inboxThreadSchema>;
+export type InboxInstruction = NonNullable<InboxThread['instructions']>[string];
 
 export const inboxMessageSchema = z.object({
   memberUid: z.string(),
@@ -427,6 +508,11 @@ export type ThreadStateOf = Pick<
     state: 'pending' | 'done';
     requestedAt?: { toMillis(): number } | null;
   } | null;
+  /** Ask the agent: the instructions (only `state` and `at` matter here) and the latest one. */
+  instructions?: Readonly<
+    Record<string, { state: 'pending' | 'answered'; at?: { toMillis(): number } | null }>
+  >;
+  instruct?: { state: 'pending' | 'done'; id: string; at?: { toMillis(): number } | null } | null;
 };
 export type OutcomeStateOf = Pick<
   InboxOutcome,
@@ -3044,4 +3130,175 @@ export function searchSubjects(input: SubjectSearchInput): {
     }),
     total: hits.length,
   };
+}
+
+// ---------- Ask the agent (item w6O2KOw4ys70TQv9I1xD) ----------
+
+/** Whether the thread's latest instruction still waits for its agent (under 30 minutes old). */
+export function instructPending(t: Pick<ThreadStateOf, 'instruct'>, nowMs: number): boolean {
+  const r = t.instruct;
+  if (!r || r.state !== 'pending') return false;
+  const at = r.at?.toMillis();
+  return at === undefined || nowMs - at < INSTRUCT_RETRY_MS;
+}
+
+/**
+ * The member asks the thread's home agent something (free text, at most 500 characters, or a
+ * chip), on a thread in any state. It is kept on the thread (at most 20: the oldest answered one
+ * goes) and the agent gets an `instruct` inbox event; it answers with a note, a question, a
+ * proposal or a plan. Nothing outward happens without an approved outcome. One at a time: a new
+ * one waits until the agent answered, or 30 minutes passed.
+ */
+export function instructThread(
+  ctx: ActionContext,
+  input: {
+    threadId: string;
+    thread: ThreadStateOf;
+    text?: string | null;
+    chip?: string | null;
+    nowMs?: number;
+  },
+): ActionPlan & { instructionId: string } {
+  const t = input.thread;
+  owner(ctx, t.memberUid);
+  const raw = input.text?.trim() ?? '';
+  const chip = input.chip ?? null;
+  need((raw === '') !== (chip === null), 'Ask with a text or a chip (one of them).');
+  need(
+    chip === null || (INSTRUCTION_CHIPS as readonly string[]).includes(chip),
+    `The chip is ${INSTRUCTION_CHIPS.join(', ')}.`,
+  );
+  const text = chip === null ? cleanText('The request', raw, INBOX_LIMITS.instruction) : null;
+  need(!instructPending(t, input.nowMs ?? Date.now()), 'The agent is still on your last request.');
+  const list = t.instructions ?? {};
+  const ids = Object.keys(list);
+  // At most 20 kept: the oldest answered one goes (else the oldest).
+  let dropped: string | null = null;
+  if (ids.length >= INBOX_LIMITS.instructions) {
+    const order = [...ids].sort(
+      (a, b) => (list[a]!.at?.toMillis() ?? 0) - (list[b]!.at?.toMillis() ?? 0) || (a < b ? -1 : 1),
+    );
+    dropped = order.find((id) => list[id]!.state === 'answered') ?? order[0]!;
+  }
+  const p = inboxPlan(
+    ctx,
+    'thread.instructed',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { text, chip },
+    (eventId) => [
+      upd(
+        inboxPaths.thread(ctx.workspaceId, input.threadId),
+        {
+          [`instructions.${eventId}`]: {
+            text,
+            chip,
+            by: ctx.actor.id,
+            at: SERVER_TIME,
+            state: 'pending',
+            answer: null,
+          },
+          ...(dropped ? { [`instructions.${dropped}`]: DELETE_FIELD } : {}),
+          instruct: { state: 'pending', id: eventId, at: SERVER_TIME },
+        },
+        eventId,
+      ),
+    ],
+  );
+  return { ...p, instructionId: p.eventId };
+}
+
+/**
+ * The home agent answers an instruction (thread_answer_instruction): with a note (its text), a
+ * question it asked (inbox_ask), or the outcome or plan it proposed (refId). Once per instruction.
+ */
+export function answerInstruction(
+  ctx: ActionContext,
+  input: {
+    threadId: string;
+    thread: ThreadStateOf;
+    instructionId: string;
+    kind: string;
+    refId?: string | null;
+    note?: string | null;
+  },
+): ActionPlan {
+  requireAgent(ctx);
+  const t = input.thread;
+  need(
+    t.fetchedBy === ctx.actor.id,
+    "Only the thread's home agent (the one that brought it in) answers the person's request.",
+  );
+  const ins = t.instructions?.[input.instructionId];
+  need(!!ins, `There is no request ${input.instructionId} on this thread.`);
+  need(ins!.state === 'pending', 'This request was answered already.');
+  need(
+    (INSTRUCT_ANSWERS as readonly string[]).includes(input.kind),
+    `The kind is ${INSTRUCT_ANSWERS.join(', ')}.`,
+  );
+  const kind = input.kind as InstructAnswer;
+  const refId = input.refId?.trim() || null;
+  const note = input.note?.trim() || null;
+  need(
+    note === null || note.length <= INBOX_LIMITS.instructNote,
+    tooLong('The note', INBOX_LIMITS.instructNote),
+  );
+  need(kind !== 'note' || note !== null, 'Answer with a note: give its text.');
+  need(
+    (kind === 'outcome' || kind === 'plan') === (refId !== null),
+    kind === 'outcome' || kind === 'plan'
+      ? `Give the ${kind === 'outcome' ? 'outcome' : 'plan'} id you proposed (refId).`
+      : 'Only an outcome or plan answer has a refId.',
+  );
+  const latest = t.instruct?.id === input.instructionId;
+  return inboxPlan(
+    ctx,
+    'thread.instruction_answered',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { instructionId: input.instructionId, kind, refId, note },
+    (eventId) => [
+      upd(
+        inboxPaths.thread(ctx.workspaceId, input.threadId),
+        {
+          [`instructions.${input.instructionId}.state`]: 'answered',
+          [`instructions.${input.instructionId}.answer`]: { kind, refId, note, at: SERVER_TIME },
+          ...(latest ? { 'instruct.state': 'done' } : {}),
+        },
+        eventId,
+      ),
+    ],
+  );
+}
+
+/** The home agent sets the chips it suggests for the thread (thread_suggest_chips): 0-5, once each. */
+export function suggestChips(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf; chips: readonly string[] },
+): ActionPlan {
+  requireAgent(ctx);
+  const t = input.thread;
+  need(
+    t.fetchedBy === ctx.actor.id,
+    "Only the thread's home agent (the one that brought it in) suggests its chips.",
+  );
+  need(Array.isArray(input.chips), 'The chips are a list.');
+  need(
+    input.chips.length <= INBOX_LIMITS.suggestedChips,
+    `At most ${INBOX_LIMITS.suggestedChips} chips.`,
+  );
+  for (const c of input.chips)
+    need(
+      (INSTRUCT_CHIPS as readonly string[]).includes(c),
+      `A chip is one of ${INSTRUCT_CHIPS.join(', ')}.`,
+    );
+  need(new Set(input.chips).size === input.chips.length, 'Each chip is listed once.');
+  const chips = [...input.chips];
+  return inboxPlan(
+    ctx,
+    'thread.chips_suggested',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { chips },
+    (eventId) => [
+      upd(inboxPaths.thread(ctx.workspaceId, input.threadId), { suggestedChips: chips }, eventId),
+    ],
+  );
 }
