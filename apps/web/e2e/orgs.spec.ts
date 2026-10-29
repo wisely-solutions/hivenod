@@ -44,6 +44,7 @@ test('an admin adds a member to a project; the member sees nothing until then', 
   page,
   browser,
 }) => {
+  test.setTimeout(60_000); // two signed-in people and a cold load of each, on a loaded machine
   const admin = person('Ada Admin');
   const member = person('Max Member');
 
@@ -118,7 +119,10 @@ test('an admin adds a member to a project; the member sees nothing until then', 
   // (The Firestore emulator does not push a "left the result set" change to a listener, so Max
   // reloads here; the rules, not the screen, are what hide the project.)
   await mp.reload();
-  await expect(mp.getByRole('heading', { name: 'You are not on any project yet' })).toBeVisible();
+  // A cold load of the whole app for a second person: under load it takes longer than 5 s.
+  await expect(mp.getByRole('heading', { name: 'You are not on any project yet' })).toBeVisible({
+    timeout: 20_000,
+  });
 
   // The data really is stored that way (not only hidden by the screen).
   const stored = await adminDoc(`workspaces/${wid}/projects/open`);
@@ -130,6 +134,7 @@ test('the last admin cannot be demoted or removed; promoting a second admin free
   page,
   browser,
 }) => {
+  test.setTimeout(60_000); // two signed-in people and a cold load of each, on a loaded machine
   const admin = person('Ada Admin');
   const member = person('Max Member');
   await page.goto('/');
@@ -138,6 +143,11 @@ test('the last admin cannot be demoted or removed; promoting a second admin free
     timeout: 20_000,
   });
 
+  // The organization is created a moment after the greeting shows: inviting before that loses the
+  // open dialog when the session switches to it (the invite is made, the link never appears).
+  await expect
+    .poll(() => workspaceOf(admin.email).catch(() => ''), { timeout: 20_000 })
+    .not.toBe('');
   await page.goto('/me/members');
   await page.getByRole('button', { name: 'Invite', exact: true }).click();
   await page.getByLabel('Email').fill(member.email);
@@ -172,6 +182,7 @@ test('the last admin cannot be demoted or removed; promoting a second admin free
 });
 
 test('a member can leave the organization; the only admin cannot', async ({ page, browser }) => {
+  test.setTimeout(60_000); // two signed-in people and a cold load of each, on a loaded machine
   const admin = person('Ada Admin');
   const member = person('Max Member');
   await page.goto('/');
@@ -180,6 +191,11 @@ test('a member can leave the organization; the only admin cannot', async ({ page
     timeout: 20_000,
   });
 
+  // The organization is created a moment after the greeting shows: inviting before that loses the
+  // open dialog when the session switches to it (the invite is made, the link never appears).
+  await expect
+    .poll(() => workspaceOf(admin.email).catch(() => ''), { timeout: 20_000 })
+    .not.toBe('');
   await page.goto('/me/members');
   await page.getByRole('button', { name: 'Invite', exact: true }).click();
   await page.getByLabel('Email').fill(member.email);

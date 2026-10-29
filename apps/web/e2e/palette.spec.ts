@@ -21,6 +21,9 @@ async function runCommand(page: Page, query: string) {
   const input = page.getByPlaceholder(/Jump to/);
   await expect(input).toBeVisible();
   await input.fill(query);
+  // Enter picks the first row: wait until the row for this query is the one shown (the palette's
+  // items and agents arrive from live listeners; under load Enter could run an empty list).
+  await expect(page.getByRole('option').first()).toContainText(new RegExp(query, 'i'));
   await page.keyboard.press('Enter');
 }
 
@@ -130,14 +133,12 @@ test('an item row opens the item, an agent row highlights the agent, Back never 
   });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /^Good \w+, Pat/ })).toBeVisible();
-  await page.waitForTimeout(500);
 
   await runCommand(page, 'Palette target');
   await expect(page).toHaveURL(/\/p\/blog\?item=i1/);
   await expect(page.getByRole('article', { name: /Palette target item/ })).toBeVisible();
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /^Good \w+, Pat/ })).toBeVisible();
-  await page.waitForTimeout(500);
 
   await runCommand(page, 'Scoutbot');
   await expect(page).toHaveURL(/\/agents\?agent=scout/);
