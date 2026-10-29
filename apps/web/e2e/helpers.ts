@@ -389,3 +389,33 @@ export const ago = (minutes: number) => new Date(agoMs(minutes));
 export async function freezeClock(target: Page | BrowserContext) {
   await target.clock.install({ time: NOW });
 }
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const phoneWidth = (page: Page) => (page.viewportSize()?.width ?? 1440) < 640;
+
+/**
+ * The organization on screen (item icVly): the switcher in the sidebar on desktop, the fifth tab
+ * (its mark and name) on a phone.
+ */
+export async function expectCurrentOrg(page: Page, name: string, { not = false } = {}) {
+  const loc = phoneWidth(page)
+    ? page.locator('[data-org-tab]')
+    : page.getByRole('button', { name: /, switch organization$/ }).first();
+  const want = phoneWidth(page)
+    ? new RegExp(`^${escapeRe(name)}, organization`)
+    : new RegExp(`^${escapeRe(name)}, switch organization$`);
+  if (not) await expect(loc).not.toHaveAccessibleName(want);
+  else await expect(loc).toHaveAccessibleName(want);
+}
+
+/** Opens the organization switcher: from the sidebar, or on a phone from the organization tab. */
+export async function openSwitcher(page: Page) {
+  if (phoneWidth(page)) {
+    await page.locator('[data-org-tab]').click();
+    await expect(page).toHaveURL(/\/org$/);
+  }
+  await page
+    .getByRole('button', { name: /, switch organization$/ })
+    .first()
+    .click();
+}

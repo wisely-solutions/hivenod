@@ -12,6 +12,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { personalOrgPlan, SERVER_TIME } from '@hive/shared';
 import { mkdirSync } from 'node:fs';
 import {
+  openSwitcher,
   adminPatch,
   adminSet,
   adminUpdate,
@@ -141,15 +142,20 @@ async function shot(page: Page, name: string) {
 const switcher = (page: Page) => page.getByRole('button', { name: /, switch organization$/ });
 
 async function switchTo(page: Page, name: RegExp) {
-  await switcher(page).first().click();
+  await openSwitcher(page);
   await page
     .getByRole('dialog', { name: 'Organizations' })
     .getByRole('list', { name: 'Your organizations' })
     .getByRole('button', { name })
     .click();
-  await expect(switcher(page).first()).toHaveAccessibleName(
-    new RegExp(`^${name.source}.*, switch organization$`),
-  );
+  if (isPhone())
+    await expect(page.locator('[data-org-tab]')).toHaveAccessibleName(
+      new RegExp(`^${name.source}.*, organization`),
+    );
+  else
+    await expect(switcher(page).first()).toHaveAccessibleName(
+      new RegExp(`^${name.source}.*, switch organization$`),
+    );
 }
 
 /** "Today 4 waiting, 2 only you" → 4. */
@@ -272,7 +278,11 @@ for (const theme of ['light', 'dark'] as const) {
     try {
       await page.goto('/');
       const tabs = page.getByRole('navigation', { name: 'Tabs' });
-      await expect(tabs.getByRole('link', { name: /^Projects$/ })).toBeVisible({ timeout: 20_000 });
+      // The fifth tab is the organization: its mark (in its colour) and name.
+      const orgTab = tabs.locator('[data-org-tab]');
+      await expect(orgTab).toHaveAccessibleName(/^Brightline Studio, organization/, {
+        timeout: 20_000,
+      });
       await expect(page.locator('[data-brief]').getByText('all organizations')).toBeVisible();
       const today = tabs.getByRole('link', { name: /^Today/ });
       await expect(today).toHaveAttribute('aria-label', /^Today \d+ waiting/, { timeout: 20_000 });
@@ -288,8 +298,26 @@ for (const theme of ['light', 'dark'] as const) {
       await expectNoHorizontalScroll(page);
       await shot(page, `A-calendar-390-${theme}`);
       await axe(page);
-      await tabs.getByRole('link', { name: /^Projects$/ }).click();
+      // The organization hub: its projects, agents, settings and the switcher.
+      await orgTab.click();
+      await expect(page).toHaveURL(/\/org$/);
+      await expect(orgTab).toHaveAttribute('data-status', 'active');
+      await expect(page.getByRole('heading', { name: 'Organization', level: 1 })).toBeVisible();
+      const hub = page.locator('main');
+      await expect(hub.getByRole('link', { name: /^Website relaunch/ })).toContainText(
+        '2 need you',
+      );
+      for (const name of ['Agents', 'Activity', 'Decision insights', 'Organization settings'])
+        await expect(hub.getByRole('link', { name, exact: true })).toBeVisible();
+      await expect(hub.getByRole('button', { name: /switch organization$/ })).toContainText(
+        'Brightline Studio',
+      );
+      await expectNoHorizontalScroll(page);
+      await shot(page, `A-orghub-390-${theme}`);
+      await axe(page);
+      await hub.getByRole('link', { name: 'Projects', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Projects', level: 1 })).toBeVisible();
+      await expect(orgTab).toHaveAttribute('data-status', 'active');
       await expect(page.getByText(/^Brightline Studio · 2 projects$/)).toBeVisible();
       await expectNoHorizontalScroll(page);
       await axe(page);
@@ -360,6 +388,107 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page).toHaveURL(/\/account\/notifications$/);
       await page.goto('/me/members');
       await expect(page).toHaveURL(/\/settings\/members$/);
+    } finally {
+      await s.stop();
+    }
+  });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`organization colours, the Personal mark and the chips that narrow Today, Inbox and Calendar (${theme})`, async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    if (isPhone()) await page.setViewportSize({ width: 390, height: 844 });
+    await fastTimers(page);
+    await freezeClock(page);
+    await page.emulateMedia({ colorScheme: theme });
+    const s = await seedThreeOrgs(page);
+    const vw = isPhone() ? '390' : '1440';
+    const bg = (l: ReturnType<Page['locator']>) =>
+      l.evaluate((e) => getComputedStyle(e).backgroundColor);
+    try {
+      await page.goto('/');
+      const chips = page.getByRole('group', { name: 'Organization' });
+      await expect(chips.getByRole('button', { name: /^All 3$/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+        { timeout: 20_000 },
+      );
+      const chipDot = (w: string) => chips.locator(`[data-org-chip="${w}"] span`).first();
+
+      // The switcher shows each organization in its colour; Personal is a person, "Just you".
+      await openSwitcher(page);
+      const list = page
+        .getByRole('dialog', { name: 'Organizations' })
+        .getByRole('list', { name: 'Your organizations' });
+      const personal = list.getByRole('button', { name: /^Personal/ });
+      await expect(personal).toContainText('Just you · your assistant');
+      await expect(personal.locator('[data-org-mark="personal"] svg')).toBeVisible();
+      for (const [w, name] of [
+        [s.wid, /^Brightline Studio/],
+        [s.client, /^Northwind/],
+        [s.personal, /^Personal/],
+      ] as const) {
+        const mark = list.getByRole('button', { name }).locator('[data-org-mark]');
+        if (isPhone()) continue; // the chips live on Today, behind the hub on a phone
+        expect(await bg(mark)).toBe(await bg(chipDot(w)));
+      }
+      await shot(page, `A-switcher-colours-${vw}-${theme}`);
+      await axe(page);
+      await page.keyboard.press('Escape');
+
+      // Today: the chips narrow the list to one organization, and the URL keeps it.
+      await page.goto('/');
+      await chips.locator(`[data-org-chip="${s.client}"]`).click();
+      await expect(page).toHaveURL(new RegExp(`org=${s.client}`));
+      await expect(chips.locator(`[data-org-chip="${s.client}"]`)).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(page.getByText('Sign off the portal login flow').first()).toBeVisible();
+      await expect(page.getByText('Pick the hero photo')).toHaveCount(0);
+      await page.reload();
+      await expect(chips.locator(`[data-org-chip="${s.client}"]`)).toHaveAttribute(
+        'aria-pressed',
+        'true',
+        { timeout: 20_000 },
+      );
+      await expectNoHorizontalScroll(page);
+      await shot(page, `A-today-chips-${vw}-${theme}`);
+      await axe(page);
+      // A filter only: switching organization leaves it as it is.
+      await switchTo(page, /Personal/);
+      if (isPhone()) await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`org=${s.client}`));
+      await page.goto('/');
+      await chips.getByRole('button', { name: /^All/ }).click();
+      await expect(page).not.toHaveURL(/org=/);
+      await expect(page.getByText('Pick the hero photo')).toBeVisible();
+
+      // Inbox: the same chips.
+      await page.goto('/inbox');
+      await chips.locator(`[data-org-chip="${s.personal}"]`).click();
+      await expect(page).toHaveURL(new RegExp(`/inbox\\?org=${s.personal}`));
+      await expect(page.getByText('Dentist').first()).toBeVisible();
+      await expect(page.getByText('Q4 price list')).toHaveCount(0);
+      await expectNoHorizontalScroll(page);
+      await axe(page);
+
+      // Calendar: one organization's view, kept in the URL.
+      await page.goto('/calendar');
+      await chips.locator(`[data-org-chip="${s.client}"]`).click();
+      await expect(page).toHaveURL(new RegExp(`/calendar\\?org=${s.client}`));
+      await expect(page.locator('main [data-scope-pill]')).toHaveCount(0);
+      await page.reload();
+      await expect(chips.locator(`[data-org-chip="${s.client}"]`)).toHaveAttribute(
+        'aria-pressed',
+        'true',
+        { timeout: 20_000 },
+      );
+      await expectNoHorizontalScroll(page);
+      await shot(page, `A-calendar-chips-${vw}-${theme}`);
+      await axe(page);
     } finally {
       await s.stop();
     }

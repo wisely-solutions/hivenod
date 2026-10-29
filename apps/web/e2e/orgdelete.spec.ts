@@ -16,6 +16,7 @@ import {
   signIn,
   uidOf,
   workspaceOf,
+  expectCurrentOrg,
 } from './helpers';
 
 const OPTIONS = { apiKey: 'fake', projectId: 'hive-board-43be' };
@@ -202,9 +203,7 @@ test('an admin deletes the organization: everything goes, the agent is cut off, 
   await expect.poll(() => workspaceOf(ada.email), { timeout: 30_000 }).not.toBe(wid);
   // Max had another organization: he is moved to it, with a toast, no error screen.
   await expect(mp.getByText(/was deleted\. Switched to /).first()).toBeVisible({ timeout: 30_000 });
-  await expect(
-    mp.getByRole('button', { name: /^Max’s organization, switch organization$/ }),
-  ).toBeVisible();
+  await expectCurrentOrg(mp, 'Max’s organization');
   await expect.poll(() => workspaceOf(max.email), { timeout: 30_000 }).not.toBe(wid);
 
   // Everything under the organization is gone, at every depth, and the document itself.
@@ -264,9 +263,7 @@ test('an interrupted delete carries on by itself and can be continued; nobody is
     )
     .toEqual([]);
   // Still on the second organization, no error screen.
-  await expect(
-    page.getByRole('button', { name: /^Second Co, switch organization$/ }),
-  ).toBeVisible();
+  await expectCurrentOrg(page, 'Second Co');
 });
 
 test('deleting the first organization leaves the second in place and the switcher working', async ({
@@ -285,9 +282,7 @@ test('deleting the first organization leaves the second in place and the switche
   // (the app resumes it at once, so only check it ends up gone and Keeper Co remains.)
   await adminPatch(`workspaces/${wid}`, { deletingAt: new Date(), deletingBy: uid });
   await expect.poll(() => adminDoc(`workspaces/${wid}`), { timeout: 60_000 }).toBeNull();
-  await expect(
-    page.getByRole('button', { name: /^Keeper Co, switch organization$/ }),
-  ).toBeVisible();
+  await expectCurrentOrg(page, 'Keeper Co');
 });
 
 test('screenshots', async ({ page }, info) => {
