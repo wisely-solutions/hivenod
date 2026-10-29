@@ -800,7 +800,12 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       await ask(['warmer'], null);
       const o = await outcome(oid);
       await owner.run(
-        approveOutcome(owner.ctx, { outcomeId: oid, outcome: o, thread: await thread(t1), version: 1 }),
+        approveOutcome(owner.ctx, {
+          outcomeId: oid,
+          outcome: o,
+          thread: await thread(t1),
+          version: 1,
+        }),
       );
       await call('outcome_propose', {
         threadId: t1,
@@ -813,7 +818,11 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
     const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
     expect(oks).toEqual([true, true, false, true, false, true, true, false, true]);
     expect(r.calls[3]).toMatchObject({
-      out: { outcomes: [{ state: 'revising', versions: 1, revise: { chips: ['shorter', 'availability'] } }] },
+      out: {
+        outcomes: [
+          { state: 'revising', versions: 1, revise: { chips: ['shorter', 'availability'] } },
+        ],
+      },
     });
     expect(r.calls[5]).toMatchObject({ out: { version: 2, state: 'proposed' } });
     expect(r.calls[8]).toMatchObject({

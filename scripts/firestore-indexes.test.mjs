@@ -416,7 +416,7 @@ describe('the repository', () => {
     const { problems, results, unanalysable } = guard(root);
     expect(problems).toEqual([]);
     const go = results.filter((r) => r.file.startsWith('cli/'));
-    expect(go).toHaveLength(8);
+    expect(go).toHaveLength(9);
     const cal = go.find((r) => r.shape.group === 'calendar');
     expect(cal?.result.via).toBe('composite');
     expect(unanalysable.filter((u) => u.file.startsWith('cli/'))).toHaveLength(1);
