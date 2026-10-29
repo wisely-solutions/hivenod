@@ -191,7 +191,7 @@ describe('proposing a plan', () => {
     await denied(
       a.run([
         ...ops.slice(0, -1),
-        { ...ev, data: { ...ev.data, data: { ...(ev.data.data as object), steps: nine } } },
+        { ...ev, data: { ...ev.data, data: { ...(ev.data!.data as object), steps: nine } } },
       ]),
     );
     await ok(a.run(p));
@@ -377,7 +377,9 @@ describe('order', () => {
     );
     // cursor +2
     const s1 = finishOutcome(a.ctx, { ...(await stepOf(0)), status: 'done' });
-    await denied(a.run(forge(s1.ops, PL('pl1'), { cursor: 2 })));
+    await denied(
+      a.run(forge(s1.ops, PL('pl1'), { cursor: 2 }).filter((op) => op.path !== T('itr1'))),
+    );
     // reporting it but leaving the cursor
     await denied(a.run(s1.ops.filter((op) => op.path !== PL('pl1'))));
     await ok(a.run(s1));
@@ -479,6 +481,88 @@ describe('order', () => {
     );
     expect(await snap(O('w1'))).toMatchObject({ state: 'done' });
     expect(await snap(PL('pl1'))).toMatchObject({ cursor: 1 });
+  });
+});
+
+/** The ops with the event written as agent A (the member's batch, forged by the agent). */
+const byAgent = (ops: WriteOp[], drop: string[] = []) =>
+  ops
+    .filter((op) => !drop.includes(op.path))
+    .map((op) =>
+      op.path.includes('inboxEvents')
+        ? { ...op, data: { ...op.data, actor: { type: 'agent', id: AGENTS.a, name: 'A' } } }
+        : op.path.includes('inboxOutcomes') && op.data?.decision
+          ? {
+              ...op,
+              data: {
+                ...op.data,
+                decision: { ...(op.data!.decision as object), byUid: AGENTS.a },
+              },
+            }
+          : op,
+    );
+
+describe('each invariant on its own', () => {
+  it('a step is started only at its turn', async () => {
+    const a = await started();
+    await proposed();
+    await approvedAll(as('alice'));
+    // Build it (step 4) while step 1 is at the cursor
+    await denied(
+      a.run(
+        finishOutcome(a.ctx, {
+          ...live(await stepOf(3), 3),
+          status: 'started',
+          result: { itemId: 'item9' },
+        }).ops,
+      ),
+    );
+  });
+  it('an agent never approves a step, nor passes a gate', async () => {
+    const a = await started();
+    await proposed();
+    const alice = as('alice');
+    await denied(a.run(byAgent(approveOutcome(alice.ctx, await stepOf(4)).ops, [T('itr1')])));
+    await approvedAll(alice);
+    await done(a, 0);
+    await done(a, 1);
+    await denied(a.run(byAgent(approveOutcome(alice.ctx, await stepOf(2)).ops, [T('itr1')])));
+  });
+  it('the member decides a gate only at its turn', async () => {
+    await started();
+    await proposed();
+    const alice = as('alice');
+    const early = live(await stepOf(2), 2);
+    const p = approveOutcome(alice.ctx, { ...early, outcome: (await stepOf(2)).outcome });
+    // without moving the plan
+    await denied(alice.run(p.ops.filter((op) => op.path !== PL('pl1'))));
+  });
+  it('an agent never edits the steps', async () => {
+    const a = await started();
+    await proposed();
+    const alice = as('alice');
+    const p = editPlan(alice.ctx, {
+      ...(await load()),
+      thread: await thread(),
+      edit: { op: 'move', from: 4, to: 0 },
+    });
+    await denied(a.run(byAgent(p.ops, [T('itr1')])));
+    // the member may (to the front: nothing has started)
+    await ok(alice.run(p));
+    expect((await snap(PL('pl1'))).steps).toEqual(['st5', 'st1', 'st2', 'st3', 'st4']);
+  });
+  it('a step is never on another thread than its plan', async () => {
+    await started();
+    await started('r2', 'thread-2');
+    const a = as(AGENTS.a);
+    const p = proposePlan(a.ctx, {
+      threadId: 'itr2',
+      thread: await thread('itr2'),
+      steps: [EXAMPLE[0]!, EXAMPLE[0]!],
+      planId: 'pl2',
+      stepIds: ['x1', 'x2'],
+    });
+    await denied(a.run(forge(p.ops, O('x2'), { threadId: 'itr1' })));
   });
 });
 

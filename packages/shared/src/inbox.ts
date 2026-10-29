@@ -40,7 +40,6 @@ import {
   SINGLE_TYPES,
   OutcomeFieldError,
   outcomeType,
-  type WaitingOn,
 } from './outcomes';
 import { calendarEventId, calendarUpsert } from './calendar';
 import {

@@ -369,6 +369,86 @@ const MUTATIONS = [
       ],
     ],
   ],
+  // Inbox plans (item qwFAWxZM5xkcE7PPjAzi)
+  [
+    'plans: step carried out out of turn',
+    [
+      [
+        "(isActiveAgent(wid) && turn && p.state in ['proposed', 'active']",
+        "(isActiveAgent(wid) && p.state in ['proposed', 'active']",
+      ],
+    ],
+  ],
+  [
+    'plans: step carried out before approval',
+    [
+      [
+        ": r.state in ['approved', 'running']\n",
+        ": r.state in ['approved', 'running', 'proposed']\n",
+      ],
+    ],
+  ],
+  [
+    'plans: agent decides a step',
+    [
+      [
+        "'plan.proposed', 'outcome.started']));",
+        "'plan.proposed', 'outcome.started', 'outcome.approved']));",
+      ],
+      [
+        'return (inboxOwner(wid, r) && inboxPlanLive(p)',
+        'return ((inboxOwner(wid, r) || isActiveAgent(wid)) && inboxPlanLive(p)',
+      ],
+      ['return (inboxOwner(wid, r)\n', 'return ((inboxOwner(wid, r) || isActiveAgent(wid))\n'],
+    ],
+  ],
+  [
+    'plans: gate decided before its turn',
+    [
+      [
+        "? turn && r.state == 'proposed' && d.state == 'done' && pa.cursor == p.cursor + 1",
+        "? r.state == 'proposed' && d.state == 'done'",
+      ],
+    ],
+  ],
+  [
+    'plans: cursor jumps',
+    [
+      ['let next = d.cursor == r.cursor + 1 && same', 'let next = d.cursor > r.cursor && same'],
+      [
+        "? d.state == 'done' && pa.cursor == p.cursor + 1",
+        "? d.state == 'done' && pa.cursor > p.cursor",
+      ],
+    ],
+  ],
+  ['plans: done step reordered', [['inboxPlanFirstFree(wid, r)))))', '0))))']]],
+  [
+    'plans: agent edits steps',
+    [
+      [
+        "'plan.proposed', 'outcome.started']));",
+        "'plan.proposed', 'outcome.started', 'plan.edited']));",
+      ],
+      ['return (inboxOwner(wid, r)\n', 'return ((inboxOwner(wid, r) || isActiveAgent(wid))\n'],
+    ],
+  ],
+  [
+    'plans: nine steps',
+    [['request.resource.data.steps.size() <= 8', 'request.resource.data.steps.size() <= 9']],
+  ],
+  [
+    'plans: step on another thread',
+    [
+      [
+        '&& d.planId is string && p.threadId == d.threadId && p.memberUid',
+        '&& d.planId is string && p.memberUid',
+      ],
+      [
+        "inboxTrackedThread(wid, d.lastEventId, ['plan.proposed'], d.memberUid, d.threadId))",
+        "inboxTracked(wid, d.lastEventId, ['plan.proposed'], d.memberUid))",
+      ],
+    ],
+  ],
   [
     'inbox: plan-only type proposed alone',
     [

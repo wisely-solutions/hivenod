@@ -69,7 +69,7 @@ function plan(
           memberUid: 'joao',
           threadId: 't1',
           type: STEPS[i]!.type,
-          fields: STEPS[i]!.fields as Record<string, string>,
+          fields: STEPS[i]!.fields as unknown as Record<string, string>,
           state: states[i]!,
           executor: STEPS[i]!.type === 'approval' ? null : 'agentA',
           planId: 'p1',

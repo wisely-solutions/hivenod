@@ -1139,9 +1139,10 @@ service cloud.firestore {
       // the member approves, reorders, removes, adds approval steps, retries, skips or stops.
       function inboxPlanDoc(wid, pid) { return inboxDoc(wid, 'inboxPlans', pid); }
       function inboxAtCursor(p, oid) { return p.cursor < p.steps.size() && p.steps[p.cursor] == oid; }
-      // The list `l` without its element `i` (a slice may not start past the end).
+      // The list `l` without its element `i` (a slice is never empty).
       function inboxWithout(l, i) {
-        return i + 1 >= l.size() ? l[0:i] : l[0:i].concat(l[i + 1:l.size()]);
+        return i == 0 ? (l.size() <= 1 ? [] : l[1:l.size()])
+          : i + 1 >= l.size() ? l[0:i] : l[0:i].concat(l[i + 1:l.size()]);
       }
       function inboxPlanLive(p) { return p.state in ['proposed', 'active', 'blocked']; }
       // A thread state of the right shape (the plan's thread state, set by the plan actions).
@@ -1249,7 +1250,7 @@ service cloud.firestore {
         // stay as they are.
         function inboxPlanEdited(wid, pid, d, r, e, first) {
           let n = r.steps.size();
-          return d.steps[0:first] == r.steps[0:first]
+          return (first == 0 || d.steps[0:first] == r.steps[0:first])
             && ((e.data.op == 'move' && d.steps.size() == n
                 && e.data.from is int && e.data.to is int
                 && e.data.from >= first && e.data.from < n && e.data.to >= first && e.data.to < n
