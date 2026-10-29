@@ -6,6 +6,7 @@ package hive
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -51,6 +52,13 @@ type FeedOutcome struct {
 	CreatedAtMs                   int64
 	// PlanID: a plan step (item qwFAWxZM5xkcE7PPjAzi), carried out only at its plan's cursor.
 	PlanID string
+}
+
+// FeedRunning is a Build it plan step this agent carries out, waiting for its item (running).
+type FeedRunning struct {
+	ID, ThreadID, MemberUID, Type, PlanID string
+	// ItemID and ProjectID: the item it made (ProjectID "" when the link does not say).
+	ItemID, ProjectID string
 }
 
 // FeedPlan is a live plan (proposed, active or blocked): its steps and whose turn it is.
@@ -100,6 +108,9 @@ type InboxSource interface {
 	WatchOutcomes(ctx context.Context, on func([]FeedOutcome))
 	WatchRevising(ctx context.Context, on func([]FeedRevise))
 	WatchPlans(ctx context.Context, on func([]FeedPlan))
+	WatchRunning(ctx context.Context, on func([]FeedRunning))
+	// ItemState is an item's status ("done", "stopped" for stopped or archived, …); gone: deleted.
+	ItemState(ctx context.Context, projectID, itemID string) (status string, gone bool, err error)
 	EventOf(ctx context.Context, eventID string) (*FeedEvent, error)
 	Wake(ctx context.Context, threadID string) error
 }
@@ -131,6 +142,8 @@ type InboxEventInfo struct {
 	// PlanID and Step ("3 of 5"): the event is about a plan (item qwFAWxZM5xkcE7PPjAzi).
 	PlanID string `json:"planId"`
 	Step   string `json:"step"`
+	// ItemID: the Build it step's item (reasons item_done and item_stopped).
+	ItemID string `json:"itemId"`
 	// PlanEnd: how a plan ended for reason rejected ("plan.rejected", "plan.stopped", or a gate's
 	// "outcome.rejected").
 	PlanEnd string `json:"planEnd"`
@@ -152,7 +165,7 @@ var inboxTriggers = map[string]string{
 }
 
 var inboxPriority = map[string]int{
-	"carry_out": 0, "answered": 1, "revise": 1, "new": 2, "message": 2,
+	"carry_out": 0, "item_done": 0, "item_stopped": 1, "answered": 1, "revise": 1, "new": 2, "message": 2,
 	"woke": 3, "rejected": 3, "failed": 3, "restored": 3, "resume": 3, "nudge_due": 4,
 }
 
@@ -217,6 +230,10 @@ func InboxText(e InboxEventInfo) string {
 		} else {
 			lines = append(lines, fmt.Sprintf("The person approved a %s outcome (outcome %s) on thread %s.", or(e.OutcomeType, "?"), or(e.OutcomeID, "?"), e.ThreadID))
 		}
+	case "item_done":
+		lines = append(lines, fmt.Sprintf("The item %s made by Build it step %s of plan %s (outcome %s) on thread %s is Done.", or(e.ItemID, "?"), or(e.Step, "?"), or(e.PlanID, "?"), or(e.OutcomeID, "?"), e.ThreadID))
+	case "item_stopped":
+		lines = append(lines, fmt.Sprintf("The item %s made by Build it step %s of plan %s (outcome %s) on thread %s was stopped or deleted: it will not be Done.", or(e.ItemID, "?"), or(e.Step, "?"), or(e.PlanID, "?"), or(e.OutcomeID, "?"), e.ThreadID))
 	case "revise":
 		var asked []string
 		for _, c := range e.Chips {
@@ -241,6 +258,10 @@ func InboxText(e InboxEventInfo) string {
 		if e.PlanID != "" && e.OutcomeType == "make_it_work" {
 			what += " status started with result.itemId once the item is made (the plan waits until the item is Done; then report it done)"
 		}
+	case "item_done":
+		what = fmt.Sprintf("report the step done: outcome_done %s status done with result.itemId %s; the plan then moves to its next step", or(e.OutcomeID, "?"), or(e.ItemID, "?"))
+	case "item_stopped":
+		what = fmt.Sprintf("report the step failed: outcome_done %s status failed with result.error saying the item was stopped; the person then retries, skips or stops the plan", or(e.OutcomeID, "?"))
 	case "rejected":
 		if e.PlanID != "" {
 			what = "re-plan: propose a new plan (plan_propose) or a single outcome (outcome_propose), or ask the person (inbox_ask)"
@@ -264,6 +285,7 @@ type feedDue struct {
 	info                              InboxEventInfo
 	outcome                           *FeedOutcome
 	revise                            *FeedRevise
+	build                             *FeedRunning
 	state                             string
 	updatedAtMs                       *int64
 }
@@ -272,6 +294,7 @@ type feedFlight struct {
 	at          int64
 	outcome     bool
 	revise      bool
+	build       bool
 	state       string
 	updatedAtMs *int64
 }
@@ -295,7 +318,13 @@ type InboxFeed struct {
 	rorder   []string
 	revised  map[string]int64
 	plans    map[string]FeedPlan
-	plansIn  bool // the first plans snapshot came
+	running  map[string]FeedRunning
+	norder   []string
+	items    map[string]string // outcome id -> its item's state ("done", "stopped", "gone", …)
+	checked  map[string]int64  // outcome id -> when its item was last looked at
+	checking map[string]bool
+	built    map[string]string // outcome id -> the item reason sent
+	plansIn  bool              // the first plans snapshot came
 	handled  map[string]string
 	seen     map[string]bool
 	due      map[string]*feedDue
@@ -339,7 +368,7 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &InboxFeed{src: src, push: push, now: now, MaxInbox: o.MaxInbox, perMinute: o.PerMinute,
 		nudgeMs: o.NudgeAfter.Milliseconds(), leaseMs: o.Lease.Milliseconds(), tickMs: o.Tick.Milliseconds(),
-		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, plans: map[string]FeedPlan{}, handled: map[string]string{},
+		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, handled: map[string]string{},
 		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{},
 		inflight: map[string]*feedFlight{}, types: map[string]*FeedEvent{}, fetching: map[string]bool{},
 		wakes: map[string]string{}, ctx: ctx, cancel: cancel}
@@ -387,6 +416,41 @@ func (f *InboxFeed) Subscribe() {
 	f.src.WatchThreads(sctx, f.OnThreads)
 	f.src.WatchOutcomes(sctx, f.OnOutcomes)
 	f.src.WatchRevising(sctx, f.OnRevising)
+	f.src.WatchRunning(sctx, f.OnRunning)
+}
+
+// OnRunning takes a snapshot of this agent's running Build it steps.
+func (f *InboxFeed) OnRunning(rows []FeedRunning) {
+	f.mu.Lock()
+	f.running = map[string]FeedRunning{}
+	f.norder = f.norder[:0]
+	for _, r := range rows {
+		f.running[r.ID] = r
+		f.norder = append(f.norder, r.ID)
+	}
+	f.mu.Unlock()
+	f.Evaluate()
+}
+
+// checkItems looks at the items of running Build it steps, then evaluates again.
+func (f *InboxFeed) checkItems(rows []FeedRunning) {
+	ok := false
+	for _, r := range rows {
+		status, gone, err := f.src.ItemState(f.ctx, r.ProjectID, r.ItemID)
+		f.mu.Lock()
+		delete(f.checking, r.ID)
+		if err == nil {
+			if gone {
+				status = "gone"
+			}
+			f.items[r.ID] = status
+			ok = true
+		}
+		f.mu.Unlock()
+	}
+	if ok {
+		f.Evaluate()
+	}
 }
 
 // OnPlans takes a snapshot of the live plans.
@@ -471,6 +535,9 @@ func (f *InboxFeed) Evaluate() {
 		if fl.revise {
 			_, ok := f.revising[slot[2:]]
 			over = over || !ok
+		} else if fl.build {
+			_, ok := f.running[slot[2:]]
+			over = over || !ok
 		} else if fl.outcome {
 			o, ok := f.outcomes[slot[2:]]
 			over = over || !ok || !f.atTurn(o)
@@ -553,8 +620,50 @@ func (f *InboxFeed) Evaluate() {
 			}
 		}
 	}
+	// Build it (item qwFAWxZM5xkcE7PPjAzi): a running step's item reaching Done (or stopped).
+	var look []FeedRunning
+	for _, id := range f.norder {
+		r := f.running[id]
+		slot := "b:" + r.ID
+		reason := ""
+		switch f.items[r.ID] {
+		case "done":
+			reason = "item_done"
+		case "stopped", "gone":
+			reason = "item_stopped"
+		}
+		if reason == "" {
+			if !f.checking[r.ID] && now-f.checked[r.ID] >= f.tickMs {
+				f.checking[r.ID], f.checked[r.ID] = true, now
+				look = append(look, r)
+			}
+			continue
+		}
+		if f.built[r.ID] == reason || f.due[slot] != nil {
+			continue
+		}
+		rc := r
+		info := InboxEventInfo{Reason: reason, ThreadID: r.ThreadID, OutcomeID: r.ID, OutcomeType: r.Type, PlanID: r.PlanID, ItemID: r.ItemID}
+		f.due[slot] = &feedDue{slot: slot, reason: reason, threadID: r.ThreadID, atMs: now, memberUID: r.MemberUID, build: &rc, info: info}
+	}
+	for slot, d := range f.due {
+		if d.build != nil {
+			if _, ok := f.running[d.build.ID]; !ok {
+				delete(f.due, slot)
+			}
+		}
+	}
+	for id := range f.items {
+		if _, ok := f.running[id]; !ok {
+			delete(f.items, id)
+			delete(f.checked, id)
+		}
+	}
 	events := f.pump()
 	f.mu.Unlock()
+	if len(look) > 0 {
+		go f.checkItems(look)
+	}
 	if len(fetch) > 0 {
 		// One batch, then one look: the threads of a snapshot go out in priority order.
 		go f.fetch(fetch)
@@ -706,11 +815,14 @@ func (f *InboxFeed) pump() []Event {
 		if d.revise != nil {
 			f.revised[d.revise.ID] = d.revise.AtMs
 		}
+		if d.build != nil {
+			f.built[d.build.ID] = d.reason
+		}
 		if d.reason == "nudge_due" {
 			f.nudged[d.threadID] = *d.updatedAtMs
 		}
 		if !update {
-			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, revise: d.revise != nil, state: d.state, updatedAtMs: d.updatedAtMs}
+			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, revise: d.revise != nil, build: d.build != nil, state: d.state, updatedAtMs: d.updatedAtMs}
 		}
 		f.sent = append(f.sent, f.nowMs())
 		meta := map[string]string{
@@ -722,6 +834,9 @@ func (f *InboxFeed) pump() []Event {
 		}
 		if d.revise != nil {
 			meta["outcome_id"], meta["outcome_type"] = d.revise.ID, d.revise.Type
+		}
+		if d.build != nil {
+			meta["outcome_id"], meta["outcome_type"], meta["item_id"] = d.build.ID, d.build.Type, d.build.ItemID
 		}
 		if d.info.PlanID != "" && d.info.Step == "" && d.info.OutcomeID != "" {
 			// The plans may arrive after the step (a fresh listener): look again when it goes out.
@@ -888,6 +1003,63 @@ func (s firestoreInbox) WatchPlans(ctx context.Context, on func([]FeedPlan)) {
 		}
 		on(rows)
 	}, nil)
+}
+
+// WatchRunning listens to this agent's running plan steps (Build it, waiting for its item).
+func (s firestoreInbox) WatchRunning(ctx context.Context, on func([]FeedRunning)) {
+	q := s.c.DB.Collection(model.Paths.InboxCollection(s.c.WorkspaceID, "inboxOutcomes")).
+		Where("executor", "==", s.c.UID).Where("state", "==", "running")
+	go listenQuery(ctx, s.c.recon, q, func(docs []*firestore.DocumentSnapshot) {
+		rows := make([]FeedRunning, 0, len(docs))
+		for _, d := range docs {
+			m := d.Data()
+			str := func(k string) string { v, _ := m[k].(string); return v }
+			r := FeedRunning{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), PlanID: str("planId")}
+			if res, ok := m["result"].(map[string]any); ok {
+				r.ItemID, _ = res["itemId"].(string)
+				if link, ok := res["permalink"].(string); ok {
+					if pid, iid := ItemLinkParts(link); iid == r.ItemID {
+						r.ProjectID = pid
+					}
+				}
+			}
+			if r.ItemID != "" {
+				rows = append(rows, r)
+			}
+		}
+		on(rows)
+	}, nil)
+}
+
+// ItemState reads a Build it item: its status ("stopped" when archived), or gone when deleted.
+func (s firestoreInbox) ItemState(ctx context.Context, projectID, itemID string) (string, bool, error) {
+	if projectID == "" {
+		l, err := s.c.load(ctx, itemID, "")
+		if err != nil {
+			var he *Error
+			if errors.As(err, &he) {
+				return "", true, nil
+			}
+			return "", false, err
+		}
+		projectID = l.ProjectID
+	}
+	snap, err := s.c.DB.Doc(model.Paths.Item(s.c.WorkspaceID, projectID, itemID)).Get(ctx)
+	if err != nil {
+		if NotFound(err) {
+			return "", true, nil
+		}
+		return "", false, err
+	}
+	if !snap.Exists() {
+		return "", true, nil
+	}
+	m := snap.Data()
+	if m["archivedAt"] != nil {
+		return "stopped", false, nil
+	}
+	st, _ := m["status"].(string)
+	return st, false, nil
 }
 
 func feedPlanOf(id string, m map[string]any) FeedPlan {

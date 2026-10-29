@@ -50,6 +50,8 @@ type Client struct {
 	clockOffset        time.Duration
 	// Creates is the create_item rate limit (item DhsO9); defaults to the shared file.
 	Creates *CreateLimiter
+	// WebURL is the Hivenod site (https://hivenod.com), for links to items.
+	WebURL string
 }
 
 // Connect signs in with the token (tok "" = HIVENOD_TOKEN, then the saved pairing) and reads
@@ -95,6 +97,7 @@ func Connect(ctx context.Context, cfg Config, tok string) (*Client, error) {
 		nextLog:     map[string]int{},
 		itemProject: map[string]string{},
 		arrivalKeys: map[string]arrivalKey{},
+		WebURL:      strings.TrimRight(cfg.WebURL, "/"),
 	}
 	a, err := c.readAgent(ctx)
 	if err != nil {

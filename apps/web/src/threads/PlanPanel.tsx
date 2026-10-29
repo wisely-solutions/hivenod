@@ -10,6 +10,7 @@
 import {
   agentSchema,
   cliSupports,
+  compareVersions,
   minVersionFor,
   outcomeType,
   paths,
@@ -44,6 +45,7 @@ import { Icon } from '../ui/icon';
 import { ActionMenu, type MenuAction } from '../ui/menu';
 import { Dialog } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
+import { BuildItCard } from './BuildItCard';
 import { FieldView } from './OutcomeCard';
 import { usePlanActions } from './usePlanActions';
 import {
@@ -91,12 +93,26 @@ export function PlanPanel(props: PlanPanelProps) {
           (s) => s.ui === 'blocked' || s.ui === 'revising' || s.ui === 'waitingForYou',
         )?.outcomeId ??
         view.steps.find((s) => s.ui === 'proposed')?.outcomeId ??
+        view.steps.find((s) => s.ui === 'running')?.outcomeId ??
         null);
   const shownId = openId === '' ? null : (openId ?? defaultOpen);
   // An old CLI sends every approved step at once: say so before the member approves.
   const home = useLiveDoc(paths.agent(wid, thread.data.fetchedBy), agentSchema);
   const have = home.state === 'ready' ? home.data?.cliVersion : undefined;
-  const old = home.state === 'ready' && !!home.data && cliSupports('plan', have) === 'old';
+  // Build it steps also need the CLI that sends item_done (slice 6).
+  const kinds = [
+    'plan',
+    ...(view.steps.some((s) => s.type === 'make_it_work') ? ['item_done'] : []),
+  ];
+  const oldKinds = kinds.filter(
+    (k) => home.state === 'ready' && !!home.data && cliSupports(k, have) === 'old',
+  );
+  const old = oldKinds.length > 0;
+  const needs =
+    oldKinds
+      .map((k) => minVersionFor(k) ?? '')
+      .sort(compareVersions)
+      .pop() ?? '';
 
   const { counting, error, edit, approveAll, rejectAll, gate, retry, skip, stop } = usePlanActions(
     wid,
@@ -211,7 +227,12 @@ export function PlanPanel(props: PlanPanelProps) {
       );
     return (
       <div className="mt-2 rounded-card border border-line bg-surface-2 p-3.5">
-        <div className="flex flex-col gap-2.5">
+        <div
+          className={cn(
+            'flex flex-col gap-2.5',
+            o.type === 'make_it_work' && o.result?.itemId && 'hidden',
+          )}
+        >
           {Object.entries(t?.fields ?? {}).map(([k, f]) => (
             <FieldView
               key={k}
@@ -228,10 +249,15 @@ export function PlanPanel(props: PlanPanelProps) {
             Failed{o.result?.error ? `: ${o.result.error}` : ''}
           </p>
         ) : null}
-        {o.state === 'running' && o.result?.itemId ? (
-          <p data-running-item="" className="mt-3 text-14 text-text-2">
-            Item {o.result.itemId} is being built; the plan goes on when it is Done.
-          </p>
+        {o.type === 'make_it_work' && o.result?.itemId ? (
+          <>
+            <BuildItCard wid={wid} outcome={o} />
+            {o.state === 'running' ? (
+              <p data-running-item="" className="mt-2 text-13 text-text-2">
+                The plan goes on when this item is Done.
+              </p>
+            ) : null}
+          </>
         ) : null}
         {o.state === 'done' && o.result?.permalink ? (
           <a
@@ -346,8 +372,8 @@ export function PlanPanel(props: PlanPanelProps) {
           <Icon icon={TriangleAlert} size={15} className="mt-0.5 shrink-0" />
           <span className="min-w-0">
             {agentName(thread.data.fetchedBy)} needs a Hivenod update to run plans step by step (it
-            runs {have}; this needs {minVersionFor('plan')}). Ask its owner to run{' '}
-            <code>hivenod update</code> and restart the session before you approve.
+            runs {have}; this needs {needs}). Ask its owner to run <code>hivenod update</code> and
+            restart the session before you approve.
           </span>
         </p>
       ) : null}

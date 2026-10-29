@@ -10,6 +10,9 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import {
   adminDoc,
+  adminSet,
+  NOW,
+  projectFields,
   expectNoHorizontalScroll,
   fastTimers,
   freezeClock,
@@ -201,6 +204,109 @@ test.describe('desktop 1440', () => {
         .toBe('investigating');
       expect(await stateOf(s, stepIds[2]!)).toBe('rejected');
       await expect(plan).toHaveAttribute('data-plan-state', 'stopped');
+    } finally {
+      await s.stop();
+    }
+  });
+});
+
+test.describe('Build it 1440', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop layout');
+
+  test('the step shows the item it made; the plan goes on once the item is Done', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await fastTimers(page);
+    await freezeClock(page);
+    const s = await seedInbox(page);
+    try {
+      const base = `workspaces/${s.wid}`;
+      await adminSet(`${base}/projects/web`, projectFields('Website', s.uid));
+      const tid = await s.agent.add(s.uid, {
+        source: 'teams',
+        from: 'Sam Okafor',
+        text: 'Can the price list be updated?',
+        ref: 'prices-build',
+        id: 'm1',
+        at: at(0, 7),
+      });
+      const { planId, stepIds } = await s.agent.plan(tid, [
+        { type: 'make_it_work', fields: { title: 'Update the price list', project: 'web' } },
+        { type: 'reply', fields: { text: 'Done: the new prices are live.' } },
+      ]);
+      await page.goto(`/inbox/${s.wid}/t/${tid}`);
+      const plan = panel(page).locator(`[data-plan="${planId}"]`);
+      await expect(plan.locator('li[data-step]').first()).toContainText(
+        'Build it: Update the price list',
+        { timeout: 20_000 },
+      );
+      await plan.locator('[data-approve-plan]').click();
+      await page.waitForTimeout(UNDO_WAIT);
+      await expect.poll(() => stateOf(s, stepIds[0]!)).toBe('approved');
+      // The agent makes the item and reports the step started (the CLI fills in the link).
+      await adminSet(`${base}/projects/web/items/b1`, {
+        title: 'Update the price list',
+        type: 'task',
+        stepId: 'draft',
+        status: 'working',
+        summary: 'From the plan',
+        source: { kind: 'agent', label: 'Desk agent' },
+        createdBy: { type: 'agent', id: s.agent.aid },
+        parentItemId: null,
+        sourceRunId: null,
+        claim: null,
+        progress: null,
+        gate: null,
+        triage: null,
+        sendBackCount: 0,
+        costEur: 0,
+        order: 1,
+        updatedAt: new Date(NOW),
+        lastEventId: 'seed',
+      });
+      await s.agent.finishStep(planId, 'started', {
+        itemId: 'b1',
+        permalink: 'https://hivenod.com/p/web?item=b1',
+      });
+      const row = plan.locator('li[data-step="1"]');
+      await expect(row).toHaveAttribute('data-step-ui', 'running');
+      const card = plan.locator('[data-build-item="b1"]');
+      await expect(card).toContainText('Website');
+      await expect(card).toContainText('Update the price list');
+      await expect(card.locator('[data-build-state]')).toHaveText('At Draft');
+      await expect(card.getByRole('link', { name: 'Open' })).toHaveAttribute(
+        'href',
+        /\/p\/web\?item=b1/,
+      );
+      await look(page, 'plan-buildit-1440');
+      // The item is Done: the agent reports the step done; the reply's turn comes.
+      await adminSet(`${base}/projects/web/items/b1`, {
+        title: 'Update the price list',
+        type: 'task',
+        stepId: 'review',
+        status: 'done',
+        summary: 'From the plan',
+        source: { kind: 'agent', label: 'Desk agent' },
+        createdBy: { type: 'agent', id: s.agent.aid },
+        parentItemId: null,
+        sourceRunId: null,
+        claim: null,
+        progress: null,
+        gate: null,
+        triage: null,
+        sendBackCount: 0,
+        costEur: 0,
+        order: 1,
+        updatedAt: new Date(NOW),
+        lastEventId: 'seed',
+      });
+      await expect(card.locator('[data-build-state]')).toHaveText(
+        'Done: the agent reports it next',
+      );
+      await s.agent.finishStep(planId, 'done', { itemId: 'b1' });
+      await expect(row).toHaveAttribute('data-step-ui', 'done');
+      await expect.poll(() => cursor(s, planId)).toBe(1);
     } finally {
       await s.stop();
     }

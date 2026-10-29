@@ -788,6 +788,60 @@ d('hivenod mcp --channel inbox events (item 4PEHr)', () => {
     expect(inbox(s)).toHaveLength(3);
   });
 
+  it('Build it (item qwFAW): the item made, then Done, sends item_done once', async () => {
+    const { token } = await newAgent();
+    const s = await session(token, 2);
+    await put({ [I('b1')]: itemDoc({ stepId: 'build', title: 'Update the price list' }) });
+    const tid = (await s.call('inbox_add', msg())).threadId as string;
+    await s.next('inbox');
+    const p = await s.call('plan_propose', {
+      threadId: tid,
+      steps: [
+        { type: 'make_it_work', fields: { title: 'Update the price list', project: 'p1' } },
+        { type: 'reply', fields: { text: 'Done: the new prices are live.' } },
+      ],
+    });
+    const pid = p.planId as string;
+    const [s1] = p.stepIds as string[];
+    const plan = (await read(inboxPaths.plan(W, pid))) as unknown as PlanInput['plan'];
+    const outcomes: Record<string, OutcomeStateOf> = {};
+    for (const id of plan.steps)
+      outcomes[id] = (await read(inboxPaths.outcome(W, id))) as unknown as OutcomeStateOf;
+    const o = owner();
+    await o.run(approvePlan(o.ctx, { planId: pid, plan, outcomes, thread: await thread(tid) }));
+    const e1 = await s.next('inbox', 2);
+    expect(e1.meta).toMatchObject({ reason: 'carry_out', outcome_id: s1, step: '1 of 2' });
+    expect(e1.content).toMatch(/status started/);
+    const started = await s.call('outcome_done', {
+      outcomeId: s1,
+      status: 'started',
+      result: { itemId: 'b1' },
+    });
+    expect(started).toMatchObject({ state: 'running' });
+    expect((await read(inboxPaths.outcome(W, s1!))) as unknown).toMatchObject({
+      state: 'running',
+      result: { itemId: 'b1', permalink: expect.stringMatching(/\/p\/p1\?item=b1$/) },
+    });
+    // The item reaches Done: one item_done.
+    await put({
+      [I('b1')]: itemDoc({ stepId: 'done', status: 'done', title: 'Update the price list' }),
+    });
+    const e2 = await s.next('inbox', 3);
+    expect(e2.meta).toMatchObject({
+      reason: 'item_done',
+      outcome_id: s1,
+      item_id: 'b1',
+      plan_id: pid,
+      step: '1 of 2',
+    });
+    await s.call('outcome_done', { outcomeId: s1, status: 'done', result: { itemId: 'b1' } });
+    // The reply's turn: its carry_out follows (already approved).
+    const e3 = await s.next('inbox', 4);
+    expect(e3.meta).toMatchObject({ reason: 'carry_out', step: '2 of 2' });
+    await pause(1500);
+    expect(inbox(s).filter((e) => e.meta.reason === 'item_done')).toHaveLength(1);
+  });
+
   it('at most maxInbox threads at a time; a reconnect or restart sends no duplicates', async () => {
     const { token } = await newAgent();
     const s = await session(token, 1, 2);

@@ -1,6 +1,14 @@
 import type { InboxOutcome, InboxPlan } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
-import { firstFree, planInputOf, planMain, planSummary, planWaits, stepTitle } from './plan';
+import {
+  firstFree,
+  itemLinkParts,
+  planInputOf,
+  planMain,
+  planSummary,
+  planWaits,
+  stepTitle,
+} from './plan';
 
 const ts = (ms: number) => ({ toMillis: () => ms, seconds: ms / 1000, nanoseconds: 0 });
 const oc = (id: string, type: string, state: InboxOutcome['state'], fields = {}) => ({
@@ -113,5 +121,14 @@ describe('plans on the thread page (item qwFAW, slice 4)', () => {
     );
     expect(stepTitle(null, {})).toBe('…');
     expect(stepTitle('reply', { text: 'x'.repeat(80) }).length).toBeLessThan(60);
+  });
+
+  it('reads the project and item of a Build it link', () => {
+    expect(itemLinkParts('https://hivenod.com/p/web%20site?item=i%2F9')).toEqual({
+      pid: 'web site',
+      iid: 'i/9',
+    });
+    expect(itemLinkParts('https://teams.example.com/m/1')).toBeNull();
+    expect(itemLinkParts(null)).toBeNull();
   });
 });

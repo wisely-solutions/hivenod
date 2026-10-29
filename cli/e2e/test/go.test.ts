@@ -914,6 +914,8 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       await call('inbox_list', {});
       // Build it: started with the item, done when the item is Done.
       await call('outcome_done', { outcomeId: s3!, status: 'started' });
+      // Build it (slice 6): the item must exist; its link is filled in.
+      await call('outcome_done', { outcomeId: s3!, status: 'started', result: { itemId: 'nope' } });
       await call('outcome_done', { outcomeId: s3!, status: 'started', result: { itemId: 'i1' } });
       await call('thread_read', { threadId: t1 });
       await call('outcome_done', { outcomeId: s3!, status: 'done', result: { itemId: 'i1' } });
@@ -947,6 +949,7 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       true,
       true,
       false,
+      false,
       true,
       true,
       true,
@@ -962,12 +965,16 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
     expect(r.calls[12]).toMatchObject({
       out: { toCarryOut: [{ step: '3 of 4', type: 'make_it_work' }] },
     });
-    expect(r.calls[14]).toMatchObject({ out: { state: 'running' } });
-    expect(r.calls[15]).toMatchObject({
+    expect(r.calls[14]).toMatchObject({
+      ok: false,
+      out: expect.stringContaining('Item nope not found'),
+    });
+    expect(r.calls[15]).toMatchObject({ out: { state: 'running' } });
+    expect(r.calls[16]).toMatchObject({
       out: { state: 'waiting', waiting: { on: 'item' }, plans: [{ progress: 'Step 3 of 4' }] },
     });
-    expect(r.calls[18]).toMatchObject({ out: { state: 'failed', threadState: 'yourCall' } });
-    expect(r.calls[21]).toMatchObject({
+    expect(r.calls[19]).toMatchObject({ out: { state: 'failed', threadState: 'yourCall' } });
+    expect(r.calls[22]).toMatchObject({
       out: { state: 'waiting', plans: [{ state: 'done', progress: 'Done' }] },
     });
     matchesGolden(r);

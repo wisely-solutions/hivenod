@@ -484,6 +484,11 @@
     },
     {
       "tool": "outcome_done",
+      "ok": false,
+      "out": "Item nope not found. Check the id (list_work) and that this agent may use its project."
+    },
+    {
+      "tool": "outcome_done",
       "ok": true,
       "out": {
         "note": "Started: the step waits until the item is Done; then report it done (outcome_done status done).",
@@ -587,7 +592,7 @@
             "result": {
               "error": null,
               "itemId": "i1",
-              "permalink": null,
+              "permalink": "https://hivenod.com/p/p1?item=i1",
               "text": null
             },
             "state": "running",
@@ -1208,14 +1213,14 @@
         "data": {
           "itemId": "i1",
           "outcomeId": "<id>",
-          "permalink": null,
+          "permalink": "https://hivenod.com/p/p1?item=i1",
           "planId": "<id>",
           "type": "make_it_work"
         },
         "memberUid": "owner",
         "subjectId": null,
         "threadId": "it4cbd6829b8b8fa4bc6781af5",
-        "type": "outcome.done"
+        "type": "outcome.started"
       },
       {
         "actor": {
@@ -1234,7 +1239,7 @@
         "memberUid": "owner",
         "subjectId": null,
         "threadId": "it4cbd6829b8b8fa4bc6781af5",
-        "type": "outcome.started"
+        "type": "outcome.done"
       },
       {
         "actor": {

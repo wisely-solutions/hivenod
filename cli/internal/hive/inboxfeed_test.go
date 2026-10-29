@@ -16,6 +16,10 @@ type fakeInbox struct {
 	onR      func([]FeedRevise)
 	onP      func([]FeedPlan)
 	plans    []FeedPlan
+	onN      func([]FeedRunning)
+	running  []FeedRunning
+	itemSt   map[string]string // item id -> status ("gone": deleted)
+	looks    int
 	revising []FeedRevise
 	events   map[string]*FeedEvent
 	woken    []string
@@ -52,6 +56,20 @@ func (f *fakeInbox) WatchPlans(_ context.Context, on func([]FeedPlan)) {
 	rows := f.plans
 	f.mu.Unlock()
 	on(rows)
+}
+func (f *fakeInbox) WatchRunning(_ context.Context, on func([]FeedRunning)) {
+	f.mu.Lock()
+	f.onN = on
+	rows := f.running
+	f.mu.Unlock()
+	on(rows)
+}
+func (f *fakeInbox) ItemState(_ context.Context, _, itemID string) (string, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.looks++
+	st := f.itemSt[itemID]
+	return st, st == "gone", nil
 }
 func (f *fakeInbox) EventOf(_ context.Context, id string) (*FeedEvent, error) {
 	f.mu.Lock()
@@ -383,5 +401,90 @@ func TestInboxFeedPlanRejectedAndRevise(t *testing.T) {
 	r2.want("t5:revise")
 	if m := r2.meta(0); m["plan_id"] != "p1" || m["step"] != "2 of 2" {
 		t.Fatal(m)
+	}
+}
+
+func (r *feedRig) runningSteps(rows []FeedRunning) {
+	r.src.mu.Lock()
+	r.src.running = rows
+	on := r.src.onN
+	r.src.mu.Unlock()
+	if on != nil {
+		on(rows)
+	}
+	r.settle()
+}
+
+func (r *feedRig) item(id, status string) {
+	r.src.mu.Lock()
+	if r.src.itemSt == nil {
+		r.src.itemSt = map[string]string{}
+	}
+	r.src.itemSt[id] = status
+	r.src.mu.Unlock()
+}
+
+// Build it (item qwFAWxZM5xkcE7PPjAzi, slice 6): the item of a running step is looked at once
+// a tick; Done sends item_done, stopped or deleted sends item_stopped, each once.
+func TestInboxFeedBuildItItemDoneAndStopped(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 3, Tick: time.Minute})
+	r.src.plans = []FeedPlan{{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"o0", "o1"}, Cursor: 1}}
+	r.item("i1", "working")
+	r.feed.Start()
+	run := FeedRunning{ID: "o1", ThreadID: "t1", MemberUID: "joao", Type: "make_it_work", PlanID: "p1", ItemID: "i1", ProjectID: "web"}
+	r.runningSteps([]FeedRunning{run})
+	r.want()
+	// Done, but looked at only once a tick.
+	r.item("i1", "done")
+	r.feed.Evaluate()
+	r.settle()
+	r.want()
+	r.advance(time.Minute)
+	r.feed.Evaluate()
+	r.settle()
+	r.want("t1:item_done")
+	m := r.meta(0)
+	if m["outcome_id"] != "o1" || m["item_id"] != "i1" || m["plan_id"] != "p1" || m["step"] != "2 of 2" {
+		t.Fatal(m)
+	}
+	r.mu.Lock()
+	c := r.pushed[0].Content
+	r.mu.Unlock()
+	for _, w := range []string{"is Done", "outcome_done o1 status done"} {
+		if !strings.Contains(c, w) {
+			t.Fatalf("%q lacks %q", c, w)
+		}
+	}
+	// Once: later ticks send nothing more; reported done (no longer running) frees the slot.
+	r.advance(time.Minute)
+	r.feed.Evaluate()
+	r.settle()
+	r.want("t1:item_done")
+	r.runningSteps(nil)
+	if r.feed.Active() != 0 {
+		t.Fatal(r.feed.Active())
+	}
+	// Another step whose item is deleted: item_stopped.
+	r.item("i2", "gone")
+	r.runningSteps([]FeedRunning{{ID: "o2", ThreadID: "t2", MemberUID: "joao", Type: "make_it_work", PlanID: "p2", ItemID: "i2"}})
+	r.want("t1:item_done", "t2:item_stopped")
+	r.mu.Lock()
+	c = r.pushed[1].Content
+	r.mu.Unlock()
+	if !strings.Contains(c, "stopped or deleted") || !strings.Contains(c, "status failed") {
+		t.Fatal(c)
+	}
+}
+
+func TestItemLink(t *testing.T) {
+	l := ItemLink("https://hivenod.com", "web site", "i/9")
+	if l != "https://hivenod.com/p/web%20site?item=i%2F9" {
+		t.Fatal(l)
+	}
+	if p, i := ItemLinkParts(l); p != "web site" || i != "i/9" {
+		t.Fatal(p, i)
+	}
+	if p, i := ItemLinkParts("https://teams.example.com/m/1"); p != "" || i != "" {
+		t.Fatal(p, i)
 	}
 }

@@ -396,6 +396,13 @@ confidence}`. Use it when the answer has more than one action or needs the perso
   retries, skips or stops). A `make_it_work` step (Build it) is reported `started` with
   `result.itemId` once the item is made (the step is `running`, the thread waits on the item),
   then `done` when the item is Done.
+- **Build it** (slice 6): `outcome_done status started` checks that the item exists in a project
+  the agent may use and, without a permalink, fills in the item's link
+  (`<site>/p/<project>?item=<item>`). The channel then watches the item (once a tick): when it is
+  **Done** it sends `item_done`; when it is stopped, archived or deleted, `item_stopped` (each
+  once, with `outcome_id`, `item_id`, `plan_id` and `step`). The agent reports the step done, or
+  failed with the reason (the plan is then blocked: Retry, Skip, Stop). Single `make_it_work`
+  outcomes are unchanged (done when the item is made).
 - **`thread_wake`** on a thread whose live plan waits at a `snooze` step marks that step done and
   moves the plan on (no `woke` event to investigate).
 - **`thread_read`** adds `plans`: each with `planId, state, cursor, progress` ("Step 3 of 5"),
@@ -526,6 +533,13 @@ last event id it handled (`lastEventId`):
   `hivenod update` before approving. On a phone the plan is in the bottom sheet ("k of N done")
   with one main button (Approve plan, Approve step k for a gate, Review step k, Retry step k),
   Reject plan (×) and a ⋯ menu (Add an approval step, Stop plan).
+- **Build it** (slice 6, `BuildItCard.tsx`): a `make_it_work` step reported `started` shows the
+  item it made: its project, title, the step it is at (or "Done: the agent reports it next") and
+  **Open** (same organization). The item is found through the step's link
+  (`<site>/p/<project>?item=<item>`, filled in by the CLI); a member who cannot read that project
+  sees what the step asked for and the item's id. The plan waits until the agent reports the step
+  done. Build it steps need a CLI that sends `item_done` (`EVENT_MIN_VERSION.item_done`): the
+  plan's update notice covers it.
 - **Today and plans** (slice 5): Today lists a thread with a live plan when the plan asks the
   member something now (`planAsksNow`): it is proposed, blocked (a step failed: listed even with
   nothing proposed), its step at the cursor waits, or an agent step can still be approved ahead.

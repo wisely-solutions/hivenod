@@ -15,6 +15,9 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * its turn. An older CLI sends carry_out for every approved step at once.
    */
   plan: '0.2.171',
+  /** Inbox events: a Build it plan step's item is Done, or was stopped (item qwFAWxZM5xkcE7PPjAzi). */
+  item_done: '0.2.174',
+  item_stopped: '0.2.174',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */
