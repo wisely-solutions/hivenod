@@ -49,6 +49,30 @@ type FeedThread struct {
 type FeedOutcome struct {
 	ID, ThreadID, MemberUID, Type string
 	CreatedAtMs                   int64
+	// PlanID: a plan step (item qwFAWxZM5xkcE7PPjAzi), carried out only at its plan's cursor.
+	PlanID string
+}
+
+// FeedPlan is a live plan (proposed, active or blocked): its steps and whose turn it is.
+type FeedPlan struct {
+	ID, ThreadID, State string
+	Steps               []string
+	Cursor              int
+}
+
+// stepOf is "3 of 5" for a step of the plan ("" when it is not one).
+func (p FeedPlan) stepOf(oid string) string {
+	for i, s := range p.Steps {
+		if s == oid {
+			return fmt.Sprintf("%d of %d", i+1, len(p.Steps))
+		}
+	}
+	return ""
+}
+
+// turn says whether step oid is at the cursor of a plan that runs.
+func (p FeedPlan) turn(oid string) bool {
+	return (p.State == "proposed" || p.State == "active") && p.Cursor < len(p.Steps) && p.Steps[p.Cursor] == oid
 }
 
 // FeedRevise is an outcome this agent proposed that the person asked changes for (revising).
@@ -58,12 +82,16 @@ type FeedRevise struct {
 	Chips                         []string
 	// AtMs is when they asked: a new request after a cancel is a new event.
 	AtMs int64
+	// PlanID: a plan step.
+	PlanID string
 }
 
 // FeedEvent is an inbox event (the timeline).
 type FeedEvent struct {
 	Type string
 	Data map[string]any
+	// Step is "3 of 5" when the event is about a step of a plan (data planId and outcomeId).
+	Step string
 }
 
 // InboxSource is where the feed reads from (Firestore; fakes in tests).
@@ -71,6 +99,7 @@ type InboxSource interface {
 	WatchThreads(ctx context.Context, on func([]FeedThread))
 	WatchOutcomes(ctx context.Context, on func([]FeedOutcome))
 	WatchRevising(ctx context.Context, on func([]FeedRevise))
+	WatchPlans(ctx context.Context, on func([]FeedPlan))
 	EventOf(ctx context.Context, eventID string) (*FeedEvent, error)
 	Wake(ctx context.Context, threadID string) error
 }
@@ -99,6 +128,12 @@ type InboxEventInfo struct {
 	// Ask for changes (reason revise): what the person asked.
 	Instruction string   `json:"instruction"`
 	Chips       []string `json:"chips"`
+	// PlanID and Step ("3 of 5"): the event is about a plan (item qwFAWxZM5xkcE7PPjAzi).
+	PlanID string `json:"planId"`
+	Step   string `json:"step"`
+	// PlanEnd: how a plan ended for reason rejected ("plan.rejected", "plan.stopped", or a gate's
+	// "outcome.rejected").
+	PlanEnd string `json:"planEnd"`
 }
 
 // reviseChipText is how a chip reads in the event text.
@@ -111,6 +146,9 @@ var inboxTriggers = map[string]string{
 	"thread.restored":  "restored",
 	"outcome.rejected": "rejected",
 	"outcome.failed":   "failed",
+	// Plans (item qwFAWxZM5xkcE7PPjAzi): the person rejected or stopped the plan.
+	"plan.rejected": "rejected",
+	"plan.stopped":  "rejected",
 }
 
 var inboxPriority = map[string]int{
@@ -151,7 +189,16 @@ func InboxText(e InboxEventInfo) string {
 	case "woke":
 		lines = append(lines, t+" woke up: its snooze is over.")
 	case "rejected":
-		lines = append(lines, "The person turned down the proposed outcome on "+t+why("."))
+		switch {
+		case e.PlanEnd == "plan.stopped":
+			lines = append(lines, "The person stopped plan "+e.PlanID+" on "+t+": nothing more of it runs.")
+		case e.PlanEnd == "plan.rejected":
+			lines = append(lines, "The person rejected plan "+e.PlanID+" on "+t+why("."))
+		case e.PlanID != "":
+			lines = append(lines, fmt.Sprintf("The person said Not approved to the approval step %s (step %s of plan %s) on %s%s. The plan stopped.", or(e.OutcomeID, "?"), or(e.Step, "?"), e.PlanID, t, why("")))
+		default:
+			lines = append(lines, "The person turned down the proposed outcome on "+t+why("."))
+		}
 	case "failed":
 		lines = append(lines, "Carrying out an outcome on "+t+" failed"+why(".")+" Investigate it again.")
 	case "restored":
@@ -165,7 +212,11 @@ func InboxText(e InboxEventInfo) string {
 		}
 		lines = append(lines, fmt.Sprintf("%s has waited on them for %d days or more.", t, days))
 	case "carry_out":
-		lines = append(lines, fmt.Sprintf("The person approved a %s outcome (outcome %s) on thread %s.", or(e.OutcomeType, "?"), or(e.OutcomeID, "?"), e.ThreadID))
+		if e.PlanID != "" {
+			lines = append(lines, fmt.Sprintf("Step %s of plan %s on thread %s is approved and its turn: a %s (outcome %s).", or(e.Step, "?"), e.PlanID, e.ThreadID, or(e.OutcomeType, "?"), or(e.OutcomeID, "?")))
+		} else {
+			lines = append(lines, fmt.Sprintf("The person approved a %s outcome (outcome %s) on thread %s.", or(e.OutcomeType, "?"), or(e.OutcomeID, "?"), e.ThreadID))
+		}
 	case "revise":
 		var asked []string
 		for _, c := range e.Chips {
@@ -174,12 +225,26 @@ func InboxText(e InboxEventInfo) string {
 		if e.Instruction != "" {
 			asked = append(asked, `"`+clip(e.Instruction, 500)+`"`)
 		}
-		lines = append(lines, fmt.Sprintf("The person asked for changes to your %s proposal (outcome %s) on thread %s: %s.", or(e.OutcomeType, "?"), or(e.OutcomeID, "?"), e.ThreadID, strings.Join(asked, "; ")))
+		where := ""
+		if e.PlanID != "" {
+			where = fmt.Sprintf(", step %s of plan %s", or(e.Step, "?"), e.PlanID)
+		}
+		lines = append(lines, fmt.Sprintf("The person asked for changes to your %s proposal (outcome %s%s) on thread %s: %s.", or(e.OutcomeType, "?"), or(e.OutcomeID, "?"), where, e.ThreadID, strings.Join(asked, "; ")))
+		if e.PlanID != "" {
+			lines = append(lines, "Only this step changes; the rest of the plan keeps its state.")
+		}
 	}
 	what := "investigate it (inbox_note for what you find, subject_assign if it is not filed, thread_due if a message states a deadline, inbox_ask only if you must), then propose what should come of it (outcome_propose, with your confidence and what you checked)"
 	switch e.Reason {
 	case "carry_out":
 		what = fmt.Sprintf("carry out outcome %s exactly as approved (its fields, as the person left them), then report it with outcome_done", or(e.OutcomeID, "?"))
+		if e.PlanID != "" && e.OutcomeType == "make_it_work" {
+			what += " status started with result.itemId once the item is made (the plan waits until the item is Done; then report it done)"
+		}
+	case "rejected":
+		if e.PlanID != "" {
+			what = "re-plan: propose a new plan (plan_propose) or a single outcome (outcome_propose), or ask the person (inbox_ask)"
+		}
 	case "revise":
 		what = fmt.Sprintf("revise it with outcome_propose revises=%s (same threadId and type): apply only what they asked and keep the rest; do not reject it or start a new outcome. If you cannot make the change, say why with inbox_ask on the thread", or(e.OutcomeID, "?"))
 	case "nudge_due":
@@ -229,6 +294,8 @@ type InboxFeed struct {
 	revising map[string]FeedRevise
 	rorder   []string
 	revised  map[string]int64
+	plans    map[string]FeedPlan
+	plansIn  bool // the first plans snapshot came
 	handled  map[string]string
 	seen     map[string]bool
 	due      map[string]*feedDue
@@ -272,7 +339,7 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &InboxFeed{src: src, push: push, now: now, MaxInbox: o.MaxInbox, perMinute: o.PerMinute,
 		nudgeMs: o.NudgeAfter.Milliseconds(), leaseMs: o.Lease.Milliseconds(), tickMs: o.Tick.Milliseconds(),
-		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, handled: map[string]string{},
+		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, plans: map[string]FeedPlan{}, handled: map[string]string{},
 		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{},
 		inflight: map[string]*feedFlight{}, types: map[string]*FeedEvent{}, fetching: map[string]bool{},
 		wakes: map[string]string{}, ctx: ctx, cancel: cancel}
@@ -316,9 +383,32 @@ func (f *InboxFeed) Subscribe() {
 	sctx, cancel := context.WithCancel(f.ctx)
 	f.subCtx = cancel
 	f.mu.Unlock()
+	f.src.WatchPlans(sctx, f.OnPlans)
 	f.src.WatchThreads(sctx, f.OnThreads)
 	f.src.WatchOutcomes(sctx, f.OnOutcomes)
 	f.src.WatchRevising(sctx, f.OnRevising)
+}
+
+// OnPlans takes a snapshot of the live plans.
+func (f *InboxFeed) OnPlans(rows []FeedPlan) {
+	f.mu.Lock()
+	f.plans = map[string]FeedPlan{}
+	f.plansIn = true
+	for _, r := range rows {
+		f.plans[r.ID] = r
+	}
+	f.mu.Unlock()
+	f.Evaluate()
+}
+
+// atTurn says whether an approved outcome may be carried out now: a single outcome always, a
+// plan step only at its plan's cursor. Call with f.mu held.
+func (f *InboxFeed) atTurn(o FeedOutcome) bool {
+	if o.PlanID == "" {
+		return true
+	}
+	p, ok := f.plans[o.PlanID]
+	return ok && p.turn(o.ID)
 }
 
 // Stop ends the feed.
@@ -382,8 +472,8 @@ func (f *InboxFeed) Evaluate() {
 			_, ok := f.revising[slot[2:]]
 			over = over || !ok
 		} else if fl.outcome {
-			_, ok := f.outcomes[slot[2:]]
-			over = over || !ok
+			o, ok := f.outcomes[slot[2:]]
+			over = over || !ok || !f.atTurn(o)
 		} else {
 			t, ok := f.threads[slot[2:]]
 			over = over || !ok || t.State != fl.state
@@ -425,16 +515,19 @@ func (f *InboxFeed) Evaluate() {
 	for _, id := range f.oorder {
 		o := f.outcomes[id]
 		slot := "o:" + o.ID
-		if f.carried[o.ID] || f.due[slot] != nil {
+		if f.carried[o.ID] || f.due[slot] != nil || !f.atTurn(o) {
 			continue
 		}
 		oc := o
-		f.due[slot] = &feedDue{slot: slot, reason: "carry_out", threadID: o.ThreadID, atMs: o.CreatedAtMs, memberUID: o.MemberUID, outcome: &oc,
-			info: InboxEventInfo{Reason: "carry_out", ThreadID: o.ThreadID, OutcomeID: o.ID, OutcomeType: o.Type}}
+		info := InboxEventInfo{Reason: "carry_out", ThreadID: o.ThreadID, OutcomeID: o.ID, OutcomeType: o.Type}
+		if o.PlanID != "" {
+			info.PlanID, info.Step = o.PlanID, f.plans[o.PlanID].stepOf(o.ID)
+		}
+		f.due[slot] = &feedDue{slot: slot, reason: "carry_out", threadID: o.ThreadID, atMs: o.CreatedAtMs, memberUID: o.MemberUID, outcome: &oc, info: info}
 	}
 	for slot, d := range f.due {
 		if d.outcome != nil {
-			if _, ok := f.outcomes[d.outcome.ID]; !ok {
+			if o, ok := f.outcomes[d.outcome.ID]; !ok || !f.atTurn(o) {
 				delete(f.due, slot)
 			}
 		}
@@ -443,12 +536,15 @@ func (f *InboxFeed) Evaluate() {
 	for _, id := range f.rorder {
 		rv := f.revising[id]
 		slot := "r:" + rv.ID
-		if v, ok := f.revised[rv.ID]; (ok && v == rv.AtMs) || f.due[slot] != nil {
+		if v, ok := f.revised[rv.ID]; (ok && v == rv.AtMs) || f.due[slot] != nil || (rv.PlanID != "" && !f.plansIn) {
 			continue
 		}
 		rc := rv
-		f.due[slot] = &feedDue{slot: slot, reason: "revise", threadID: rv.ThreadID, atMs: rv.AtMs, memberUID: rv.MemberUID, revise: &rc,
-			info: InboxEventInfo{Reason: "revise", ThreadID: rv.ThreadID, OutcomeID: rv.ID, OutcomeType: rv.Type, Instruction: rv.Instruction, Chips: rv.Chips}}
+		info := InboxEventInfo{Reason: "revise", ThreadID: rv.ThreadID, OutcomeID: rv.ID, OutcomeType: rv.Type, Instruction: rv.Instruction, Chips: rv.Chips}
+		if rv.PlanID != "" {
+			info.PlanID, info.Step = rv.PlanID, f.plans[rv.PlanID].stepOf(rv.ID)
+		}
+		f.due[slot] = &feedDue{slot: slot, reason: "revise", threadID: rv.ThreadID, atMs: rv.AtMs, memberUID: rv.MemberUID, revise: &rc, info: info}
 	}
 	for slot, d := range f.due {
 		if d.revise != nil {
@@ -516,6 +612,12 @@ func (f *InboxFeed) investigating(t FeedThread) string {
 		info.Answer = &a
 	case "rejected":
 		info.Why = str("reason")
+		if pid := str("planId"); pid != "" {
+			info.PlanID, info.OutcomeID, info.PlanEnd = pid, str("outcomeId"), ev.Type
+			if ev != nil {
+				info.Step = ev.Step
+			}
+		}
 	case "failed":
 		info.Why = str("error")
 	}
@@ -620,6 +722,19 @@ func (f *InboxFeed) pump() []Event {
 		}
 		if d.revise != nil {
 			meta["outcome_id"], meta["outcome_type"] = d.revise.ID, d.revise.Type
+		}
+		if d.info.PlanID != "" && d.info.Step == "" && d.info.OutcomeID != "" {
+			// The plans may arrive after the step (a fresh listener): look again when it goes out.
+			d.info.Step = f.plans[d.info.PlanID].stepOf(d.info.OutcomeID)
+		}
+		if d.info.PlanID != "" {
+			meta["plan_id"] = d.info.PlanID
+			if d.info.Step != "" {
+				meta["step"] = d.info.Step
+			}
+			if d.info.OutcomeID != "" && meta["outcome_id"] == "" {
+				meta["outcome_id"] = d.info.OutcomeID
+			}
 		}
 		info := d.info
 		if update {
@@ -727,7 +842,7 @@ func (s firestoreInbox) WatchOutcomes(ctx context.Context, on func([]FeedOutcome
 		for _, d := range docs {
 			m := d.Data()
 			str := func(k string) string { v, _ := m[k].(string); return v }
-			rows = append(rows, FeedOutcome{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), CreatedAtMs: feedMs(m["createdAt"])})
+			rows = append(rows, FeedOutcome{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), CreatedAtMs: feedMs(m["createdAt"]), PlanID: str("planId")})
 		}
 		on(rows)
 	}, nil)
@@ -741,7 +856,7 @@ func (s firestoreInbox) WatchRevising(ctx context.Context, on func([]FeedRevise)
 		for _, d := range docs {
 			m := d.Data()
 			str := func(k string) string { v, _ := m[k].(string); return v }
-			r := FeedRevise{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), AtMs: feedMs(m["updatedAt"])}
+			r := FeedRevise{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), AtMs: feedMs(m["updatedAt"]), PlanID: str("planId")}
 			if rv, ok := m["revise"].(map[string]any); ok {
 				r.Instruction, _ = rv["instruction"].(string)
 				if cs, ok := rv["chips"].([]any); ok {
@@ -761,6 +876,36 @@ func (s firestoreInbox) WatchRevising(ctx context.Context, on func([]FeedRevise)
 	}, nil)
 }
 
+// WatchPlans listens to the workspace's live plans (what an agent may read of Inbox; a plan
+// step's carry_out waits for its turn).
+func (s firestoreInbox) WatchPlans(ctx context.Context, on func([]FeedPlan)) {
+	q := s.c.DB.Collection(model.Paths.InboxCollection(s.c.WorkspaceID, "inboxPlans")).
+		Where("state", "in", []any{"proposed", "active", "blocked"})
+	go listenQuery(ctx, s.c.recon, q, func(docs []*firestore.DocumentSnapshot) {
+		rows := make([]FeedPlan, 0, len(docs))
+		for _, d := range docs {
+			rows = append(rows, feedPlanOf(d.Ref.ID, d.Data()))
+		}
+		on(rows)
+	}, nil)
+}
+
+func feedPlanOf(id string, m map[string]any) FeedPlan {
+	str := func(k string) string { v, _ := m[k].(string); return v }
+	p := FeedPlan{ID: id, ThreadID: str("threadId"), State: str("state")}
+	if c, ok := m["cursor"].(int64); ok {
+		p.Cursor = int(c)
+	}
+	if steps, ok := m["steps"].([]any); ok {
+		for _, e := range steps {
+			if v, ok := e.(string); ok {
+				p.Steps = append(p.Steps, v)
+			}
+		}
+	}
+	return p
+}
+
 func (s firestoreInbox) EventOf(ctx context.Context, eventID string) (*FeedEvent, error) {
 	snap, err := s.c.DB.Doc(model.Paths.InboxEvent(s.c.WorkspaceID, eventID)).Get(ctx)
 	if err != nil {
@@ -772,7 +917,15 @@ func (s firestoreInbox) EventOf(ctx context.Context, eventID string) (*FeedEvent
 	m := snap.Data()
 	typ, _ := m["type"].(string)
 	data, _ := m["data"].(map[string]any)
-	return &FeedEvent{Type: typ, Data: data}, nil
+	e := &FeedEvent{Type: typ, Data: data}
+	pid, _ := data["planId"].(string)
+	oid, _ := data["outcomeId"].(string)
+	if pid != "" && oid != "" {
+		if ps, err := s.c.DB.Doc(model.Paths.InboxPlan(s.c.WorkspaceID, pid)).Get(ctx); err == nil {
+			e.Step = feedPlanOf(pid, ps.Data()).stepOf(oid)
+		}
+	}
+	return e, nil
 }
 
 func (s firestoreInbox) Wake(ctx context.Context, threadID string) error {

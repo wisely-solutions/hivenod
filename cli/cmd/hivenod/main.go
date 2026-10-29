@@ -33,7 +33,7 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
                            creates an item (work at the first step) where the project lets
                            agents create items; at most 30 an hour
-  hivenod inbox …, thread …, subject …, outcome …
+  hivenod inbox …, thread …, subject …, outcome …, plan …
                            a person's Inbox: bring messages in, file, note, ask, propose
                            outcomes, report them done
                            (hivenod inbox --help)
@@ -139,7 +139,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	// `hivenod inbox|subject …` have flags of their own (item 4PEHrOW5IfXBQWgOK9wo).
-	if len(args) > 0 && (args[0] == "inbox" || args[0] == "thread" || args[0] == "subject" || args[0] == "outcome") {
+	if len(args) > 0 && (args[0] == "inbox" || args[0] == "thread" || args[0] == "subject" || args[0] == "outcome" || args[0] == "plan") {
 		return runInbox(args, stdout, stderr)
 	}
 	o, pos, err := parse(args)

@@ -350,6 +350,8 @@ type OutcomeState struct {
 	Checks     []string         `json:"checks,omitempty"`
 	Versions   []OutcomeVersion `json:"versions,omitempty"`
 	Revise     *ReviseRequest   `json:"revise,omitempty"`
+	// PlanID: a step of that plan (item qwFAWxZM5xkcE7PPjAzi); nil: a single outcome.
+	PlanID *string `json:"planId,omitempty"`
 }
 
 // ReviseAsk, ReviseRequest and OutcomeVersion are the stored shapes (model).
@@ -395,7 +397,7 @@ func OutcomeStateFrom(o model.InboxOutcome) OutcomeState {
 		f = map[string]any{}
 	}
 	s := OutcomeState{MemberUID: o.MemberUID, ThreadID: o.ThreadID, Type: o.Type, Fields: f, State: o.State, Executor: o.Executor,
-		ProposedBy: sp(o.ProposedBy), Note: sp(o.Note), Confidence: o.Confidence, Checks: o.Checks, Versions: o.Versions, Revise: o.Revise}
+		ProposedBy: sp(o.ProposedBy), Note: sp(o.Note), Confidence: o.Confidence, Checks: o.Checks, Versions: o.Versions, Revise: o.Revise, PlanID: o.PlanID}
 	return s
 }
 
@@ -1195,22 +1197,30 @@ type FinishInput struct {
 		ItemID    *string `json:"itemId"`
 		Error     *string `json:"error"`
 	} `json:"result"`
+	// Plan: the outcome's plan, when it is a plan step.
+	Plan *PlanInput `json:"plan"`
 }
 
-// FinishOutcome is finishOutcome: the executor reports an approved outcome done or failed.
+// FinishOutcome is finishOutcome: the executor reports an approved outcome done or failed. A plan
+// step is reported only at its turn: done moves the plan on, failed blocks it, and started (Build
+// it: the item is made) leaves the step running until the item is Done.
 func FinishOutcome(ctx Ctx, in FinishInput) (plan.Plan, error) {
 	if err := RequireAgent(ctx); err != nil {
 		return plan.Plan{}, err
 	}
 	o := in.Outcome
+	planned := o.PlanID != nil
 	msg := "This outcome is " + o.State + " already."
-	if o.State == "proposed" {
+	if o.State == "proposed" || o.State == "revising" {
 		msg = "Not approved: nothing is carried out before the person approves it."
 	}
-	if err := need(o.State == "approved", msg); err != nil {
+	if err := need(o.State == "approved" || (planned && o.State == "running" && in.Status != "started"), msg); err != nil {
 		return plan.Plan{}, err
 	}
 	if err := need(o.Executor != nil && *o.Executor == ctx.Actor.ID, "Only the agent that carries this outcome out reports it."); err != nil {
+		return plan.Plan{}, err
+	}
+	if err := need(in.Status != "started" || planned, "Only a plan step can be started (status started is for Build it)."); err != nil {
 		return plan.Plan{}, err
 	}
 	var text, permalink, itemID, errText *string
@@ -1239,6 +1249,45 @@ func FinishOutcome(ctx Ctx, in FinishInput) (plan.Plan, error) {
 	); err != nil {
 		return plan.Plan{}, err
 	}
+	result := map[string]any{"text": strOrNil(text), "permalink": strOrNil(permalink), "itemId": strOrNil(itemID), "error": strOrNil(errText), "by": ctx.Actor.ID, "at": ServerTime()}
+	if planned {
+		pl, err := planFor(in.Plan, o, in.OutcomeID)
+		if err != nil {
+			return plan.Plan{}, err
+		}
+		if err := need(pl.Plan.State == "proposed" || pl.Plan.State == "active", "This plan is "+pl.Plan.State+": its steps are not carried out."); err != nil {
+			return plan.Plan{}, err
+		}
+		if err := need(pl.Plan.Cursor < len(pl.Plan.Steps) && pl.Plan.Steps[pl.Plan.Cursor] == in.OutcomeID, "Not its turn: a plan step is carried out only once the steps before it are done."); err != nil {
+			return plan.Plan{}, err
+		}
+		state, typ, force := "failed", "outcome.failed", "blocked"
+		switch in.Status {
+		case "started":
+			t := OutcomeTypeOf(o.Type)
+			if err := need(t != nil && t.After.WaitingOn == "item", "A "+o.Type+" step is reported done or failed, not started."); err != nil {
+				return plan.Plan{}, err
+			}
+			if err := need(itemID != nil, "Give the item you made (result.itemId)."); err != nil {
+				return plan.Plan{}, err
+			}
+			state, typ, force = "running", "outcome.started", ""
+		case "done":
+			state, typ, force = "done", "outcome.done", ""
+		}
+		next := advance(pl, in.OutcomeID, state, in.Status == "done")
+		data := map[string]any{"outcomeId": in.OutcomeID, "type": o.Type, "planId": pl.PlanID, "permalink": strOrNil(permalink), "itemId": strOrNil(itemID)}
+		if errText != nil {
+			data["error"] = *errText
+		}
+		var werr error
+		p := InboxPlan(ctx, typ, o.MemberUID, sp(o.ThreadID), in.Thread.SubjectID, data, func(eventID string) []plan.Op {
+			ops, err := planWrites(ctx, pl, next, force, eventID)
+			werr = err
+			return append([]plan.Op{upd(model.Paths.InboxOutcome(ctx.WorkspaceID, in.OutcomeID), map[string]any{"state": state, "result": result}, eventID)}, ops...)
+		}, "")
+		return p, werr
+	}
 	after := map[string]any{"state": "investigating", "waiting": nil}
 	typ := "outcome.failed"
 	if in.Status == "done" {
@@ -1256,7 +1305,7 @@ func FinishOutcome(ctx Ctx, in FinishInput) (plan.Plan, error) {
 		return []plan.Op{
 			upd(model.Paths.InboxOutcome(ctx.WorkspaceID, in.OutcomeID), map[string]any{
 				"state":  in.Status,
-				"result": map[string]any{"text": strOrNil(text), "permalink": strOrNil(permalink), "itemId": strOrNil(itemID), "error": strOrNil(errText), "by": ctx.Actor.ID, "at": ServerTime()},
+				"result": result,
 			}, eventID),
 			upd(model.Paths.InboxThread(ctx.WorkspaceID, o.ThreadID), after, eventID),
 		}
@@ -1268,6 +1317,8 @@ type WakeInput struct {
 	ThreadID string      `json:"threadId"`
 	Thread   ThreadState `json:"thread"`
 	NowMs    int64       `json:"nowMs"`
+	// Plan: the thread's live plan, if any; a wait-until step at its cursor is then done.
+	Plan *PlanInput `json:"plan"`
 }
 
 // WakeThread is wakeThread: a snoozed thread whose date has come.
@@ -1285,6 +1336,26 @@ func WakeThread(ctx Ctx, in WakeInput) (plan.Plan, error) {
 	}
 	if err := need(until.UnixMilli() <= in.NowMs, "Not yet: it waits until its date."); err != nil {
 		return plan.Plan{}, err
+	}
+	if pl := in.Plan; pl != nil {
+		if step := pl.at(pl.Plan.Cursor); step != nil {
+			sid := pl.Plan.Steps[pl.Plan.Cursor]
+			if err := need(pl.Plan.ThreadID == in.ThreadID, "Plan "+pl.PlanID+" is not on this thread."); err != nil {
+				return plan.Plan{}, err
+			}
+			if err := need((pl.Plan.State == "proposed" || pl.Plan.State == "active") && step.State == "approved" && step.Type == "snooze", "This plan is not waiting until a date."); err != nil {
+				return plan.Plan{}, err
+			}
+			next := advance(*pl, sid, "done", true)
+			var werr error
+			p := InboxPlan(ctx, "thread.woke", t.MemberUID, sp(in.ThreadID), t.SubjectID, map[string]any{"planId": pl.PlanID, "outcomeId": sid}, func(eventID string) []plan.Op {
+				ops, err := planWrites(ctx, *pl, next, "", eventID)
+				werr = err
+				res := map[string]any{"text": nil, "permalink": nil, "itemId": nil, "error": nil, "by": ctx.Actor.ID, "at": ServerTime()}
+				return append([]plan.Op{upd(model.Paths.InboxOutcome(ctx.WorkspaceID, sid), map[string]any{"state": "done", "result": res}, eventID)}, ops...)
+			}, "")
+			return p, werr
+		}
 	}
 	return InboxPlan(ctx, "thread.woke", t.MemberUID, sp(in.ThreadID), t.SubjectID, map[string]any{}, func(eventID string) []plan.Op {
 		return []plan.Op{upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{"state": "investigating", "waiting": nil}, eventID)}

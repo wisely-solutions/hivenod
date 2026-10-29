@@ -22,8 +22,11 @@ import {
   relateSubjects,
   relationId,
   approveOutcome,
+  approvePlan,
+  retryPlanStep,
   requestRevision,
   inboxPaths,
+  type PlanInput,
   setInboxLabels,
   setSubjectLabel,
   type OutcomeStateOf,
@@ -177,6 +180,7 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
       'inboxOutcomes',
       'inboxEvents',
       'inboxRelations',
+      'inboxPlans',
     ])
       await read(`workspaces/${W}/${c}`);
     await read(`workspaces/${W}/calendar`);
@@ -835,6 +839,136 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
           },
         ],
       },
+    });
+    matchesGolden(r);
+  }, 120_000);
+
+  it('plans (item qwFAW): one call proposes, steps run in order, a gate waits for the person, Build it runs until done', async () => {
+    const r = await scenario(async (call) => {
+      const owner = as('owner');
+      const thread = async (tid: string) =>
+        (await snap(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+      const outcome = async (oid: string) =>
+        (await snap(inboxPaths.outcome(W, oid))) as unknown as OutcomeStateOf;
+      const planOf = async (pid: string): Promise<PlanInput> => {
+        const plan = (await snap(inboxPaths.plan(W, pid))) as unknown as PlanInput['plan'];
+        const outcomes: Record<string, OutcomeStateOf> = {};
+        for (const id of plan.steps) outcomes[id] = await outcome(id);
+        return { planId: pid, plan, outcomes };
+      };
+      const t1 = out(
+        await call('inbox_add', {
+          source: 'teams',
+          sender: { name: 'Sam Example', handle: 'sam@example.com' },
+          text: 'Can you update the price list on the website? A goes from 10 to 12.',
+          threadRef: 'prices-1',
+          receivedAt: '2026-10-29T09:00:00Z',
+        }),
+      ).threadId as string;
+      // Refused: a step type that ends the thread, and a plan without steps.
+      await call('plan_propose', {
+        threadId: t1,
+        steps: [{ type: 'no_reply', fields: {} }],
+      });
+      await call('plan_propose', { threadId: t1, steps: [] });
+      const p = out(
+        await call('plan_propose', {
+          threadId: t1,
+          note: 'Confirm, get your OK on the prices, update the site, then tell Sam.',
+          confidence: 'medium',
+          steps: [
+            { type: 'reply', fields: { text: 'On it, Sam.', holding: true }, confidence: 'high' },
+            { type: 'approval', fields: { what: 'New price list', detail: 'A: 10 → 12' } },
+            { type: 'make_it_work', fields: { title: 'Update the price list', project: 'p1' } },
+            { type: 'reply', fields: { text: 'Done: the new prices are live.' } },
+          ],
+        }),
+      );
+      const pid = p.planId as string;
+      const [s1, s2, s3, s4] = p.stepIds as string[];
+      await call('thread_read', { threadId: t1 });
+      // Nothing approved: nothing to carry out, and step 1 cannot be reported.
+      await call('inbox_list', {});
+      await call('outcome_done', { outcomeId: s1!, status: 'done' });
+      await owner.run(approvePlan(owner.ctx, { ...(await planOf(pid)), thread: await thread(t1) }));
+      // Only step 1 is its turn; step 3 is approved but must wait.
+      await call('inbox_list', {});
+      await call('outcome_done', { outcomeId: s3!, status: 'started', result: { itemId: 'i1' } });
+      await call('outcome_done', {
+        outcomeId: s1!,
+        status: 'done',
+        result: { permalink: 'https://teams.example.com/m/1' },
+      });
+      // The gate waits for the person: nothing to carry out.
+      await call('inbox_list', {});
+      await call('thread_read', { threadId: t1 });
+      const pl = await planOf(pid);
+      await owner.run(
+        approveOutcome(owner.ctx, {
+          outcomeId: s2!,
+          outcome: pl.outcomes[s2!]!,
+          thread: await thread(t1),
+          plan: pl,
+        }),
+      );
+      await call('inbox_list', {});
+      // Build it: started with the item, done when the item is Done.
+      await call('outcome_done', { outcomeId: s3!, status: 'started' });
+      await call('outcome_done', { outcomeId: s3!, status: 'started', result: { itemId: 'i1' } });
+      await call('thread_read', { threadId: t1 });
+      await call('outcome_done', { outcomeId: s3!, status: 'done', result: { itemId: 'i1' } });
+      await call('inbox_list', {});
+      await call('outcome_done', {
+        outcomeId: s4!,
+        status: 'failed',
+        result: { error: 'Teams said 403' },
+      });
+      // Blocked until the person retries; then it is its turn again.
+      await call('outcome_done', { outcomeId: s4!, status: 'done' });
+      await owner.run(
+        retryPlanStep(owner.ctx, { ...(await planOf(pid)), thread: await thread(t1) }),
+      );
+      await call('outcome_done', { outcomeId: s4!, status: 'done' });
+      await call('thread_read', { threadId: t1 });
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+    ]);
+    expect(r.calls[5]).toMatchObject({ out: { toCarryOut: [] } });
+    expect(r.calls[7]).toMatchObject({ out: { toCarryOut: [{ step: '1 of 4', type: 'reply' }] } });
+    expect(r.calls[10]).toMatchObject({ out: { toCarryOut: [] } });
+    expect(r.calls[12]).toMatchObject({
+      out: { toCarryOut: [{ step: '3 of 4', type: 'make_it_work' }] },
+    });
+    expect(r.calls[14]).toMatchObject({ out: { state: 'running' } });
+    expect(r.calls[15]).toMatchObject({
+      out: { state: 'waiting', waiting: { on: 'item' }, plans: [{ progress: 'Step 3 of 4' }] },
+    });
+    expect(r.calls[18]).toMatchObject({ out: { state: 'failed', threadState: 'yourCall' } });
+    expect(r.calls[21]).toMatchObject({
+      out: { state: 'waiting', plans: [{ state: 'done', progress: 'Done' }] },
     });
     matchesGolden(r);
   }, 120_000);

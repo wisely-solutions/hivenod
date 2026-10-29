@@ -355,10 +355,32 @@ func (c *Client) InboxList(ctx context.Context) (map[string]any, error) {
 			toWake = append(toWake, threadRow(t.ID, t.Data))
 		}
 	}
+	plans := map[string]actions.PlanState{}
 	for _, o := range outcomes {
-		if o.Data.Executor != nil && *o.Data.Executor == c.UID {
-			toCarry = append(toCarry, map[string]any{"outcomeId": o.ID, "threadId": o.Data.ThreadID, "member": o.Data.MemberUID, "type": o.Data.Type, "fields": fieldsOf(o.Data.Fields)})
+		if o.Data.Executor == nil || *o.Data.Executor != c.UID {
+			continue
 		}
+		row := map[string]any{"outcomeId": o.ID, "threadId": o.Data.ThreadID, "member": o.Data.MemberUID, "type": o.Data.Type, "fields": fieldsOf(o.Data.Fields)}
+		if pid := o.Data.PlanID; pid != nil {
+			// A plan step only at its turn (the steps before it done, the plan running).
+			p, ok := plans[*pid]
+			if !ok {
+				var d model.InboxPlan
+				found, err := c.getDoc(ctx, model.Paths.InboxPlan(c.WorkspaceID, *pid), &d)
+				if err != nil {
+					return nil, err
+				}
+				if found {
+					p = actions.PlanStateFrom(d)
+				}
+				plans[*pid] = p
+			}
+			if (p.State != "proposed" && p.State != "active") || p.Cursor >= len(p.Steps) || p.Steps[p.Cursor] != o.ID {
+				continue
+			}
+			row["planId"], row["step"] = *pid, fmt.Sprintf("%d of %d", p.Cursor+1, len(p.Steps))
+		}
+		toCarry = append(toCarry, row)
 	}
 	return map[string]any{"toWork": toWork, "toCarryOut": toCarry, "toWake": toWake}, nil
 }
@@ -411,19 +433,37 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 	if err != nil {
 		return nil, err
 	}
+	plans, stepOf, err := c.planRows(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// A plan's steps are made in one batch (same createdAt): they list in the plan's order.
 	sort.SliceStable(ocs, func(i, j int) bool {
 		a, b := ocs[i].Data.CreatedAt.UnixMilli(), ocs[j].Data.CreatedAt.UnixMilli()
 		if a != b {
 			return a < b
 		}
+		if si, sj := stepNumber(stepOf[ocs[i].ID]), stepNumber(stepOf[ocs[j].ID]); si != sj {
+			return si < sj
+		}
 		return ocs[i].ID < ocs[j].ID
 	})
+	turn := map[string]bool{}
+	for _, pr := range plans {
+		r := pr.(map[string]any)
+		for _, st := range r["steps"].([]any) {
+			sr := st.(map[string]any)
+			if sr["atCursor"] == true && (r["state"] == "proposed" || r["state"] == "active") {
+				turn[sr["outcomeId"].(string)] = true
+			}
+		}
+	}
 	outcomes := []any{}
 	carry := false
 	for _, d := range ocs {
 		o := d.Data
 		mine := o.Executor != nil && *o.Executor == c.UID
-		carry = carry || (o.State == "approved" && mine)
+		carry = carry || (o.State == "approved" && mine && (o.PlanID == nil || turn[d.ID]))
 		var decision, result any
 		if o.Decision != nil {
 			decision = map[string]any{"edited": o.Decision.Edited, "reason": strOrNull(o.Decision.Reason)}
@@ -447,6 +487,9 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 			"outcomeId": d.ID, "type": o.Type, "state": o.State, "fields": fieldsOf(o.Fields), "note": o.Note,
 			"confidence": strOrNull(o.Confidence), "checks": checks,
 			"executor": strOrNull(o.Executor), "executorIsMe": mine, "decision": decision, "result": result,
+		}
+		if o.PlanID != nil {
+			row["planId"], row["step"] = *o.PlanID, stepOf[d.ID]
 		}
 		// Ask for changes: how many versions, and what the person asks while revising.
 		if len(o.Versions) > 0 || revise != nil {
@@ -499,7 +542,7 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 	return map[string]any{
 		"threadId": id, "member": t.MemberUID, "state": t.State, "waiting": waiting, "question": question,
 		"title": t.Title, "subject": subject, "fetchedBy": t.FetchedBy, "fetchedByMe": t.FetchedBy == c.UID, "urgent": t.Urgent, "due": isoPtr(t.Due),
-		"messages": messages, "outcomes": outcomes, "timeline": timeline, "next": next,
+		"messages": messages, "outcomes": outcomes, "plans": plans, "timeline": timeline, "next": next,
 	}, nil
 }
 
@@ -773,6 +816,13 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 		return nil, err
 	}
 	in := actions.FinishInput{OutcomeID: id, Outcome: actions.OutcomeStateFrom(o), Thread: actions.ThreadStateFrom(t), Status: status}
+	if o.PlanID != nil {
+		pl, _, err := c.planInput(ctx, *o.PlanID)
+		if err != nil {
+			return nil, err
+		}
+		in.Plan = &pl
+	}
 	in.Result = &struct {
 		Text      *string `json:"text"`
 		Permalink *string `json:"permalink"`
@@ -791,19 +841,50 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 		return nil, err
 	}
 	note := "Reported as done."
-	if status != "done" {
+	state := status
+	switch {
+	case status == "started":
+		state, note = "running", "Started: the step waits until the item is Done; then report it done (outcome_done status done)."
+	case o.PlanID != nil && status == "done" && in.Plan != nil && in.Plan.Plan.Cursor+1 >= len(in.Plan.Plan.Steps):
+		note = "Reported as done: that was the plan's last step, the plan is done."
+	case o.PlanID != nil && status == "done":
+		note = "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn)."
+	case o.PlanID != nil:
+		note = "Reported as failed: the plan is blocked until the person retries, skips or stops it."
+	case status != "done":
 		note = "Reported as failed: the thread is back to investigating."
 	}
-	return map[string]any{"outcomeId": id, "state": status, "threadId": o.ThreadID, "threadState": after.State, "note": note}, nil
+	out := map[string]any{"outcomeId": id, "state": state, "threadId": o.ThreadID, "threadState": after.State, "note": note}
+	if o.PlanID != nil {
+		out["planId"] = *o.PlanID
+	}
+	return out, nil
 }
 
 // ThreadWake wakes a snoozed thread whose date has come (thread_wake).
 func (c *Client) ThreadWake(ctx context.Context, id string) (map[string]any, error) {
-	err := c.threadAction(ctx, id, func(t actions.ThreadState) (plan.Plan, error) {
-		return actions.WakeThread(c.actx(), actions.WakeInput{ThreadID: id, Thread: t, NowMs: time.Now().UnixMilli()})
+	pl, err := c.livePlan(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if pl != nil {
+		// Only a plan waiting at a wait-until step moves on; any other plan is not this snooze's.
+		if pl.Plan.Cursor >= len(pl.Plan.Steps) || pl.Outcomes[pl.Plan.Steps[pl.Plan.Cursor]].Type != "snooze" {
+			pl = nil
+		}
+	}
+	err = c.threadAction(ctx, id, func(t actions.ThreadState) (plan.Plan, error) {
+		return actions.WakeThread(c.actx(), actions.WakeInput{ThreadID: id, Thread: t, NowMs: time.Now().UnixMilli(), Plan: pl})
 	})
 	if err != nil {
 		return nil, err
+	}
+	if pl != nil {
+		after, err := c.thread(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"threadId": id, "state": after.State, "planId": pl.PlanID, "note": "The wait is over: the plan moves to its next step."}, nil
 	}
 	return map[string]any{"threadId": id, "state": "investigating", "note": "Awake: investigate it again."}, nil
 }
@@ -937,4 +1018,11 @@ func (c *Client) ThreadFlag(ctx context.Context, id string, urgent bool, reason 
 		note = "Marked urgent: the person is pinged at once, whatever their quiet hours."
 	}
 	return map[string]any{"threadId": id, "urgent": urgent, "note": note}, nil
+}
+
+// stepNumber is 3 for "3 of 5" (0 for a single outcome).
+func stepNumber(step string) int {
+	n := 0
+	fmt.Sscanf(step, "%d of", &n)
+	return n
 }
