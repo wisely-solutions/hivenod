@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -20,7 +21,7 @@ import (
 	"github.com/wisely-solutions/hivenod/cli/internal/hive"
 )
 
-var inboxHelp = `hivenod inbox / thread / subject / outcome: a person's Hivenod Inbox, as this agent (JSON output).
+var inboxHelp = `hivenod inbox / thread / subject / outcome / plan: a person's Hivenod Inbox, as this agent (JSON output).
 
   hivenod inbox add --source S --sender NAME [--handle H] --thread-ref REF --received-at ISO
                     (--text T | --text-file F) [--message-id M] [--permalink URL]
@@ -52,8 +53,14 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome: a person's Hivenod 
                            proposes an outcome (types: ` + outcomeTypeList() + `);
                            --check: what you verified, up to 6; --revises: the person
                            asked for changes, so this is that outcome's next version
-  hivenod outcome done OUTCOME --status done|failed [--text T] [--permalink URL] [--item-id I] [--error E]
-                           after carrying out an outcome the person approved
+  hivenod plan propose THREAD --steps-file F|- [--note N] [--confidence high|medium|low]
+                           proposes a plan: 1-8 ordered steps from a JSON file (- reads
+                           stdin), either [{type, fields, note?, confidence?, checks?}, ...]
+                           or {"steps": [...], "note": ..., "confidence": ...}; step types:
+                           ` + strings.Join(actions.PlanOutcomeTypes(), ", ") + `
+  hivenod outcome done OUTCOME --status done|failed|started [--text T] [--permalink URL] [--item-id I] [--error E]
+                           after carrying out an outcome the person approved; started (with
+                           --item-id) is for a Build it plan step whose item is made
 
   Nothing is carried out before the person approves it in Hivenod.`
 
@@ -70,7 +77,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
@@ -242,9 +249,47 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 		if len(checks) > 0 {
 			a["checks"] = anyList(checks)
 		}
+	case "plan propose":
+		tool = "plan_propose"
+		if id == "" || *str["steps-file"] == "" {
+			return usage()
+		}
+		var b []byte
+		var err error
+		if *str["steps-file"] == "-" {
+			b, err = io.ReadAll(os.Stdin)
+		} else {
+			b, err = os.ReadFile(*str["steps-file"])
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "hivenod: %v\n", err)
+			return 1
+		}
+		var v any
+		if err := json.Unmarshal(b, &v); err != nil {
+			fmt.Fprintf(stderr, "hivenod: the steps file is not JSON: %v\n", err)
+			return 2
+		}
+		switch x := v.(type) {
+		case []any:
+			a["steps"] = x
+		case map[string]any:
+			a["steps"] = x["steps"]
+			for _, k := range []string{"note", "confidence"} {
+				if e, ok := x[k]; ok {
+					a[k] = e
+				}
+			}
+		default:
+			fmt.Fprintln(stderr, "hivenod: the steps file is a list of steps, or an object with steps")
+			return 2
+		}
+		a["threadId"] = id
+		opt(a, "note", "note")
+		opt(a, "confidence", "confidence")
 	case "outcome done":
 		tool = "outcome_done"
-		if id == "" || (*str["status"] != "done" && *str["status"] != "failed") {
+		if id == "" || (*str["status"] != "done" && *str["status"] != "failed" && *str["status"] != "started") {
 			return usage()
 		}
 		r := hive.Args{}

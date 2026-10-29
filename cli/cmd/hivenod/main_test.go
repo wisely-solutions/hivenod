@@ -108,6 +108,8 @@ func TestInboxCommands(t *testing.T) {
 		{"subject", "assign", "it1", "--name", "A", "--subject-id", "s1"},
 		{"outcome", "propose", "it1"},
 		{"outcome", "done", "o1", "--status", "maybe"},
+		{"plan", "propose", "it1"},
+		{"plan", "propose", "--steps-file", "x.json"},
 		// thread due (item kt3E7): a time or --clear, not both, not neither
 		{"thread", "due", "it1"},
 		{"thread", "due", "it1", "2026-10-30T12:00:00Z", "--clear"},
@@ -125,6 +127,7 @@ func TestInboxCommands(t *testing.T) {
 		{"inbox", "ask", "it1", "--text", "Thu or Fri?", "--option", "Thu", "--option", "Fri"},
 		{"outcome", "propose", "it1", "--type", "no_reply", "--confidence", "high", "--check", "An FYI"},
 		{"outcome", "propose", "it1", "--type", "reply", "--field", "text=Shorter", "--revises", "o1"},
+		{"outcome", "done", "o1", "--status", "started", "--item-id", "i9"},
 	} {
 		if code, _, errs := call(args...); code != 1 || !strings.Contains(errs, "hivenod:") {
 			t.Errorf("%v without a token: %d %q", args, code, errs)

@@ -71,7 +71,7 @@ func commandTree(t *testing.T) map[string]bool {
 		}
 		return true
 	})
-	for _, w := range []string{"inbox", "thread", "subject", "outcome", "claude"} {
+	for _, w := range []string{"inbox", "thread", "subject", "outcome", "plan", "claude"} {
 		cmds[w] = true
 	}
 	if len(cmds) < 14 {

@@ -14,6 +14,8 @@ type fakeInbox struct {
 	onT      func([]FeedThread)
 	onO      func([]FeedOutcome)
 	onR      func([]FeedRevise)
+	onP      func([]FeedPlan)
+	plans    []FeedPlan
 	revising []FeedRevise
 	events   map[string]*FeedEvent
 	woken    []string
@@ -41,6 +43,13 @@ func (f *fakeInbox) WatchRevising(_ context.Context, on func([]FeedRevise)) {
 	f.mu.Lock()
 	f.onR = on
 	rows := f.revising
+	f.mu.Unlock()
+	on(rows)
+}
+func (f *fakeInbox) WatchPlans(_ context.Context, on func([]FeedPlan)) {
+	f.mu.Lock()
+	f.onP = on
+	rows := f.plans
 	f.mu.Unlock()
 	on(rows)
 }
@@ -265,4 +274,114 @@ func TestInboxFeedRevise(t *testing.T) {
 	rv2.Chips, rv2.Instruction = []string{"warmer"}, ""
 	r.revise([]FeedRevise{rv2})
 	r.want("t5:revise", "t1:new", "t5:revise")
+}
+
+func (r *feedRig) plans(rows []FeedPlan) {
+	r.src.mu.Lock()
+	r.src.plans = rows
+	on := r.src.onP
+	r.src.mu.Unlock()
+	if on != nil {
+		on(rows)
+	}
+	r.settle()
+}
+
+func (r *feedRig) meta(i int) map[string]string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.pushed[i].Meta
+}
+
+// Plans (item qwFAWxZM5xkcE7PPjAzi): an approved plan step is carried out only at its turn
+// (the plan's cursor), with plan_id and step in the meta; a step approved ahead waits.
+func TestInboxFeedPlanCarryOutAtTheCursor(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 3})
+	r.feed.Start()
+	o1 := FeedOutcome{ID: "o1", ThreadID: "t1", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli(), PlanID: "p1"}
+	o3 := FeedOutcome{ID: "o3", ThreadID: "t1", MemberUID: "joao", Type: "make_it_work", CreatedAtMs: r.now.UnixMilli(), PlanID: "p1"}
+	// The steps are approved before the plan is known: nothing goes out.
+	r.set(nil, []FeedOutcome{o1, o3})
+	r.want()
+	pl := FeedPlan{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"o1", "o2", "o3"}, Cursor: 0}
+	r.plans([]FeedPlan{pl})
+	r.want("t1:carry_out")
+	m := r.meta(0)
+	if m["plan_id"] != "p1" || m["step"] != "1 of 3" || m["outcome_id"] != "o1" {
+		t.Fatal(m)
+	}
+	r.mu.Lock()
+	c := r.pushed[0].Content
+	r.mu.Unlock()
+	if !strings.Contains(c, "Step 1 of 3 of plan p1") {
+		t.Fatal(c)
+	}
+	// Step 1 done, step 2 (a gate) at the cursor: o3 still waits.
+	r.set(nil, []FeedOutcome{o3})
+	pl.Cursor = 1
+	r.plans([]FeedPlan{pl})
+	r.want("t1:carry_out")
+	// The gate passed: o3's turn.
+	pl.Cursor = 2
+	r.plans([]FeedPlan{pl})
+	r.want("t1:carry_out", "t1:carry_out")
+	m = r.meta(1)
+	if m["outcome_id"] != "o3" || m["step"] != "3 of 3" {
+		t.Fatal(m)
+	}
+	r.mu.Lock()
+	c = r.pushed[1].Content
+	r.mu.Unlock()
+	if !strings.Contains(c, "status started") {
+		t.Fatal(c)
+	}
+}
+
+func TestInboxFeedPlanBlockedOrStoppedSendsNothing(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 3})
+	r.feed.Start()
+	o := FeedOutcome{ID: "o1", ThreadID: "t1", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli(), PlanID: "p1"}
+	r.plans([]FeedPlan{{ID: "p1", ThreadID: "t1", State: "blocked", Steps: []string{"o1"}}})
+	r.set(nil, []FeedOutcome{o})
+	r.want()
+	r.plans(nil) // stopped: no longer live
+	r.want()
+}
+
+func TestInboxFeedPlanRejectedAndRevise(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 3})
+	r.feed.Start()
+	r.src.mu.Lock()
+	r.src.events["x1"] = &FeedEvent{Type: "plan.rejected", Data: map[string]any{"planId": "p1", "reason": "Not now"}}
+	r.src.events["x2"] = &FeedEvent{Type: "outcome.rejected", Data: map[string]any{"planId": "p2", "outcomeId": "g1", "reason": "Too high"}, Step: "3 of 5"}
+	r.src.events["x3"] = &FeedEvent{Type: "plan.stopped", Data: map[string]any{"planId": "p3"}}
+	r.src.mu.Unlock()
+	r.set([]FeedThread{
+		r.th("t1", func(t *FeedThread) { t.LastEventID = "x1" }),
+		r.th("t2", func(t *FeedThread) { t.LastEventID = "x2" }),
+		r.th("t3", func(t *FeedThread) { t.LastEventID = "x3" }),
+	}, nil)
+	r.settle()
+	r.want("t1:rejected", "t2:rejected", "t3:rejected")
+	r.mu.Lock()
+	ev := append([]Event{}, r.pushed...)
+	r.mu.Unlock()
+	if ev[0].Meta["plan_id"] != "p1" || !strings.Contains(ev[0].Content, "rejected plan p1") || !strings.Contains(ev[0].Content, "plan_propose") {
+		t.Fatal(ev[0])
+	}
+	if ev[1].Meta["plan_id"] != "p2" || ev[1].Meta["step"] != "3 of 5" || ev[1].Meta["outcome_id"] != "g1" || !strings.Contains(ev[1].Content, "Not approved") {
+		t.Fatal(ev[1])
+	}
+	if !strings.Contains(ev[2].Content, "stopped plan p3") {
+		t.Fatal(ev[2])
+	}
+	r2 := newRig(t, InboxOptions{MaxInbox: 3})
+	r2.src.plans = []FeedPlan{{ID: "p1", ThreadID: "t5", State: "proposed", Steps: []string{"o0", "o1"}}}
+	r2.src.revising = []FeedRevise{{ID: "o1", ThreadID: "t5", MemberUID: "joao", Type: "reply", Chips: []string{"shorter"}, AtMs: r2.now.UnixMilli(), PlanID: "p1"}}
+	r2.feed.Start()
+	r2.settle()
+	r2.want("t5:revise")
+	if m := r2.meta(0); m["plan_id"] != "p1" || m["step"] != "2 of 2" {
+		t.Fatal(m)
+	}
 }

@@ -863,8 +863,110 @@
         }
       },
       {
+        "name": "plan_propose",
+        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. For one action alone, use outcome_propose. Step types: reply, reply_book, book, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\nbook: Book a meeting (pick the time with calendar_free); the reply is its own step. On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this step's outcome id); at its turn you create it in the member's own calendar, call calendar_mirror with its id and report outcome_done. Fields: start (datetime: ISO 8601 with its offset); end (datetime: after start); with (line: who is invited); title? (line: what the calendar shows).\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "note": {
+              "description": "Why this plan, in 1-2 sentences: the person reads it first",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "confidence": {
+              "description": "How sure you are of the plan as a whole",
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            "steps": {
+              "description": "The steps, in the order they run (1-8)",
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "reply",
+                      "reply_book",
+                      "book",
+                      "make_it_work",
+                      "handover",
+                      "snooze",
+                      "nudge",
+                      "approval"
+                    ],
+                    "description": "The step's outcome type"
+                  },
+                  "fields": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "boolean"
+                      ]
+                    },
+                    "description": "The type's fields"
+                  },
+                  "note": {
+                    "description": "Why this step, in one sentence",
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "confidence": {
+                    "description": "How sure you are of this step",
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "checks": {
+                    "description": "What you verified for this step, one line each (at most 6)",
+                    "type": "array",
+                    "maxItems": 6,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "fields"
+                ]
+              }
+            }
+          },
+          "required": [
+            "threadId",
+            "steps"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "outcome_done",
-        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out.",
+        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A make_it_work plan step (Build it): status started with result.itemId once the item is made; report it done when the item is Done. A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -877,7 +979,8 @@
               "type": "string",
               "enum": [
                 "done",
-                "failed"
+                "failed",
+                "started"
               ]
             },
             "result": {
@@ -2512,8 +2615,110 @@
         }
       },
       {
+        "name": "plan_propose",
+        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. For one action alone, use outcome_propose. Step types: reply, reply_book, book, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\nbook: Book a meeting (pick the time with calendar_free); the reply is its own step. On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this step's outcome id); at its turn you create it in the member's own calendar, call calendar_mirror with its id and report outcome_done. Fields: start (datetime: ISO 8601 with its offset); end (datetime: after start); with (line: who is invited); title? (line: what the calendar shows).\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "note": {
+              "description": "Why this plan, in 1-2 sentences: the person reads it first",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "confidence": {
+              "description": "How sure you are of the plan as a whole",
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            "steps": {
+              "description": "The steps, in the order they run (1-8)",
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "reply",
+                      "reply_book",
+                      "book",
+                      "make_it_work",
+                      "handover",
+                      "snooze",
+                      "nudge",
+                      "approval"
+                    ],
+                    "description": "The step's outcome type"
+                  },
+                  "fields": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "boolean"
+                      ]
+                    },
+                    "description": "The type's fields"
+                  },
+                  "note": {
+                    "description": "Why this step, in one sentence",
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "confidence": {
+                    "description": "How sure you are of this step",
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "checks": {
+                    "description": "What you verified for this step, one line each (at most 6)",
+                    "type": "array",
+                    "maxItems": 6,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "fields"
+                ]
+              }
+            }
+          },
+          "required": [
+            "threadId",
+            "steps"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "outcome_done",
-        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out.",
+        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A make_it_work plan step (Build it): status started with result.itemId once the item is made; report it done when the item is Done. A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2526,7 +2731,8 @@
               "type": "string",
               "enum": [
                 "done",
-                "failed"
+                "failed",
+                "started"
               ]
             },
             "result": {
