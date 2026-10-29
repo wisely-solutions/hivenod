@@ -2,7 +2,7 @@
  * One real Claude Code run through `hivenod run` on the emulators (card MkUwvyWs). Skipped unless
  * HIVE_SMOKE_CLAUDE=1, because it needs a signed-in `claude` and spends a few cents of model
  * usage (haiku). Run:
- *   HIVE_SMOKE_CLAUDE=1 node scripts/with-lock.mjs firebase emulators:exec --only firestore,auth \
+ *   HIVE_SMOKE_CLAUDE=1 node scripts/emu-exec.mjs \
  *     "cd packages/agent && npx vitest run -c vitest.integration.config.ts test/claude.smoke.test.ts"
  */
 import { createAgentIdentity } from '@hive/shared/agent-auth';

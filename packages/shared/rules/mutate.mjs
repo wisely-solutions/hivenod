@@ -87,8 +87,8 @@ const MUTATIONS = [
     'events editable',
     [
       [
-        'allow update, delete: if false;\n      }\n\n      // ---------- runs',
-        'allow update, delete: if true;\n      }\n\n      // ---------- runs',
+        'allow update, delete: if false;\n\n        // Calendar writes (item w9SAf)',
+        'allow update, delete: if true;\n\n        // Calendar writes (item w9SAf)',
       ],
     ],
   ],
@@ -105,7 +105,7 @@ const MUTATIONS = [
     'revoked agents active',
     [['return a != null && a.data.revokedAt == null;', 'return a != null;']],
   ],
-  ['agents unscoped', [["return ids == '*' || pid in ids;", 'return true;']]],
+  ['agents unscoped', [["&& (a.projectIds == '*' || pid in a.projectIds);", '&& true;']]],
   [
     'agents skip steps',
     [
@@ -267,21 +267,21 @@ const MUTATIONS = [
     'agents by members',
     [
       [
-        'allow create: if isAdmin(wid)\n          && aid != me()',
-        'allow create: if isMember(wid)\n          && aid != me()',
+        'allow create: if (isAdmin(wid) || memberConnects(request.resource.data)) && verified()\n          && aid != me()',
+        'allow create: if isMember(wid) && verified()\n          && aid != me()',
       ],
     ],
   ],
   ['member can be agent', [['&& aid != me() && !(aid in get(wsPath(wid)).data.memberRoles)', '']]],
   ['owner adds members directly', [['.addedKeys().size() == 0', '.addedKeys().size() >= 0']]],
-  // Known survivor: the delete rule is defense in depth. A member's delete is still denied by the
-  // 'project.deleted' event rule in the same batch, so weakening this line alone changes nothing observable.
+  // The project delete rule is now a flat `if false` (projects are archived; only an organization
+  // delete removes them). The old admin-plus-tracked-event rule no longer exists.
   [
     'project delete by members',
     [
       [
-        "allow delete: if isAdmin(wid) && trackedDelete(wid, 'projects'",
-        "allow delete: if isMember(wid) && trackedDelete(wid, 'projects'",
+        'only an organization delete removes them.\n        allow delete: if false;',
+        'only an organization delete removes them.\n        allow delete: if isMember(wid);',
       ],
     ],
   ],
@@ -447,20 +447,9 @@ const MUTATIONS = [
   ],
 ];
 
-// Fail loudly, before any run: a search text that no longer matches (the rules were refactored)
-// would otherwise check nothing.
-const stale = MUTATIONS.flatMap(([name, edits]) =>
-  edits
-    .filter(([find, rep]) => !original.includes(find) || find === rep)
-    .map(([find]) => [name, find]),
-);
-if (stale.length) {
-  for (const [name, find] of stale)
-    console.error(
-      `STALE mutation "${name}": search text not found in firestore.rules: ${JSON.stringify(find.slice(0, 80))}`,
-    );
-  process.exit(2);
-}
+// A search text that no longer matches (the rules were refactored) would check nothing: it is
+// reported as a STALE failure with its name, and the rest of the suite still runs.
+const isStale = (edits) => edits.find(([find, rep]) => !original.includes(find) || find === rep);
 
 const runSuite = (verbose = false) => {
   try {
@@ -498,10 +487,10 @@ const results = [];
 try {
   for (const [name, edits] of MUTATIONS) {
     if (only && !only.includes(name)) continue;
-    const missing = edits.find(([find]) => !original.includes(find));
+    const missing = isStale(edits);
     if (missing) {
-      results.push([name, 'NOT FOUND']);
-      console.log(`NOT FOUND ${name}: ${missing[0].slice(0, 60)}`);
+      results.push([name, 'STALE']);
+      console.log(`STALE     ${name}: ${JSON.stringify(missing[0].slice(0, 80))}`);
       continue;
     }
     writeFileSync(
