@@ -1,0 +1,14 @@
+{
+  "calls": [
+    {
+      "tool": "list_work",
+      "ok": false,
+      "out": "This agent cannot use Hivenod: it was revoked, rotated, or is not allowed in this organization. Ask an admin for a new token."
+    },
+    {
+      "tool": "read_item",
+      "ok": false,
+      "out": "This agent cannot use Hivenod: it was revoked, rotated, or is not allowed in this organization. Ask an admin for a new token."
+    }
+  ]
+}

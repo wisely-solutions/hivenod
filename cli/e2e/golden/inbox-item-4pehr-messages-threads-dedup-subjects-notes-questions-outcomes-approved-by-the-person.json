@@ -1,0 +1,1422 @@
+{
+  "calls": [
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "im00737972a6853b0fe49b196b",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "itc85e52ee7e270745c4ed5a02"
+      }
+    },
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": true,
+        "member": "owner",
+        "messageId": "im00737972a6853b0fe49b196b",
+        "newThread": false,
+        "note": "Already in Inbox (same source, thread and message): nothing was added.",
+        "state": "investigating",
+        "threadId": "itc85e52ee7e270745c4ed5a02"
+      }
+    },
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "imdb64613fb5d40aef74204995",
+        "newThread": false,
+        "note": "Added to its thread.",
+        "state": "investigating",
+        "threadId": "itc85e52ee7e270745c4ed5a02"
+      }
+    },
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "im8435b2071e38af5f4c3c8640",
+        "newThread": false,
+        "note": "Added to its thread.",
+        "state": "investigating",
+        "threadId": "itc85e52ee7e270745c4ed5a02"
+      }
+    },
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "alice",
+        "messageId": "im60c552b0e7a9d12193e2e26f",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "itaf9223c482be56e1cd21026e"
+      }
+    },
+    {
+      "tool": "inbox_add",
+      "ok": false,
+      "out": "eve is not a member of this organization."
+    },
+    {
+      "tool": "inbox_add",
+      "ok": false,
+      "out": "receivedAt is not a valid ISO 8601 time (e.g. <iso>)."
+    },
+    {
+      "tool": "inbox_add",
+      "ok": false,
+      "out": "The source is one lowercase word, like teams, mail or jira."
+    },
+    {
+      "tool": "inbox_add",
+      "ok": false,
+      "out": "Thread itaf9223c482be56e1cd21026e not found among this person's threads."
+    },
+    {
+      "tool": "inbox_list",
+      "ok": true,
+      "out": {
+        "toCarryOut": [],
+        "toWake": [],
+        "toWork": [
+          {
+            "lastMessageAt": "<iso>",
+            "member": "owner",
+            "state": "investigating",
+            "subjectId": null,
+            "threadId": "itc85e52ee7e270745c4ed5a02",
+            "title": "Can we move the review to Thursday?"
+          },
+          {
+            "lastMessageAt": "<iso>",
+            "member": "alice",
+            "state": "investigating",
+            "subjectId": null,
+            "threadId": "itaf9223c482be56e1cd21026e",
+            "title": "Can we move the review to Thursday?"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "subject_list",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "subjects": [],
+        "unfiled": 1
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": true,
+      "out": {
+        "created": true,
+        "name": "Review date (Payments)",
+        "note": "Filed under a new subject \"Review date (Payments)\".",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02"
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": true,
+      "out": {
+        "created": true,
+        "name": "review date (payments)",
+        "note": "Filed under a new subject \"review date (payments)\".",
+        "subjectId": "<id>",
+        "threadId": "itaf9223c482be56e1cd21026e"
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": false,
+      "out": "Subject <id> not found among this person's subjects (see subject_list)."
+    },
+    {
+      "tool": "inbox_note",
+      "ok": true,
+      "out": {
+        "note": "Noted on the timeline.",
+        "threadId": "itc85e52ee7e270745c4ed5a02"
+      }
+    },
+    {
+      "tool": "inbox_ask",
+      "ok": true,
+      "out": {
+        "note": "Asked. The thread waits in Needs you; the answer shows in thread_read.",
+        "state": "needsYou",
+        "threadId": "itc85e52ee7e270745c4ed5a02"
+      }
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": true,
+      "out": {
+        "note": "Proposed. It waits for the person to approve, edit or reject it; nothing is carried out before.",
+        "outcomeId": "<id>",
+        "state": "proposed",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "reply"
+      }
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": false,
+      "out": "reply has no field bcc. Its fields: text, holding."
+    },
+    {
+      "tool": "outcome_done",
+      "ok": false,
+      "out": "Not approved: nothing is carried out before the person approves it."
+    },
+    {
+      "tool": "inbox_list",
+      "ok": true,
+      "out": {
+        "toCarryOut": [
+          {
+            "fields": {
+              "text": "Thursday 10:00 works."
+            },
+            "member": "owner",
+            "outcomeId": "<id>",
+            "threadId": "itc85e52ee7e270745c4ed5a02",
+            "type": "reply"
+          }
+        ],
+        "toWake": [],
+        "toWork": [
+          {
+            "lastMessageAt": "<iso>",
+            "member": "alice",
+            "state": "investigating",
+            "subjectId": "<id>",
+            "threadId": "itaf9223c482be56e1cd21026e",
+            "title": "Can we move the review to Thursday?"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [
+              {
+                "name": "agenda.pdf",
+                "url": "https://files.example.com/a.pdf"
+              }
+            ],
+            "direction": "in",
+            "messageId": "im00737972a6853b0fe49b196b",
+            "permalink": "https://teams.example.com/m/1",
+            "receivedAt": "<iso>",
+            "replyRef": "conv:1",
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "teams",
+            "text": "Can we move the review to Thursday?",
+            "threadRef": "thread-1"
+          },
+          {
+            "attachments": [
+              {
+                "name": "agenda.pdf",
+                "url": "https://files.example.com/a.pdf"
+              }
+            ],
+            "direction": "in",
+            "messageId": "im8435b2071e38af5f4c3c8640",
+            "permalink": "https://teams.example.com/m/1",
+            "receivedAt": "<iso>",
+            "replyRef": "conv:1",
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "mail",
+            "text": "Can we move the review to Thursday?",
+            "threadRef": "<x@example.com>"
+          },
+          {
+            "attachments": [
+              {
+                "name": "agenda.pdf",
+                "url": "https://files.example.com/a.pdf"
+              }
+            ],
+            "direction": "in",
+            "messageId": "imdb64613fb5d40aef74204995",
+            "permalink": "https://teams.example.com/m/1",
+            "receivedAt": "<iso>",
+            "replyRef": "conv:1",
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "teams",
+            "text": "Or Friday?",
+            "threadRef": "thread-1"
+          }
+        ],
+        "next": "Carry out the approved outcome exactly as approved (its fields, as the person left them), then report it with outcome_done.",
+        "outcomes": [
+          {
+            "decision": {
+              "edited": true,
+              "reason": null
+            },
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "text": "Thursday 10:00 works."
+            },
+            "note": "They asked twice",
+            "outcomeId": "<id>",
+            "result": null,
+            "state": "approved",
+            "type": "reply"
+          }
+        ],
+        "question": {
+          "answer": "Thursday",
+          "text": "Thursday or Friday?"
+        },
+        "state": "yourCall",
+        "subject": {
+          "name": "Review date (Payments)",
+          "subjectId": "<id>"
+        },
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "timeline": [
+          {
+            "at": "<iso>",
+            "by": "agent",
+            "text": "Checked the calendar: Thursday is free.",
+            "type": "thread.note"
+          },
+          {
+            "at": "<iso>",
+            "by": "agent",
+            "text": "Thursday or Friday?",
+            "type": "thread.asked"
+          },
+          {
+            "at": "<iso>",
+            "by": "human",
+            "text": "Thursday",
+            "type": "thread.answered"
+          }
+        ],
+        "title": "Can we move the review to Thursday?",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done.",
+        "outcomeId": "<id>",
+        "state": "done",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "threadState": "waiting"
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": false,
+      "out": "This outcome is done already."
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": true,
+      "out": {
+        "note": "Proposed. It waits for the person to approve, edit or reject it; nothing is carried out before.",
+        "outcomeId": "<id>",
+        "state": "proposed",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "snooze"
+      }
+    },
+    {
+      "tool": "inbox_list",
+      "ok": true,
+      "out": {
+        "toCarryOut": [],
+        "toWake": [
+          {
+            "lastMessageAt": "<iso>",
+            "member": "owner",
+            "state": "waiting",
+            "subjectId": "<id>",
+            "threadId": "itc85e52ee7e270745c4ed5a02",
+            "title": "Can we move the review to Thursday?"
+          }
+        ],
+        "toWork": [
+          {
+            "lastMessageAt": "<iso>",
+            "member": "alice",
+            "state": "investigating",
+            "subjectId": "<id>",
+            "threadId": "itaf9223c482be56e1cd21026e",
+            "title": "Can we move the review to Thursday?"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "thread_wake",
+      "ok": true,
+      "out": {
+        "note": "Awake: investigate it again.",
+        "state": "investigating",
+        "threadId": "itc85e52ee7e270745c4ed5a02"
+      }
+    },
+    {
+      "tool": "thread_wake",
+      "ok": false,
+      "out": "This thread is not waiting for a date."
+    },
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "imfce22893a202e2a397601ce3",
+        "newThread": false,
+        "note": "Added to its thread.",
+        "state": "investigating",
+        "threadId": "itc85e52ee7e270745c4ed5a02"
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [
+              {
+                "name": "agenda.pdf",
+                "url": "https://files.example.com/a.pdf"
+              }
+            ],
+            "direction": "in",
+            "messageId": "im00737972a6853b0fe49b196b",
+            "permalink": "https://teams.example.com/m/1",
+            "receivedAt": "<iso>",
+            "replyRef": "conv:1",
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "teams",
+            "text": "Can we move the review to Thursday?",
+            "threadRef": "thread-1"
+          },
+          {
+            "attachments": [
+              {
+                "name": "agenda.pdf",
+                "url": "https://files.example.com/a.pdf"
+              }
+            ],
+            "direction": "in",
+            "messageId": "im8435b2071e38af5f4c3c8640",
+            "permalink": "https://teams.example.com/m/1",
+            "receivedAt": "<iso>",
+            "replyRef": "conv:1",
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "mail",
+            "text": "Can we move the review to Thursday?",
+            "threadRef": "<x@example.com>"
+          },
+          {
+            "attachments": [
+              {
+                "name": "agenda.pdf",
+                "url": "https://files.example.com/a.pdf"
+              }
+            ],
+            "direction": "in",
+            "messageId": "imdb64613fb5d40aef74204995",
+            "permalink": "https://teams.example.com/m/1",
+            "receivedAt": "<iso>",
+            "replyRef": "conv:1",
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "teams",
+            "text": "Or Friday?",
+            "threadRef": "thread-1"
+          },
+          {
+            "attachments": [
+              {
+                "name": "agenda.pdf",
+                "url": "https://files.example.com/a.pdf"
+              }
+            ],
+            "direction": "in",
+            "messageId": "imfce22893a202e2a397601ce3",
+            "permalink": "https://teams.example.com/m/1",
+            "receivedAt": "<iso>",
+            "replyRef": "conv:1",
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam Example"
+            },
+            "source": "teams",
+            "text": "Thanks!",
+            "threadRef": "thread-1"
+          }
+        ],
+        "next": "Investigate: read the messages and the subject's other threads, note what you find (inbox_note), ask the person if you must (inbox_ask), then propose what should come of it (outcome_propose).",
+        "outcomes": [
+          {
+            "decision": {
+              "edited": true,
+              "reason": null
+            },
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "text": "Thursday 10:00 works."
+            },
+            "note": "They asked twice",
+            "outcomeId": "<id>",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": "https://teams.example.com/m/9",
+              "text": null
+            },
+            "state": "done",
+            "type": "reply"
+          },
+          {
+            "decision": {
+              "edited": false,
+              "reason": null
+            },
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "until": "<iso>"
+            },
+            "note": "",
+            "outcomeId": "<id>",
+            "result": null,
+            "state": "done",
+            "type": "snooze"
+          }
+        ],
+        "question": {
+          "answer": "Thursday",
+          "text": "Thursday or Friday?"
+        },
+        "state": "investigating",
+        "subject": {
+          "name": "Review date (Payments)",
+          "subjectId": "<id>"
+        },
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "timeline": [
+          {
+            "at": "<iso>",
+            "by": "agent",
+            "text": "Checked the calendar: Thursday is free.",
+            "type": "thread.note"
+          },
+          {
+            "at": "<iso>",
+            "by": "agent",
+            "text": "Thursday or Friday?",
+            "type": "thread.asked"
+          },
+          {
+            "at": "<iso>",
+            "by": "human",
+            "text": "Thursday",
+            "type": "thread.answered"
+          }
+        ],
+        "title": "Can we move the review to Thursday?",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": false,
+      "out": "Thread nope not found."
+    },
+    {
+      "tool": "subject_list",
+      "ok": true,
+      "out": {
+        "member": "alice",
+        "subjects": [
+          {
+            "area": null,
+            "forYou": 0,
+            "name": "review date (payments)",
+            "open": 1,
+            "subjectId": "<id>"
+          }
+        ],
+        "unfiled": 0
+      }
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      }
+    ],
+    "workspaces/w1/inboxSubjects": [
+      {
+        "area": "Payments",
+        "createdAt": "<ts>",
+        "createdBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "name": "Review date (Payments)",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "createdBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "alice",
+        "name": "review date (payments)",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/inboxThreads": [
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "alice",
+        "question": null,
+        "refs": [
+          "af9223c482be56e1cd21026e"
+        ],
+        "state": "investigating",
+        "subjectId": "<id>",
+        "title": "Can we move the review to Thursday?",
+        "updatedAt": "<ts>",
+        "waiting": null
+      },
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": {
+          "answer": "Thursday",
+          "answeredAt": "<ts>",
+          "at": "<ts>",
+          "by": "<agent>",
+          "text": "Thursday or Friday?"
+        },
+        "refs": [
+          "c85e52ee7e270745c4ed5a02",
+          "1e33c57db33d617c76c0057d"
+        ],
+        "state": "investigating",
+        "subjectId": "<id>",
+        "title": "Can we move the review to Thursday?",
+        "updatedAt": "<ts>",
+        "waiting": null
+      }
+    ],
+    "workspaces/w1/inboxMessages": [
+      {
+        "attachments": [
+          {
+            "name": "agenda.pdf",
+            "url": "https://files.example.com/a.pdf"
+          }
+        ],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "alice",
+        "messageId": "m-a",
+        "permalink": "https://teams.example.com/m/1",
+        "receivedAt": "<ts>",
+        "replyRef": "conv:1",
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "teams",
+        "text": "Can we move the review to Thursday?",
+        "threadId": "itaf9223c482be56e1cd21026e",
+        "threadRef": "thread-1"
+      },
+      {
+        "attachments": [
+          {
+            "name": "agenda.pdf",
+            "url": "https://files.example.com/a.pdf"
+          }
+        ],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": "https://teams.example.com/m/1",
+        "receivedAt": "<ts>",
+        "replyRef": "conv:1",
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "mail",
+        "text": "Can we move the review to Thursday?",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "threadRef": "<x@example.com>"
+      },
+      {
+        "attachments": [
+          {
+            "name": "agenda.pdf",
+            "url": "https://files.example.com/a.pdf"
+          }
+        ],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": "https://teams.example.com/m/1",
+        "receivedAt": "<ts>",
+        "replyRef": "conv:1",
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "teams",
+        "text": "Can we move the review to Thursday?",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "threadRef": "thread-1"
+      },
+      {
+        "attachments": [
+          {
+            "name": "agenda.pdf",
+            "url": "https://files.example.com/a.pdf"
+          }
+        ],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "m-2",
+        "permalink": "https://teams.example.com/m/1",
+        "receivedAt": "<ts>",
+        "replyRef": "conv:1",
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "teams",
+        "text": "Or Friday?",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "threadRef": "thread-1"
+      },
+      {
+        "attachments": [
+          {
+            "name": "agenda.pdf",
+            "url": "https://files.example.com/a.pdf"
+          }
+        ],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "m-3",
+        "permalink": "https://teams.example.com/m/1",
+        "receivedAt": "<ts>",
+        "replyRef": "conv:1",
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam Example"
+        },
+        "source": "teams",
+        "text": "Thanks!",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "threadRef": "thread-1"
+      }
+    ],
+    "workspaces/w1/inboxOutcomes": [
+      {
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "owner",
+          "edited": false,
+          "reason": null
+        },
+        "executor": null,
+        "fields": {
+          "until": "<iso>"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "done",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "snooze",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "owner",
+          "edited": true,
+          "reason": null
+        },
+        "executor": "<agent>",
+        "fields": {
+          "text": "Thursday 10:00 works."
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "They asked twice",
+        "proposedBy": "<agent>",
+        "result": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "error": null,
+          "itemId": null,
+          "permalink": "https://teams.example.com/m/9",
+          "text": null
+        },
+        "state": "done",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "reply",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/inboxEvents": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "area": "Payments",
+          "created": true,
+          "from": null,
+          "name": "Review date (Payments)"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "thread.filed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "created": true,
+          "from": null,
+          "name": "review date (payments)"
+        },
+        "memberUid": "alice",
+        "subjectId": "<id>",
+        "threadId": "itaf9223c482be56e1cd21026e",
+        "type": "thread.filed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "im00737972a6853b0fe49b196b",
+          "newThread": true,
+          "sender": "Sam Example",
+          "source": "teams"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "im60c552b0e7a9d12193e2e26f",
+          "newThread": true,
+          "sender": "Sam Example",
+          "source": "teams"
+        },
+        "memberUid": "alice",
+        "subjectId": null,
+        "threadId": "itaf9223c482be56e1cd21026e",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "im8435b2071e38af5f4c3c8640",
+          "newThread": false,
+          "sender": "Sam Example",
+          "source": "mail"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "imdb64613fb5d40aef74204995",
+          "newThread": false,
+          "sender": "Sam Example",
+          "source": "teams"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "imfce22893a202e2a397601ce3",
+          "newThread": false,
+          "sender": "Sam Example",
+          "source": "teams"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "fields": {
+            "text": "Thursday works."
+          },
+          "outcomeId": "<id>",
+          "type": "reply"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "outcome.proposed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "fields": {
+            "until": "<iso>"
+          },
+          "outcomeId": "<id>",
+          "type": "snooze"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "outcome.proposed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "<id>",
+          "permalink": "https://teams.example.com/m/9",
+          "type": "reply"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "text": "Checked the calendar: Thursday is free."
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "thread.note"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "text": "Thursday or Friday?"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "thread.asked"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {},
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "thread.woke"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "answer": "Thursday",
+          "question": "Thursday or Friday?"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "thread.answered"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "edited": false,
+          "outcomeId": "<id>",
+          "type": "snooze"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "outcome.approved"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "edited": true,
+          "fields": {
+            "text": "Thursday 10:00 works."
+          },
+          "outcomeId": "<id>",
+          "type": "reply"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "itc85e52ee7e270745c4ed5a02",
+        "type": "outcome.approved"
+      }
+    ],
+    "workspaces/w1/projects": [
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      },
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      }
+    ],
+    "workspaces/w1/projects/p1/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      },
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": {
+          "approvals": {},
+          "rejections": {},
+          "stepId": "review"
+        },
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "waiting",
+        "stepId": "review",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects/p2/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ]
+  }
+}

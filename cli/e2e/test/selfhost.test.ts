@@ -18,10 +18,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { as, now, put, reset, snap, useEmulator, W } from '../../shared/rules/harness';
-import { readCredentials } from '../src/credentials';
-import { resolveServer } from '../src/server';
-import { useFirebaseConfig } from '../src/client';
+import { as, now, put, reset, snap, useEmulator, W } from '../../../packages/shared/rules/harness';
 import { GO, goBinary, REPO } from './gobin';
 
 useEmulator();
@@ -118,7 +115,6 @@ afterAll(async () => {
     await Promise.race([gone, new Promise((r) => setTimeout(r, 10_000))]);
     if (hosting.exitCode === null) hosting.kill('SIGKILL');
   }
-  useFirebaseConfig(null);
 }, 30_000);
 
 describe.skipIf(!GO)('self-hosted site: the CLI needs only its address', () => {
@@ -197,26 +193,8 @@ describe.skipIf(!GO)('self-hosted site: the CLI needs only its address', () => {
     expect(who.status, who.stderr).toBe(0);
     expect(JSON.parse(who.stdout)).toMatchObject({ agentUid: uid, workspaceId: W });
 
-    // The TypeScript CLI reads the same file and resolves the same server (without the emulator
-    // variables this test process has, which would win as explicit config).
-    const keep = {
-      a: process.env.FIREBASE_AUTH_EMULATOR_HOST,
-      f: process.env.FIRESTORE_EMULATOR_HOST,
-    };
-    delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
-    delete process.env.FIRESTORE_EMULATOR_HOST;
-    process.env.HIVENOD_HOME = home;
-    try {
-      expect(readCredentials()).toMatchObject({ server: SITE });
-      const r = await resolveServer();
-      expect(r.discovery?.firebase.projectId).toBe(PROJECT);
-      expect(r.discovery?.emulators).toEqual({ auth: AUTH_HOST, firestore: FS_HOST });
-    } finally {
-      delete process.env.HIVENOD_HOME;
-      if (keep.a !== undefined) process.env.FIREBASE_AUTH_EMULATOR_HOST = keep.a;
-      if (keep.f !== undefined) process.env.FIRESTORE_EMULATOR_HOST = keep.f;
-      useFirebaseConfig(null);
-    }
+    // The saved discovery carries the emulators too, so nothing else is needed later.
+    expect(saved.discovery.emulators).toEqual({ auth: AUTH_HOST, firestore: FS_HOST });
   }, 90_000);
 
   it('a site that is not Hivenod gets a plain message', async () => {

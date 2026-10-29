@@ -1,0 +1,1289 @@
+{
+  "calls": [
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "im61bdd9b2c7d6dca7ca15097b",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "it6db370644b61556467c3cd89"
+      }
+    },
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "im00be666d96da934fd547c3eb",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "ita78bfc945c992099b36a6db8"
+      }
+    },
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "im13c477325771389b24f5d407",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "it01f86384d4d2f64d340fad11"
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": true,
+      "out": {
+        "created": true,
+        "name": "Klarna refunds",
+        "note": "Filed under a new subject \"Klarna refunds\".",
+        "subjectId": "<id>",
+        "threadId": "it6db370644b61556467c3cd89"
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": true,
+      "out": {
+        "created": true,
+        "name": "Grafana access",
+        "note": "Filed under a new subject \"Grafana access\".",
+        "subjectId": "<id>",
+        "threadId": "ita78bfc945c992099b36a6db8"
+      }
+    },
+    {
+      "tool": "subject_assign",
+      "ok": true,
+      "out": {
+        "created": true,
+        "name": "Klarna payouts",
+        "note": "Filed under a new subject \"Klarna payouts\".",
+        "subjectId": "<id>",
+        "threadId": "it01f86384d4d2f64d340fad11"
+      }
+    },
+    {
+      "tool": "subject_search",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Best matches first. File a thread under the subject it belongs to (subject_assign with subjectId); propose links between related subjects with subject_relate.",
+        "query": "",
+        "subjects": [
+          {
+            "channels": [
+              "mail"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [],
+            "name": "Klarna payouts",
+            "open": 1,
+            "people": [
+              "Ana"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 0,
+            "subjectId": "<id>",
+            "threads": 1
+          },
+          {
+            "channels": [
+              "jira"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [],
+            "name": "Grafana access",
+            "open": 1,
+            "people": [
+              "Ana"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 0,
+            "subjectId": "<id>",
+            "threads": 1
+          },
+          {
+            "channels": [
+              "teams"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [],
+            "name": "Klarna refunds",
+            "open": 1,
+            "people": [
+              "Sam"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 0,
+            "subjectId": "<id>",
+            "threads": 1
+          }
+        ],
+        "total": 3
+      }
+    },
+    {
+      "tool": "subject_search",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Best matches first. File a thread under the subject it belongs to (subject_assign with subjectId); propose links between related subjects with subject_relate.",
+        "query": "klarna",
+        "subjects": [
+          {
+            "channels": [
+              "mail"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [
+              "name",
+              "thread",
+              "text"
+            ],
+            "name": "Klarna payouts",
+            "open": 1,
+            "people": [
+              "Ana"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 5,
+            "subjectId": "<id>",
+            "threads": 1
+          },
+          {
+            "channels": [
+              "teams"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [
+              "name",
+              "thread",
+              "text"
+            ],
+            "name": "Klarna refunds",
+            "open": 1,
+            "people": [
+              "Sam"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 5,
+            "subjectId": "<id>",
+            "threads": 1
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "tool": "subject_search",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Best matches first. File a thread under the subject it belongs to (subject_assign with subjectId); propose links between related subjects with subject_relate.",
+        "query": "ana",
+        "subjects": [
+          {
+            "channels": [
+              "jira"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [
+              "name",
+              "people",
+              "thread",
+              "text"
+            ],
+            "name": "Grafana access",
+            "open": 1,
+            "people": [
+              "Ana"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 5,
+            "subjectId": "<id>",
+            "threads": 1
+          },
+          {
+            "channels": [
+              "mail"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [
+              "people"
+            ],
+            "name": "Klarna payouts",
+            "open": 1,
+            "people": [
+              "Ana"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 3,
+            "subjectId": "<id>",
+            "threads": 1
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "tool": "subject_search",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Best matches first. File a thread under the subject it belongs to (subject_assign with subjectId); propose links between related subjects with subject_relate.",
+        "query": "jira",
+        "subjects": [
+          {
+            "channels": [
+              "jira"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [
+              "channel"
+            ],
+            "name": "Grafana access",
+            "open": 1,
+            "people": [
+              "Ana"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 3,
+            "subjectId": "<id>",
+            "threads": 1
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "tool": "subject_search",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Best matches first. File a thread under the subject it belongs to (subject_assign with subjectId); propose links between related subjects with subject_relate.",
+        "query": "order 12",
+        "subjects": [
+          {
+            "channels": [
+              "teams"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [
+              "thread",
+              "text"
+            ],
+            "name": "Klarna refunds",
+            "open": 1,
+            "people": [
+              "Sam"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 4,
+            "subjectId": "<id>",
+            "threads": 1
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "tool": "subject_search",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "No subject matches. Try fewer or other words, or make a new subject with subject_assign (name).",
+        "query": "nothing like this",
+        "subjects": [],
+        "total": 0
+      }
+    },
+    {
+      "tool": "subject_search",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Best matches first. File a thread under the subject it belongs to (subject_assign with subjectId); propose links between related subjects with subject_relate.",
+        "query": "",
+        "subjects": [
+          {
+            "channels": [
+              "mail"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [],
+            "name": "Klarna payouts",
+            "open": 1,
+            "people": [
+              "Ana"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 0,
+            "subjectId": "<id>",
+            "threads": 1
+          },
+          {
+            "channels": [
+              "jira"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [],
+            "name": "Grafana access",
+            "open": 1,
+            "people": [
+              "Ana"
+            ],
+            "proposed": [],
+            "related": [],
+            "score": 0,
+            "subjectId": "<id>",
+            "threads": 1
+          }
+        ],
+        "total": 3
+      }
+    },
+    {
+      "tool": "subject_search",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "No subject matches. Try fewer or other words, or make a new subject with subject_assign (name).",
+        "query": "",
+        "subjects": [],
+        "total": 0
+      }
+    },
+    {
+      "tool": "subject_relate",
+      "ok": true,
+      "out": {
+        "a": "<id>",
+        "b": "<id>",
+        "note": "Proposed. The person OKs or turns it down; until then it shows as a suggestion.",
+        "relationId": "rel-<id>-<id>",
+        "state": "proposed"
+      }
+    },
+    {
+      "tool": "subject_relate",
+      "ok": false,
+      "out": "This link is proposed already: it waits for the person."
+    },
+    {
+      "tool": "subject_relate",
+      "ok": false,
+      "out": "Pick two different subjects."
+    },
+    {
+      "tool": "subject_relate",
+      "ok": false,
+      "out": "Subject nope not found (see subject_search)."
+    },
+    {
+      "tool": "subject_relate",
+      "ok": true,
+      "out": {
+        "a": "<id>",
+        "b": "<id>",
+        "note": "Proposed. The person OKs or turns it down; until then it shows as a suggestion.",
+        "relationId": "rel-<id>-<id>",
+        "state": "proposed"
+      }
+    },
+    {
+      "tool": "subject_search",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Best matches first. File a thread under the subject it belongs to (subject_assign with subjectId); propose links between related subjects with subject_relate.",
+        "query": "klarna",
+        "subjects": [
+          {
+            "channels": [
+              "mail"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [
+              "name",
+              "thread",
+              "text"
+            ],
+            "name": "Klarna payouts",
+            "open": 1,
+            "people": [
+              "Ana"
+            ],
+            "proposed": [
+              {
+                "name": "Klarna refunds",
+                "note": "Both Klarna",
+                "subjectId": "<id>"
+              }
+            ],
+            "related": [],
+            "score": 5,
+            "subjectId": "<id>",
+            "threads": 1
+          },
+          {
+            "channels": [
+              "teams"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [
+              "name",
+              "thread",
+              "text"
+            ],
+            "name": "Klarna refunds",
+            "open": 1,
+            "people": [
+              "Sam"
+            ],
+            "proposed": [
+              {
+                "name": "Grafana access",
+                "note": "",
+                "subjectId": "<id>"
+              },
+              {
+                "name": "Klarna payouts",
+                "note": "Both Klarna",
+                "subjectId": "<id>"
+              }
+            ],
+            "related": [],
+            "score": 5,
+            "subjectId": "<id>",
+            "threads": 1
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "tool": "subject_relate",
+      "ok": false,
+      "out": "The person turned this link down (or removed it): do not propose it again."
+    },
+    {
+      "tool": "subject_search",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Best matches first. File a thread under the subject it belongs to (subject_assign with subjectId); propose links between related subjects with subject_relate.",
+        "query": "klarna refunds",
+        "subjects": [
+          {
+            "channels": [
+              "teams"
+            ],
+            "forYou": 0,
+            "lastActivityAt": "<iso>",
+            "matched": [
+              "name",
+              "thread",
+              "text"
+            ],
+            "name": "Klarna refunds",
+            "open": 1,
+            "people": [
+              "Sam"
+            ],
+            "proposed": [],
+            "related": [
+              {
+                "name": "Klarna payouts",
+                "note": "Both Klarna",
+                "subjectId": "<id>"
+              }
+            ],
+            "score": 10,
+            "subjectId": "<id>",
+            "threads": 1
+          }
+        ],
+        "total": 1
+      }
+    },
+    {
+      "tool": "thread_flag",
+      "ok": true,
+      "out": {
+        "note": "Marked urgent: the person is pinged at once, whatever their quiet hours.",
+        "threadId": "it6db370644b61556467c3cd89",
+        "urgent": true
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "im61bdd9b2c7d6dca7ca15097b",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": "sam@example.com",
+              "name": "Sam"
+            },
+            "source": "teams",
+            "text": "Klarna refund stuck for order 12",
+            "threadRef": "r1"
+          }
+        ],
+        "next": "Investigate: read the messages and the subject's other threads, note what you find (inbox_note), ask the person if you must (inbox_ask), then propose what should come of it (outcome_propose).",
+        "outcomes": [],
+        "question": null,
+        "state": "investigating",
+        "subject": {
+          "name": "Klarna refunds",
+          "subjectId": "<id>"
+        },
+        "threadId": "it6db370644b61556467c3cd89",
+        "timeline": [],
+        "title": "Klarna refund stuck for order 12",
+        "urgent": true,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "thread_flag",
+      "ok": true,
+      "out": {
+        "note": "No longer urgent.",
+        "threadId": "it6db370644b61556467c3cd89",
+        "urgent": false
+      }
+    },
+    {
+      "tool": "thread_flag",
+      "ok": false,
+      "out": "Thread nope not found."
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      }
+    ],
+    "workspaces/w1/inboxSubjects": [
+      {
+        "createdAt": "<ts>",
+        "createdBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "name": "Grafana access",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "createdBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "name": "Klarna payouts",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "createdBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "name": "Klarna refunds",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/inboxThreads": [
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "01f86384d4d2f64d340fad11"
+        ],
+        "state": "investigating",
+        "subjectId": "<id>",
+        "title": "Klarna payouts are late",
+        "updatedAt": "<ts>",
+        "waiting": null
+      },
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "6db370644b61556467c3cd89"
+        ],
+        "state": "investigating",
+        "subjectId": "<id>",
+        "title": "Klarna refund stuck for order 12",
+        "updatedAt": "<ts>",
+        "urgent": false,
+        "waiting": null
+      },
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "a78bfc945c992099b36a6db8"
+        ],
+        "state": "investigating",
+        "subjectId": "<id>",
+        "title": "Please give me Grafana access",
+        "updatedAt": "<ts>",
+        "waiting": null
+      }
+    ],
+    "workspaces/w1/inboxMessages": [
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": "ana@example.com",
+          "name": "Ana"
+        },
+        "source": "jira",
+        "text": "Please give me Grafana access",
+        "threadId": "ita78bfc945c992099b36a6db8",
+        "threadRef": "r2"
+      },
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": "ana@example.com",
+          "name": "Ana"
+        },
+        "source": "mail",
+        "text": "Klarna payouts are late",
+        "threadId": "it01f86384d4d2f64d340fad11",
+        "threadRef": "r3"
+      },
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": "sam@example.com",
+          "name": "Sam"
+        },
+        "source": "teams",
+        "text": "Klarna refund stuck for order 12",
+        "threadId": "it6db370644b61556467c3cd89",
+        "threadRef": "r1"
+      }
+    ],
+    "workspaces/w1/inboxEvents": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "a": "<id>",
+          "b": "<id>",
+          "note": "",
+          "relationId": "rel-<id>-<id>"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": null,
+        "type": "relation.proposed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "a": "<id>",
+          "b": "<id>",
+          "note": "Both Klarna",
+          "relationId": "rel-<id>-<id>"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": null,
+        "type": "relation.proposed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "created": true,
+          "from": null,
+          "name": "Grafana access"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "ita78bfc945c992099b36a6db8",
+        "type": "thread.filed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "created": true,
+          "from": null,
+          "name": "Klarna payouts"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "it01f86384d4d2f64d340fad11",
+        "type": "thread.filed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "created": true,
+          "from": null,
+          "name": "Klarna refunds"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "it6db370644b61556467c3cd89",
+        "type": "thread.filed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "im00be666d96da934fd547c3eb",
+          "newThread": true,
+          "sender": "Ana",
+          "source": "jira"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "ita78bfc945c992099b36a6db8",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "im13c477325771389b24f5d407",
+          "newThread": true,
+          "sender": "Ana",
+          "source": "mail"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it01f86384d4d2f64d340fad11",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "in",
+          "messageDocId": "im61bdd9b2c7d6dca7ca15097b",
+          "newThread": true,
+          "sender": "Sam",
+          "source": "teams"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "it6db370644b61556467c3cd89",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "reason": "Order 12 is stuck at checkout",
+          "urgent": true
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "it6db370644b61556467c3cd89",
+        "type": "thread.flagged"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "reason": null,
+          "urgent": false
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": "it6db370644b61556467c3cd89",
+        "type": "thread.flagged"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "a": "<id>",
+          "b": "<id>",
+          "note": "Both Klarna",
+          "relationId": "rel-<id>-<id>"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": null,
+        "type": "relation.accepted"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "a": "<id>",
+          "b": "<id>",
+          "relationId": "rel-<id>-<id>"
+        },
+        "memberUid": "owner",
+        "subjectId": "<id>",
+        "threadId": null,
+        "type": "relation.rejected"
+      }
+    ],
+    "workspaces/w1/inboxRelations": [
+      {
+        "a": "<id>",
+        "b": "<id>",
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "owner"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "proposedBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "state": "rejected",
+        "updatedAt": "<ts>"
+      },
+      {
+        "a": "<id>",
+        "b": "<id>",
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "owner"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "Both Klarna",
+        "proposedBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "state": "related",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects": [
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      },
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      }
+    ],
+    "workspaces/w1/projects/p1/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      },
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": {
+          "approvals": {},
+          "rejections": {},
+          "stepId": "review"
+        },
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "waiting",
+        "stepId": "review",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects/p2/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ]
+  }
+}

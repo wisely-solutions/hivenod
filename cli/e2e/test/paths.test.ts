@@ -1,11 +1,11 @@
 /**
- * Card st5INNZj, against the emulators and the real rules: an unshaped item is shaping work for
+ * Card st5INNZj, through the Go CLI (`hivenod mcp`), against the emulators and the real rules: an unshaped item is shaping work for
  * any agent on the project; the agent shapes it (agent steps skipped, a people step asked of its
  * deciders), then works it along its path, skipping an agent step ahead and proposing a step.
  */
 import { createAgentIdentity } from '@hive/shared/agent-auth';
 import { paths } from '@hive/shared';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   I,
   itemDoc,
@@ -16,15 +16,20 @@ import {
   snap,
   useEmulator,
   W,
-} from '../../shared/rules/harness';
-import { HiveClient } from '../src/client';
+} from '../../../packages/shared/rules/harness';
+import { GoAgent } from './agentcli';
+import { GO, goBinary } from './gobin';
 
 useEmulator();
 
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1:9099';
 const options = { apiKey: 'fake-api-key', projectId: 'hive-rules-test' };
 
-const clients: HiveClient[] = [];
+const d = GO ? describe : describe.skip;
+beforeAll(() => {
+  if (GO) goBinary();
+}, 300_000);
+const clients: GoAgent[] = [];
 afterEach(async () => {
   await Promise.all(clients.splice(0).map((c) => c.close()));
 });
@@ -47,16 +52,12 @@ async function agent() {
       lastEventId: 'seed',
     },
   });
-  const c = await HiveClient.connect({
-    token,
-    projectId: 'hive-rules-test',
-    authEmulator: AUTH_HOST,
-  });
+  const c = await GoAgent.start(uid, token);
   clients.push(c);
   return { uid, c };
 }
 
-describe('per-item paths: shaping and paths from the agent client', () => {
+d('per-item paths: shaping and paths from the agent client', () => {
   it('lists an unshaped item as shaping work, even at a step limited to other agents', async () => {
     await put({
       [P('p1')]: projectDoc({}, { stepAgents: { intake: ['someoneElse'] } }),

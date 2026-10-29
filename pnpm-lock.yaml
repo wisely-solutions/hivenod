@@ -309,6 +309,27 @@ importers:
         specifier: ^7.0.0
         version: 7.3.7(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(yaml@2.9.1)
 
+  cli/e2e:
+    devDependencies:
+      '@firebase/rules-unit-testing':
+        specifier: ^6.0.0
+        version: 6.0.0(firebase@13.1.0)
+      '@hive/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.32.2
+        version: 1.32.2(supports-color@10.2.2)(zod@4.6.7)
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.5
+      firebase:
+        specifier: ^13.1.0
+        version: 13.1.0
+      vitest:
+        specifier: 5.0.5
+        version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@22.20.5)(@vitest/coverage-v8@5.0.5)(jsdom@26.1.0(supports-color@10.2.2))(vite@7.3.7(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(yaml@2.9.1))
+
   packages/agent:
     dependencies:
       '@hive/shared':
