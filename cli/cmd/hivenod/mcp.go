@@ -96,7 +96,8 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 		push := func(e hive.Event) { _ = srv.Notify("notifications/claude/channel", e) }
 		opts := hive.ChannelOptions{ProjectID: o.project, StepID: o.step, MaxItems: maxItems,
 			Presence: msEnv("HIVENOD_PRESENCE_MS"), Retry: msEnv("HIVENOD_CHANNEL_RETRY_MS"),
-			ParkCheck: msEnv("HIVENOD_PARK_CHECK_MS"),
+			ParkCheck: msEnv("HIVENOD_PARK_CHECK_MS"), StatusCheck: msEnv("HIVENOD_STATUS_CHECK_MS"),
+			StatusMinute: msEnv("HIVENOD_STATUS_MINUTE_MS"),
 			Inbox: hive.InboxOptions{MaxInbox: maxInbox, PerMinute: int(msEnv("HIVENOD_INBOX_PER_MIN") / time.Millisecond),
 				NudgeAfter: msEnv("HIVENOD_INBOX_NUDGE_MS"), Lease: msEnv("HIVENOD_INBOX_LEASE_MS"), Tick: msEnv("HIVENOD_INBOX_TICK_MS")}}
 		srv.OnInitialized = func() {

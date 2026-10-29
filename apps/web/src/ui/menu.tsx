@@ -11,13 +11,15 @@ export interface MenuAction {
   label: string;
   icon?: LucideIcon;
   tone?: 'default' | 'danger';
+  /** Shown but not selectable (e.g. "Asked · waiting…"). */
+  disabled?: boolean;
   onSelect: () => void;
 }
 
 const CONTENT =
   'z-50 min-w-44 max-w-[calc(100vw-24px)] rounded-card border border-line bg-surface p-1 shadow-e3 outline-hidden';
 const ITEM =
-  'flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-btn px-3 text-14 text-ink outline-hidden data-[highlighted]:bg-agent-soft sm:min-h-9';
+  'flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-btn px-3 text-14 text-ink outline-hidden data-[highlighted]:bg-agent-soft data-[disabled]:cursor-default data-[disabled]:text-text-2 sm:min-h-9';
 
 function itemClass(a: MenuAction) {
   return cn(ITEM, a.tone === 'danger' && 'text-sendback');
@@ -49,7 +51,12 @@ export function ActionMenu({
           className={CONTENT}
         >
           {actions.map((a) => (
-            <DropdownMenu.Item key={a.id} className={itemClass(a)} onSelect={() => a.onSelect()}>
+            <DropdownMenu.Item
+              key={a.id}
+              className={itemClass(a)}
+              disabled={a.disabled}
+              onSelect={() => a.onSelect()}
+            >
               {a.icon ? <Icon icon={a.icon} size={16} /> : null}
               {a.label}
             </DropdownMenu.Item>
@@ -84,7 +91,12 @@ export function LongPressMenu({
       <ContextMenu.Portal>
         <ContextMenu.Content aria-label={label} collisionPadding={12} className={CONTENT}>
           {actions.map((a) => (
-            <ContextMenu.Item key={a.id} className={itemClass(a)} onSelect={() => a.onSelect()}>
+            <ContextMenu.Item
+              key={a.id}
+              className={itemClass(a)}
+              disabled={a.disabled}
+              onSelect={() => a.onSelect()}
+            >
               {a.icon ? <Icon icon={a.icon} size={16} /> : null}
               {a.label}
             </ContextMenu.Item>

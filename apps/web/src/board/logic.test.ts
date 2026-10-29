@@ -22,6 +22,8 @@ import {
   scrubber,
   activeStepId,
   stepStats,
+  statusView,
+  askStatusState,
 } from './logic';
 
 const ts = (ms: number) => ({ toMillis: () => ms }) as never;
@@ -363,5 +365,75 @@ describe('parked items (item QjTTL)', () => {
     // Without parked items the card keeps the working dots, no presence text.
     const plain = { ...ctx, items: [workingRow] };
     expect(cardData(workingRow, plain).agent?.presence).toBeUndefined();
+  });
+});
+
+describe('status checks on the card (item AzveC)', () => {
+  const claim = { runId: 'r1', agentUid: 'ag', heartbeatAt: ts(NOW - 60_000) };
+  const base = { status: 'working', claim } as unknown as Item;
+  const su = (over = {}) => ({
+    runId: 'r1',
+    text: 'Running checks',
+    pct: 70,
+    at: ts(NOW - 5 * 60_000),
+    by: 'ag',
+    ...over,
+  });
+  it('shows the status line of the current run only', () => {
+    expect(statusView({ ...base, statusUpdate: su() } as Item, NOW)).toEqual({
+      status: 'Running checks · 70%',
+    });
+    expect(statusView({ ...base, statusUpdate: su({ pct: null }) } as Item, NOW).status).toBe(
+      'Running checks',
+    );
+    expect(statusView({ ...base, statusUpdate: su({ runId: 'old' }) } as Item, NOW)).toEqual({});
+    expect(statusView({ ...base, status: 'queued', statusUpdate: su() } as Item, NOW)).toEqual({});
+  });
+  it('shows the silence flag until a newer status arrives; not while parked', () => {
+    const silence = { runId: 'r1', since: NOW - 42 * 60_000, at: NOW - 60_000 };
+    expect(statusView({ ...base, silence } as Item, NOW)).toEqual({
+      silence: 'No update for 42 min',
+    });
+    expect(
+      statusView({ ...base, silence, statusUpdate: su({ at: ts(NOW - 30_000) }) } as Item, NOW),
+    ).toEqual({ status: 'Running checks · 70%' });
+    const parked = { runId: 'r1', reason: 'release', at: ts(NOW) };
+    expect(statusView({ ...base, silence, parked } as Item, NOW)).toEqual({});
+    expect(statusView({ ...base, silence: { ...silence, runId: 'old' } } as Item, NOW)).toEqual({});
+  });
+  it('Ask for status: on live worked items, then "Asked · waiting…" for 2 minutes', () => {
+    expect(askStatusState(base, NOW)).toEqual({
+      show: true,
+      disabled: false,
+      label: 'Ask for status',
+    });
+    const stale = { ...base, claim: { ...claim, heartbeatAt: ts(NOW - 20 * 60_000) } } as Item;
+    expect(askStatusState(stale, NOW).show).toBe(false);
+    const waiting = {
+      ...base,
+      awaitingAnswer: { questionId: 'q', agentUid: 'ag', at: ts(NOW) },
+    } as Item;
+    expect(askStatusState(waiting, NOW).show).toBe(false);
+    const asked = {
+      ...base,
+      statusAsk: { runId: 'r1', byUid: 'me', at: ts(NOW - 60_000) },
+    } as Item;
+    expect(askStatusState(asked, NOW)).toEqual({
+      show: true,
+      disabled: true,
+      label: 'Asked · waiting…',
+    });
+    expect(askStatusState(asked, NOW + 61_000)).toEqual({
+      show: true,
+      disabled: false,
+      label: 'Ask again',
+    });
+    const answered = { ...asked, statusUpdate: su({ at: ts(NOW - 30_000) }) } as Item;
+    expect(askStatusState(answered, NOW)).toEqual({
+      show: true,
+      disabled: true,
+      label: 'Ask for status',
+    });
+    expect(askStatusState(answered, NOW + 61_000).disabled).toBe(false);
   });
 });

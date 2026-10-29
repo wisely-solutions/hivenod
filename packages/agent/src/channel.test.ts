@@ -220,3 +220,115 @@ describe('parking (item QjTTL)', () => {
     expect((s as unknown as { skipped(i: string): boolean }).skipped('i2')).toBe(true);
   });
 });
+
+describe('status checks (item AzveC)', () => {
+  const ts = (ms: number) => ({ toMillis: () => ms });
+  const setup = (every = 30) => {
+    let t = 1_000_000;
+    const pushed: ChannelEvent[] = [];
+    const reads: string[] = [];
+    const client = {
+      statusEvery: async (pid: string) => {
+        reads.push(pid);
+        return every;
+      },
+      askedBy: async () => 'Ana',
+      untrackRun: () => undefined,
+    } as unknown as HiveClient;
+    const s = new ChannelSession(client, async (e) => void pushed.push(e), {
+      maxItems: 2,
+      now: () => t,
+    });
+    (s as unknown as { closed: boolean }).closed = true;
+    const map = (s as unknown as { current: Map<string, Record<string, unknown>> }).current;
+    for (const i of [1, 2])
+      map.set(`r${i}`, {
+        itemId: `i${i}`,
+        projectId: 'p1',
+        runId: `r${i}`,
+        title: `T${i}`,
+        stops: [],
+        parked: null,
+        statusDue: t + every * 60_000,
+        askSeen: 0,
+      });
+    const item = (runId: string, over: Record<string, unknown> = {}) => ({
+      status: 'working',
+      claim: { runId, agentUid: 'a', heartbeatAt: ts(t) },
+      lastEventId: 'e1',
+      ...over,
+    });
+    const snapshot = (runId: string, over: Record<string, unknown> = {}) =>
+      (s as unknown as { onItem(h: unknown, it: unknown): void }).onItem(
+        map.get(runId),
+        item(runId, over),
+      );
+    return { s, pushed, reads, map, snapshot, now: () => t, tick: (ms: number) => (t += ms) };
+  };
+  const statuses = (p: ChannelEvent[]) => p.filter((e) => e.meta.kind === 'status');
+
+  it('sends a status event per active item once the interval has passed (fake clock)', async () => {
+    const { s, pushed, tick } = setup(30);
+    tick(30 * 60_000 - 1);
+    expect(await s.statusChecks()).toEqual([]);
+    tick(1);
+    expect(await s.statusChecks()).toEqual(['i1', 'i2']);
+    const e = statuses(pushed)[0]!;
+    expect(e.meta).toMatchObject({ kind: 'status', item_id: 'i1', run_id: 'r1', why: 'interval' });
+    expect(e.content).toMatch(/Status check on "T1" \(item_id i1\)\. Pass it on to the sub-agent/);
+    expect(e.content).toContain('status tool (itemId="i1"');
+    // Not again until another interval has passed.
+    tick(60_000);
+    expect(await s.statusChecks()).toEqual([]);
+    tick(29 * 60_000);
+    expect(await s.statusChecks()).toEqual(['i1', 'i2']);
+  });
+
+  it('an answer resets the clock; parked or waiting items get no event', async () => {
+    const { s, pushed, tick, now, snapshot } = setup(15);
+    tick(10 * 60_000);
+    // i1 answered 10 minutes in: its next check is 15 minutes after that answer.
+    snapshot('r1', {
+      statusUpdate: { runId: 'r1', text: 'Tests', pct: 50, at: ts(now()), by: 'a' },
+    });
+    // i2 waits for people (an ask held it).
+    snapshot('r2', { awaitingAnswer: { questionId: 'q', agentUid: 'a', at: ts(now()) } });
+    tick(5 * 60_000);
+    expect(await s.statusChecks()).toEqual([]);
+    tick(10 * 60_000);
+    expect(await s.statusChecks()).toEqual(['i1']);
+    await s.park('i1', 'release').catch(() => undefined);
+    (s as unknown as { current: Map<string, { parked: unknown }> }).current.get('r1')!.parked = {
+      reason: 'release',
+      at: now(),
+    };
+    tick(60 * 60_000);
+    expect(await s.statusChecks()).toEqual([]);
+    expect(statuses(pushed)).toHaveLength(1);
+  });
+
+  it('interval 0 sends none; a person asking sends one at once, once per ask', async () => {
+    const { s, pushed, tick, now, snapshot } = setup(0);
+    snapshot('r1'); // the first snapshot (an older ask would be ignored)
+    tick(120 * 60_000);
+    expect(await s.statusChecks()).toEqual([]);
+    const ask = { runId: 'r1', byUid: 'ana', at: ts(now()) };
+    snapshot('r1', { statusAsk: ask, lastEventId: 'e2' });
+    snapshot('r1', { statusAsk: ask, lastEventId: 'e2' }); // the same ask again: no second event
+    await new Promise((r) => setTimeout(r, 10));
+    const got = statuses(pushed);
+    expect(got).toHaveLength(1);
+    expect(got[0]!.meta).toMatchObject({ item_id: 'i1', why: 'asked' });
+    expect(got[0]!.content).toMatch(/^Ana asked for a status on "T1" \(item_id i1\)\./);
+  });
+
+  it('reads the interval again only every few minutes', async () => {
+    const { s, reads, tick } = setup(30);
+    await s.statusChecks();
+    await s.statusChecks();
+    expect(reads).toHaveLength(1);
+    tick(5 * 60_000);
+    await s.statusChecks();
+    expect(reads).toHaveLength(2);
+  });
+});

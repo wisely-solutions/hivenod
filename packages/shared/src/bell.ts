@@ -15,6 +15,7 @@
  *  - inboxCall: outcomes were proposed on one of your Inbox threads (Your call)
  *    For the inbox kinds, projectId is INBOX_BELL_PROJECT and itemId is the thread id;
  *    projectName is the subject's name.
+ *  - silence:  an item you decide on next has had no status from its agent for a while (item AzveC)
  */
 import { z } from 'zod';
 import { id } from './schema';
@@ -24,7 +25,15 @@ export const BELL_KEEP_MS = BELL_KEEP_DAYS * 86_400_000;
 /** The bell and the full page show at most this many entries. */
 export const BELL_LIMIT = 100;
 
-export const bellKind = z.enum(['gate', 'question', 'answer', 'sentBack', 'inboxAsk', 'inboxCall']);
+export const bellKind = z.enum([
+  'gate',
+  'question',
+  'answer',
+  'sentBack',
+  'inboxAsk',
+  'inboxCall',
+  'silence',
+]);
 /** The projectId of the inbox bell entries (their itemId is the thread id). */
 export const INBOX_BELL_PROJECT = 'inbox';
 export const isInboxBell = (kind: BellKind) => kind === 'inboxAsk' || kind === 'inboxCall';
@@ -64,6 +73,7 @@ export const bellId = {
   sentBack: (decisionId: string) => `s-${safe(decisionId)}`,
   /** One arrival of a thread at Needs you or Your call (`arrival`: see inboxArrival). */
   inbox: (threadId: string, arrival: string) => `i-${safe(threadId)}-${safe(arrival)}`,
+  silence: (itemId: string, key: string) => `n-${safe(itemId)}-${safe(key)}`,
 } as const;
 
 /** The kinds that ask you to act (the "Needs you" filter). */
@@ -100,6 +110,12 @@ export function bellText(
       return { before: `${who} asks you about `, title: e.itemTitle, after: quote };
     case 'inboxCall':
       return { before: 'Your call on ', title: e.itemTitle, after: e.text ? `: ${e.text}` : '' };
+    case 'silence':
+      return {
+        before: 'No update on ',
+        title: e.itemTitle,
+        after: `${e.actorName ? ` from ${e.actorName}` : ''}${e.text ? `: ${e.text}` : ''}`,
+      };
   }
 }
 

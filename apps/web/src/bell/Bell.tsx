@@ -9,6 +9,7 @@ import {
   Bell,
   Check,
   CircleHelp,
+  Clock,
   Mail,
   MailQuestion,
   MessageSquare,
@@ -31,6 +32,7 @@ const KIND: Record<BellKind, { icon: LucideIcon; tone: string }> = {
   sentBack: { icon: Undo2, tone: 'bg-sendback-bg text-sendback' },
   inboxAsk: { icon: MailQuestion, tone: 'bg-agent-soft text-agent' },
   inboxCall: { icon: Mail, tone: 'bg-gate-bg text-gate-text' },
+  silence: { icon: Clock, tone: 'bg-sendback-bg text-sendback' },
 };
 
 /** The unread count on the bell: 99+ past 99. */

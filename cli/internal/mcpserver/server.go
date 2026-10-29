@@ -37,9 +37,10 @@ type Surface struct {
 		Capabilities map[string]any `json:"capabilities"`
 		Tools        []ToolSpec     `json:"tools"`
 	} `json:"channel"`
-	ChannelInstructions map[string]string `json:"channelInstructions"`
-	WorkText            []WorkTextSample  `json:"workText"`
-	InboxText           []InboxTextSample `json:"inboxText"`
+	ChannelInstructions map[string]string  `json:"channelInstructions"`
+	WorkText            []WorkTextSample   `json:"workText"`
+	InboxText           []InboxTextSample  `json:"inboxText"`
+	StatusText          []StatusTextSample `json:"statusText"`
 }
 
 // InboxTextSample is one TypeScript inboxText output (for the Go port's test); Info decodes
@@ -47,6 +48,20 @@ type Surface struct {
 type InboxTextSample struct {
 	Info json.RawMessage `json:"info"`
 	Text string          `json:"text"`
+}
+
+// StatusTextSample is one TypeScript statusText output (item AzveC; for the Go port's test).
+type StatusTextSample struct {
+	Item struct {
+		ItemID string `json:"itemId"`
+		Title  string `json:"title"`
+	} `json:"item"`
+	Why struct {
+		Why string `json:"why"`
+		By  string `json:"by"`
+	} `json:"why"`
+	MaxItems int    `json:"maxItems"`
+	Text     string `json:"text"`
 }
 
 // WorkTextSample is one TypeScript workText output (for the Go port's test).

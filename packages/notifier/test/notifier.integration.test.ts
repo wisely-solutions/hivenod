@@ -11,6 +11,7 @@ import {
   atGate,
   I,
   itemDoc,
+  minutesAgo,
   now as harnessNow,
   put,
   useEmulator,
@@ -385,5 +386,145 @@ describe('notifier end to end', () => {
       message: { message_id: 3, chat: { id: 55, type: 'private' }, text: '/unlink' },
     });
     expect((await db.doc(notifyPath.telegram('bob')).get()).exists).toBe(false);
+  });
+});
+
+describe('silence end to end (item AzveC)', () => {
+  const run = (itemId: string, startedAt: ReturnType<typeof minutesAgo>) => ({
+    agentUid: 'agentA',
+    projectId: 'p1',
+    itemId,
+    stepId: 'draft',
+    startedAt,
+    heartbeatAt: minutesAgo(1),
+    heartbeatEventAt: minutesAgo(1),
+    endedAt: null,
+    status: 'running',
+    costEur: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+    model: null,
+    summary: null,
+    lastEventId: 'seed',
+  });
+  const event = (
+    itemId: string,
+    runId: string,
+    type: string,
+    at: ReturnType<typeof minutesAgo>,
+  ) => ({
+    actor: { type: 'agent', id: 'agentA', name: 'Agent A' },
+    projectId: 'p1',
+    itemId,
+    runId,
+    type,
+    data: {},
+    at,
+  });
+  it('flags a silent worked item on the item and tells the decider once on Telegram', async () => {
+    const ago = minutesAgo;
+    await put({
+      [notifyPath.telegram('alice')]: { chatId: 43, username: null, linkedAt: 1 },
+      [notifyPath.prefs('alice')]: {
+        push: false,
+        telegram: true,
+        digest: false,
+        quiet: { enabled: false, from: '22:00', to: '08:00', tz: 'UTC' },
+      },
+      [paths.run(W, 'run-s')]: {
+        agentUid: 'agentA',
+        projectId: 'p1',
+        itemId: 'quiet',
+        stepId: 'draft',
+        startedAt: ago(45),
+        heartbeatAt: ago(1),
+        heartbeatEventAt: ago(1),
+        endedAt: null,
+        status: 'running',
+        costEur: 0,
+        tokensIn: 0,
+        tokensOut: 0,
+        model: null,
+        summary: null,
+        lastEventId: 'seed',
+      },
+      [I('quiet')]: itemDoc({
+        title: 'Quiet one',
+        stepId: 'draft',
+        status: 'working',
+        claim: { runId: 'run-s', agentUid: 'agentA', heartbeatAt: ago(1) },
+      }),
+      // Heartbeats are not activity.
+      [paths.event(W, 'hb-s')]: event('quiet', 'run-s', 'run.heartbeat', ago(2)),
+      // Busy: a log line 5 minutes ago, no status at all.
+      [paths.run(W, 'run-l')]: run('logs', ago(60)),
+      [paths.logLine(W, 'run-l', 0)]: { at: ago(5), level: 'info', text: 'Running tests' },
+      [I('logs')]: itemDoc({
+        title: 'Logging one',
+        stepId: 'draft',
+        status: 'working',
+        claim: { runId: 'run-l', agentUid: 'agentA', heartbeatAt: ago(1) },
+      }),
+      // Busy: a note 3 minutes ago (an event of the agent), behind newer heartbeats.
+      [paths.run(W, 'run-n')]: run('notes', ago(60)),
+      [paths.event(W, 'note-n')]: event('notes', 'run-n', 'message.posted', ago(3)),
+      [paths.event(W, 'hb-n')]: event('notes', 'run-n', 'run.heartbeat', ago(1)),
+      [I('notes')]: itemDoc({
+        title: 'Noting one',
+        stepId: 'draft',
+        status: 'working',
+        claim: { runId: 'run-n', agentUid: 'agentA', heartbeatAt: ago(1) },
+      }),
+    });
+    const { calls, bot } = fakeTelegram();
+    const ports = firestorePorts(db, {
+      sendPush: async () => ({ result: 'error' as const, attempts: 0 }),
+      sendTelegram: (c, n, a) => bot.send(c, n, a),
+      log: () => undefined,
+    });
+    const engine = new Engine(ports);
+    // One sweep at a time, as in main.ts.
+    let chain = Promise.resolve();
+    const sweep = () => (chain = chain.then(() => engine.sweep()));
+    const stop = watchAll(
+      db,
+      engine,
+      () => void sweep(),
+      () => undefined,
+    );
+    const toAlice = () =>
+      calls.filter(
+        (c) =>
+          c.method === 'sendMessage' &&
+          c.body.chat_id === 43 &&
+          /No update/.test(c.body.text ?? ''),
+      );
+    try {
+      await until(() => toAlice().length > 0);
+      expect(toAlice()[0]!.body.text).toContain('Quiet one');
+      await until(async () => !!(await db.doc(I('quiet')).get()).data()!.silence);
+      const flag = (await db.doc(I('quiet')).get()).data()!.silence;
+      expect(flag).toMatchObject({ runId: 'run-s' });
+      expect(Date.now() - flag.since).toBeGreaterThan(44 * 60_000);
+      await sweep();
+      await sweep();
+      expect(toAlice()).toHaveLength(1);
+      // The items with recent activity (a log line, a note) are not silent.
+      expect((await db.doc(I('logs')).get()).data()!.silence ?? null).toBeNull();
+      expect((await db.doc(I('notes')).get()).data()!.silence ?? null).toBeNull();
+      // A status ends it: the flag is cleared.
+      await db.doc(I('quiet')).update({
+        statusUpdate: {
+          runId: 'run-s',
+          text: 'Tests',
+          pct: null,
+          at: Timestamp.now(),
+          by: 'agentA',
+        },
+      });
+      await until(async () => (await db.doc(I('quiet')).get()).data()!.silence === null);
+    } finally {
+      stop();
+    }
   });
 });
