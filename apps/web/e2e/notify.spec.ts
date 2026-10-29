@@ -82,7 +82,7 @@ test('the tab title carries the Needs-you count', async ({ page }) => {
   await expect(page.getByText('2 things need you.')).toBeVisible();
   await expect(page).toHaveTitle('(2) Today · Hivenod');
   await page.goto('/projects');
-  await expect(page).toHaveTitle(/^\(2\) All projects · Hivenod$/);
+  await expect(page).toHaveTitle(/^\(2\) Projects · Hivenod$/);
 });
 
 test('a gate past its reminder time says so, then "reminder sent" once the notifier sent it', async ({

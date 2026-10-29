@@ -95,7 +95,10 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
       {/* Zone 1 (item icVly, model A): you, across every organization. The switcher never changes it. */}
       <nav aria-label="You, all organizations" data-zone="you" className="mt-4 flex flex-col px-2">
         <p aria-hidden className={zoneHead}>
-          You<span className="ml-1.5 normal-case tracking-normal text-text-3">· all organizations</span>
+          You
+          <span className="ml-1.5 font-sans font-normal normal-case tracking-normal text-text-3">
+            · all organizations
+          </span>
         </p>
         <div className="flex flex-col gap-0.5">
           {YOU_NAV.map((n) => {
@@ -119,7 +122,11 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
                 <Icon icon={n.icon} size={18} />
                 <span className="flex-1 max-xl:hidden">{n.label}</span>{' '}
                 {n.badge && badge ? (
-                  <NeedsBadge total={count.total} onlyYou={count.onlyYou} className="max-xl:hidden" />
+                  <NeedsBadge
+                    total={count.total}
+                    onlyYou={count.onlyYou}
+                    className="max-xl:hidden"
+                  />
                 ) : null}
                 {inbox && badge ? (
                   <span aria-hidden data-inbox-badge className="max-xl:hidden">
@@ -162,7 +169,7 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
         </div>
         <div className="mt-2 min-h-0 flex-1 overflow-y-auto [@media(max-height:560px)]:overflow-visible">
           {live.length ? (
-            <ul aria-label="Projects" className="flex flex-col gap-0.5">
+            <ul className="flex flex-col gap-0.5">
               {live.map((p) => {
                 const n = needs.byProject[p.id] ?? 0;
                 return (
@@ -175,7 +182,10 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
                           ? `${p.data.name}: ${n} ${n === 1 ? 'needs' : 'need'} you in ${orgName}`
                           : p.data.name
                       }
-                      className={cn(item, path === `/p/${p.id}` && 'bg-canvas font-medium text-ink')}
+                      className={cn(
+                        item,
+                        path === `/p/${p.id}` && 'bg-canvas font-medium text-ink',
+                      )}
                     >
                       <span aria-hidden className="w-[18px] text-center text-16 leading-none">
                         {p.data.emoji || p.data.name.charAt(0).toUpperCase()}

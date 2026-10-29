@@ -533,7 +533,7 @@ test('phone board: one-row header, step chips with counts, first card high up (c
   const heading = page.getByRole('heading', { level: 1 });
   await expect(heading).toBeVisible();
   // Header: back, name, menu on one row; Columns/Rows and the big buttons are gone.
-  await expect(page.getByRole('link', { name: 'All projects', exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Projects', exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Columns', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'New item', exact: true })).toHaveCount(0);
   const nav = page.getByRole('navigation', { name: 'Steps' });

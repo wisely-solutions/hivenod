@@ -241,8 +241,8 @@ export function OrgSwitcher({
         >
           <Icon icon={Info} size={15} className="mt-0.5 shrink-0" />
           <span>
-            Switching changes the Organization section: projects, agents, settings. Today, Inbox
-            and Calendar stay across all your organizations.
+            Switching changes the Organization section: projects, agents, settings. Today, Inbox and
+            Calendar stay across all your organizations.
           </span>
         </p>
         <button

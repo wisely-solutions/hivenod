@@ -12,7 +12,7 @@ export function ScopePill({ className }: { className?: string }) {
     <span
       data-scope-pill=""
       className={cn(
-        'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-canvas px-2.5 text-13 text-text-2',
+        'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-13 text-text-2',
         className,
       )}
     >
