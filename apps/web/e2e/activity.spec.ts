@@ -2,6 +2,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import {
+  NOW,
+  ago,
+  freezeClock,
   adminDoc,
   adminPatch,
   adminSet,
@@ -14,12 +17,6 @@ import {
   settle,
 } from './helpers';
 
-const MIN = 60_000;
-const ago = (m: number) => new Date(Date.now() - m * MIN);
-// The seeds put events up to 60 minutes back and expect them under "Today". In the first hour
-// after local midnight they land under "Yesterday", so those tests wait until the day is old enough.
-const tooEarlyInDay = () => Date.now() - new Date().setHours(0, 0, 0, 0) < 65 * MIN;
-const SKIP_MSG = 'seeded events would fall on yesterday in the first hour after midnight';
 const SHOTS = process.env.SHOTS_DIR;
 
 async function axe(page: Page) {
@@ -60,7 +57,7 @@ const item = (uid: string, over: Record<string, unknown>) => ({
   sendBackCount: 0,
   costEur: 0,
   order: 1,
-  updatedAt: new Date(),
+  updatedAt: new Date(NOW),
   lastEventId: 'seed',
   ...over,
 });
@@ -263,8 +260,11 @@ async function seed(page: Page) {
   return { owner, wid, uid, base };
 }
 
+test.beforeEach(async ({ page }) => {
+  await freezeClock(page);
+});
+
 test('Activity: live feed grouped by day, filters, paging and a new event', async ({ page }) => {
-  test.skip(tooEarlyInDay(), SKIP_MSG);
   const { base } = await seed(page);
   await page.goto('/activity');
   await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
@@ -340,7 +340,6 @@ test('Activity: live feed grouped by day, filters, paging and a new event', asyn
 test('Agent profile: status, KPIs that add up, runs with logs, release of a stalled run', async ({
   page,
 }) => {
-  test.skip(tooEarlyInDay(), SKIP_MSG);
   const { base } = await seed(page);
   await page.goto('/agents');
   await page.getByRole('link', { name: 'Scout' }).click();

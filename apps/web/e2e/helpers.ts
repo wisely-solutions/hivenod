@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 const rand = () => Math.random().toString(36).slice(2, 8);
 
@@ -362,4 +362,29 @@ export async function fastTimers(page: Page, { undo = true, unreachable = false 
     },
     [undo ? UNDO_MS : 0, unreachable ? 3000 : 0] as const,
   );
+}
+
+/**
+ * A fixed "now" for specs whose seeded times feed day-bound labels ("Today", "since 14:05",
+ * "tokens today"). Real-time seeds ("now minus 40 min") fall on yesterday in the first hour after
+ * midnight and the app then correctly prints another label. Use NOW / agoMs / ago for every seed and
+ * call freezeClock(page) before the first goto, so the page and the seeds agree on the time.
+ * Default: midday UTC. E2E_FAKE_NOW=<ISO time> picks another (`pnpm e2e:midnight` uses 00:05 UTC).
+ * Offsets up to 65 min are squeezed to fit between the start of the UTC day and now, so "today"
+ * seeds stay today (their order is kept); longer ones may fall on earlier days. The browser runs in
+ * UTC (playwright.config.ts) so labels do not depend on the host zone. Emulator server timestamps
+ * are not frozen: seed explicit times where a label depends on them.
+ */
+export const NOW = process.env.E2E_FAKE_NOW
+  ? new Date(process.env.E2E_FAKE_NOW).getTime()
+  : Date.UTC(2026, 5, 15, 12, 0, 0);
+const MINUTE = 60_000;
+const SINCE_MIDNIGHT_MIN = (NOW % (24 * 60 * MINUTE)) / MINUTE;
+export const agoMs = (minutes: number) =>
+  NOW -
+  minutes * MINUTE * (minutes <= 65 ? Math.min(1, Math.max(SINCE_MIDNIGHT_MIN - 1, 0.5) / 65) : 1);
+export const ago = (minutes: number) => new Date(agoMs(minutes));
+/** The page clock starts at NOW and keeps running, so timers and animations still work. */
+export async function freezeClock(target: Page | BrowserContext) {
+  await target.clock.install({ time: NOW });
 }

@@ -43,7 +43,7 @@ export default defineConfig({
   globalTimeout: deadline ? Math.max(deadline - Date.now(), 1) : 0,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
-  use: { baseURL: base, trace: 'on-first-retry' },
+  use: { baseURL: base, timezoneId: 'UTC', trace: 'on-first-retry' },
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
