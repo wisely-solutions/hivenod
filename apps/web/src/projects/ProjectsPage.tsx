@@ -124,9 +124,12 @@ export function ProjectsPage() {
   return (
     <>
       <PageHeader
-        title="All projects"
+        title="Projects"
+        // Named after the organization: the list is this organization's only (item icVly).
         subtitle={
-          live.length ? `${live.length} ${live.length === 1 ? 'project' : 'projects'}` : undefined
+          live.length
+            ? `${session.workspace.name} · ${live.length} ${live.length === 1 ? 'project' : 'projects'}`
+            : undefined
         }
         reserveSubtitle={loading}
         action={
