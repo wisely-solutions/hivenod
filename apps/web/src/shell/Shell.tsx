@@ -285,6 +285,8 @@ function pageWidth(path: string): string {
     path === '/projects' ||
     path === '/activity' ||
     path === '/agents' ||
+    // An Inbox thread or subject: the conversation and the agent panel (item kt3E7).
+    /^\/inbox\/[^/]+\/[ts]\/[^/]+\/?$/.test(path) ||
     path.endsWith('/insights') ||
     path.endsWith('/process')
   )

@@ -38,7 +38,14 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useReady } from '../auth/context';
 import { Key } from '../components/DecisionBar';
 import { stash } from '../lib/pendingDecisions';
@@ -117,11 +124,42 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
   function DecisionCard(props, ref) {
     const { entry } = props;
     const t = entry.thread!.data;
-    return t.state === 'needsYou' ? (
-      <QuestionCard {...props} />
-    ) : (
-      <ProposalCard {...props} ref={ref} />
-    );
+    const band = bandOf(t, props.now);
+    return t.state === 'needsYou'
+      ? shell(
+          band,
+          <>
+            <CardHead props={props} />
+            <QuestionPanel
+              wid={entry.wid}
+              thread={entry.thread!}
+              agentName={props.agentName}
+              onDone={props.onDone}
+              onSkip={props.onSkip}
+            />
+          </>,
+          t.title,
+        )
+      : shell(
+          band,
+          <>
+            <CardHead props={props} />
+            <ProposalPanel
+              ref={ref}
+              wid={entry.wid}
+              thread={entry.thread!}
+              proposals={entry.proposals ?? []}
+              sender={props.sender}
+              now={props.now}
+              busy={props.busy}
+              agentName={props.agentName}
+              onDone={props.onDone}
+              onOpen={props.onOpen}
+              onSkip={props.onSkip}
+            />
+          </>,
+          t.title,
+        );
   },
 );
 
@@ -188,15 +226,41 @@ function shell(band: number | null, children: React.ReactNode, title: string) {
   );
 }
 
-const ProposalCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
-  function ProposalCard(props, ref) {
-    const { entry, now, busy, agentName, onSkip, onDone, onOpen, sender } = props;
+export interface ProposalPanelProps {
+  wid: string;
+  thread: Row<InboxThread>;
+  /** The thread's open proposals, oldest first. */
+  proposals: Row<InboxOutcome>[];
+  sender: { name: string; source: string; at: number } | null;
+  now: number;
+  busy: ReadonlyArray<{ start: Date; end: Date }>;
+  agentName: (id: string) => string;
+  onDone: (label: string) => void;
+  /** Open thread (in the Other menu); left out on the thread page itself. */
+  onOpen?: () => void;
+  /** Skip (Today only). */
+  onSkip?: () => void;
+  /** Under the proposal block: the thread page's "When you approve…" preview. */
+  after?: (shown: Row<InboxOutcome>) => ReactNode;
+  /** Phone bottom sheet, collapsed: no reason, no slot strip. */
+  compact?: boolean;
+  /** A narrow column (the thread page's panel): Other is an icon. */
+  narrow?: boolean;
+  /** Which proposal is on show (the panel's checks and confidence follow it). */
+  onShown?: (id: string) => void;
+}
+
+/**
+ * The proposal block and its buttons: shared by the Today card and the thread page's agent panel
+ * (design 2.2 and 2.3). Shows one open proposal at a time ("1 of N" through Other).
+ */
+export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
+  function ProposalPanel(props, ref) {
+    const { wid, thread, proposals, now, busy, agentName, onSkip, onDone, onOpen, sender } = props;
+    const { after, compact, onShown, narrow } = props;
     const { session, actionContext, run } = useReady();
     const toast = useToast();
-    const wid = entry.wid;
-    const thread = entry.thread!;
     const t = thread.data;
-    const proposals = entry.proposals ?? [];
     const [shownId, setShownId] = useState<string | null>(null);
     const shown: Row<InboxOutcome> | undefined =
       proposals.find((p) => p.id === shownId) ?? proposals[0];
@@ -214,6 +278,9 @@ const ProposalCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
     const [rejecting, setRejecting] = useState(false);
     const [reason, setReason] = useState('');
     const [moreReason, setMoreReason] = useState(false);
+    useEffect(() => {
+      if (shown) onShown?.(shown.id);
+    }, [shown, onShown]);
     if (shown && valuesFor !== shown.id) {
       setValuesFor(shown.id);
       setValues(formValues(shown.data.type, shown.data.fields));
@@ -391,14 +458,17 @@ const ProposalCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
         icon: CircleCheck,
         onSelect: () => threadAct('close'),
       },
-      { id: 'open', label: 'Open thread', icon: ExternalLink, onSelect: onOpen },
-      { id: 'skip', label: 'Skip for now', icon: SkipForward, onSelect: onSkip },
+      ...(onOpen
+        ? [{ id: 'open', label: 'Open thread', icon: ExternalLink, onSelect: onOpen }]
+        : []),
+      ...(onSkip
+        ? [{ id: 'skip', label: 'Skip for now', icon: SkipForward, onSelect: onSkip }]
+        : []),
     ];
+    void band;
 
-    return shell(
-      band,
-      <>
-        <CardHead props={props} />
+    return (
+      <div data-outcome={shown.id} data-outcome-state="proposed">
         <div
           data-proposal={shown.id}
           data-type={shown.data.type}
@@ -438,7 +508,7 @@ const ProposalCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
             </p>
           )}
           {note ? <p className="mt-2 text-13 font-medium text-gate-text">{note}</p> : null}
-          {reasonText ? (
+          {reasonText && !compact ? (
             <div className="mt-2.5 flex gap-2 text-13 text-text-2">
               <Icon icon={Sparkles} size={14} className="mt-0.5 shrink-0 text-agent" />
               <div className="min-w-0">
@@ -469,9 +539,11 @@ const ProposalCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
               busy={busy}
               disabled={!!pending}
               onPick={pick}
+              compact={compact}
             />
           ) : null}
         </div>
+        {after && !compact ? after(shown) : null}
         {error ? (
           <p role="alert" className="mt-3 text-14 text-sendback">
             {error}
@@ -519,22 +591,28 @@ const ProposalCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
             trigger={
               <Button variant="ghost" disabled={!!pending} aria-label="Other actions">
                 <span className="inline-flex items-center gap-1">
-                  <span className="max-sm:hidden">Other</span>
-                  <Icon icon={ChevronDown} size={15} className="max-sm:hidden" />
-                  <Icon icon={MoreHorizontal} size={18} className="sm:hidden" />
+                  <span className={narrow ? 'hidden' : 'max-sm:hidden'}>Other</span>
+                  <Icon
+                    icon={ChevronDown}
+                    size={15}
+                    className={narrow ? 'hidden' : 'max-sm:hidden'}
+                  />
+                  <Icon icon={MoreHorizontal} size={18} className={narrow ? '' : 'sm:hidden'} />
                 </span>
               </Button>
             }
           />
-          <Button
-            variant="ghost"
-            className="ml-auto max-sm:hidden"
-            disabled={!!pending}
-            onClick={onSkip}
-          >
-            Skip
-            <Key>S</Key>
-          </Button>
+          {onSkip ? (
+            <Button
+              variant="ghost"
+              className="ml-auto max-sm:hidden"
+              disabled={!!pending}
+              onClick={onSkip}
+            >
+              Skip
+              <Key>S</Key>
+            </Button>
+          ) : null}
         </div>
         <Dialog
           open={rejecting}
@@ -567,8 +645,7 @@ const ProposalCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
             onChange={(e) => setReason(e.target.value)}
           />
         </Dialog>
-      </>,
-      t.title,
+      </div>
     );
   },
 );
@@ -580,12 +657,15 @@ function SlotStrip({
   busy,
   disabled,
   onPick,
+  compact,
 }: {
   slots: Slot[];
   chosen: number;
   busy: ReadonlyArray<{ start: Date; end: Date }>;
   disabled: boolean;
   onPick: (s: Slot) => void;
+  /** Slots only, no free/busy strip (the phone sheet, collapsed). */
+  compact?: boolean;
 }) {
   const pickedSlot = slots.find((s) => s.start.getTime() === chosen) ?? slots[0]!;
   const day = new Date(pickedSlot.start);
@@ -626,7 +706,7 @@ function SlotStrip({
                   : 'border-line bg-surface text-ink hov:bg-canvas',
               )}
             >
-              <span className="text-14 font-semibold tabular-nums">
+              <span className="whitespace-nowrap text-13 font-semibold tabular-nums sm:text-14">
                 {hhmm(s.start)}–{hhmm(s.end)}
               </span>
               <span className="text-12 text-text-2">
@@ -636,51 +716,62 @@ function SlotStrip({
           );
         })}
       </div>
-      <div
-        aria-hidden
-        data-freebusy=""
-        className="relative mt-2 h-7 overflow-hidden rounded-btn border border-line bg-surface"
-      >
-        {busy.map((b, i) => {
-          const p = sameDay(b.start) ? pos(b.start, b.end) : null;
-          return p ? (
-            <span key={i} className="absolute inset-y-1 rounded-sm bg-line-strong/40" style={p} />
-          ) : null;
-        })}
-        {(() => {
-          const p = pos(pickedSlot.start, pickedSlot.end);
-          return p ? (
-            <span
-              className="absolute inset-y-0.5 rounded-sm border-2 border-dashed border-gate bg-gate-bg"
-              style={p}
-            />
-          ) : null;
-        })()}
-        <span className="absolute bottom-0 left-1 text-[10px] text-text-3">08</span>
-        <span className="absolute bottom-0 right-1 text-[10px] text-text-3">18</span>
-      </div>
+      {compact ? null : (
+        <div
+          aria-hidden
+          data-freebusy=""
+          className="relative mt-2 h-7 overflow-hidden rounded-btn border border-line bg-surface"
+        >
+          {busy.map((b, i) => {
+            const p = sameDay(b.start) ? pos(b.start, b.end) : null;
+            return p ? (
+              <span key={i} className="absolute inset-y-1 rounded-sm bg-line-strong/40" style={p} />
+            ) : null;
+          })}
+          {(() => {
+            const p = pos(pickedSlot.start, pickedSlot.end);
+            return p ? (
+              <span
+                className="absolute inset-y-0.5 rounded-sm border-2 border-dashed border-gate bg-gate-bg"
+                style={p}
+              />
+            ) : null;
+          })()}
+          <span className="absolute bottom-0 left-1 text-[10px] text-text-3">08</span>
+          <span className="absolute bottom-0 right-1 text-[10px] text-text-3">18</span>
+        </div>
+      )}
     </div>
   );
 }
 
 /** A question from the agent: up to 4 answer chips, or a written answer. */
-function QuestionCard(props: DecisionCardProps) {
-  const { entry, onDone, onSkip, agentName } = props;
+export function QuestionPanel({
+  wid,
+  thread,
+  agentName,
+  onDone,
+  onSkip,
+}: {
+  wid: string;
+  thread: Row<InboxThread>;
+  agentName: (id: string) => string;
+  onDone: (label: string) => void;
+  onSkip?: () => void;
+}) {
   const { actionContext, run } = useReady();
-  const t: InboxThread = entry.thread!.data;
+  const t: InboxThread = thread.data;
   const q = t.question;
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function send(text: string) {
-    const ctx = actionContext(entry.wid);
+    const ctx = actionContext(wid);
     if (!ctx || !text.trim() || busy) return;
     setError(null);
     setBusy(true);
     try {
-      await run(
-        answerQuestion(ctx, { threadId: entry.thread!.id, thread: { ...t }, answer: text }),
-      );
+      await run(answerQuestion(ctx, { threadId: thread.id, thread: { ...t }, answer: text }));
       onDone(`Answered · ${t.title || 'thread'}`);
     } catch (e) {
       setError(errorText(e));
@@ -688,11 +779,12 @@ function QuestionCard(props: DecisionCardProps) {
       setBusy(false);
     }
   }
-  return shell(
-    bandOf(t, props.now),
+  return (
     <>
-      <CardHead props={props} />
-      <div className="mt-3 rounded-card border border-gate/50 bg-gate-bg p-3.5 sm:p-4">
+      <div
+        data-question=""
+        className="mt-3 rounded-card border border-gate/50 bg-gate-bg p-3.5 sm:p-4"
+      >
         <p className="font-mono text-12 font-semibold uppercase tracking-[0.08em] text-gate-text">
           {q ? `${agentName(q.by)} asks` : 'Question'}
         </p>
@@ -739,13 +831,14 @@ function QuestionCard(props: DecisionCardProps) {
           {error}
         </p>
       ) : null}
-      <div className="mt-3 flex justify-end">
-        <Button variant="ghost" onClick={onSkip}>
-          Skip
-          <Key>S</Key>
-        </Button>
-      </div>
-    </>,
-    t.title,
+      {onSkip ? (
+        <div className="mt-3 flex justify-end">
+          <Button variant="ghost" onClick={onSkip}>
+            Skip
+            <Key>S</Key>
+          </Button>
+        </div>
+      ) : null}
+    </>
   );
 }

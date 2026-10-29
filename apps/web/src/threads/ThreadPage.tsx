@@ -1,14 +1,16 @@
 /**
- * One Inbox thread (item 4PEHrOW5IfXBQWgOK9wo, part 3): the agent's question with an answer box,
- * the proposed outcomes (Approve, Edit, Reject), the messages with sender, source and the
- * original text, the investigation notes, and the member's own actions: move to another
- * subject, Make it work, Ignore, Mark done, Bring back.
+ * One Inbox thread (item 4PEHrOW5IfXBQWgOK9wo; redesigned in item kt3E7u9EliL3q2veDDI0, design
+ * 2.3): the conversation on the left (messages as bubbles, agent notes and decisions inline, the
+ * full timeline in a disclosure) and the agent panel on the right (what it checked, the proposal
+ * with what happens on approval, its question, the outcomes, related subjects). On a phone the
+ * panel is a bottom sheet. Opened from Today (?from=today) it adds the briefing bar and moves on
+ * to the next decision once one is made. The member's other actions sit in the ⋯ menu.
  */
 import {
   agentSchema,
-  answerQuestion,
   closeThread,
   createItem,
+  dueThread,
   flagThread,
   ignoreThread,
   makeItemFromThread,
@@ -17,42 +19,109 @@ import {
   restoreThread,
   shapesNewItems,
   type ActionPlan,
-  type InboxMessage,
 } from '@hive/shared';
-import { useNavigate, useParams } from '@tanstack/react-router';
+import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { collection, query, where } from 'firebase/firestore';
-import { Paperclip } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import {
+  ArrowRightLeft,
+  Ban,
+  CalendarClock,
+  CircleCheck,
+  Flag,
+  ListChecks,
+  MoreHorizontal,
+  RotateCcw,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useReady } from '../auth/context';
 import { db } from '../lib/db';
 import { useLiveCollection, useLiveQuery } from '../lib/live';
+import { useNeedsAll } from '../needs/data';
+import { orgColor } from '../orgs/color';
+import { useBriefing, type BriefingFrom } from '../today/briefing';
+import { dueShort } from '../today/logic';
+import { Chip, OrgChip } from '../today/parts';
+import { useMyCalendar } from '../today/useToday';
 import { Pill } from '../ui/badge';
-import { Button } from '../ui/button';
-import { Card } from '../ui/card';
+import { Button, IconButton } from '../ui/button';
+import { cn } from '../ui/cn';
 import { Skeleton } from '../ui/feedback';
 import { Input, Select, Textarea } from '../ui/form';
 import { Icon } from '../ui/icon';
+import { ActionMenu } from '../ui/menu';
 import { Dialog, useToast } from '../ui/overlay';
+import { AgentPanel } from './AgentPanel';
+import { BriefingBar } from './BriefingBar';
+import { Conversation } from './Conversation';
 import { useMySubjects, useThread } from './data';
-import { eventText, timeline } from './logic';
 import { LabelChip } from './labels';
-import { OutcomeCard } from './OutcomeCard';
-import { BackLink, errorText, Section, SourceTag, StateChip, when } from './parts';
+import { timeline } from './logic';
+import { BackLink, errorText, StateChip } from './parts';
 
 const myProjectsIn = (wid: string, uid: string) =>
   query(collection(db, `workspaces/${wid}/projects`), where('memberUids', 'array-contains', uid));
 
+const WIDE = '(min-width: 1024px)';
+function subscribeWide(cb: () => void) {
+  const mq = window.matchMedia(WIDE);
+  mq.addEventListener('change', cb);
+  return () => mq.removeEventListener('change', cb);
+}
+/** Two columns from 1024 px; below, the agent panel is a bottom sheet. */
+export function useWide(): boolean {
+  return useSyncExternalStore(
+    subscribeWide,
+    () => window.matchMedia(WIDE).matches,
+    () => true,
+  );
+}
+
 export function ThreadPage() {
   const { wid, tid } = useParams({ from: '/inbox/$wid/t/$tid' });
+  const { from } = useSearch({ strict: false }) as { from?: BriefingFrom };
   const { session, actionContext, run } = useReady();
+  const navigate = useNavigate();
   const uid = session.me.uid;
   const { thread, messages, outcomes, events, subject } = useThread(wid, tid, uid);
   const agents = useLiveCollection(`workspaces/${wid}/agents`, agentSchema);
-  const toast = useToast();
+  const all = useNeedsAll();
+  const wide = useWide();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const { busy: calendarBusy } = useMyCalendar(all.orgs, now);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [answer, setAnswer] = useState('');
   const [makeOpen, setMakeOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [dueOpen, setDueOpen] = useState(false);
+
+  // Briefing mode: where this thread is in Today's order, and the one after it.
+  const key = `t:${wid}:${tid}`;
+  const briefing = useBriefing(from, key, now);
+  const nextRef = useRef<string | null>(null);
+  // Remembered while this thread is still listed: once decided it leaves the list.
+  const nextKey =
+    briefing && briefing.index >= 0
+      ? (briefing.list[briefing.index + 1] ?? briefing.list[briefing.index - 1])?.key
+      : undefined;
+  useEffect(() => {
+    if (nextKey !== undefined) nextRef.current = nextKey;
+  }, [nextKey]);
+  const goNext = () => {
+    if (!from || !briefing) return;
+    const n = briefing.list.find((e) => e.key === nextRef.current && e.key !== key);
+    if (n?.thread)
+      void navigate({
+        to: '/inbox/$wid/t/$tid',
+        params: { wid: n.wid, tid: n.thread.id },
+        search: { from },
+      });
+    else if (n) void navigate({ to: '/', search: { sel: n.key } });
+    else void navigate({ to: from === 'calendar' ? '/calendar' : '/' });
+  };
 
   const agentName = (id: string) =>
     (agents.state === 'ready' && agents.data.find((a) => a.id === id)?.data.name) || 'An agent';
@@ -91,22 +160,34 @@ export function ThreadPage() {
   const subjectName = subject.state === 'ready' ? (subject.data?.name ?? '') : '';
   const closed = t.state === 'done' || t.state === 'ignored';
   const urgent = t.urgent === true;
+  const msgs = messages.state === 'ready' ? messages.data.map((m) => m.data) : [];
+  const people = [...new Set(msgs.filter((m) => m.direction === 'in').map((m) => m.sender.name))];
+  const channels = [...new Set(msgs.map((m) => m.source))];
+  const notes = (events.state === 'ready' ? events.data : [])
+    .filter((e) => e.data.type === 'thread.note')
+    .sort((a, b) => a.data.at.toMillis() - b.data.at.toMillis())
+    .map((e) => ({ id: e.id, event: e.data }));
+  const org = all.orgs.find((o) => o.wid === wid);
+  const due = t.due ? t.due.toMillis() : null;
+  const deciding =
+    proposed.length > 0 || (t.state === 'needsYou' && !!t.question && !t.question.answer);
 
-  async function act(make: () => Pick<ActionPlan, 'ops'>, done?: string) {
+  async function act(make: () => Pick<ActionPlan, 'ops'>) {
     setError(null);
     let plan;
     try {
       plan = make();
     } catch (e) {
       setError(errorText(e));
-      return;
+      return false;
     }
     setBusy(true);
     try {
       await run(plan);
-      if (done) toast.push({ message: done });
+      return true;
     } catch (e) {
       setError(errorText(e));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -117,194 +198,156 @@ export function ThreadPage() {
     return c;
   };
 
+  const menu = [
+    {
+      id: 'move',
+      label: 'Move to subject…',
+      icon: ArrowRightLeft,
+      onSelect: () => setMoveOpen(true),
+    },
+    {
+      id: 'urgent',
+      label: urgent ? 'Not urgent' : 'Mark urgent',
+      icon: Flag,
+      onSelect: () =>
+        void act(() => flagThread(ctx(), { threadId: tid, thread: t, urgent: !urgent })),
+    },
+    {
+      id: 'due',
+      label: due ? 'Due date…' : 'Set a due date…',
+      icon: CalendarClock,
+      onSelect: () => setDueOpen(true),
+    },
+    { id: 'make', label: 'Make it work…', icon: ListChecks, onSelect: () => setMakeOpen(true) },
+    ...(closed
+      ? [
+          {
+            id: 'restore',
+            label: 'Bring back',
+            icon: RotateCcw,
+            onSelect: () => void act(() => restoreThread(ctx(), { threadId: tid, thread: t })),
+          },
+        ]
+      : [
+          {
+            id: 'close',
+            label: 'Mark done',
+            icon: CircleCheck,
+            onSelect: () => void act(() => closeThread(ctx(), { threadId: tid, thread: t })),
+          },
+          {
+            id: 'ignore',
+            label: 'Ignore',
+            icon: Ban,
+            tone: 'danger' as const,
+            onSelect: () => void act(() => ignoreThread(ctx(), { threadId: tid, thread: t })),
+          },
+        ]),
+  ];
+
+  const panel = (
+    <AgentPanel
+      wid={wid}
+      uid={uid}
+      thread={{ id: tid, data: t }}
+      proposals={proposed}
+      decided={decided}
+      notes={notes}
+      messages={msgs}
+      now={now}
+      busy={calendarBusy}
+      agentName={agentName}
+      onDone={() => (from ? goNext() : undefined)}
+      sheet={!wide}
+    />
+  );
+
   return (
-    <div className="mx-auto w-full max-w-3xl">
-      {t.subjectId ? (
+    <div className="mx-auto w-full">
+      {from && briefing ? (
+        <BriefingBar from={from} list={briefing.list} index={briefing.index} />
+      ) : t.subjectId ? (
         <BackLink subject={{ wid, sid: t.subjectId }}>{subjectName || 'Subject'}</BackLink>
       ) : (
         <BackLink>Inbox</BackLink>
       )}
-      <div className="mb-2 flex flex-wrap items-start gap-3">
-        <h1 className="min-w-0 flex-1 text-24 font-semibold text-ink [overflow-wrap:anywhere]">
-          {t.title || 'Untitled thread'}
-        </h1>
-        <div className="flex shrink-0 items-center gap-2">
-          {urgent ? (
-            <Pill tone="sendback">
-              <span data-urgent="">Urgent</span>
-            </Pill>
-          ) : null}
-          <StateChip state={t.state} waiting={t.waiting} />
-        </div>
-      </div>
-      <p className="text-14 text-text-2">
-        {subjectName ? `${subjectName} · ` : 'Not filed yet · '}
-        Brought in by {agentName(t.fetchedBy)} · last message {when(t.lastMessageAt.toMillis())}
-      </p>
-      {t.subjectId && subject.state === 'ready' && subject.data?.label ? (
-        <div className="mt-2">
-          <LabelChip wid={wid} subjectId={t.subjectId} subject={subject.data} />
-        </div>
-      ) : null}
-
-      <div className="mt-4 flex flex-wrap items-end gap-2">
-        <MoveControl
-          wid={wid}
-          uid={uid}
-          current={t.subjectId}
-          busy={busy}
-          onMove={(sid) =>
-            void act(
-              () => moveThread(ctx(), { threadId: tid, thread: t, subjectId: sid }),
-              'Moved.',
-            )
-          }
-        />
-        <Button variant="secondary" onClick={() => setMakeOpen(true)}>
-          Make it work
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={busy}
-          aria-pressed={urgent}
-          onClick={() =>
-            void act(
-              () => flagThread(ctx(), { threadId: tid, thread: t, urgent: !urgent }),
-              urgent ? 'Not urgent any more.' : 'Marked urgent.',
-            )
-          }
-        >
-          {urgent ? 'Not urgent' : 'Mark urgent'}
-        </Button>
-        {closed ? (
-          <Button
-            variant="secondary"
-            loading={busy}
-            onClick={() =>
-              void act(
-                () => restoreThread(ctx(), { threadId: tid, thread: t }),
-                'Back with the agents.',
-              )
-            }
-          >
-            Bring back
-          </Button>
-        ) : (
-          <>
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() =>
-                void act(() => closeThread(ctx(), { threadId: tid, thread: t }), 'Marked done.')
-              }
-            >
-              Mark done
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() =>
-                void act(() => ignoreThread(ctx(), { threadId: tid, thread: t }), 'Ignored.')
-              }
-            >
-              Ignore
-            </Button>
-          </>
-        )}
-      </div>
-      {error ? (
-        <p role="alert" className="mt-3 text-14 text-sendback">
-          {error}
-        </p>
-      ) : null}
-
-      {t.state === 'needsYou' && t.question && !t.question.answer ? (
-        <Card tone="gate" className="mt-6">
-          <h2 className="text-16 font-semibold text-ink">{agentName(t.question.by)} asks you</h2>
-          <p className="mt-1 whitespace-pre-wrap text-14 text-ink">{t.question.text}</p>
-          <form
-            className="mt-3 flex flex-col gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void act(
-                () => answerQuestion(ctx(), { threadId: tid, thread: t, answer }),
-                'Answered.',
-              ).then(() => setAnswer(''));
-            }}
-          >
-            <Textarea
-              label="Your answer"
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-            />
-            <div>
-              <Button type="submit" variant="primary" loading={busy} disabled={!answer.trim()}>
-                Answer
-              </Button>
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_25rem] lg:items-start lg:gap-6">
+        <div className={cn('min-w-0', !wide && deciding && 'pb-[45dvh]')}>
+          <header>
+            <div className="flex items-start gap-2">
+              <h1 className="min-w-0 flex-1 text-20 font-semibold leading-tight text-ink [overflow-wrap:anywhere] sm:text-24">
+                {t.title || 'Untitled thread'}
+              </h1>
+              <ActionMenu
+                label="Thread actions"
+                actions={menu}
+                trigger={
+                  <IconButton label="Thread actions" disabled={busy}>
+                    <Icon icon={MoreHorizontal} size={18} />
+                  </IconButton>
+                }
+              />
             </div>
-          </form>
-        </Card>
-      ) : null}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {org ? <OrgChip name={org.name} color={orgColor(wid, all.orgs)} /> : null}
+              {t.subjectId && subject.state === 'ready' && subject.data?.label ? (
+                <LabelChip wid={wid} subjectId={t.subjectId} subject={subject.data} />
+              ) : subject.state === 'ready' && subject.data?.area ? (
+                <Chip>{subject.data.area}</Chip>
+              ) : null}
+              <StateChip state={t.state} waiting={t.waiting} />
+              {urgent ? (
+                <Pill tone="sendback">
+                  <span data-urgent="">Urgent</span>
+                </Pill>
+              ) : null}
+              {due ? (
+                <Pill tone={due < now ? 'sendback' : 'gate'}>
+                  <span data-due="">{due < now ? 'Overdue' : `Due ${dueShort(due, now)}`}</span>
+                </Pill>
+              ) : null}
+            </div>
+            <p className="mt-2 text-14 text-text-2">
+              {subjectName ? `${subjectName} · ` : 'Not filed yet · '}
+              {people.length ? `${people.join(', ')} · ` : ''}
+              {channels.length ? `${channels.join(', ')} · ` : ''}
+              brought in by {agentName(t.fetchedBy)}
+            </p>
+          </header>
+          {error ? (
+            <p role="alert" className="mt-3 text-14 text-sendback">
+              {error}
+            </p>
+          ) : null}
+          <Conversation entries={entries} now={now} />
+        </div>
+        {wide ? <div className="lg:sticky lg:top-4">{panel}</div> : panel}
+      </div>
 
-      {proposed.length > 0 ? (
-        <Section title="Proposed">
-          <div className="flex flex-col gap-3">
-            {proposed.map((o) => (
-              <OutcomeCard
-                key={o.id}
-                wid={wid}
-                oid={o.id}
-                outcome={o.data}
-                thread={t}
-                othersPending={proposed.length > 1}
-                agentName={agentName}
-              />
-            ))}
-          </div>
-        </Section>
-      ) : null}
-
-      {decided.length > 0 ? (
-        <Section title="Outcomes">
-          <div className="flex flex-col gap-3">
-            {decided.map((o) => (
-              <OutcomeCard
-                key={o.id}
-                wid={wid}
-                oid={o.id}
-                outcome={o.data}
-                thread={t}
-                othersPending={false}
-                agentName={agentName}
-              />
-            ))}
-          </div>
-        </Section>
-      ) : null}
-
-      <Section title="Timeline">
-        <ol className="flex flex-col gap-3" aria-label="Timeline">
-          {entries.map((e) =>
-            e.kind === 'message' ? (
-              <li key={e.id}>
-                <MessageView m={e.message} />
-              </li>
-            ) : (
-              <li
-                key={e.id}
-                data-event={e.event.type}
-                className="flex gap-3 px-1 text-14 text-text-2"
-              >
-                <span className="shrink-0 tabular-nums">{when(e.at)}</span>
-                <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
-                  {eventText(e.event)}
-                </span>
-              </li>
-            ),
-          )}
-        </ol>
-      </Section>
-
+      <MoveDialog
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+        wid={wid}
+        uid={uid}
+        current={t.subjectId}
+        busy={busy}
+        onMove={(sid) =>
+          void act(() => moveThread(ctx(), { threadId: tid, thread: t, subjectId: sid })).then(
+            (ok) => ok && setMoveOpen(false),
+          )
+        }
+      />
+      <DueDialog
+        open={dueOpen}
+        onOpenChange={setDueOpen}
+        due={due}
+        busy={busy}
+        onSave={(iso) =>
+          void act(() => dueThread(ctx(), { threadId: tid, thread: t, due: iso })).then(
+            (ok) => ok && setDueOpen(false),
+          )
+        }
+      />
       <MakeItWork
         open={makeOpen}
         onOpenChange={setMakeOpen}
@@ -312,70 +355,23 @@ export function ThreadPage() {
         tid={tid}
         thread={t}
         subjectName={subjectName}
-        firstText={messages.state === 'ready' ? (messages.data[0]?.data.text ?? '') : ''}
+        firstText={msgs[0]?.text ?? ''}
       />
     </div>
   );
 }
 
-function MessageView({ m }: { m: InboxMessage }) {
-  const mine = m.direction === 'out';
-  return (
-    <article
-      data-message=""
-      className={
-        mine
-          ? 'rounded-card border border-line bg-canvas p-4'
-          : 'rounded-card border border-line bg-surface p-4 shadow-e1'
-      }
-    >
-      <header className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="text-14 font-semibold text-ink">{mine ? 'You' : m.sender.name}</span>
-        {m.sender.handle && !mine ? (
-          <span className="text-13 text-text-2 [overflow-wrap:anywhere]">{m.sender.handle}</span>
-        ) : null}
-        <SourceTag source={m.source} />
-        <span className="ml-auto text-13 text-text-2">{when(m.receivedAt.toMillis())}</span>
-      </header>
-      <p className="whitespace-pre-wrap text-14 text-ink [overflow-wrap:anywhere]">{m.text}</p>
-      {m.attachments.length > 0 ? (
-        <ul className="mt-2 flex flex-wrap gap-2">
-          {m.attachments.map((a) => (
-            <li key={a.url}>
-              <a
-                href={a.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-9 items-center gap-1 rounded-btn border border-line px-2 text-13 text-ink hover:bg-canvas"
-              >
-                <Icon icon={Paperclip} size={14} />
-                {a.name}
-              </a>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {m.permalink ? (
-        <a
-          href={m.permalink}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 inline-flex min-h-11 items-center text-14 font-medium text-agent hover:underline"
-        >
-          Open the original
-        </a>
-      ) : null}
-    </article>
-  );
-}
-
-function MoveControl({
+function MoveDialog({
+  open,
+  onOpenChange,
   wid,
   uid,
   current,
   busy,
   onMove,
 }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
   wid: string;
   uid: string;
   current: string | null;
@@ -391,21 +387,94 @@ function MoveControl({
           .sort((a, b) => a.data.name.localeCompare(b.data.name))
           .map((s) => ({ value: s.id, label: s.data.name }))
       : [];
-  if (options.length === 0) return null;
   return (
-    <div className="flex items-end gap-2">
-      <Select
-        label="Move to subject"
-        hideLabel
-        inline
-        value={to}
-        onValueChange={setTo}
-        options={[{ value: '', label: 'Move to subject…' }, ...options]}
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Move to another subject"
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={!to || busy} onClick={() => to && onMove(to)}>
+            Move
+          </Button>
+        </>
+      }
+    >
+      {options.length === 0 ? (
+        <p className="text-14 text-text-2">You have no other subject in this organization.</p>
+      ) : (
+        <Select
+          label="Move to subject"
+          value={to}
+          onValueChange={setTo}
+          options={[{ value: '', label: 'Pick a subject…' }, ...options]}
+        />
+      )}
+    </Dialog>
+  );
+}
+
+const localInput = (ms: number) => {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+/** Sets or clears the thread's deadline (thread.due, the member's own). */
+function DueDialog({
+  open,
+  onOpenChange,
+  due,
+  busy,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  due: number | null;
+  busy: boolean;
+  onSave: (iso: string | null) => void;
+}) {
+  const [value, setValue] = useState(() => (due ? localInput(due) : ''));
+  const [seen, setSeen] = useState({ open, due });
+  if (seen.open !== open || seen.due !== due) {
+    setSeen({ open, due });
+    if (open) setValue(due ? localInput(due) : '');
+  }
+  const ms = value ? new Date(value).getTime() : NaN;
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Due date"
+      description="Today ranks the thread by it: due within a day comes first."
+      footer={
+        <>
+          {due ? (
+            <Button variant="secondary" disabled={busy} onClick={() => onSave(null)}>
+              Clear the due date
+            </Button>
+          ) : null}
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={Number.isNaN(ms)}
+            onClick={() => onSave(new Date(ms).toISOString())}
+          >
+            Save
+          </Button>
+        </>
+      }
+    >
+      <Input
+        label="Due"
+        type="datetime-local"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
       />
-      <Button variant="secondary" disabled={!to || busy} onClick={() => to && onMove(to)}>
-        Move
-      </Button>
-    </div>
+    </Dialog>
   );
 }
 

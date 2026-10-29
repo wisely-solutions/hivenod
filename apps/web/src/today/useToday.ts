@@ -65,21 +65,7 @@ export function useToday(
     useMemo(() => investigating.map((t) => ({ wid: t.wid, id: t.id })), [investigating]),
   );
 
-  const orgs = useMemo(() => all.orgs.map((o) => ({ id: o.wid, name: o.name })), [all.orgs]);
-  const today = startOfDay(new Date(now));
-  const from = today.getTime();
-  const calendar = useCalendarBlocks({
-    scope: 'all',
-    uid,
-    orgs,
-    memberName: () => '',
-    from: useMemo(() => new Date(from), [from]),
-    to: useMemo(() => addDays(new Date(from), 14), [from]),
-  });
-  const busy = useMemo(
-    () => calendar.blocks.filter((b) => !b.allDay).map((b) => ({ start: b.start, end: b.end })),
-    [calendar.blocks],
-  );
+  const { calendar, busy, from } = useMyCalendar(all.orgs, now);
 
   const colorOf = (wid: string) => orgColor(wid, all.orgs);
   const orgOf = (wid: string) => {
@@ -211,4 +197,27 @@ export function useToday(
   }, [recent, stack, tidy.length, investigating.length, now, doneCount]);
 
   return { brief, busy, agenda, freeMinutes, waiting, working, orgOf, senderOf, areaOf };
+}
+
+/**
+ * The member's own calendar in every organization, from the start of today for 14 days: the
+ * agenda, the free time and the slot strip of a reply_book (item kt3E7).
+ */
+export function useMyCalendar(orgsIn: ReadonlyArray<{ wid: string; name: string }>, now: number) {
+  const { session } = useReady();
+  const orgs = useMemo(() => orgsIn.map((o) => ({ id: o.wid, name: o.name })), [orgsIn]);
+  const from = startOfDay(new Date(now)).getTime();
+  const calendar = useCalendarBlocks({
+    scope: 'all',
+    uid: session.me.uid,
+    orgs,
+    memberName: () => '',
+    from: useMemo(() => new Date(from), [from]),
+    to: useMemo(() => addDays(new Date(from), 14), [from]),
+  });
+  const busy = useMemo(
+    () => calendar.blocks.filter((b) => !b.allDay).map((b) => ({ start: b.start, end: b.end })),
+    [calendar.blocks],
+  );
+  return { calendar, busy, from };
 }

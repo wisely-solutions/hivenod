@@ -257,8 +257,9 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
       page.getByRole('heading', { name: /move the payments review/, level: 1 }),
     ).toBeVisible();
     await expect(page.getByText('The team is out on Wednesday.')).toBeVisible();
-    await expect(page.getByText('Sam Example')).toBeVisible();
-    await expect(page.getByText('teams', { exact: true })).toBeVisible();
+    const msg = page.locator('[data-message]').first();
+    await expect(msg.getByText('Sam Example', { exact: true })).toBeVisible();
+    await expect(msg.getByText('teams', { exact: true })).toBeVisible();
     await expect(page.getByText(/noted: .Thursday 10:00 is free/)).toBeVisible();
     await page.getByLabel('Your answer').fill('10:00, please.');
     await page.getByRole('button', { name: 'Answer' }).click();
@@ -281,9 +282,16 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     const out = page.locator(`[data-outcome="${o1}"]`);
     await expect(out.getByText('Thursday 10:00 works for me.')).toBeVisible();
     await expect(out.locator('[data-confidence="high"]')).toHaveText('Sure');
+    // The agent panel (item kt3E7): what it checked, and what happens on approval.
+    // On a phone the panel is a bottom sheet: its handle opens the rest.
+    if (info.project.name === 'iphone-se')
+      await page.getByRole('button', { name: 'Notes, outcomes and related' }).click();
     await expect(
-      out.getByRole('list', { name: 'What the agent checked' }).getByRole('listitem'),
-    ).toHaveText(['✓Your calendar: Thu 10:00-11:00 free', '✓Your answer: 10:00']);
+      page.getByRole('list', { name: 'What the agent checked' }).getByRole('listitem'),
+    ).toHaveText(['Your calendar: Thu 10:00-11:00 free', 'Your answer: 10:00']);
+    await expect(out.locator('[data-effects]')).toContainText(
+      'When you approve, Payments agent will:',
+    );
     await look(page, 'thread', info.project.name);
     await out.getByRole('button', { name: 'Edit' }).click();
     await out.getByLabel('Reply', { exact: true }).fill('Thursday 10:00 works. See you then, Sam.');
@@ -328,7 +336,7 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
       with: 'Sam Example',
     });
     const book = page.locator(`[data-outcome="${o4}"]`);
-    await expect(book.getByText('Starts')).toBeVisible();
+    await expect(book.getByRole('group', { name: 'Pick a time' })).toBeVisible();
     await book.getByRole('button', { name: 'Send and book' }).click();
     await expect(book.locator('[data-booked]')).toHaveText(
       /^Booked in your calendar: .+, with Sam Example$/,
@@ -356,9 +364,14 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     const o3 = await agent.propose(t2, 'nudge', { text: 'Any news on the room?' });
     await page.goto(`/inbox/${wid}/t/${t2}`);
     const nudge = page.locator(`[data-outcome="${o3}"]`);
-    await nudge.getByRole('button', { name: 'Reject' }).click();
+    const rejectIt = async () => {
+      await nudge.getByRole('button', { name: 'Other actions' }).click();
+      await page.getByRole('menuitem', { name: 'Reject proposal' }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Reject' }).click();
+    };
+    await rejectIt();
     await nudge.getByRole('button', { name: 'Undo' }).click();
-    await nudge.getByRole('button', { name: 'Reject' }).click();
+    await rejectIt();
     await expect(page.locator(`[data-outcome="${o3}"][data-outcome-state="rejected"]`)).toBeVisible(
       {
         timeout: UNDO_WAIT + 5000,
@@ -368,7 +381,11 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
 
     // Merge "Review slot" into "Review dates (Payments)".
     await page.goto(`/inbox/${wid}/s/${s2}`);
-    await page.getByRole('button', { name: 'Merge…' }).click();
+    const subjectMenu = async (item: string) => {
+      await page.getByRole('button', { name: 'Subject actions' }).click();
+      await page.getByRole('menuitem', { name: item }).click();
+    };
+    await subjectMenu('Merge…');
     await page.getByRole('combobox', { name: 'Merge into' }).selectOption(s1);
     await page.getByRole('dialog').getByRole('button', { name: 'Merge' }).click();
     await expect(page).toHaveURL(new RegExp(`/inbox/${wid}/s/${s1}$`));
@@ -376,13 +393,13 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await expect(page.locator(`[data-thread="${t1}"]`)).toBeVisible();
 
     // Rename, then split the second thread off, then move it back.
-    await page.getByRole('button', { name: 'Rename' }).click();
+    await subjectMenu('Rename');
     await page.getByLabel('Subject name').fill('Payments review (Thursday)');
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(
       page.getByRole('heading', { name: 'Payments review (Thursday)', level: 1 }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Split…' }).click();
+    await subjectMenu('Split…');
     const split = page.getByRole('dialog');
     await split.getByLabel('New subject name').fill('Review room');
     await split.getByLabel('Which room for the Thursday review?').check();
@@ -409,12 +426,17 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await page.goto(`/inbox/${wid}/s/${room}`);
     await expect(linked.getByRole('link', { name: 'Payments review (Thursday)' })).toBeVisible();
     await page.locator(`[data-thread="${t2}"]`).click();
+    const threadMenu = async (item: string) => {
+      await page.getByRole('button', { name: 'Thread actions' }).click();
+      await page.getByRole('menuitem', { name: item }).click();
+    };
+    await threadMenu('Move to subject…');
     await page.getByRole('combobox', { name: 'Move to subject' }).selectOption(s1);
-    await page.getByRole('button', { name: 'Move', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Move', exact: true }).click();
     await expect(page.getByRole('link', { name: 'Payments review (Thursday)' })).toBeVisible();
 
     // Make it work: an item made by the member, linked on the thread.
-    await page.getByRole('button', { name: 'Make it work' }).click();
+    await threadMenu('Make it work…');
     const mw = page.getByRole('dialog');
     await mw.getByLabel('Item title').fill('Book a room for the payments review');
     await mw.getByRole('button', { name: 'Create item' }).click();
@@ -423,11 +445,11 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     // Urgent: the agent flags it, the member takes it off.
     await agent.flag(t2, true);
     await expect(page.locator('[data-urgent]')).toBeVisible();
-    await page.getByRole('button', { name: 'Not urgent' }).click();
+    await threadMenu('Not urgent');
     await expect(page.locator('[data-urgent]')).toHaveCount(0);
 
     // Ignore.
-    await page.getByRole('button', { name: 'Ignore' }).click();
+    await threadMenu('Ignore');
     await expect(chip(page, 'ignored')).toBeVisible();
 
     // Find: by person, by channel, by words; the waiting filter.
@@ -525,10 +547,13 @@ test('Inbox: subjects group by area; a quiet subject folds away and comes back',
 
     // The member sets an area on the subject page.
     await page.goto(`/inbox/${wid}/s/${s4}`);
-    await page.getByRole('button', { name: 'Set area' }).click();
+    await page.getByRole('button', { name: 'Subject actions' }).click();
+    await page.getByRole('menuitem', { name: 'Set area' }).click();
     await page.getByLabel('Area or tag').fill('Admin');
     await page.getByRole('button', { name: 'Save area' }).click();
-    await expect(page.getByRole('button', { name: 'Area: Admin' })).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'About this subject' })).toContainText(
+      'Admin',
+    );
     await page.goto('/inbox');
     await expect(areaOf('Admin').locator(`[data-subject="${s4}"]`)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'No area', level: 2 })).toHaveCount(0);
@@ -604,7 +629,10 @@ test('another member of the organization never sees my Inbox', async ({ page, br
     await expect(bob.page.getByText('Nothing in your Inbox yet')).toBeVisible({ timeout: 15_000 });
     await expect(bob.page.getByText('Cara only')).toHaveCount(0);
     await bob.page.goto(`/inbox/${client}/t/${tid}`);
-    await expect(bob.page.getByText('This thread is not in your Inbox.')).toBeVisible();
+    // The refused read shows at once (failFast); 15 s covers a busy emulator.
+    await expect(bob.page.getByText('This thread is not in your Inbox.')).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(bob.page.getByText('Private question for Cara')).toHaveCount(0);
   } finally {
     await agent.stop();

@@ -176,7 +176,8 @@ export function useMyRelations(uid: string, wids: readonly string[], enabled = t
 
 /** One thread with its messages, outcomes and events. */
 export function useThread(wid: string, tid: string, uid: string) {
-  const thread = useLiveDoc(inboxPaths.thread(wid, tid), inboxThreadSchema);
+  // Someone else's thread is refused: say so at once, not after the sign-in retries.
+  const thread = useLiveDoc(inboxPaths.thread(wid, tid), inboxThreadSchema, { failFast: true });
   const k = `${wid}/${tid}/${uid}`;
   const messages = useLiveQuery(
     `im:${k}`,
@@ -196,7 +197,9 @@ export function useThread(wid: string, tid: string, uid: string) {
 
 /** One subject with its threads and its timeline events. */
 export function useSubject(wid: string, sid: string, uid: string) {
-  const subject = useLiveDoc(inboxPaths.subject(wid, sid), inboxSubjectSchema);
+  const subject = useLiveDoc(inboxPaths.subject(wid, sid), inboxSubjectSchema, {
+    failFast: true,
+  });
   const k = `${wid}/${sid}/${uid}`;
   const threads = useLiveQuery(
     `st:${k}`,
