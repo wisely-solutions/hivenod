@@ -360,7 +360,7 @@ const USAGES: Record<
           <li className="lp-callout lp-c1">
             <span className="lp-dot" />
             <span>
-              <b>Hive</b> keeps the checks green
+              <b>Your agent</b> keeps the checks green
             </span>
           </li>
           <li className="lp-callout lp-c2">
