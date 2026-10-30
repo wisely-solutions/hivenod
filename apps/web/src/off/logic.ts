@@ -24,7 +24,7 @@ export interface OffSummary {
   sinceMs: number | null;
   /** The agents named (when not all), with their organization. */
   agents: { wid: string; uid: string }[];
-  /** The pill's text: "Agents on", "Agents off", "Off: Hive", "Off: 2 agents". */
+  /** The pill's text: "Agents on", "Agents off", "Off: Books", "Off: 2 agents". */
   label: string;
 }
 

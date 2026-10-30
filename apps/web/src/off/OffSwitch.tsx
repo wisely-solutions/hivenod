@@ -1,6 +1,6 @@
 /**
  * The Off switch on screen (scheduled tasks slice 7, design 9.4): the pill on every page ("Agents
- * on", or amber "Agents off" / "Off: Hive"), the panel that turns all agents or some Off and On
+ * on", or amber "Agents off" / "Off: Books"), the panel that turns all agents or some Off and On
  * again (never by itself; turning on lists what will start first), and the Today banner.
  */
 import {
