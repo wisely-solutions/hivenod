@@ -649,6 +649,49 @@ member's approval; only the member approves or marks done; done only with eviden
 message from them on this thread created after `ext.outAt` (mutation tests in mutate.mjs). Cost:
 no polling; one timer write per waiting step; one model turn per reply.
 
+### Scheduled tasks (schedules, slices 1-8)
+
+A schedule is a recurring job of one agent for one member: a rule (daily, weekly, monthly,
+quarterly, once, yearly; a time of day in the member's zone) and the plan each run follows.
+Design: `~/drafts/schedules/design.md`. Docs of the clock itself: NOTIFIER.md.
+
+- **How agents propose.** The agent never keeps its own timers. When the person asks for something
+  recurring, it checks `schedule_list` (nothing scheduled twice) and calls `schedule_propose` on the
+  thread: a `schedule` outcome (the rule in words, the steps of each run, a note, confidence and
+  checks) and a `proposed` schedule doc, so the thread goes to Your call. Nothing runs until the
+  member approves it (Set up schedule); he can edit it first (`outcome.approved` with
+  `edited`). A change of a schedule the agent runs is `replaces=<scheduleId>`; Ask for changes comes
+  back as `reason="revise"` (`revises=<outcomeId>`, the whole schedule again). The member can also
+  add, edit, pause, resume and delete schedules on the Schedules page; every write is a batch with
+  its event (`schedule.created|updated|paused|resumed|deleted`, `scheduleActions.ts`).
+- **How runs fire.** The notifier's scheduler fires each occurrence once: one batch writes the run
+  `{scheduleId}_{key}` (create(), so a restart or second notifier cannot double it), a thread under
+  the schedule's subject, its first message and the plan with its steps. The agent then gets the
+  thread like any other work (`carry_out` per step, `step_progress`, `outcome_done`). The run thread
+  is shown with the schedule's name; the run's state follows the plan (`running`, `done`,
+  `stopped`, `failed`).
+- **Can't run.** At due time the gates may say no: the agent is Off, paused or revoked, its CLI is
+  too old, it is offline (it gets 15 minutes to come online), the host was down (missed
+  occurrences are never fired late), or it did not start within 30 minutes. The run becomes
+  `cantRun` with the reason, and the member is asked (bell, push, Telegram, the daily digest for
+  daily ones): **Run now**, **Try later** (a time within 35 days) or **Skip this one**
+  (`decideRun`, `run.decided`). The scheduler acts on the answer and asks again if a later try
+  still cannot run. A run the member stopped is not asked about.
+- **Cost.** A run is an ordinary thread: one model turn per step the agent does, nothing while it
+  waits. The scheduler itself polls nothing (listeners, one timer, a 15-minute beat); the Firestore numbers are in the NOTIFIER.md
+  cost table.
+  Off and pause cost nothing.
+- **Off.** The member's Off switch (all agents, or some; `agentsOff/{memberUid}`) silences agents
+  for him until he switches it on: no timer turns it back on. Scheduled runs for an Off agent become
+  `cantRun` (`off`); the session side is in "Off" under Channel events.
+- **Activity.** Every one of these is an `inboxEvents` row, shown on Activity under the
+  **Schedules** filter in one line each, linked to the schedule or the run thread: proposed
+  (`outcome.proposed` of a schedule outcome), approved or turned down, `schedule.*`, `run.fired`,
+  `run.done`, `run.expired`, `run.cantRun` (with the reason), `run.decided` (the choice),
+  `agents.off` and `agents.on`. The scheduler writes `run.*` as the system actor "Hivenod
+  scheduler". The all view asks in two chunks of at most 30 types (Firestore's `in` limit) and
+  merges them (`mergeFeeds`, `apps/web/src/activity/data.ts`); the Schedules view is one query.
+
 ## Channel events (part 2)
 
 A channel session (`hivenod mcp --channel`, `cli/internal/hive/inboxfeed.go`) pushes `<channel source="hivenod" kind="inbox">` events for

@@ -5,7 +5,7 @@ import { useShellData } from '../shell/data';
 import { Eyebrow } from '../ui/badge';
 import { Button } from '../ui/button';
 import { EmptyState, Skeleton } from '../ui/feedback';
-import { useNow, useThreadFeed, useThreadTitles } from './data';
+import { useNow, useScheduleTitles, useThreadFeed, useThreadTitles } from './data';
 import { groupByDay, INDEX_BUILDING_TEXT } from './logic';
 import { ThreadEventRow } from './ThreadEventRow';
 import { foldProgress, matches, type ThreadFeedFilters } from './threadLogic';
@@ -37,12 +37,17 @@ export function ThreadFeed({
     wid,
     shown.map((r) => r.data),
   );
+  const schedTitleOf = useScheduleTitles(
+    wid,
+    shown.map((r) => r.data),
+  );
   const days = useMemo(() => groupByDay(shown, now), [shown, now]);
 
   // Rows grow when a title arrives, so the first paint waits for its titles.
   const [revealed, setRevealed] = useState(false);
   if (feed.state === 'loading' && revealed) setRevealed(false);
-  else if (feed.state === 'ready' && titleOf.settled && !revealed) setRevealed(true);
+  else if (feed.state === 'ready' && titleOf.settled && schedTitleOf.settled && !revealed)
+    setRevealed(true);
 
   // Infinite scroll: reaching the end of the list reads the next page of 50.
   const sentinel = useRef<HTMLDivElement>(null);
@@ -111,6 +116,7 @@ export function ThreadFeed({
                   folded={r.folded}
                   fresh={feed.fresh.has(r.id)}
                   title={titleOf(r.data.threadId)}
+                  scheduleTitle={schedTitleOf(r.data.data.scheduleId)}
                   agent={agentById.get(r.data.actor.id)}
                 />
               ))}
