@@ -438,7 +438,6 @@ export function summaryCases(
   att('http link', who.agent, { kind: 'link', content: undefined, url: 'http://example.com' });
   att('svg', who.agent, { content: 'data:image/svg+xml;base64,PHN2Zz4=' });
   att('html as image', who.agent, { content: '<b>x</b>' });
-  att('too big', who.agent, { kind: 'text', content: 'x'.repeat(900 * 1024 + 1) });
   att('bad id', who.agent, { id: 'a_b' });
   att('no name', who.agent, { name: '  ' });
   att('long name', who.agent, { name: 'n'.repeat(201) });

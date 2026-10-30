@@ -20,7 +20,7 @@ import {
   type ActionContext,
   type ActionPlan,
 } from './actions';
-import { inboxPaths, inboxPlan, type ThreadStateOf } from './inbox';
+import { inboxPlan, type ThreadStateOf } from './inbox';
 import { attachmentKind, MAX_ATTACHMENT_BYTES, timestamp, type AttachmentKind } from './schema';
 
 /** An image a thread may hold: a PNG, JPEG or WebP data URL (never SVG). */

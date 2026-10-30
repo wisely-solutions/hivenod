@@ -183,6 +183,7 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
       'inboxEvents',
       'inboxRelations',
       'inboxPlans',
+      'inboxAttachments',
     ])
       await read(`workspaces/${W}/${c}`);
     await read(`workspaces/${W}/calendar`);
@@ -212,14 +213,18 @@ const TMP = tmpdir();
 /** Masks what differs between two equal runs: random ids, the agent uid, timestamps, clocks. */
 function mask(v: unknown, uid: string): unknown {
   if (typeof v === 'string')
-    return v
-      .split(uid)
-      .join('<agent>')
-      .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z/g, '<iso>')
-      .split(TMP)
-      .join('<tmp>')
-      .replace(/<tmp>[^\s:"]*/g, '<tmp>')
-      .replace(ID, '<id>');
+    return (
+      v
+        .split(uid)
+        .join('<agent>')
+        .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z/g, '<iso>')
+        .split(TMP)
+        .join('<tmp>')
+        .replace(/<tmp>[^\s:"]*/g, '<tmp>')
+        .replace(ID, '<id>')
+        // Thread attachment ids: {threadId}_{id}.
+        .replace(/_[A-Za-z0-9]{20}\b/g, '_<id>')
+    );
   if (typeof v === 'number') return v > 1e12 ? '<ms>' : v;
   if (Array.isArray(v)) return v.map((x) => mask(x, uid));
   if (v && typeof v === 'object') {
@@ -1134,6 +1139,83 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       },
     });
     expect((r.calls[6] as { out: Record<string, unknown> }).out.summaryNext).toBeUndefined();
+    matchesGolden(r);
+  }, 120_000);
+
+  it('thread attachments (item OE8Fm, slice 4): the home agent attaches screenshots and shows them as an image pair; other threads, SVG and missing images are refused', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hivenod-shots-'));
+    // A 1x1 PNG, twice (before and after), and an SVG.
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    writeFileSync(join(dir, 'before.png'), png);
+    writeFileSync(join(dir, 'after.png'), png);
+    writeFileSync(join(dir, 'logo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    writeFileSync(join(dir, 'report.html'), '<h1>Checks</h1>');
+    const r = await scenario(async (call) => {
+      const add = async (ref: string) =>
+        out(
+          await call('inbox_add', {
+            source: 'teams',
+            sender: { name: 'Sam Example', handle: 'sam@example.com' },
+            text: `Ship the new card? (${ref})`,
+            threadRef: ref,
+            receivedAt: '2026-10-28T09:00:00Z',
+          }),
+        ).threadId as string;
+      const t1 = await add('card-1');
+      const t2 = await add('card-2');
+      const b4 = out(await call('thread_attach', { threadId: t1, source: join(dir, 'before.png') }))
+        .attachmentId as string;
+      const af = out(
+        await call('thread_attach', {
+          threadId: t1,
+          source: join(dir, 'after.png'),
+          name: 'Inbox card, after',
+        }),
+      ).attachmentId as string;
+      await call('thread_attach', { threadId: t1, source: join(dir, 'report.html') });
+      await call('thread_attach', { threadId: t1, source: join(dir, 'logo.svg') });
+      await call('thread_attach', { threadId: t1, source: 'http://example.com/a.png' });
+      const other = out(
+        await call('thread_attach', { threadId: t2, source: join(dir, 'before.png') }),
+      ).attachmentId as string;
+      const pair = (before: string, after: string) => ({
+        headline: 'The Inbox card shows the summary',
+        ask: 'Ship the new card?',
+        bullets: ['One screen changed'],
+        visuals: [
+          {
+            kind: 'image_pair',
+            title: 'Inbox card',
+            caption: 'The card asks the question first',
+            before,
+            after,
+          },
+        ],
+      });
+      // Another thread's screenshot, a missing one, then the real pair.
+      await call('thread_summary', { threadId: t1, baseVersion: 0, summary: pair(b4, other) });
+      await call('thread_summary', {
+        threadId: t1,
+        baseVersion: 0,
+        summary: pair(b4, `${t1}_nope`),
+      });
+      await call('thread_summary', { threadId: t1, baseVersion: 0, summary: pair(b4, af) });
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([true, true, true, true, true, false, false, true, false, false, true]);
+    expect(r.calls[2]).toMatchObject({ out: { kind: 'image', name: 'before.png' } });
+    expect(r.calls[5]).toMatchObject({ ok: false, out: expect.stringContaining('webp') });
+    expect(r.calls[6]).toMatchObject({ ok: false, out: expect.stringContaining('https') });
+    expect(r.calls[8]).toMatchObject({
+      ok: false,
+      out: expect.stringContaining('is not an attachment of this thread'),
+    });
+    expect(r.calls[9]).toMatchObject({ ok: false, out: expect.stringContaining('no image') });
+    expect(r.calls[10]).toMatchObject({ out: { version: 1 } });
+    expect(r.docs[`workspaces/${W}/inboxAttachments`]).toHaveLength(4);
     matchesGolden(r);
   }, 120_000);
 

@@ -56,7 +56,7 @@
     {
       "tool": "thread_summary",
       "ok": false,
-      "out": "At a person step add a visual or say why there is none: a chart for data, before/after or a flow for a change, or noVisualWhy in one line."
+      "out": "At a person step add a visual or say why there is none: a chart for data, before/after screenshots (thread_attach both, then an image_pair) or a flow for a change, or noVisualWhy in one line."
     },
     {
       "tool": "thread_summary",

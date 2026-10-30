@@ -33,6 +33,11 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * An older CLI never writes a summary: the page says the agent's CLI is too old.
    */
   summary: '0.2.191',
+  /**
+   * Thread attachments (item OE8FmrTaIxFVGcaeGG3N, slice 4): thread_attach, and thread_summary
+   * with image and image_pair visuals. An older CLI cannot attach screenshots.
+   */
+  attach: '0.2.194',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */
