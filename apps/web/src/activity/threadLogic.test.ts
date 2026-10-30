@@ -13,8 +13,11 @@ import {
 
 const human = { type: 'human' as const, id: 'alice', name: 'Alice' };
 const agent = { type: 'agent' as const, id: 'hive', name: 'Hive' };
-const e = (type: string, data: Record<string, unknown> = {}, actor = agent) =>
-  ({ type, data, actor }) as never;
+const e = (
+  type: string,
+  data: Record<string, unknown> = {},
+  actor: typeof human | typeof agent = agent,
+) => ({ type, data, actor }) as never;
 
 describe('the thread feed', () => {
   it('always reads the member’s own events, by group', () => {
