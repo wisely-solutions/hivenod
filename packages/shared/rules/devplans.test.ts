@@ -199,7 +199,7 @@ describe('the Development plan runs gate by gate', () => {
     await finish(2);
     // Keep green (slice 6c) runs next: the thread still waits on the work.
     expect(await snap(PL('pd1'))).toMatchObject({ cursor: 3, state: 'active' });
-    expect(await snap(T('nt1'))).toMatchObject({ state: 'waiting', waiting: { on: 'item' } });
+    expect(await snap(T('nt1'))).toMatchObject({ state: 'waiting', waiting: { on: 'agent' } });
     await finish(3);
     expect(await snap(PL('pd1'))).toMatchObject({ cursor: 4, state: 'active' });
     expect(await snap(T('nt1'))).toMatchObject({ state: 'yourCall' });

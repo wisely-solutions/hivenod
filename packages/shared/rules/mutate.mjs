@@ -484,6 +484,10 @@ const MUTATIONS = [
     [['&& d.executor == (d.type in outcomeImmediate() ? null : t.fetchedBy);', ';']],
   ],
   [
+    'inbox: approved outcome thread state unchecked',
+    [["&& d.state == 'waiting' && d.waiting == {'on': 'agent', 'until': null})", ')']],
+  ],
+  [
     'inbox: unknown outcome fields',
     [['return f is map && f.keys().hasOnly(outcomeFieldKeys()[type])', 'return f is map']],
   ],
