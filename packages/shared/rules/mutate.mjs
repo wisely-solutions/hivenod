@@ -150,8 +150,8 @@ const MUTATIONS = [
     'agents skip steps',
     [
       [
-        "&& nextOk(d, r, p)\n              && trackedFor(wid, d.lastEventId, ['item.completed']",
-        "&& trackedFor(wid, d.lastEventId, ['item.completed']",
+        "&& nextOk(d, r, p)\n              && itemTracked(wid, d, ['item.completed']",
+        "&& itemTracked(wid, d, ['item.completed']",
       ],
     ],
   ],
@@ -190,7 +190,7 @@ const MUTATIONS = [
   [
     'paths: unshaped items worked',
     [
-      ['(claimIt(wid, pid, iid, r, p, true)', '(claimIt(wid, pid, iid, r, p, false)'],
+      ['(claimIt(r, p, true)', '(claimIt(r, p, false)'],
       ["(shaping ? run.data.get('job', '') == 'shape' : agentAllowedAtStep(p, r.stepId))", 'true'],
     ],
   ],
@@ -298,8 +298,8 @@ const MUTATIONS = [
     'groups by members',
     [
       [
-        "allow create, update: if isAdmin(wid)\n          && exactKeys(request.resource.data, ['name', 'memberUids'",
-        "allow create, update: if isMember(wid)\n          && exactKeys(request.resource.data, ['name', 'memberUids'",
+        "return isAdmin(wid)\n          && exactKeys(d, ['name', 'memberUids'",
+        "return isMember(wid)\n          && exactKeys(d, ['name', 'memberUids'",
       ],
     ],
   ],
@@ -329,15 +329,15 @@ const MUTATIONS = [
     'invite email unchecked',
     [
       [
-        "&& resource.data.email == request.auth.token.get('email', '').lower()\n          && tracked",
-        '&& tracked',
+        "&& r.email == request.auth.token.get('email', '').lower()\n          && docTracked",
+        '&& docTracked',
       ],
     ],
   ],
   [
     'expired invites ok',
     [
-      ['&& resource.data.expiresAt > request.time\n', '\n'],
+      ['&& r.expiresAt > request.time\n', '\n'],
       [
         '&& inv.data.usedBy == null && inv.data.expiresAt > request.time',
         '&& inv.data.usedBy == null',
@@ -365,8 +365,8 @@ const MUTATIONS = [
     'inbox: other members read',
     [
       [
-        'function inboxOwner(wid, d) { return isMember(wid) && d.memberUid == me(); }',
-        'function inboxOwner(wid, d) { return isMember(wid); }',
+        'function inboxOwner(d) { return isMember(wid) && d.memberUid == me(); }',
+        'function inboxOwner(d) { return isMember(wid); }',
       ],
     ],
   ],
@@ -374,8 +374,8 @@ const MUTATIONS = [
     'inbox: for anyone',
     [
       [
-        'function inboxMember(wid, uid) { return uid is string && uid in get(wsPath(wid)).data.memberRoles; }',
-        'function inboxMember(wid, uid) { return uid is string; }',
+        'function inboxMember(uid) { return uid is string && uid in get(wsPath(wid)).data.memberRoles; }',
+        'function inboxMember(uid) { return uid is string; }',
       ],
     ],
   ],
@@ -383,8 +383,8 @@ const MUTATIONS = [
     'inbox: agents decide outcomes',
     [
       [
-        '((inboxOwner(wid, resource.data)\n                && (inboxDecide(',
-        '(((inboxOwner(wid, resource.data) || isActiveAgent(wid))\n                && (inboxDecide(',
+        '((inboxOwner(resource.data)\n                && (inboxDecide(',
+        '(((inboxOwner(resource.data) || isActiveAgent(wid))\n                && (inboxDecide(',
       ],
       [
         "'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed',",
@@ -396,7 +396,7 @@ const MUTATIONS = [
     'inbox: any agent carries out',
     [
       ["return r.state == 'approved' && r.executor == me()", "return r.state == 'approved'"],
-      ['&& inboxOutcomeOf(wid, d.lastEventId).executor == me()', ''],
+      ['&& inboxOutcomeOf(d.lastEventId).executor == me()', ''],
     ],
   ],
   [
@@ -435,10 +435,10 @@ const MUTATIONS = [
         "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'outcome.approved']));",
       ],
       [
-        'return (inboxOwner(wid, r) && inboxPlanLive(p)',
-        'return ((inboxOwner(wid, r) || isActiveAgent(wid)) && inboxPlanLive(p)',
+        'return (inboxOwner(r) && inboxPlanLive(p)',
+        'return ((inboxOwner(r) || isActiveAgent(wid)) && inboxPlanLive(p)',
       ],
-      ['return (inboxOwner(wid, r)\n', 'return ((inboxOwner(wid, r) || isActiveAgent(wid))\n'],
+      ['return (inboxOwner(r)\n', 'return ((inboxOwner(r) || isActiveAgent(wid))\n'],
     ],
   ],
   [
@@ -460,7 +460,7 @@ const MUTATIONS = [
       ],
     ],
   ],
-  ['plans: done step reordered', [['inboxPlanFirstFree(wid, r)))))', '0))))']]],
+  ['plans: done step reordered', [['inboxPlanFirstFree(r)))))', '0))))']]],
   [
     'plans: agent edits steps',
     [
@@ -468,7 +468,7 @@ const MUTATIONS = [
         "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written']));",
         "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'plan.edited']));",
       ],
-      ['return (inboxOwner(wid, r)\n', 'return ((inboxOwner(wid, r) || isActiveAgent(wid))\n'],
+      ['return (inboxOwner(r)\n', 'return ((inboxOwner(r) || isActiveAgent(wid))\n'],
     ],
   ],
   [
@@ -483,8 +483,8 @@ const MUTATIONS = [
         '&& d.planId is string && p.memberUid',
       ],
       [
-        "inboxTrackedThread(wid, d.lastEventId, ['plan.proposed'], d.memberUid, d.threadId))",
-        "inboxTracked(wid, d.lastEventId, ['plan.proposed'], d.memberUid))",
+        "inboxDocTracked(d, ['plan.proposed'], d.memberUid, d.threadId))",
+        "inboxTracked(d.lastEventId, ['plan.proposed'], d.memberUid))",
       ],
     ],
   ],
@@ -507,7 +507,7 @@ const MUTATIONS = [
   ],
   [
     "inbox: another member's subject",
-    [["&& getAfter(inboxDoc(wid, 'inboxSubjects', sid)).data.memberUid == member;", ';']],
+    [["&& getAfter(inboxDoc('inboxSubjects', sid)).data.memberUid == member;", ';']],
   ],
   [
     'inbox: agent rewrites more than a subject area',
@@ -522,7 +522,7 @@ const MUTATIONS = [
     'inbox: agent sets an area outside a filing',
     [
       [
-        "inboxTracked(wid, d.lastEventId, ['thread.filed'], r.memberUid)\n          && inboxEv(wid, d.lastEventId).data.subjectId == sid;",
+        "inboxTracked(d.lastEventId, ['thread.filed'], r.memberUid)\n          && inboxEv(d.lastEventId).data.subjectId == sid;",
         'true;',
       ],
     ],
@@ -559,11 +559,11 @@ const MUTATIONS = [
   ],
   [
     'inbox: member label outside the list',
-    [["&& (d.label in inboxLabelList(wid) || ('label' in r && d.label == r.label))", '']],
+    [["&& (d.label in inboxLabelList() || ('label' in r && d.label == r.label))", '']],
   ],
   [
     'inbox: label change without its event',
-    [["&& inboxEv(wid, d.lastEventId).data.type == 'subject.label'))", '))']],
+    [["&& inboxEv(d.lastEventId).data.type == 'subject.label'))", '))']],
   ],
   [
     'inbox: people create labelled subjects',
@@ -578,8 +578,8 @@ const MUTATIONS = [
     'inbox: members edit the label list',
     [
       [
-        "allow create, update: if cid == 'labels' && isAdmin(wid)",
-        "allow create, update: if cid == 'labels' && isMember(wid)",
+        "return cid == 'labels' && isAdmin(wid)",
+        "return cid == 'labels' && isMember(wid)",
       ],
     ],
   ],
@@ -587,14 +587,14 @@ const MUTATIONS = [
     'inbox: agents edit the label list',
     [
       [
-        "allow create, update: if cid == 'labels' && isAdmin(wid)",
-        "allow create, update: if cid == 'labels' && (isAdmin(wid) || isActiveAgent(wid))",
+        "return cid == 'labels' && isAdmin(wid)",
+        "return cid == 'labels' && (isAdmin(wid) || isActiveAgent(wid))",
       ],
     ],
   ],
   [
     'inbox: unbounded label list',
-    [['request.resource.data.labels.size() <= 12', 'request.resource.data.labels.size() <= 100']],
+    [['d.labels.size() <= 12', 'd.labels.size() <= 100']],
   ],
   [
     'inbox: people write agent events',
@@ -625,11 +625,11 @@ const MUTATIONS = [
   ['inbox: early wake', [['&& r.waiting.until <= request.time', '']]],
   [
     'inbox: an item link without the item',
-    [['|| inboxItemMade(wid, d))', '|| true)']],
+    [['|| inboxItemMade(d))', '|| true)']],
   ],
   [
     "inbox: linking another member's thread",
-    [["&& get(inboxDoc(wid, 'inboxThreads', e.threadId)).data.memberUid == me()", '']],
+    [["&& get(inboxDoc('inboxThreads', e.threadId)).data.memberUid == me()", '']],
   ],
   [
     'inbox: agents decide relations',
@@ -639,8 +639,8 @@ const MUTATIONS = [
         "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'relation.accepted']));",
       ],
       [
-        "allow update: if inboxOwner(wid, resource.data)\n          && touched(['state', 'note', 'decision'",
-        "allow update: if (inboxOwner(wid, resource.data) || isActiveAgent(wid))\n          && touched(['state', 'note', 'decision'",
+        "return inboxOwner(r)\n          && touched(['state', 'note', 'decision'",
+        "return (inboxOwner(r) || isActiveAgent(wid))\n          && touched(['state', 'note', 'decision'",
       ],
       [
         "['relation.accepted', 'relation.created', 'relation.rejected', 'relation.removed'], me())",
@@ -650,7 +650,7 @@ const MUTATIONS = [
   ],
   [
     "inbox: relate another member's subject",
-    [['&& inboxSubjectOf(wid, d.a, d.memberUid) && inboxSubjectOf(wid, d.b, d.memberUid);', ';']],
+    [['&& inboxSubjectOf(d.a, d.memberUid) && inboxSubjectOf(d.b, d.memberUid);', ';']],
   ],
   ['inbox: relation id forged', [["&& d.a < d.b && rid == 'rel-' + d.a + '-' + d.b", '']]],
   ['inbox: urgent not a boolean', [['&& d.urgent is bool', '']]],
@@ -786,7 +786,7 @@ const MUTATIONS = [
   ], // Re-check (item bmNoIvvqKCdAorLSShE9).
   [
     'recheck: another member asks',
-    [['(inboxOwner(wid, r) && inboxRecheckAsked(', '(inboxRecheckAsked(']],
+    [['(inboxOwner(r) && inboxRecheckAsked(', '(inboxRecheckAsked(']],
   ],
   [
     'recheck: ask while pending',
@@ -814,7 +814,7 @@ const MUTATIONS = [
   ],
   [
     'recheck: result not its event',
-    [['\n            && inboxEv(wid, d.lastEventId).data.data.result == d.recheck.result;', ';']],
+    [['\n            && inboxEv(d.lastEventId).data.data.result == d.recheck.result;', ';']],
   ],
   [
     'recheck: answer rewrites the request',
@@ -825,7 +825,7 @@ const MUTATIONS = [
     'recheck: checkedAt without the answer',
     [
       [
-        "\n            && getAfter(inboxDoc(wid, 'inboxThreads', r.threadId)).data.lastEventId == d.lastEventId",
+        "\n            && getAfter(inboxDoc('inboxThreads', r.threadId)).data.lastEventId == d.lastEventId",
         '',
       ],
     ],
@@ -841,7 +841,7 @@ const MUTATIONS = [
   ],
   [
     'recheck: checkedAt or revise at the cursor',
-    [['&& !inboxAtCursor(get(inboxPlanDoc(wid, r.planId)).data, oid)', '']],
+    [['&& !inboxAtCursor(get(inboxPlanDoc(r.planId)).data, oid)', '']],
   ],
   [
     'recheck: checkedAt with any result',
@@ -880,7 +880,7 @@ const MUTATIONS = [
   // Ask the agent (item w6O2KOw4ys70TQv9I1xD).
   [
     'instruct: another member asks',
-    [['(inboxOwner(wid, r) && inboxInstructed(', '(inboxInstructed(']],
+    [['(inboxOwner(r) && inboxInstructed(', '(inboxInstructed(']],
   ],
   [
     'instruct: ask while pending',
@@ -985,13 +985,13 @@ const MUTATIONS = [
   ['summary: version skip', [['&& d.version == prev + 1 &&', '&& d.version > prev &&']]],
   [
     'summary: without its version doc',
-    [['\n          && existsAfter(inboxSummaryVersionDoc(wid, tid, d.version))', '']],
+    [['\n          && existsAfter(inboxSummaryVersionDoc(tid, d.version))', '']],
   ],
   [
     'summary: without the mirror',
     [
       [
-        "\n          && getAfter(inboxDoc(wid, 'inboxThreads', tid)).data.get('summary', {}).get('version', 0) == d.version;",
+        "\n          && getAfter(inboxDoc('inboxThreads', tid)).data.get('summary', {}).get('version', 0) == d.version;",
         ';',
       ],
     ],
@@ -1065,7 +1065,7 @@ const MUTATIONS = [
     'summary: deletes newer versions',
     [
       [
-        '\n          && resource.data.version <= getAfter(inboxSummaryDoc(wid, resource.data.threadId)).data.version - 20;',
+        '\n          && resource.data.version <= getAfter(inboxSummaryDoc(resource.data.threadId)).data.version - 20;',
         ';',
       ],
     ],

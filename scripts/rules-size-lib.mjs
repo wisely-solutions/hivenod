@@ -77,7 +77,11 @@ export function rulesTokenStats(src) {
       /[A-Za-z_][A-Za-z0-9_]*|'[^']*'|\d+(?:\.\d+)?|==|!=|<=|>=|&&|\|\||[^\sA-Za-z0-9_]/g,
     ) ?? [];
   const words = toks.filter((t) => /^[A-Za-z_'0-9]/.test(t));
-  return { tokens: toks.length, words: words.length, chars: words.reduce((n, t) => n + t.length, 0) };
+  return {
+    tokens: toks.length,
+    words: words.length,
+    chars: words.reduce((n, t) => n + t.length, 0),
+  };
 }
 
 /**

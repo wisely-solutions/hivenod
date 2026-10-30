@@ -1,4 +1,5 @@
 // Pure helpers for the release workflow (tested in release-lib.test.mjs).
+import { RULES_COMPILED_LIMIT, parseCompiledSize } from './rules-size-lib.mjs';
 
 const num = (t) => Number(t.replace('release-', ''));
 const isReleaseTag = (t) => /^release-[1-9]\d*$/.test(t);
@@ -195,22 +196,28 @@ export function isRules409(output) {
  * - 503 from the rules API: retry (after 60 s), at most `max503` times.
  * - 409 "already exists": success when the live ruleset's source equals the local one
  *   (`remoteMatches === true`); otherwise retry `max409` time(s), then fail.
+ * - rules too big (Google's 400 "compiled executables must be smaller than 256000 bytes", which
+ *   firebase-tools reports as a 409 "already exists"; `compiledSize` is the probe's measure):
+ *   'too-big', never retried (scripts/rules-size.mjs, docs/DEPLOY.md "Rules size").
  * - anything else: fail.
  * @param {{output: string, retries503: number, retries409: number, remoteMatches?: boolean,
- *   max503?: number, max409?: number}} s
- * @returns {'retry' | 'success' | 'fail'}
+ *   compiledSize?: number, max503?: number, max409?: number}} s
+ * @returns {'retry' | 'success' | 'fail' | 'too-big'}
  */
 export function rulesDeployDecision({
   output,
   retries503,
   retries409,
   remoteMatches,
+  compiledSize,
   max503 = 2,
   max409 = 1,
 }) {
+  if (parseCompiledSize(output) != null) return 'too-big';
   if (isRulesApi503(output)) return retries503 < max503 ? 'retry' : 'fail';
   if (isRules409(output)) {
     if (remoteMatches === true) return 'success';
+    if (compiledSize != null && compiledSize >= RULES_COMPILED_LIMIT) return 'too-big';
     return retries409 < max409 ? 'retry' : 'fail';
   }
   return 'fail';
@@ -244,7 +251,7 @@ export function deployPlan(project, commit = 'HEAD') {
   const msg = `commit ${String(commit).slice(0, 7)}`;
   return [
     'build (pnpm build) and stamp version.json',
-    `step 1/2 rules+indexes: firebase deploy --only firestore --project ${project} (503: retry after 60 s, up to 2x; 409 already exists: compare live ruleset with firestore.rules, match = success, else retry once after 60 s)`,
+    `step 1/2 rules+indexes: firebase deploy --only firestore --project ${project} (first the rules size probe, scripts/rules-size.mjs: 256000 compiled bytes or more = stop, nothing deployed; 503: retry after 60 s, up to 2x; 409 already exists: compare live ruleset with firestore.rules, match = success, too big = stop, else retry once after 60 s)`,
     `step 2/2 hosting: firebase deploy --only hosting --message "${msg}" --project ${project}`,
   ];
 }

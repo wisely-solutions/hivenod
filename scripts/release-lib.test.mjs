@@ -274,6 +274,17 @@ describe('rulesDeployDecision', () => {
     );
     expect(isRules409('')).toBe(false);
   });
+  it('never retries rules that are too big (the 400 behind the 409)', () => {
+    const big =
+      'PATCH releases/cloud.firestore 400: Total size of compiled executables must be smaller than 256000 bytes (actual: 262622 bytes).';
+    expect(rulesDeployDecision({ output: big, retries503: 0, retries409: 0 })).toBe('too-big');
+    expect(
+      rulesDeployDecision({ output: e409, retries503: 0, retries409: 0, compiledSize: 262622 }),
+    ).toBe('too-big');
+    expect(
+      rulesDeployDecision({ output: e409, retries503: 0, retries409: 0, compiledSize: 230000 }),
+    ).toBe('retry');
+  });
 });
 
 describe('liveRulesMatch', () => {

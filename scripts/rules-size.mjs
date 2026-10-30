@@ -43,6 +43,10 @@ async function accessToken() {
   return (await res.json()).access_token;
 }
 
+const pause = (ms) => new Promise((res) => setTimeout(res, ms));
+// Google's rules API answers 503 and 429 (quota) now and then: retry those with a growing pause.
+const transient = (status) => status === 429 || status >= 500;
+
 /**
  * Upload `source` as a throwaway ruleset and try the throwaway release; delete both.
  * @returns {Promise<number|null>} the compiled size when refused for size, null when it fit
@@ -51,53 +55,57 @@ async function tryRelease(project, token, source) {
   const H = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
   const base = `${API}/projects/${project}`;
   const relName = `projects/${project}/releases/${PROBE_RELEASE}`;
-  const del = (name) => fetch(`${API}/${name}`, { method: 'DELETE', headers: H });
-  let rs;
-  for (let attempt = 0; ; attempt++) {
-    rs = await fetch(`${base}/rulesets`, {
-      method: 'POST',
-      headers: H,
-      body: JSON.stringify({ source: { files: [{ name: 'firestore.rules', content: source }] } }),
-    });
-    if (rs.status < 500 || attempt >= 6) break;
-    await new Promise((res) => setTimeout(res, 5000 * (attempt + 1))); // Google hiccup
-  }
+  const send = async (method, url, body) => {
+    for (let attempt = 0; ; attempt++) {
+      let r;
+      try {
+        r = await fetch(url, { method, headers: H, body: body && JSON.stringify(body) });
+      } catch (e) {
+        if (attempt >= 6) throw e; // the network itself: try again
+      }
+      if (r && (!transient(r.status) || attempt >= 6)) return r;
+      await pause(5000 * (attempt + 1));
+    }
+  };
+  const del = async (name) => {
+    const r = await send('DELETE', `${API}/${name}`).catch((e) => ({ status: e.message }));
+    if (!r.ok && r.status !== 404)
+      console.warn(`rules size probe: could not delete ${name} (${r.status}); delete it by hand`);
+  };
+  const rs = await send('POST', `${base}/rulesets`, {
+    source: { files: [{ name: 'firestore.rules', content: source }] },
+  });
   const set = await rs.json().catch(() => ({}));
   if (!rs.ok || !set.name) {
-    throw new Error(`rules size probe: ruleset upload failed: ${rs.status} ${set.error?.message ?? ''}`);
+    throw new Error(
+      `rules size probe: ruleset upload failed: ${rs.status} ${set.error?.message ?? ''}`,
+    );
   }
   try {
     for (let attempt = 0; ; attempt++) {
-      const r = await fetch(`${base}/releases`, {
-        method: 'POST',
-        headers: H,
-        body: JSON.stringify({ name: relName, rulesetName: set.name }),
-      });
+      const r = await send('POST', `${base}/releases`, { name: relName, rulesetName: set.name });
       const text = await r.text();
-      if (r.ok) {
-        await del(relName);
-        return null;
-      }
+      if (r.ok) return null;
       const size = parseCompiledSize(text);
       if (size != null) return size;
-      if (r.status === 409 && attempt < 2) {
-        await del(relName); // left over from an interrupted probe
-        continue;
-      }
-      if (r.status >= 500 && attempt < 6) {
-        await new Promise((res) => setTimeout(res, 5000 * (attempt + 1))); // Google hiccup
+      // 409: a probe release left over (an interrupted run, or a 503 that did create it);
+      // 429/5xx: a Google hiccup. Either way: drop the probe release and try again.
+      if ((r.status === 409 || transient(r.status)) && attempt < 6) {
+        await del(relName);
+        await pause(r.status === 409 ? 0 : 5000 * (attempt + 1));
         continue;
       }
       throw new Error(`rules size probe: release failed: ${r.status} ${text.slice(0, 300)}`);
     }
   } finally {
+    await del(relName);
     await del(set.name);
   }
 }
 
 /** The compiled size of `source` as Google counts it (see rules-size-lib.mjs). */
-export async function measureRulesSize({ project, source }) {
-  const token = await accessToken();
+export async function measureRulesSize({ project, source, getToken = accessToken }) {
+  const token = await getToken();
   return measureCompiledSize(source, (s) => tryRelease(project, token, s));
 }
 
@@ -112,7 +120,9 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   console.log(rulesSizeVerdict(size));
   if (size >= RULES_COMPILED_LIMIT) process.exit(1);
   if (size > RULES_COMPILED_BUDGET) {
-    console.error(`over the budget of ${RULES_COMPILED_BUDGET} bytes (docs/DEPLOY.md "Rules size")`);
+    console.error(
+      `over the budget of ${RULES_COMPILED_BUDGET} bytes (docs/DEPLOY.md "Rules size")`,
+    );
     process.exit(1);
   }
 }

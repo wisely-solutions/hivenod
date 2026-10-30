@@ -37,6 +37,8 @@ import {
 import { cliBinProblems } from './cli-bin-smoke.mjs';
 import { sweepPairings } from './pairing-sweep-lib.mjs';
 import { fetchStars, starsJson } from './stars-lib.mjs';
+import { RULES_COMPILED_LIMIT, parseCompiledSize, rulesSizeVerdict } from './rules-size-lib.mjs';
+import { measureRulesSize } from './rules-size.mjs';
 
 const [mode, name] = process.argv.slice(2);
 // Self-hosting: HIVENOD_FIREBASE_PROJECT is your Firebase project id (docs/SELF-HOST.md).
@@ -156,6 +158,24 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
   };
   // Step 1: rules + indexes alone, so a Google rules hiccup never blocks (or half-ships) the site.
   console.log('Deploy step 1/2: Firestore rules and indexes');
+  const rulesSource = readFileSync(join(cwd, 'firestore.rules'), 'utf8');
+  // Google refuses to release rules of 256000 compiled bytes or more, and firebase-tools then
+  // reports a misleading 409 "already exists". Measure first (scripts/rules-size.mjs; a throwaway
+  // ruleset and release, deleted again) and stop with the real reason.
+  const probeSize = async () => {
+    try {
+      return await measureRulesSize({ project, source: rulesSource, getToken: accessToken });
+    } catch (e) {
+      console.warn(`Deploy step 1/2: rules size probe failed (${e.message}); deploying anyway`);
+      return undefined;
+    }
+  };
+  let compiledSize = await probeSize();
+  if (compiledSize != null) {
+    console.log(`Deploy step 1/2: ${rulesSizeVerdict(compiledSize)}`);
+    if (compiledSize >= RULES_COMPILED_LIMIT)
+      die(`Deploy step 1/2 FAILED: ${rulesSizeVerdict(compiledSize)}. Nothing was deployed.`);
+  }
   let retries503 = 0;
   let retries409 = 0;
   for (;;) {
@@ -165,13 +185,24 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
       break;
     }
     const remoteMatches = isRules409(r.output)
-      ? await liveRulesMatch({
-          project,
-          localSource: readFileSync(join(cwd, 'firestore.rules'), 'utf8'),
-          getJson,
-        })
+      ? await liveRulesMatch({ project, localSource: rulesSource, getJson })
       : undefined;
-    const d = rulesDeployDecision({ output: r.output, retries503, retries409, remoteMatches });
+    // A 409 that is not "already current" may hide the PATCH 400 "too big": measure again.
+    if (isRules409(r.output) && remoteMatches !== true && compiledSize == null)
+      compiledSize = await probeSize();
+    const d = rulesDeployDecision({
+      output: r.output,
+      retries503,
+      retries409,
+      remoteMatches,
+      compiledSize,
+    });
+    if (d === 'too-big') {
+      const size = parseCompiledSize(r.output) ?? compiledSize;
+      die(
+        `Deploy step 1/2 FAILED: ${rulesSizeVerdict(size)} (Google's PATCH releases/cloud.firestore 400, reported by firebase-tools as a 409). Hosting was not deployed.`,
+      );
+    }
     if (d === 'success') {
       console.log(
         'Deploy step 1/2: 409 "already exists", live ruleset equals firestore.rules: already current',
