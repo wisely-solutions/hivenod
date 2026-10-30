@@ -146,7 +146,12 @@ const MUTATIONS = [
   // ----- per-item paths (card st5INNZj) -----
   [
     'paths: jumps over unskipped steps',
-    [['return j > i && gap0(p, i, j, k, g);', 'return j > i;']],
+    [
+      [
+        '      return j > i && (\n        (n <= 1 ||',
+        '      return j > i || (\n        (n <= 1 ||',
+      ],
+    ],
   ],
   [
     'paths: agents skip gates',
@@ -178,7 +183,7 @@ const MUTATIONS = [
   [
     'paths: unshaped items worked',
     [
-      ['(claimIt(r, p, true, d)', '(claimIt(r, p, false, d)'],
+      ['(claimIt(r, p, sh, d)', '(claimIt(r, p, false, d)'],
       ["(shaping ? run.data.get('job', '') == 'shape' : agentAllowedAtStep(p, r.stepId))", 'true'],
     ],
   ],
@@ -204,8 +209,8 @@ const MUTATIONS = [
     'agents act at human steps',
     [
       [
-        ": stepOf(p, r.stepId).kind == 'agent'\n                  // Releasing",
-        ': true\n                  // Releasing',
+        ": (sh || stepOf(p, r.stepId).kind == 'agent')\n                  // Releasing",
+        ': (sh || true)\n                  // Releasing',
       ],
     ],
   ],
@@ -267,8 +272,8 @@ const MUTATIONS = [
       ],
       // The item rules route by the decision's outcome: without a decision, take it from the event.
       [
-        "let outcome = dec == null ? '' : dec.data.outcome;",
-        "let outcome = dec == null ? getAfter(eventPath(wid, request.resource.data.lastEventId)).data.type.split('[.]')[1] : dec.data.outcome;",
+        "return dec == null ? '' : dec.data.outcome;",
+        "return dec == null ? getAfter(eventPath(wid, request.resource.data.lastEventId)).data.type.split('[.]')[1] : dec.data.outcome;",
       ],
     ],
   ],
@@ -616,7 +621,7 @@ const MUTATIONS = [
     [['&& inboxSubjectOf(d.a, d.memberUid) && inboxSubjectOf(d.b, d.memberUid);', ';']],
   ],
   ['inbox: relation id forged', [["&& d.a < d.b && rid == 'rel-' + d.a + '-' + d.b", '']]],
-  ['inbox: urgent not a boolean', [['&& d.urgent is bool', '']]],
+  ['inbox: urgent not a boolean', [['&& request.resource.data.urgent is bool', '']]],
   [
     'inbox: agents propose a related link',
     [
@@ -660,9 +665,17 @@ const MUTATIONS = [
   ],
   [
     'inbox: due without its event',
-    [["['thread.due'], r.memberUid, tid)", "['thread.due', 'thread.flagged'], r.memberUid, tid)"]],
+    [
+      [
+        "['thread.due'], resource.data.memberUid, tid)",
+        "['thread.due', 'thread.flagged'], resource.data.memberUid, tid)",
+      ],
+    ],
   ],
-  ['inbox: due not a timestamp', [['&& (d.due == null || d.due is timestamp)', '']]],
+  [
+    'inbox: due not a timestamp',
+    [['&& (request.resource.data.due == null || request.resource.data.due is timestamp)', '']],
+  ],
   ['inbox: due rewrites more', [["touched(['due'])", "touched(['due', 'state'])"]]],
   [
     'inbox: unbounded options',
@@ -735,7 +748,7 @@ const MUTATIONS = [
   ], // Re-check (item bmNoIvvqKCdAorLSShE9).
   [
     'recheck: another member asks',
-    [['(inboxOwner(r) && inboxRecheckAsked(', '(inboxRecheckAsked(']],
+    [['(inboxOwner(resource.data) && inboxRecheckAsked(', '(inboxRecheckAsked(']],
   ],
   [
     'recheck: ask while pending',
@@ -824,14 +837,17 @@ const MUTATIONS = [
     ],
   ],
   // Not now (item OE8FmrTaIxFVGcaeGG3N, slice 3).
-  ['not now: another member', [['(inboxOwner(r) && inboxNotNow(', '(inboxNotNow(']]],
+  ['not now: another member', [['(inboxOwner(resource.data) && inboxNotNow(', '(inboxNotNow(']]],
   ['not now: any time', [["n.until <= request.time + duration.value(48, 'h') && ", '']]],
   ['not now: past time', [['&& n.until > request.time', '']]],
   ['not now: other fields too', [["return changed(['notNow', 'lastEventId']) && ", 'return ']]],
   ['not now: nothing waits', [[" && r.state in ['needsYou', 'yourCall']", '']]],
   ["not now: key not the event's", [['&& e.key == n.key && e.until == n.until;', ';']]],
   // Ask the agent (item w6O2KOw4ys70TQv9I1xD).
-  ['instruct: another member asks', [['(inboxOwner(r) && inboxInstructed(', '(inboxInstructed(']]],
+  [
+    'instruct: another member asks',
+    [['(inboxOwner(resource.data) && inboxInstructed(', '(inboxInstructed(']],
+  ],
   [
     'instruct: ask while pending',
     [["|| r.instruct.at + duration.value(30, 'm') <= request.time)", '|| true)']],

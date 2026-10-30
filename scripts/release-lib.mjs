@@ -198,7 +198,7 @@ export function isRules409(output) {
  *   (`remoteMatches === true`); otherwise retry `max409` time(s), then fail.
  * - rules too big (Google's 400 "compiled executables must be smaller than 256000 bytes", which
  *   firebase-tools reports as a 409 "already exists"; `compiledSize` is the probe's measure):
- *   'too-big', never retried (scripts/rules-size.mjs, docs/DEPLOY.md "Rules size").
+ *   'too-big', never retried (scripts/rules-size.mjs, docs/DEPLOY.md "Rules size and compile time").
  * - anything else: fail.
  * @param {{output: string, retries503: number, retries409: number, remoteMatches?: boolean,
  *   compiledSize?: number, max503?: number, max409?: number}} s
@@ -251,7 +251,7 @@ export function deployPlan(project, commit = 'HEAD') {
   const msg = `commit ${String(commit).slice(0, 7)}`;
   return [
     'build (pnpm build) and stamp version.json',
-    `step 1/2 rules+indexes: firebase deploy --only firestore --project ${project} (first the rules size probe, scripts/rules-size.mjs: 256000 compiled bytes or more = stop, nothing deployed; 503: retry after 60 s, up to 2x; 409 already exists: compare live ruleset with firestore.rules, match = success, too big = stop, else retry once after 60 s)`,
+    `step 1/2 rules+indexes: firebase deploy --only firestore --project ${project} (first the rules compile-time probe, scripts/rules-compile-time.mjs: no try compiles within Google's ~6 s = stop, nothing deployed; then the rules size probe, scripts/rules-size.mjs: 256000 compiled bytes or more = stop, nothing deployed; 503: retry after 60 s, up to 2x; 409 already exists: compare live ruleset with firestore.rules, match = success, too big = stop, else retry once after 60 s)`,
     `step 2/2 hosting: firebase deploy --only hosting --message "${msg}" --project ${project}`,
   ];
 }

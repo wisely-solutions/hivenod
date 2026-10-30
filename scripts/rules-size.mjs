@@ -4,7 +4,7 @@
 // and exits 1 when it is over the budget (RULES_COMPILED_BUDGET) or the limit.
 // It uploads throwaway rulesets and a throwaway release `size-probe` (never `cloud.firestore`)
 // with the service account in GOOGLE_APPLICATION_CREDENTIALS, and deletes them again.
-// See docs/DEPLOY.md "Rules size".
+// See docs/DEPLOY.md "Rules size and compile time".
 import { readFileSync } from 'node:fs';
 import { createSign } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
@@ -168,7 +168,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (size >= RULES_COMPILED_LIMIT) process.exit(1);
   if (size > RULES_COMPILED_BUDGET) {
     console.error(
-      `over the budget of ${RULES_COMPILED_BUDGET} bytes (docs/DEPLOY.md "Rules size")`,
+      `over the budget of ${RULES_COMPILED_BUDGET} bytes (docs/DEPLOY.md "Rules size and compile time")`,
     );
     process.exit(1);
   }
