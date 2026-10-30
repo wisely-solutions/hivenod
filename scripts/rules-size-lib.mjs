@@ -3,7 +3,7 @@
 // compiled size of a ruleset that fits, so `measureRulesSize` creates a throwaway ruleset and
 // a throwaway release (`releases/size-probe`), padded with unused functions until the release
 // is refused, and reads the size from the 400 message. Everything it creates is deleted.
-// See docs/DEPLOY.md "Rules size".
+// See docs/DEPLOY.md "Rules size and compile time".
 
 /** Google's limit: compiled executables must be smaller than this. */
 export const RULES_COMPILED_LIMIT = 256000;
@@ -98,6 +98,6 @@ export function estimateCompiledSize(src) {
 /** One-line verdict for the deploy log. */
 export function rulesSizeVerdict(size, limit = RULES_COMPILED_LIMIT) {
   return size >= limit
-    ? `rules too big: ${size} of ${limit} bytes (Google refuses the release; see docs/DEPLOY.md "Rules size")`
+    ? `rules too big: ${size} of ${limit} bytes (Google refuses the release; see docs/DEPLOY.md "Rules size and compile time")`
     : `rules compiled size: ${size} of ${limit} bytes (${Math.round((100 * (limit - size)) / limit)}% headroom)`;
 }
