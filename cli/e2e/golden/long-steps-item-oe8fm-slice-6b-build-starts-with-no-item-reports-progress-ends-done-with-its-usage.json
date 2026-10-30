@@ -844,7 +844,7 @@
         "title": "Dark mode",
         "urgent": false,
         "waiting": {
-          "on": "item",
+          "on": "agent",
           "until": null
         }
       }
@@ -946,7 +946,7 @@
         "title": "Dark mode",
         "updatedAt": "<ts>",
         "waiting": {
-          "on": "item",
+          "on": "agent",
           "until": null
         }
       }
