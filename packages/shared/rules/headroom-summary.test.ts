@@ -28,7 +28,7 @@ function pad(k: number) {
 const STATEMENTS = {
   summary: 'allow create: if isActiveAgent(wid) && inboxSummaryOk(',
   version: 'allow create: if isActiveAgent(wid) && inboxSummaryVersionOk(',
-  mirror: '&& inboxSummaryMirrored(wid, tid, request.resource.data, resource.data))',
+  mirror: '&& inboxSummaryMirrored(d, r))',
 } as const;
 function instrument(k: number, at: keyof typeof STATEMENTS) {
   const s = STATEMENTS[at];
