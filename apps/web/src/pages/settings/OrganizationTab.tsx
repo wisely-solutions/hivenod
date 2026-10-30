@@ -1,8 +1,14 @@
 import { beginOrgDelete, leaveOrganization, renameWorkspace } from '@hive/shared';
-import { DoorOpen, Plus, Trash2 } from 'lucide-react';
+import { Download, DoorOpen, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useReady } from '../../auth/context';
 import { ResponsiveModal } from '../../components/ResponsiveModal';
+import {
+  downloadParts,
+  exportFilename,
+  exportOrg,
+  firestoreExportStore,
+} from '../../orgs/exportOrg';
 import { countOrg, type OrgCounts } from '../../orgs/deleteOrg';
 import { runOrgDelete } from '../../orgs/deleteJobs';
 import { NewOrgModal, OrgList } from '../../orgs/OrgSwitcher';
@@ -138,6 +144,7 @@ export function OrganizationTab() {
           </>
         }
       />
+      {isAdmin ? <ExportCard /> : null}
       {isAdmin ? <DangerZone /> : null}
 
       {creatingOrg ? <NewOrgModal open onClose={() => setCreatingOrg(false)} /> : null}
@@ -147,6 +154,55 @@ export function OrganizationTab() {
 
 function plural(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`;
+}
+
+/** Admins only: the organization's data as one JSON file (projects, items, runs, calendar). */
+function ExportCard() {
+  const { session } = useReady();
+  const { workspace, workspaceId } = session;
+  const [state, setState] = useState<'idle' | 'running' | 'done' | 'failed'>('idle');
+  const [docs, setDocs] = useState(0);
+
+  async function start() {
+    setState('running');
+    setDocs(0);
+    try {
+      const r = await exportOrg(firestoreExportStore, workspaceId, {
+        onProgress: (p) => setDocs(p.docs),
+      });
+      downloadParts(r.parts, exportFilename(workspace.name, workspaceId));
+      setDocs(r.total);
+      setState('done');
+    } catch {
+      setState('failed');
+    }
+  }
+
+  return (
+    <section aria-labelledby="export-title" className="mt-8 rounded-card border border-line p-4">
+      <h3 id="export-title" className="text-16 font-semibold text-ink">
+        Export organization data (JSON)
+      </h3>
+      <p className="mt-1 text-14 text-text-2">
+        One file with the projects, items, processes, decisions, attachments, runs, events and old
+        calendar data of {workspace.name}. Keep it before the old project data is deleted.
+      </p>
+      <Button
+        variant="secondary"
+        className="mt-3"
+        leading={<Icon icon={Download} />}
+        loading={state === 'running'}
+        onClick={start}
+      >
+        Export organization data (JSON)
+      </Button>
+      <p role="status" className="mt-2 text-13 text-text-2">
+        {state === 'running' ? `Reading… ${docs} documents so far` : null}
+        {state === 'done' ? `Done: ${docs} documents saved to your downloads.` : null}
+        {state === 'failed' ? 'Could not export. Try again.' : null}
+      </p>
+    </section>
+  );
 }
 
 /** Admins only: erase the organization for good. */

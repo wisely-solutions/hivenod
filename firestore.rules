@@ -77,9 +77,6 @@ service cloud.firestore {
     // (scripts/migrate-orgs.mjs) has rewritten it, so releasing the rules first locks nobody out.
     function roleOf(wid) { return signedIn() ? get(wsPath(wid)).data.memberRoles.get(me(), '') : ''; }
     function isAdmin(wid) { return roleOf(wid) in ['admin', 'owner']; }
-    function isAdminAfter(wid) {
-      return signedIn() && getAfter(wsPath(wid)).data.memberRoles.get(me(), '') in ['admin', 'owner'];
-    }
     // A plain member sees only the projects that list them; admins see every project.
     function isProjectMember(wid, pid) {
       return roleOf(wid) == 'member' && me() in get(projPath(wid, pid)).data.memberUids;
@@ -90,7 +87,7 @@ service cloud.firestore {
     }
     // For events written in the same batch as the project itself (creation, deletion).
     function canProjectAfter(wid, pid) {
-      return isAdminAfter(wid)
+      return (signedIn() && getAfter(wsPath(wid)).data.memberRoles.get(me(), '') in ['admin', 'owner'])
         || (isMemberAfter(wid) && existsAfter(projPath(wid, pid))
             && me() in getAfter(projPath(wid, pid)).data.memberUids);
     }
@@ -109,13 +106,6 @@ service cloud.firestore {
     function projectAgent(wid, pid) { return isActiveAgent(wid) && agentCanProject(wid, pid); }
     function projectReader(wid, pid) { return canProject(wid, pid) || projectAgent(wid, pid); }
 
-    // Who may triage agent suggestions (card TU5pDmzE): admins, the project's creator, and the
-    // deciders of the first step when it is a gate. THE ONE PLACE for this rule; mirrored by
-    // canTriage() in packages/shared/src/suggestions.ts (the UI) — change both together.
-    function canTriage(wid, p) {
-      return isAdmin(wid) || p.createdBy == me()
-        || (p.steps[0].kind == 'human' && me() in p.steps[0].gate.deciderUids);
-    }
 
     // Who may change which agents do a project's steps (card zSzW3LXy): admins and the
     // project's creator. An agent's own settings (projects, guardrails, permissions, resume) are
@@ -142,6 +132,8 @@ service cloud.firestore {
     // ---------- tracking (SPEC §5.3) ----------
 
     // The event named by `eid` is written in this same batch by the caller, now, with one of `types`.
+    // These run in almost every write, so they do not call each other: the compile time grows
+    // with every inlined copy (docs/DEPLOY.md "Rules size and compile time").
     function tracked(wid, eid, types) {
       let e = getAfter(eventPath(wid, eid));
       return eid is string && e != null
@@ -149,12 +141,17 @@ service cloud.firestore {
     }
     // tracked() / trackedFor() for the event the written document `d` names (d.lastEventId).
     function docTracked(wid, d, types) { return tracked(wid, d.lastEventId, types); }
-    function itemTracked(wid, d, types, pid, iid) { return trackedFor(wid, d.lastEventId, types, pid, iid); }
+    function itemTracked(wid, d, types, pid, iid) {
+      let e = getAfter(eventPath(wid, d.lastEventId));
+      return d.lastEventId is string && e != null
+        && e.data.actor.id == me() && e.data.at == request.time && e.data.type in types
+        && e.data.projectId == pid && e.data.itemId == iid;
+    }
     function trackedFor(wid, eid, types, pid, iid) {
       let e = getAfter(eventPath(wid, eid));
-      return tracked(wid, eid, types)
-        && e.data.projectId == pid
-        && e.data.itemId == iid;
+      return eid is string && e != null
+        && e.data.actor.id == me() && e.data.at == request.time && e.data.type in types
+        && e.data.projectId == pid && e.data.itemId == iid;
     }
     // Hard deletes cannot carry a lastEventId, so they need a tombstone event at a fixed id.
     function trackedDelete(wid, kind, docId, type) {
@@ -247,26 +244,20 @@ service cloud.firestore {
     // rules (so other writes pay nothing). Moves only jump over skipped steps.
 
     function unshaped(r) { return r.get('shape', 0) == null; }
-    function gap0(p, i, j, k, g) {
-      let n = j - i;
-      let s = p.steps;
-      return (n <= 1 || (skipped(s[i + 1], k, g) && (n <= 2 || (skipped(s[i + 2], k, g) && (n <= 3 || (skipped(s[i + 3], k, g) && (n <= 4 || (skipped(s[i + 4], k, g) && (n <= 5 || (skipped(s[i + 5], k, g) && (n <= 6 || (skipped(s[i + 6], k, g) && (n <= 7 || (skipped(s[i + 7], k, g) && (n <= 8 || (skipped(s[i + 8], k, g) && (n <= 9 || (skipped(s[i + 9], k, g) && (n <= 10 || (skipped(s[i + 10], k, g) && gap1(p, i, j, k, g)))))))))))))))))))));
-    }
-    function gap1(p, i, j, k, g) {
-      let n = j - i;
-      let s = p.steps;
-      return (n <= 11 || (skipped(s[i + 11], k, g) && (n <= 12 || (skipped(s[i + 12], k, g) && (n <= 13 || (skipped(s[i + 13], k, g) && (n <= 14 || (skipped(s[i + 14], k, g) && (n <= 15 || (skipped(s[i + 15], k, g) && (n <= 16 || (skipped(s[i + 16], k, g) && (n <= 17 || (skipped(s[i + 17], k, g) && (n <= 18 || (skipped(s[i + 18], k, g) && (n <= 19 || (skipped(s[i + 19], k, g) && (n <= 20 || (skipped(s[i + 20], k, g) && gap2(p, i, j, k, g)))))))))))))))))))));
-    }
-    function gap2(p, i, j, k, g) {
-      let n = j - i;
-      let s = p.steps;
-      return (n <= 21 || (skipped(s[i + 21], k, g) && (n <= 22 || (skipped(s[i + 22], k, g) && (n <= 23 || (skipped(s[i + 23], k, g) && (n <= 24 || (skipped(s[i + 24], k, g) && (n <= 25 || (skipped(s[i + 25], k, g) && (n <= 26 || (skipped(s[i + 26], k, g) && (n <= 27 || (skipped(s[i + 27], k, g) && (n <= 28 || (skipped(s[i + 28], k, g) && (n <= 29 || (skipped(s[i + 29], k, g) && (n <= 30 || (skipped(s[i + 30], k, g)))))))))))))))))))));
-    }
     // Step `s` is skipped: an agent step by k (pathSkips), a people step by g (gateSkips).
     function skipped(s, k, g) { return s.id in (s.kind == 'agent' ? k : g); }
-    // Every library step strictly between positions i and j is skipped. Rules have no loops:
-    // positions are unrolled (gap0..gap2, 10 each), so a short jump pays little.
-    function gapOk(p, i, j, k, g) { return j > i && gap0(p, i, j, k, g); }
+    // Every library step strictly between positions i and j is skipped (as skipped() says).
+    function gapOk(p, i, j, k, g) {
+      let n = j - i;
+      let s = p.steps;
+      // Rules have no loops: the 30 positions are unrolled in three chains of 10 (one chain of 30
+      // is "too complex"), joined here rather than calling each other: a nested call is compiled
+      // again with its caller (docs/DEPLOY.md "Rules size and compile time"). A short jump stops at
+      // its first `n <= m`.
+      return j > i && (
+        (n <= 1 || (skipped(s[i + 1], k, g) && (n <= 2 || (skipped(s[i + 2], k, g) && (n <= 3 || (skipped(s[i + 3], k, g) && (n <= 4 || (skipped(s[i + 4], k, g) && (n <= 5 || (skipped(s[i + 5], k, g) && (n <= 6 || (skipped(s[i + 6], k, g) && (n <= 7 || (skipped(s[i + 7], k, g) && (n <= 8 || (skipped(s[i + 8], k, g) && (n <= 9 || (skipped(s[i + 9], k, g) && (n <= 10 || skipped(s[i + 10], k, g)))))))))))))))))))))
+        && (n <= 11 || (((n <= 11 || (skipped(s[i + 11], k, g) && (n <= 12 || (skipped(s[i + 12], k, g) && (n <= 13 || (skipped(s[i + 13], k, g) && (n <= 14 || (skipped(s[i + 14], k, g) && (n <= 15 || (skipped(s[i + 15], k, g) && (n <= 16 || (skipped(s[i + 16], k, g) && (n <= 17 || (skipped(s[i + 17], k, g) && (n <= 18 || (skipped(s[i + 18], k, g) && (n <= 19 || (skipped(s[i + 19], k, g) && (n <= 20 || skipped(s[i + 20], k, g))))))))))))))))))))) && (n <= 21 || ((n <= 21 || (skipped(s[i + 21], k, g) && (n <= 22 || (skipped(s[i + 22], k, g) && (n <= 23 || (skipped(s[i + 23], k, g) && (n <= 24 || (skipped(s[i + 24], k, g) && (n <= 25 || (skipped(s[i + 25], k, g) && (n <= 26 || (skipped(s[i + 26], k, g) && (n <= 27 || (skipped(s[i + 27], k, g) && (n <= 28 || (skipped(s[i + 28], k, g) && (n <= 29 || (skipped(s[i + 29], k, g) && (n <= 30 || skipped(s[i + 30], k, g))))))))))))))))))))))));
+    }
     // A new item waiting to be shaped: at the first step, queued, nobody's, no gate.
     function unshapedAt0(d, p) {
       return d.shape == null && d.stepId == p.steps[0].id && d.status == 'queued'
@@ -274,12 +265,14 @@ service cloud.firestore {
     }
     // The item state `d` correctly leaves position i forward over skipped steps only, or
     // finishes when every step after i is skipped.
+    // (One gapOk for both: the target position is the end of the list when it finishes.)
     function movesOver(d, r, p, i, k, g) {
-      return (hasStep(p, d.stepId) && !skipped(stepOf(p, d.stepId), k, g)
-          && gapOk(p, i, p.stepIndex[d.stepId], k, g)
-          && arrivesAt(d, p, p.stepIndex[d.stepId]))
-        || (d.stepId == r.stepId && d.status == 'done' && d.claim == null && d.gate == null
-          && gapOk(p, i, p.steps.size(), k, g));
+      let done = d.stepId == r.stepId && d.status == 'done';
+      return gapOk(p, i, done ? p.steps.size() : p.stepIndex.get(d.stepId, -1), k, g)
+        && (done
+          ? d.claim == null && d.gate == null
+          : hasStep(p, d.stepId) && !skipped(stepOf(p, d.stepId), k, g)
+            && arrivesAt(d, p, p.stepIndex[d.stepId]));
     }
     // Forward from the current step: the next library step, or the next one the item does not skip.
     function nextOk(d, r, p) {
@@ -1555,40 +1548,35 @@ service cloud.firestore {
           && inboxEvOf(d).data.get('agentUid', d.fetchedBy) == d.fetchedBy
           && inboxMessageIn(d.lastEventId, tid);
         }
-        allow update: if inboxThreadsUpdateOk();
-        function inboxThreadsUpdateOk() {
-          let d = request.resource.data;
-          let r = resource.data;
-          return d.updatedAt == request.time
+        allow update: if request.resource.data.updatedAt == request.time
           // Summaries (item OE8FmrTaIxFVGcaeGG3N): the home agent's mirror of the summary it wrote.
           && ((touched(['summary']) && isActiveAgent(wid)
-              && inboxSummaryMirrored(d, r))
-            || (isActiveAgent(wid) && inboxThreadAgent(d, r))
-            || (inboxOwner(r) && inboxThreadOwner(d, r))
-            || ((isActiveAgent(wid) || inboxOwner(r))
+              && inboxSummaryMirrored(request.resource.data, resource.data))
+            || (isActiveAgent(wid) && inboxThreadAgent(request.resource.data, resource.data))
+            || (inboxOwner(resource.data) && inboxThreadOwner(request.resource.data, resource.data))
+            || ((isActiveAgent(wid) || inboxOwner(resource.data))
               && touched(['title'])
-              && str(d.title, 1, 200)
-              && inboxDocTracked(d, ['thread.titled'], r.memberUid, tid))
+              && str(request.resource.data.title, 1, 200)
+              && inboxDocTracked(request.resource.data, ['thread.titled'], resource.data.memberUid, tid))
             // Urgent or not (thread_flag): its agents or its member.
-            || ((isActiveAgent(wid) || inboxOwner(r))
+            || ((isActiveAgent(wid) || inboxOwner(resource.data))
               && touched(['urgent'])
-              && d.urgent is bool
-              && inboxDocTracked(d, ['thread.flagged'], r.memberUid, tid))
+              && request.resource.data.urgent is bool
+              && inboxDocTracked(request.resource.data, ['thread.flagged'], resource.data.memberUid, tid))
             // A deadline, or none (thread_due): its agents or its member.
-            || ((isActiveAgent(wid) || inboxOwner(r))
+            || ((isActiveAgent(wid) || inboxOwner(resource.data))
               && touched(['due'])
-              && (d.due == null || d.due is timestamp)
-              && inboxDocTracked(d, ['thread.due'], r.memberUid, tid))
+              && (request.resource.data.due == null || request.resource.data.due is timestamp)
+              && inboxDocTracked(request.resource.data, ['thread.due'], resource.data.memberUid, tid))
             // Re-check (item bmNoIvvqKCdAorLSShE9): the member asks, the home agent answers.
-            || (inboxOwner(r) && inboxRecheckAsked(d, r))
-            || (isActiveAgent(wid) && inboxRecheckAnswered(d, r))
+            || (inboxOwner(resource.data) && inboxRecheckAsked(request.resource.data, resource.data))
+            || (isActiveAgent(wid) && inboxRecheckAnswered(request.resource.data, resource.data))
             // Ask the agent (item w6O2KOw4ys70TQv9I1xD): the member asks, the home agent answers
             // and suggests chips.
-            || (inboxOwner(r) && inboxInstructed(d, r))
-            || (isActiveAgent(wid) && inboxInstructionAnswered(d, r))
-            || (isActiveAgent(wid) && inboxChipsSuggested(d, r)))
-            || (inboxOwner(r) && inboxNotNow(d, r));
-        }
+            || (inboxOwner(resource.data) && inboxInstructed(request.resource.data, resource.data))
+            || (isActiveAgent(wid) && inboxInstructionAnswered(request.resource.data, resource.data))
+            || (isActiveAgent(wid) && inboxChipsSuggested(request.resource.data, resource.data)))
+            || (inboxOwner(resource.data) && inboxNotNow(request.resource.data, resource.data));
         allow delete: if false;
 
         // Not now: updatedAt kept; last, for the expression budget.
@@ -1852,17 +1840,12 @@ service cloud.firestore {
           && inboxEvOf(d).data.outcomeId == oid)
           || inboxStepCreate(d);
         }
-        allow update: if inboxOutcomesUpdateOk();
-        function inboxOutcomesUpdateOk() {
-          let d = request.resource.data;
-          let r = resource.data;
-          return d.updatedAt == request.time
-          && (inboxChecked(d, r)
-            || (r.get('planId', null) != null
-              ? d.get('planId', null) == r.planId
-                && inboxStepUpdate(d, r)
-              : inboxSingleUpdate(d)));
-        }
+        allow update: if request.resource.data.updatedAt == request.time
+          && (inboxChecked(request.resource.data, resource.data)
+            || (resource.data.get('planId', null) != null
+              ? request.resource.data.get('planId', null) == resource.data.planId
+                && inboxStepUpdate(request.resource.data, resource.data)
+              : inboxSingleUpdate(request.resource.data)));
 
         // Re-check "still good" (item bmNoIvvqKCdAorLSShE9): the home agent stamps checkedAt on an
         // open proposal or an unrun live-plan step, in the batch that answers the thread's request.
@@ -1954,12 +1937,6 @@ service cloud.firestore {
           return d.decision.keys().hasAll(['byUid', 'at', 'edited', 'reason'])
             && d.decision.byUid == me() && d.decision.at == request.time && d.decision.edited is bool;
         }
-        function inboxStepResult(d) {
-          return exactKeys(d.result, ['text', 'permalink', 'itemId', 'error', 'by', 'at'])
-            && strOrNull(d.result.text, 20000) && strOrNull(d.result.permalink, 2048)
-            && strOrNull(d.result.itemId, 128) && strOrNull(d.result.error, 1000)
-            && d.result.by == me() && d.result.at == request.time;
-        }
         // `p`, `pa`: the plan before and after the batch. The member approves an agent step any
         // time before it runs; a person step only at its turn (passing it moves the cursor) and
         // only the member; Reject plan / remove set aside what has not started; Retry and Skip
@@ -2021,7 +1998,10 @@ service cloud.firestore {
                   && touched(['state'])
                   && d.state == 'rejected' && pa.cursor == p.cursor + 1)))
             || (isActiveAgent(wid) && turn && p.state in ['proposed', 'active']
-              && touched(['state', 'result']) && inboxStepResult(d)
+              && touched(['state', 'result']) && (exactKeys(d.result, ['text', 'permalink', 'itemId', 'error', 'by', 'at'])
+            && strOrNull(d.result.text, 20000) && strOrNull(d.result.permalink, 2048)
+            && strOrNull(d.result.itemId, 128) && strOrNull(d.result.error, 1000)
+            && d.result.by == me() && d.result.at == request.time)
               && ((e.type in ['outcome.done', 'outcome.failed', 'outcome.started'] && r.executor == me()
                   && (e.type == 'outcome.started'
                     ? r.state == 'approved' && d.state == 'running'
@@ -2333,47 +2313,42 @@ service cloud.firestore {
           && itemTracked(wid, d, ['project.created'], pid, null);
         }
 
-        allow update: if projectsUpdateOk();
-        function projectsUpdateOk() {
-          let d = request.resource.data;
-          let r = resource.data;
-          return (canProject(wid, pid)
+        allow update: if (canProject(wid, pid)
             && changed(['name', 'emoji', 'description', 'color', 'templateId', 'steps', 'stepIndex',
                         'archivedAt', 'memberUids', 'stepAgents', 'shapeNewItems',
                         'agentsMayCreateItems', 'statusEvery', 'silenceAfter', 'lastEventId'])
-            && validProject(d)
+            && validProject(request.resource.data)
             // Shaping new items (card st5INNZj), "Agents may create items" (item DhsO9), the status
             // interval and the silence threshold (item AzveC) are switched by admins and the
             // project's creator. One check for all: long processes are close to the rules budget.
-            && (!d.diff(r).affectedKeys()
+            && (!request.resource.data.diff(resource.data).affectedKeys()
                   .hasAny(['shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter'])
-                || (canSetStepAgents(wid, r)
-                    && d.get('shapeNewItems', false) is bool
-                    && d.get('agentsMayCreateItems', false) is bool
-                    && d.get('statusEvery', 0) in [0, 15, 30, 60]
-                    && d.get('silenceAfter', 40) in [0, 20, 40, 60, 120]))
-            && gatesAllowed(r, d)
+                || (canSetStepAgents(wid, resource.data)
+                    && request.resource.data.get('shapeNewItems', false) is bool
+                    && request.resource.data.get('agentsMayCreateItems', false) is bool
+                    && request.resource.data.get('statusEvery', 0) in [0, 15, 30, 60]
+                    && request.resource.data.get('silenceAfter', 40) in [0, 20, 40, 60, 120]))
+            && gatesAllowed(resource.data, request.resource.data)
             // Unchanged per-step agents cost little: long processes are close to the rules budget.
-            && (d.get('stepAgents', {}) == r.get('stepAgents', {})
-                || stepAgentsAllowed(r, d))
+            && (request.resource.data.get('stepAgents', {}) == resource.data.get('stepAgents', {})
+                || stepAgentsAllowed(resource.data, request.resource.data))
             // Only an admin archives or restores.
-            && (d.archivedAt == r.archivedAt
+            && (request.resource.data.archivedAt == resource.data.archivedAt
                 || (isAdmin(wid)
-                    && (d.archivedAt == null
-                        || d.archivedAt == request.time)))
-            && (itemTracked(wid, d,
+                    && (request.resource.data.archivedAt == null
+                        || request.resource.data.archivedAt == request.time)))
+            && (itemTracked(wid, request.resource.data,
                  ['project.updated', 'project.processChanged', 'project.archived'], pid, null)
                 // An approver adds an agent's proposed step (card st5INNZj); the event names the item.
-                || (docTracked(wid, d, ['step.accepted'])
-                    && canSetStepAgents(wid, r)
-                    && evOf(wid, d).projectId == pid))
-            && membersOnlyGainDeciders(r, d))
+                || (docTracked(wid, request.resource.data, ['step.accepted'])
+                    && canSetStepAgents(wid, resource.data)
+                    && evOf(wid, request.resource.data).projectId == pid))
+            && membersOnlyGainDeciders(resource.data, request.resource.data))
           // Only an admin decides who is on a project.
           || (isAdmin(wid)
             && changed(['memberUids', 'lastEventId'])
-            && validProject(d)
-            && itemTracked(wid, d, ['project.membersChanged'], pid, null));
-        }
+            && validProject(request.resource.data)
+            && itemTracked(wid, request.resource.data, ['project.membersChanged'], pid, null));
 
         // Projects are archived, never deleted in normal use; only an organization delete removes them.
         allow delete: if false;
@@ -2389,30 +2364,31 @@ service cloud.firestore {
           let x = a.steps;
           let y = b.steps;
           return x == y || isAdmin(wid) || b.createdBy == me()
-            || ((n <= 0 || x[0] == y[0] || gateMoved(b, x[0], y, 0)) && (n <= 1 || x[1] == y[1] || gateMoved(b, x[1], y, 1)) && (n <= 2 || x[2] == y[2] || gateMoved(b, x[2], y, 2)) && (n <= 3 || x[3] == y[3] || gateMoved(b, x[3], y, 3)) && (n <= 4 || x[4] == y[4] || gateMoved(b, x[4], y, 4))
-            && (n <= 5 || ((n <= 5 || x[5] == y[5] || gateMoved(b, x[5], y, 5)) && (n <= 6 || x[6] == y[6] || gateMoved(b, x[6], y, 6)) && (n <= 7 || x[7] == y[7] || gateMoved(b, x[7], y, 7)) && (n <= 8 || x[8] == y[8] || gateMoved(b, x[8], y, 8)) && (n <= 9 || x[9] == y[9] || gateMoved(b, x[9], y, 9))
-            && (n <= 10 || ((n <= 10 || x[10] == y[10] || gateMoved(b, x[10], y, 10)) && (n <= 11 || x[11] == y[11] || gateMoved(b, x[11], y, 11)) && (n <= 12 || x[12] == y[12] || gateMoved(b, x[12], y, 12)) && (n <= 13 || x[13] == y[13] || gateMoved(b, x[13], y, 13)) && (n <= 14 || x[14] == y[14] || gateMoved(b, x[14], y, 14))
-            && (n <= 15 || ((n <= 15 || x[15] == y[15] || gateMoved(b, x[15], y, 15)) && (n <= 16 || x[16] == y[16] || gateMoved(b, x[16], y, 16)) && (n <= 17 || x[17] == y[17] || gateMoved(b, x[17], y, 17)) && (n <= 18 || x[18] == y[18] || gateMoved(b, x[18], y, 18)) && (n <= 19 || x[19] == y[19] || gateMoved(b, x[19], y, 19))
-            && (n <= 20 || ((n <= 20 || x[20] == y[20] || gateMoved(b, x[20], y, 20)) && (n <= 21 || x[21] == y[21] || gateMoved(b, x[21], y, 21)) && (n <= 22 || x[22] == y[22] || gateMoved(b, x[22], y, 22)) && (n <= 23 || x[23] == y[23] || gateMoved(b, x[23], y, 23)) && (n <= 24 || x[24] == y[24] || gateMoved(b, x[24], y, 24))
-            && (n <= 25 || ((n <= 25 || x[25] == y[25] || gateMoved(b, x[25], y, 25)) && (n <= 26 || x[26] == y[26] || gateMoved(b, x[26], y, 26)) && (n <= 27 || x[27] == y[27] || gateMoved(b, x[27], y, 27)) && (n <= 28 || x[28] == y[28] || gateMoved(b, x[28], y, 28)) && (n <= 29 || x[29] == y[29] || gateMoved(b, x[29], y, 29)))))))))))));
+            || ((n <= 0 || x[0] == y[0] || gateMoved(b, x[0], y[0])) && (n <= 1 || x[1] == y[1] || gateMoved(b, x[1], y[1])) && (n <= 2 || x[2] == y[2] || gateMoved(b, x[2], y[2])) && (n <= 3 || x[3] == y[3] || gateMoved(b, x[3], y[3])) && (n <= 4 || x[4] == y[4] || gateMoved(b, x[4], y[4]))
+            && (n <= 5 || ((n <= 5 || x[5] == y[5] || gateMoved(b, x[5], y[5])) && (n <= 6 || x[6] == y[6] || gateMoved(b, x[6], y[6])) && (n <= 7 || x[7] == y[7] || gateMoved(b, x[7], y[7])) && (n <= 8 || x[8] == y[8] || gateMoved(b, x[8], y[8])) && (n <= 9 || x[9] == y[9] || gateMoved(b, x[9], y[9]))
+            && (n <= 10 || ((n <= 10 || x[10] == y[10] || gateMoved(b, x[10], y[10])) && (n <= 11 || x[11] == y[11] || gateMoved(b, x[11], y[11])) && (n <= 12 || x[12] == y[12] || gateMoved(b, x[12], y[12])) && (n <= 13 || x[13] == y[13] || gateMoved(b, x[13], y[13])) && (n <= 14 || x[14] == y[14] || gateMoved(b, x[14], y[14]))
+            && (n <= 15 || ((n <= 15 || x[15] == y[15] || gateMoved(b, x[15], y[15])) && (n <= 16 || x[16] == y[16] || gateMoved(b, x[16], y[16])) && (n <= 17 || x[17] == y[17] || gateMoved(b, x[17], y[17])) && (n <= 18 || x[18] == y[18] || gateMoved(b, x[18], y[18])) && (n <= 19 || x[19] == y[19] || gateMoved(b, x[19], y[19]))
+            && (n <= 20 || ((n <= 20 || x[20] == y[20] || gateMoved(b, x[20], y[20])) && (n <= 21 || x[21] == y[21] || gateMoved(b, x[21], y[21])) && (n <= 22 || x[22] == y[22] || gateMoved(b, x[22], y[22])) && (n <= 23 || x[23] == y[23] || gateMoved(b, x[23], y[23])) && (n <= 24 || x[24] == y[24] || gateMoved(b, x[24], y[24]))
+            && (n <= 25 || ((n <= 25 || x[25] == y[25] || gateMoved(b, x[25], y[25])) && (n <= 26 || x[26] == y[26] || gateMoved(b, x[26], y[26])) && (n <= 27 || x[27] == y[27] || gateMoved(b, x[27], y[27])) && (n <= 28 || x[28] == y[28] || gateMoved(b, x[28], y[28])) && (n <= 29 || x[29] == y[29] || gateMoved(b, x[29], y[29])))))))))))));
         }
-        // Step s, now at position i, differs from what was there (y = the steps before): it keeps
-        // its gate, or may change it (gateOk). The plain x[i] == y[i] check stays inline, so an
-        // unchanged step costs no call (the expression budget, see gateOk).
-        function gateMoved(b, s, y, i) {
-          return s.get('gate', null) == y[i].get('gate', null) || gateOk(b, s);
+        // Step s, now at position i, differs from what was there (o = the step there before): it
+        // keeps its gate, or may change it (gateOk). The plain x[i] == y[i] check stays inline, so
+        // an unchanged step costs no call (the expression budget, see gateOk).
+        function gateMoved(b, s, o) {
+          return s.get('gate', null) == o.get('gate', null) || gateOk(b, s);
         }
         // A position whose gate is the same as it was needs no check (that gate already existed; an
         // out-of-range read errors, which falls through to the full check). Only a changed gate
         // pays for gateOk. Budget: a plain member's save is evaluated in full for ~10 shifted steps
         // (a front-of-list insert or delete in a long process may be denied; admins and creators skip this).
         function gateOk(b, s) {
+          let o = s.id in b.stepIndex && hasStep(b, s.id) ? b.steps[b.stepIndex[s.id]] : null;
           return s.id in b.stepIndex
-            ? (hasStep(b, s.id) && (s.get('gate', null) == stepOf(b, s.id).get('gate', null)
-                || me() in stepOf(b, s.id).get('gate', {'deciderUids': []}).deciderUids
+            ? (o != null && (s.get('gate', null) == o.get('gate', null)
+                || request.auth.uid in o.get('gate', {'deciderUids': []}).deciderUids
                 // a step that has nobody deciding yet may gain an (empty) gate or lose it
                 || (s.get('gate', {'deciderUids': []}).deciderUids.size() == 0
-                    && stepOf(b, s.id).get('gate', {'deciderUids': []}).deciderUids.size() == 0)))
+                    && o.get('gate', {'deciderUids': []}).deciderUids.size() == 0)))
             : (s.get('gate', null) == null || s.gate.deciderUids.size() == 0);
         }
 
@@ -2464,7 +2440,13 @@ service cloud.firestore {
             && exactKeys(d, ['name', 'kind', 'description', 'instructions', 'outputs',
                  'afterStepId', 'deciderUids', 'reason', 'itemId', 'by', 'at', 'status', 'decision',
                  'lastEventId'])
-            && validProposal(d)
+            && (str(d.name, 1, 60) && d.kind in ['agent', 'human']
+              && str(d.description, 0, 2000) && str(d.instructions, 0, 20000)
+              && d.outputs is list && d.outputs.size() <= 20
+              && d.afterStepId is string
+              && (d.afterStepId == '' || hasStep(get(projPath(wid, pid)).data, d.afterStepId))
+              && d.deciderUids is list && d.deciderUids.size() <= 100
+              && str(d.reason, 10, 1000) && d.itemId is string)
             && d.by == me_('agent')
             && d.at == request.time
             && d.status == 'open' && d.decision == null
@@ -2478,15 +2460,6 @@ service cloud.firestore {
             && decidedProposal(request.resource.data);
           allow delete: if false;
 
-          function validProposal(d) {
-            return str(d.name, 1, 60) && d.kind in ['agent', 'human']
-              && str(d.description, 0, 2000) && str(d.instructions, 0, 20000)
-              && d.outputs is list && d.outputs.size() <= 20
-              && d.afterStepId is string
-              && (d.afterStepId == '' || hasStep(get(projPath(wid, pid)).data, d.afterStepId))
-              && d.deciderUids is list && d.deciderUids.size() <= 100
-              && str(d.reason, 10, 1000) && d.itemId is string;
-          }
           function decidedProposal(d) {
             let x = d.decision;
             return x is map && exactKeys(x, ['byUid', 'at', 'reason', 'stepId'])
@@ -2581,28 +2554,19 @@ service cloud.firestore {
                   || agentRaiseFinding(d)));
           }
 
-          allow update: if itemsUpdateOk();
-          function itemsUpdateOk() {
-            let d = request.resource.data;
-            let r = resource.data;
-            return validItemText(d)
-            && d.createdBy == r.createdBy
+          allow update: if validItemText(request.resource.data)
+            && request.resource.data.createdBy == resource.data.createdBy
             // stepAt (item QjTTL): when the item reached its step, only ever set to now. The
             // writes that may change it (moves) list it; clients from before it leave it alone.
-            && (d.get('stepAt', null) == r.get('stepAt', null)
-              || d.stepAt == request.time)
+            && (request.resource.data.get('stepAt', null) == resource.data.get('stepAt', null)
+              || request.resource.data.stepAt == request.time)
             // People and agents never overlap (see isActiveAgent), and every human path needs a
             // role: the role routes the write, so neither side pays for the other's checks.
-            && itemUpdateBy(roleOf(wid));
-          }
+            && (roleOf(wid) == '' ? agentUpdate() : humanUpdate(roleOf(wid)));
 
           // Delete for good (item.deleted; also the Undo of quick capture): the item's creator or an
           // organization admin, never an agent, and only while no agent holds it (Stop work first).
           allow delete: if mayEraseItem(wid, pid, iid);
-
-          function itemUpdateBy(role) {
-            return role == '' ? agentUpdate() : humanUpdate(role);
-          }
 
           function validItemText(d) {
             return str(d.title, 1, 300) && str(d.summary, 0, 20000)
@@ -2656,32 +2620,53 @@ service cloud.firestore {
             let d = request.resource.data;
             let p = get(projPath(wid, pid)).data;
             let r = resource.data;
+            let sh = unshaped(r);
+            // Each helper appears once (compile time grows with every inlined copy, see
+            // docs/DEPLOY.md "Rules size and compile time"): the routes below fold the shaping
+            // (unshaped, card st5INNZj, at any first step) and agent-step cases together.
             return projectAgent(wid, pid) && hasStep(p, r.stepId)
-              // The files of an item the agent created (item DhsO9), right after create_item, while
-              // nobody holds it: at any step, as the first step may be a people step.
-              && ((r.claim == null && r.createdBy == me_('agent')
-                  && attachCounted(r))
+              // An attachment changes neither claim nor path: the files of an item the agent
+              // created (item DhsO9), right after create_item, while nobody holds it, at any step
+              // (the first step may be a people step); or a file on shaping or agent-step work.
+              && ((attachCounted(r)
+                  && ((r.claim == null && r.createdBy == me_('agent'))
+                    || (d.get('pathRev', 0) == r.get('pathRev', 0)
+                      && (sh || (stepOf(p, r.stepId).kind == 'agent'
+                        && (d.get('claim', null) != null
+                          || d.get('agentSendBacks', 0) == r.get('agentSendBacks', 0)))))))
               || (d.get('pathRev', 0) != r.get('pathRev', 0)
                 ? agentPathUpdate(r, p, d)
-                // An unshaped item is only shaping work (card st5INNZj), at any first step.
-                : unshaped(r)
-                  ? (d.get('claim', null) == null
-                    ? (releaseIt(r, d) || attachCounted(r))
-                    : (claimIt(r, p, true, d) || heartbeatIt(r, d)
-                      || attachCounted(r) || parkIt(r, d)
-                      || statusIt(r, d)))
-                  : stepOf(p, r.stepId).kind == 'agent'
+                : (sh || stepOf(p, r.stepId).kind == 'agent')
                   // Releasing and completing clear the claim; claiming, heartbeats and progress
-                  // keep one (the expression budget, see humanUpdate). An attachment changes neither.
+                  // keep one (the expression budget, see humanUpdate).
                   && (d.get('claim', null) == null
                     // Only an agent send-back (card KLCTVnX8) changes the agent rounds.
-                    ? (d.get('agentSendBacks', 0) != r.get('agentSendBacks', 0)
+                    ? (!sh && d.get('agentSendBacks', 0) != r.get('agentSendBacks', 0)
                       ? agentSendBackIt(r, p, d)
-                      : (releaseIt(r, d) || completeIt(r, p, d)
-                        || attachCounted(r)))
-                    : (claimIt(r, p, false, d) || heartbeatIt(r, d)
-                      || progressIt(r, d) || attachCounted(r)
-                      || parkIt(r, d) || statusIt(r, d)))));
+                      : ((ownsClaim(r)
+              && touched(['claim', 'status', 'awaitingAnswer', 'costEur'])
+              && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
+              && d.costEur is number && d.costEur >= r.costEur
+              && (d.get('awaitingAnswer', null) == r.get('awaitingAnswer', null)
+                  || holdsForMyQuestion(d.get('awaitingAnswer', null)))
+              && itemTracked(wid, d, ['item.released'], pid, iid)) || (!sh && completeIt(r, p, d))))
+                    : (claimIt(r, p, sh, d) || heartbeatIt(r, d) || (
+                      // Park / unpark (item QjTTL): only the agent holding the item, under its current claim.
+                      // A park names that claim's run, so it is void once the claim moves on.
+                      ownsClaim(r) && touched(['parked'])
+              && d.updatedAt == request.time
+              && (d.parked == null
+                || (exactKeys(d.parked, ['runId', 'reason', 'at'])
+                  && d.parked.runId == r.claim.runId && str(d.parked.reason, 1, 200)
+                  && d.parked.at == request.time))
+              && itemTracked(wid, d, ['item.updated'], pid, iid))
+                      || statusIt(r, d) || (!sh && (ownsClaim(r) && touched(['progress', 'costEur'])
+              && d.updatedAt == request.time
+              && (d.progress == null || (exactKeys(d.progress, ['done', 'total'])
+                  && d.progress.done is int && d.progress.total is int
+                  && d.progress.done >= 0 && d.progress.total >= d.progress.done))
+              && d.costEur is number && d.costEur >= r.costEur
+              && itemTracked(wid, d, ['item.updated'], pid, iid)))))));
           }
           // Path writes by an agent (card st5INNZj): shaping the unshaped item it holds, or, on
           // the item it holds at an agent step, changing agent steps ahead, asking for a people
@@ -2740,15 +2725,6 @@ service cloud.firestore {
               && d.claim.heartbeatAt == request.time
               && getAfter(runPath(wid, r.claim.runId)).data.heartbeatAt == request.time;
           }
-          function releaseIt(r, d) {
-            return ownsClaim(r)
-              && touched(['claim', 'status', 'awaitingAnswer', 'costEur'])
-              && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
-              && d.costEur is number && d.costEur >= r.costEur
-              && (d.get('awaitingAnswer', null) == r.get('awaitingAnswer', null)
-                  || holdsForMyQuestion(d.get('awaitingAnswer', null)))
-              && itemTracked(wid, d, ['item.released'], pid, iid);
-          }
           // Released while waiting for people's answer (card zSzW3LXy): the hold names an open
           // question this agent asked on this item. Until it is answered nobody claims the item.
           function holdsForMyQuestion(h) {
@@ -2760,26 +2736,6 @@ service cloud.firestore {
               && h.questionId is string && h.agentUid == me() && h.at == request.time
               && q != null && q.data.kind == 'question' && q.data.by == me_('agent')
               && q.data.answered == false;
-          }
-          function progressIt(r, d) {
-            return ownsClaim(r) && touched(['progress', 'costEur'])
-              && d.updatedAt == request.time
-              && (d.progress == null || (exactKeys(d.progress, ['done', 'total'])
-                  && d.progress.done is int && d.progress.total is int
-                  && d.progress.done >= 0 && d.progress.total >= d.progress.done))
-              && d.costEur is number && d.costEur >= r.costEur
-              && itemTracked(wid, d, ['item.updated'], pid, iid);
-          }
-          // Park / unpark (item QjTTL): only the agent holding the item, under its current claim.
-          // A park names that claim's run, so it is void once the claim moves on.
-          function parkIt(r, d) {
-            return ownsClaim(r) && touched(['parked'])
-              && d.updatedAt == request.time
-              && (d.parked == null
-                || (exactKeys(d.parked, ['runId', 'reason', 'at'])
-                  && d.parked.runId == r.claim.runId && str(d.parked.reason, 1, 200)
-                  && d.parked.at == request.time))
-              && itemTracked(wid, d, ['item.updated'], pid, iid);
           }
           // Status (item AzveC): only the agent holding the item, under its current claim, at the
           // server time; it replaces the previous status.
@@ -2829,10 +2785,8 @@ service cloud.firestore {
           // Every step of the list `l` (n steps, n <= 12) is an agent step or a people step in g
           // (skipped). Unrolled: rules have no loops. Each step costs ~17 expressions of the
           // 1000-expression budget (rules/headroom.test.ts), hence the cap of 12 steps between.
-          function noGate(l, n, g) { return n <= 0 || (open1(l[0], g) && noGate1(l, n, g)); }
+          function noGate(l, n, g) { return n <= 0 || (open1(l[0], g) && ((n <= 1 || (open1(l[1], g) && (n <= 2 || (open1(l[2], g) && (n <= 3 || (open1(l[3], g) && (n <= 4 || (open1(l[4], g) && (n <= 5 || (open1(l[5], g) && (n <= 6 || (open1(l[6], g) && ((n <= 7 || (open1(l[7], g) && (n <= 8 || (open1(l[8], g) && (n <= 9 || (open1(l[9], g) && (n <= 10 || (open1(l[10], g) && (n <= 11 || (open1(l[11], g) && true))))))))))))))))))))))))); }
           function open1(s, g) { return s.kind == 'agent' || s.id in g; }
-          function noGate1(l, n, g) { return (n <= 1 || (open1(l[1], g) && (n <= 2 || (open1(l[2], g) && (n <= 3 || (open1(l[3], g) && (n <= 4 || (open1(l[4], g) && (n <= 5 || (open1(l[5], g) && (n <= 6 || (open1(l[6], g) && noGate2(l, n, g))))))))))))); }
-          function noGate2(l, n, g) { return (n <= 7 || (open1(l[7], g) && (n <= 8 || (open1(l[8], g) && (n <= 9 || (open1(l[9], g) && (n <= 10 || (open1(l[10], g) && (n <= 11 || (open1(l[11], g) && true)))))))))); }
 
           // ----- human updates -----
 
@@ -2852,15 +2806,100 @@ service cloud.firestore {
                 ? humanPathUpdate(r, p, d)
               // Stop work / Resume are the only writes that change workStopped.
               : d.get('workStopped', null) != r.get('workStopped', null)
-                ? (stopWorkIt(r, p, d) || resumeIt(r, p, d))
-                // Only an item waiting at a gate can be decided on.
-                : r.status == 'waiting'
-                  ? waitingUpdate(r, p)
+                ? (stopWorkIt(r, p, d) || (
+                  // Resume: the hold of Go back ends; agents may take the item again.
+                  d.get('workStopped', 'missing') == null
+              && r.get('workStopped', null) != null && r.workStopped.mode == 'back'
+              && r.status != 'stopped'
+              && touched(['workStopped'])
+              && d.updatedAt == request.time
+              && itemTracked(wid, d, ['item.resumed'], pid, iid)
+              && canStopWork(wid, p,
+                   evOf(wid, d).data.get('gateStepId', ''))))
+                // Only an item waiting at a gate can be decided on. A gate decision is the only
+                // write whose event has an approved / sentBack / stopped decision doc (same id: see
+                // the decisions rules); every other path needs an event of another type.
+                : r.status == 'waiting' && decisionOutcome() in ['approved', 'sentBack', 'stopped']
+                  ? decideIt(r, p, decisionOutcome())
                   // "Ask for status" (item AzveC) is the only write that changes statusAsk; only
                   // a worked item can be asked, so gate writes never pay for this check.
-                  : d.get('statusAsk', null) != r.get('statusAsk', null)
+                  : r.status != 'waiting' && d.get('statusAsk', null) != r.get('statusAsk', null)
                     ? askStatusIt(r)
-                    : otherHumanUpdate(r, p));
+                    : (humanEdit(r)
+              || (
+                // Add a suggestion to the first step (it arrives there like a new item), add it to its
+                // parent item, or dismiss it with a reason. Only canTriage() people.
+                r.type == 'finding' && r.triage == null && r.status == 'suggested'
+              && (
+                // Who may triage agent suggestions (card TU5pDmzE): admins, the project's creator, and the
+                // deciders of the first step when it is a gate. THE ONE PLACE for this rule; mirrored by
+                // canTriage() in packages/shared/src/suggestions.ts (the UI) — change both together.
+                isAdmin(wid) || p.createdBy == me()
+        || (p.steps[0].kind == 'human' && me() in p.steps[0].gate.deciderUids))
+              && touched(['triage', 'type', 'stepId', 'stepAt', 'status', 'gate', 'claim', 'shape'])
+              && d.updatedAt == request.time
+              && exactKeys(d.triage, ['outcome', 'reason', 'byUid', 'at'])
+              && d.triage.byUid == me() && d.triage.at == request.time
+              && str(d.triage.reason, 0, 2000)
+              && ((d.triage.outcome == 'intake' && d.type in ['idea', 'request', 'bug', 'task']
+                    && ('shape' in d ? unshapedAt0(d, p) : arrivesAt(d, p, 0)))
+                  || (d.triage.outcome in ['addedToItem', 'dismissed'] && d.type == 'finding'
+                    && d.status == 'stopped' && d.stepId == r.stepId
+                    && d.gate == null && d.claim == null && !('shape' in d)
+                    && (d.triage.outcome == 'addedToItem' || d.triage.reason.size() >= 10)))
+              && itemTracked(wid, d, ['finding.triaged'], pid, iid)) || relocateIt(r, p)
+              || releaseStaleIt(r) || unholdIt(r)
+              || (
+                // Revoking an agent gives back the items it held (same batch; see the runs rules).
+                isAdmin(wid) && r.claim != null
+              && getAfter(agentPath(wid, r.claim.agentUid)).data.revokedAt != null
+              && touched(['claim', 'status'])
+              && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
+              && docTracked(wid, d, ['agent.revoked', 'agent.rotated'])) || attachCounted(r)
+              || (
+                // Move to step (card O2Ehb9CG): an open item nobody holds goes to another step, arriving
+                // like a new item. Anyone on the project may send it back to an earlier step; only an
+                // admin may move it forward (that skips the gates in between).
+                touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'agentSendBacks'])
+              && roundsReset(r)
+              && d.updatedAt == request.time
+              && r.status in ['queued', 'waiting'] && r.claim == null
+              && r.get('workStopped', null) == null
+              && hasStep(p, r.stepId) && hasStep(p, d.stepId) && d.stepId != r.stepId
+              && arrivesAt(d, p, p.stepIndex[d.stepId])
+              && notSkipped(d, r, p)
+              && (p.stepIndex[d.stepId] < p.stepIndex[r.stepId] || isAdmin(wid))
+              && itemTracked(wid, d, ['item.moved'], pid, iid)) || (
+                // Archive: the item's creator or an admin stops an open item nobody holds, without a
+                // decision. Restore (Undo) is the same people, back to a fresh arrival at the same step.
+                touched(['status', 'claim', 'gate', 'archivedAt'])
+              && d.updatedAt == request.time
+              && r.status in ['queued', 'waiting'] && r.claim == null
+              && r.get('archivedAt', null) == null
+              && d.status == 'stopped' && d.claim == null && d.gate == null
+              && d.archivedAt == request.time
+              && (r.createdBy == me_('human') || isAdmin(wid))
+              && itemTracked(wid, d, ['item.archived'], pid, iid))
+              || (touched(['status', 'claim', 'gate', 'archivedAt', 'stepAt'])
+              && d.updatedAt == request.time
+              // Any stopped item: archived in bulk, or rejected at a gate (card lvPPSnV2).
+              && r.status == 'stopped' && r.get('workStopped', null) == null
+              && r.get('erasing', false) != true
+              && d.archivedAt == null
+              && hasStep(p, r.stepId) && arrivesAt(d, p, p.stepIndex[r.stepId])
+              && d.stepId == r.stepId
+              && (r.createdBy == me_('human') || isAdmin(wid))
+              && itemTracked(wid, d, ['item.restored'], pid, iid)) || (
+                // Delete for good, step 1: flag the item (stopped, archived) so its history can be erased
+                // in chunks. The creator or an admin, nobody holding it. Idempotent.
+                touched(['erasing', 'status', 'claim', 'gate', 'archivedAt'])
+              && d.updatedAt == request.time
+              && r.claim == null
+              && d.erasing == true
+              && d.status == 'stopped' && d.claim == null && d.gate == null
+              && d.archivedAt == request.time
+              && (r.createdBy == me_('human') || isAdmin(wid))
+              && itemTracked(wid, d, ['item.erasing'], pid, iid))));
           }
           // Ask for status (item AzveC): anyone on the project, on an item an agent is actively
           // working (claimed with a recent heartbeat, not parked, not waiting for an answer), at
@@ -2879,78 +2918,10 @@ service cloud.firestore {
                   || prev.at < request.time - duration.value(2, 'm'))
               && trackedFor(wid, request.resource.data.lastEventId, ['item.updated'], pid, iid);
           }
-          // A gate decision is the only write whose event has an approved / sentBack / stopped
-          // decision doc (same id: see the decisions rules); every other path needs an event of
-          // another type, so the outcome picks the paths.
-          function waitingUpdate(r, p) {
+          // The outcome of the decision doc written in this batch under the event's id, or ''.
+          function decisionOutcome() {
             let dec = getAfter(decisionPath(wid, pid, request.resource.data.lastEventId));
-            let outcome = dec == null ? '' : dec.data.outcome;
-            return outcome in ['approved', 'sentBack', 'stopped']
-              ? decideIt(r, p, outcome)
-              : otherHumanUpdate(r, p);
-          }
-          function otherHumanUpdate(r, p) {
-            return humanEdit(r)
-              || triageIt(r, p) || relocateIt(r, p)
-              || releaseStaleIt(r) || unholdIt(r)
-              || releaseRevokedIt(r) || attachCounted(r)
-              || moveIt(r, p) || archiveIt(r, p)
-              || restoreIt(r, p) || beginEraseIt(r);
-          }
-          // Move to step (card O2Ehb9CG): an open item nobody holds goes to another step, arriving
-          // like a new item. Anyone on the project may send it back to an earlier step; only an
-          // admin may move it forward (that skips the gates in between).
-          function moveIt(r, p) {
-            let d = request.resource.data;
-            return touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'agentSendBacks'])
-              && roundsReset(r)
-              && d.updatedAt == request.time
-              && r.status in ['queued', 'waiting'] && r.claim == null
-              && r.get('workStopped', null) == null
-              && hasStep(p, r.stepId) && hasStep(p, d.stepId) && d.stepId != r.stepId
-              && arrivesAt(d, p, p.stepIndex[d.stepId])
-              && notSkipped(d, r, p)
-              && (p.stepIndex[d.stepId] < p.stepIndex[r.stepId] || isAdmin(wid))
-              && itemTracked(wid, d, ['item.moved'], pid, iid);
-          }
-          // Archive: the item's creator or an admin stops an open item nobody holds, without a
-          // decision. Restore (Undo) is the same people, back to a fresh arrival at the same step.
-          function archiveIt(r, p) {
-            let d = request.resource.data;
-            return touched(['status', 'claim', 'gate', 'archivedAt'])
-              && d.updatedAt == request.time
-              && r.status in ['queued', 'waiting'] && r.claim == null
-              && r.get('archivedAt', null) == null
-              && d.status == 'stopped' && d.claim == null && d.gate == null
-              && d.archivedAt == request.time
-              && (r.createdBy == me_('human') || isAdmin(wid))
-              && itemTracked(wid, d, ['item.archived'], pid, iid);
-          }
-          // Delete for good, step 1: flag the item (stopped, archived) so its history can be erased
-          // in chunks. The creator or an admin, nobody holding it. Idempotent.
-          function beginEraseIt(r) {
-            let d = request.resource.data;
-            return touched(['erasing', 'status', 'claim', 'gate', 'archivedAt'])
-              && d.updatedAt == request.time
-              && r.claim == null
-              && d.erasing == true
-              && d.status == 'stopped' && d.claim == null && d.gate == null
-              && d.archivedAt == request.time
-              && (r.createdBy == me_('human') || isAdmin(wid))
-              && itemTracked(wid, d, ['item.erasing'], pid, iid);
-          }
-          function restoreIt(r, p) {
-            let d = request.resource.data;
-            return touched(['status', 'claim', 'gate', 'archivedAt', 'stepAt'])
-              && d.updatedAt == request.time
-              // Any stopped item: archived in bulk, or rejected at a gate (card lvPPSnV2).
-              && r.status == 'stopped' && r.get('workStopped', null) == null
-              && r.get('erasing', false) != true
-              && d.archivedAt == null
-              && hasStep(p, r.stepId) && arrivesAt(d, p, p.stepIndex[r.stepId])
-              && d.stepId == r.stepId
-              && (r.createdBy == me_('human') || isAdmin(wid))
-              && itemTracked(wid, d, ['item.restored'], pid, iid);
+            return dec == null ? '' : dec.data.outcome;
           }
           // Stop work (card BrK0r2FE): someone canStopWork() ends the agent's work on an item at
           // an agent step. The claim is cleared and the claimed run ends as stopped in the same
@@ -2977,26 +2948,6 @@ service cloud.firestore {
           function stopEventOk(p, e, w, runId) {
             return e.runId == runId && e.data.get('mode', '') == w.mode
               && canStopWork(wid, p, e.data.get('gateStepId', ''));
-          }
-          // Resume: the hold of Go back ends; agents may take the item again.
-          function resumeIt(r, p, d) {
-            return d.get('workStopped', 'missing') == null
-              && r.get('workStopped', null) != null && r.workStopped.mode == 'back'
-              && r.status != 'stopped'
-              && touched(['workStopped'])
-              && d.updatedAt == request.time
-              && itemTracked(wid, d, ['item.resumed'], pid, iid)
-              && canStopWork(wid, p,
-                   evOf(wid, d).data.get('gateStepId', ''));
-          }
-          // Revoking an agent gives back the items it held (same batch; see the runs rules).
-          function releaseRevokedIt(r) {
-            let d = request.resource.data;
-            return isAdmin(wid) && r.claim != null
-              && getAfter(agentPath(wid, r.claim.agentUid)).data.revokedAt != null
-              && touched(['claim', 'status'])
-              && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
-              && docTracked(wid, d, ['agent.revoked', 'agent.rotated']);
           }
           // The hold ends when its question is answered (in the answer's batch), or when an
           // admin lets agents take the item anyway (the question stays open).
@@ -3068,25 +3019,6 @@ service cloud.firestore {
             return touched(['summary'])
               && docTracked(wid, d, ['finding.triaged'])
               && e.projectId == pid && e.data.parentItemId == iid;
-          }
-          // Add a suggestion to the first step (it arrives there like a new item), add it to its
-          // parent item, or dismiss it with a reason. Only canTriage() people.
-          function triageIt(r, p) {
-            let d = request.resource.data;
-            return r.type == 'finding' && r.triage == null && r.status == 'suggested'
-              && canTriage(wid, p)
-              && touched(['triage', 'type', 'stepId', 'stepAt', 'status', 'gate', 'claim', 'shape'])
-              && d.updatedAt == request.time
-              && exactKeys(d.triage, ['outcome', 'reason', 'byUid', 'at'])
-              && d.triage.byUid == me() && d.triage.at == request.time
-              && str(d.triage.reason, 0, 2000)
-              && ((d.triage.outcome == 'intake' && d.type in ['idea', 'request', 'bug', 'task']
-                    && ('shape' in d ? unshapedAt0(d, p) : arrivesAt(d, p, 0)))
-                  || (d.triage.outcome in ['addedToItem', 'dismissed'] && d.type == 'finding'
-                    && d.status == 'stopped' && d.stepId == r.stepId
-                    && d.gate == null && d.claim == null && !('shape' in d)
-                    && (d.triage.outcome == 'addedToItem' || d.triage.reason.size() >= 10)))
-              && itemTracked(wid, d, ['finding.triaged'], pid, iid);
           }
 
           // ----- per-item paths (card st5INNZj) -----
@@ -3202,6 +3134,7 @@ service cloud.firestore {
           // `outcome` is the decision doc's (waitingUpdate): each path checks it again
           // (decisionWritten), so it only picks the paths that can match.
           function decideIt(r, p, outcome) {
+            let d = request.resource.data;
             return hasStep(p, r.stepId) && stepOf(p, r.stepId).kind == 'human'
               && r.status == 'waiting' && r.gate != null && r.gate.stepId == r.stepId
               // Nobody decides an item before it is shaped (card st5INNZj).
@@ -3210,11 +3143,35 @@ service cloud.firestore {
               && !(me() in r.gate.approvals) && !(me() in r.gate.rejections)
               && request.resource.data.updatedAt == request.time
               && (outcome == 'approved'
-                ? (approveStay(r) || approveAdvance(r, p))
-                : (rejectStay(r)
+                ? ((
+                  // Record an approval without moving (the rule is not yet satisfied, or not chosen).
+                  touched(['gate'])
+              && exactKeys(d.gate, ['stepId', 'approvals', 'rejections'])
+              && d.gate.stepId == r.gate.stepId && d.gate.rejections == r.gate.rejections
+              && addsOnlyMe(d.gate.approvals, r.gate.approvals)
+              && myMark(d.gate.approvals[me()], 0)
+              && decisionWritten('approved')) || (
+                  // Pass the gate: approvals so far plus mine must satisfy the step's rule.
+                  touched(['stepId', 'stepAt', 'status', 'gate', 'claim', 'agentSendBacks'])
+              && roundsReset(r)
+              && gateSatisfied(stepOf(p, r.stepId).gate,
+                   r.gate.approvals.keys().toSet().union([me()].toSet()))
+              && nextOk(d, r, p)
+              && decisionWritten('approved')))
+                : ((
+                  // Record a rejection without moving (majority policy, not yet a majority).
+                  touched(['gate'])
+              && exactKeys(d.gate, ['stepId', 'approvals', 'rejections'])
+              && d.gate.stepId == r.gate.stepId && d.gate.approvals == r.gate.approvals
+              && addsOnlyMe(d.gate.rejections, r.gate.rejections)
+              && myMark(d.gate.rejections[me()], 10)
+              && (decisionWritten('sentBack') || decisionWritten('stopped')))
                   || (outcome == 'sentBack'
                     ? sendBackMove(r, p)
-                    : stopIt(r, p))));
+                    : (touched(['status', 'gate', 'claim'])
+              && rejectionsOk(r, p)
+              && d.status == 'stopped' && d.gate == null && d.claim == null
+              && decisionWritten('stopped')))));
           }
           function decisionWritten(outcome) {
             let dec = getAfter(decisionPath(wid, pid, request.resource.data.lastEventId));
@@ -3230,36 +3187,6 @@ service cloud.firestore {
             return after.diff(before).affectedKeys() == [me()].toSet();
           }
 
-          // Record an approval without moving (the rule is not yet satisfied, or not chosen).
-          function approveStay(r) {
-            let d = request.resource.data;
-            return touched(['gate'])
-              && exactKeys(d.gate, ['stepId', 'approvals', 'rejections'])
-              && d.gate.stepId == r.gate.stepId && d.gate.rejections == r.gate.rejections
-              && addsOnlyMe(d.gate.approvals, r.gate.approvals)
-              && myMark(d.gate.approvals[me()], 0)
-              && decisionWritten('approved');
-          }
-          // Pass the gate: approvals so far plus mine must satisfy the step's rule.
-          function approveAdvance(r, p) {
-            let d = request.resource.data;
-            return touched(['stepId', 'stepAt', 'status', 'gate', 'claim', 'agentSendBacks'])
-              && roundsReset(r)
-              && gateSatisfied(stepOf(p, r.stepId).gate,
-                   r.gate.approvals.keys().toSet().union([me()].toSet()))
-              && nextOk(d, r, p)
-              && decisionWritten('approved');
-          }
-          // Record a rejection without moving (majority policy, not yet a majority).
-          function rejectStay(r) {
-            let d = request.resource.data;
-            return touched(['gate'])
-              && exactKeys(d.gate, ['stepId', 'approvals', 'rejections'])
-              && d.gate.stepId == r.gate.stepId && d.gate.approvals == r.gate.approvals
-              && addsOnlyMe(d.gate.rejections, r.gate.rejections)
-              && myMark(d.gate.rejections[me()], 10)
-              && (decisionWritten('sentBack') || decisionWritten('stopped'));
-          }
           function rejectionsOk(r, p) {
             return rejectionsSuffice(stepOf(p, r.stepId).gate,
                      r.gate.rejections.keys().toSet().union([me()].toSet()));
@@ -3275,13 +3202,6 @@ service cloud.firestore {
               && notSkipped(d, r, p)
               && d.sendBackCount == r.sendBackCount + 1
               && decisionWritten('sentBack');
-          }
-          function stopIt(r, p) {
-            let d = request.resource.data;
-            return touched(['status', 'gate', 'claim'])
-              && rejectionsOk(r, p)
-              && d.status == 'stopped' && d.gate == null && d.claim == null
-              && decisionWritten('stopped');
           }
 
           // ---------- attachments (immutable) ----------
@@ -3334,7 +3254,19 @@ service cloud.firestore {
               && d.at == request.time
               && d.answered == false
               && str(d.text, 1, 8000)
-              && (humanMessage(d) || agentMessage(d));
+              && ((canProject(wid, pid) && d.by == me_('human')
+                && ((d.kind == 'note' && d.replyTo == null
+                      && itemTracked(wid, d,
+                           ['message.posted', 'decision.sentBack', 'decision.stopped'], pid, iid))
+                    || (d.kind == 'note' && d.replyTo == null
+                      && itemTracked(wid, d, ['item.workStopped'], pid, iid))
+                    || (d.kind == 'answer' && mid == d.lastEventId && d.replyTo is string
+                      && get(msgPath(wid, pid, iid, d.replyTo)).data.kind == 'question'
+                      && getAfter(msgPath(wid, pid, iid, d.replyTo)).data.answered == true
+                      && itemTracked(wid, d, ['decision.answered'], pid, iid)))) || (projectAgent(wid, pid) && d.by == me_('agent')
+                && d.kind in ['question', 'note'] && d.replyTo == null
+                && get(itemPath(wid, pid, iid)).data.claim.agentUid == me()
+                && itemTracked(wid, d, ['message.posted', 'item.sentBack'], pid, iid)));
             }
             // Marking a question answered happens in the answer's batch.
             allow update: if canProject(wid, pid)
@@ -3346,24 +3278,6 @@ service cloud.firestore {
             // Erased together with its item.
             allow delete: if eraseWith(wid, pid, iid);
 
-            function humanMessage(d) {
-              return canProject(wid, pid) && d.by == me_('human')
-                && ((d.kind == 'note' && d.replyTo == null
-                      && itemTracked(wid, d,
-                           ['message.posted', 'decision.sentBack', 'decision.stopped'], pid, iid))
-                    || (d.kind == 'note' && d.replyTo == null
-                      && itemTracked(wid, d, ['item.workStopped'], pid, iid))
-                    || (d.kind == 'answer' && mid == d.lastEventId && d.replyTo is string
-                      && get(msgPath(wid, pid, iid, d.replyTo)).data.kind == 'question'
-                      && getAfter(msgPath(wid, pid, iid, d.replyTo)).data.answered == true
-                      && itemTracked(wid, d, ['decision.answered'], pid, iid)));
-            }
-            function agentMessage(d) {
-              return projectAgent(wid, pid) && d.by == me_('agent')
-                && d.kind in ['question', 'note'] && d.replyTo == null
-                && get(itemPath(wid, pid, iid)).data.claim.agentUid == me()
-                && itemTracked(wid, d, ['message.posted', 'item.sentBack'], pid, iid);
-            }
           }
         }
       }
