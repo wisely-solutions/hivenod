@@ -1,4 +1,3 @@
-
 /** A data: URL to a blob: URL, so browsers open big PDFs and images without URL length limits. */
 export function dataUrlToBlobUrl(dataUrl: string): string | null {
   const m = /^data:([^;,]+)(;base64)?,(.*)$/s.exec(dataUrl);
@@ -26,4 +25,3 @@ export const MAX_ZOOM = 5;
 export function clampZoom(z: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100));
 }
-

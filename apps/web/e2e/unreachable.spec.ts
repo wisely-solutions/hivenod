@@ -3,7 +3,6 @@ import {
   adminDoc,
   adminSet,
   person,
-  projectFields,
   signIn,
   uidOf,
   workspaceOf,
@@ -29,9 +28,6 @@ test('cold cache + unreachable Firestore: every main screen offers Retry, then r
   await expect
     .poll(() => workspaceOf(owner.email).catch(() => ''), { timeout: 20_000 })
     .not.toBe('');
-  const wid = await workspaceOf(owner.email);
-  const uid = await uidOf(owner.email);
-  await adminSet(`workspaces/${wid}/projects/pu1`, projectFields('Reachable Blog', uid));
 
   await blockAndWipeCache(page);
 
@@ -45,21 +41,18 @@ test('cold cache + unreachable Firestore: every main screen offers Retry, then r
   // so the shell and its Reconnecting banner are not up yet.)
 
   // Every main screen shows the same state (a full load each, so each starts cold).
-  for (const path of ['/projects', '/activity', '/agents']) {
+  for (const path of ['/inbox', '/activity', '/agents']) {
     await page.goto(path);
     await expect(page.getByTestId('unreachable')).toBeVisible({ timeout: 25_000 });
     await expect(page.getByText('No agents yet')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Reachable Blog' })).toHaveCount(0);
   }
 
   // The server comes back: Retry loads the real data.
   await page.unroute(FIRESTORE);
   await page.getByTestId('unreachable').getByRole('button', { name: 'Retry' }).click();
   await expect(page.getByTestId('unreachable')).toHaveCount(0, { timeout: 20_000 });
-  await page.goto('/projects');
-  await expect(
-    page.getByRole('list', { name: 'Projects' }).getByText('Reachable Blog'),
-  ).toBeVisible({ timeout: 20_000 });
+  await page.goto('/agents');
+  await expect(page.getByText('No agents yet')).toBeVisible({ timeout: 20_000 });
 });
 
 /** Blocks the Firestore host, then empties its local cache (IndexedDB) from a blank page. Auth stays. */

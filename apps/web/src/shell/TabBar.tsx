@@ -125,7 +125,7 @@ export function TabBar({ hidden }: { hidden: boolean }) {
         <li>
           <button
             type="button"
-            aria-label="Add an item"
+            aria-label="New thread"
             onClick={() => capture.open()}
             className="flex min-h-14 w-full items-center justify-center foc:outline-2 foc:outline-focus"
           >

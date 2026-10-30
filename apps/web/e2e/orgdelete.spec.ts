@@ -221,10 +221,8 @@ test('an admin deletes the organization: everything goes, the agent is cut off, 
   expect(await agentCanRead(agent.token, `workspaces/${wid}/projects/a1`)).toBe(false);
 
   // Ada's new organization is empty and works.
-  await page.goto('/projects');
-  await expect(
-    page.getByRole('heading', { name: 'Agents do the work. You make the decisions.' }),
-  ).toBeVisible();
+  await page.goto('/');
+  await expect(page.getByText('Nothing needs you.')).toBeVisible();
   await maxSide.ctx.close();
 });
 

@@ -44,73 +44,11 @@ async function seed(page: Page) {
   return { wid, uid, pid };
 }
 
-function waiting(uid: string, hours: number, over: Record<string, unknown> = {}) {
-  return {
-    title: 'Launch post',
-    type: 'idea',
-    stepId: 'review',
-    status: 'waiting',
-    summary: 'Draft of the launch post, ready for a decision.',
-    source: { kind: 'manual', label: 'Test' },
-    createdBy: { type: 'human', id: uid },
-    parentItemId: null,
-    sourceRunId: null,
-    claim: null,
-    progress: null,
-    gate: { stepId: 'review', approvals: {}, rejections: {} },
-    triage: null,
-    sendBackCount: 0,
-    costEur: 0,
-    order: 1,
-    updatedAt: new Date(Date.now() - hours * 3_600_000),
-    lastEventId: 'seed',
-    ...over,
-  };
-}
-const itemPath = (wid: string, pid: string, iid: string) =>
-  `workspaces/${wid}/projects/${pid}/items/${iid}`;
 const configOn = () =>
   adminSet('config/notify', {
     vapidPublicKey: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9',
     telegramBot: 'hivenod_bot',
   });
-
-test('the tab title carries the Needs-you count', async ({ page }) => {
-  const { wid, uid, pid } = await seed(page);
-  for (const n of [1, 2])
-    await adminSet(itemPath(wid, pid, `t${n}`), waiting(uid, 1, { title: `Post ${n}` }));
-  await expect(page.getByText('2 things need you.')).toBeVisible();
-  await expect(page).toHaveTitle('(2) Today · Hivenod');
-  await page.goto('/projects');
-  await expect(page).toHaveTitle(/^\(2\) Projects · Hivenod$/);
-});
-
-test('a gate past its reminder time says so, then "reminder sent" once the notifier sent it', async ({
-  page,
-}) => {
-  const { wid, uid, pid } = await seed(page);
-  await adminSet(itemPath(wid, pid, 'late'), waiting(uid, 30, { title: 'Pricing page copy' }));
-  await adminSet(itemPath(wid, pid, 'early'), waiting(uid, 2, { title: 'Fresh post' }));
-  const late = page.getByRole('button', { name: /Pricing page copy/ }).first();
-  await expect(late).toContainText('Waiting 30 h · reminder due');
-  await expect(page.getByRole('button', { name: /Fresh post/ }).first()).not.toContainText(
-    'reminder',
-  );
-  await adminSet(`workspaces/${wid}/notified/g-late`, {
-    itemId: 'late',
-    projectId: pid,
-    gateKey: 'review:0',
-    sent: [uid],
-    remindedAt: Date.now(),
-    at: Date.now(),
-  });
-  await expect(late).toContainText('Waiting 30 h · reminder sent');
-  // The board card says the same.
-  await page.goto(`/p/${pid}`);
-  await expect(page.getByRole('button', { name: /Pricing page copy/ }).first()).toContainText(
-    'reminder sent',
-  );
-});
 
 test('Me, Notifications: choices are saved, Telegram links, quiet hours, install steps', async ({
   page,
@@ -195,19 +133,8 @@ test('without the notifier the page says nothing is sent yet and the buttons are
 test('screenshots', async ({ page }, info) => {
   test.skip(!process.env.SHOTS_DIR, 'set SHOTS_DIR to capture');
   test.skip(info.project.name !== 'desktop-1440', 'sizes are set below');
-  const { wid, uid, pid } = await seed(page);
+  const { uid } = await seed(page);
   await configOn();
-  await adminSet(itemPath(wid, pid, 'late'), waiting(uid, 30, { title: 'Pricing page copy' }));
-  await adminSet(`workspaces/${wid}/notified/g-late`, {
-    itemId: 'late',
-    projectId: pid,
-    gateKey: 'review:0',
-    sent: [uid],
-    remindedAt: Date.now(),
-    at: Date.now(),
-  });
-  await adminSet(itemPath(wid, pid, 'due'), waiting(uid, 26, { title: 'Launch post' }));
-  await adminSet(itemPath(wid, pid, 'new'), waiting(uid, 1, { title: 'Newsletter draft' }));
   await adminSet(`users/${uid}/notify/prefs`, {
     push: true,
     telegram: true,
@@ -235,14 +162,6 @@ test('screenshots', async ({ page }, info) => {
     await page.setViewportSize(vp);
     for (const theme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: theme });
-      await page.goto('/');
-      await expect(page.getByText(/reminder sent/).first()).toBeVisible({ timeout: 15_000 });
-      await page.waitForTimeout(800);
-      await page.screenshot({ path: `${dir}/needs-you-${name}-${theme}.png` });
-      await page.goto(`/p/${pid}`);
-      await expect(page.getByText(/reminder sent/).first()).toBeVisible({ timeout: 15_000 });
-      await page.waitForTimeout(800);
-      await page.screenshot({ path: `${dir}/board-${name}-${theme}.png` });
       await page.goto('/me/notifications');
       await expect(page.getByText('Connected as @joao')).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(800);

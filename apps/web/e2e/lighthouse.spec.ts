@@ -9,10 +9,8 @@ test.skip(!process.env.LH_DIR || !process.env.LH_MODULE, 'set LH_DIR and LH_MODU
 const PORT = 9333;
 const ROUTES: Array<[string, string]> = [
   ['needs-you', '/'],
-  ['board', '/p/blog'],
-  ['full-page', '/p/blog/i/i2/view/a2'],
+  ['inbox', '/inbox'],
   ['insights', '/insights'],
-  ['projects', '/projects'],
   ['activity', '/activity'],
 ];
 

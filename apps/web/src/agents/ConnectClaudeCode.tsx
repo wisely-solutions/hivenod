@@ -22,7 +22,7 @@ const card = 'rounded-card border border-line bg-surface p-4 shadow-e1 sm:p-5';
  */
 export function ConnectClaudeCode({ codeForm }: { codeForm: ReactNode }) {
   const { session } = useReady();
-  const { agents, runs, projects } = useShellData();
+  const { agents, runs } = useShellData();
   const [opened] = useState(() => Date.now());
   const now = useNow(15_000);
   const [os, setOs] = useState<'unix' | 'windows'>(() =>
@@ -33,10 +33,6 @@ export function ConnectClaudeCode({ codeForm }: { codeForm: ReactNode }) {
 
   const agent = newlyConnected(agents, session.me.uid, opened);
   const online = agent ? isOnline(agent.data, runs, agent.id, now) : false;
-  const ids = agent && Array.isArray(agent.data.projectIds) ? agent.data.projectIds : [];
-  const first =
-    projects.find((p) => ids.includes(p.id) && !p.data.archivedAt) ??
-    projects.find((p) => !p.data.archivedAt);
 
   return (
     <section aria-labelledby="connect-title" className={card}>
@@ -98,15 +94,12 @@ export function ConnectClaudeCode({ codeForm }: { codeForm: ReactNode }) {
               {agent.data.name}
               {online ? ' · Claude Code is online' : ' · starting Claude Code…'}
             </span>
-            {first ? (
-              <Link
-                to="/p/$pid"
-                params={{ pid: first.id }}
-                className="inline-flex min-h-11 items-center rounded-btn bg-ink px-4 text-14 font-medium text-surface foc:outline-2 foc:outline-offset-2 foc:outline-focus"
-              >
-                Add your first item
-              </Link>
-            ) : null}
+            <Link
+              to="/inbox"
+              className="inline-flex min-h-11 items-center rounded-btn bg-ink px-4 text-14 font-medium text-surface foc:outline-2 foc:outline-offset-2 foc:outline-focus"
+            >
+              Open Inbox
+            </Link>
           </div>
         ) : (
           <span className="text-text-2">Waiting for your terminal…</span>

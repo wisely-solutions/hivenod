@@ -51,60 +51,6 @@ async function delay(write: () => Promise<void>, visible: () => Promise<void>): 
   return Date.now() - t0;
 }
 
-test('board, Needs you and Activity update live within ~2 s, without a refresh', async ({
-  page,
-}) => {
-  const { wid, uid, pid } = await seed(page);
-  const base = `workspaces/${wid}/projects/${pid}`;
-  const seen: Record<string, number> = {};
-
-  await page.goto('/');
-  await expect(page.getByText('You are all caught up.')).toBeVisible();
-  seen.needsYou = await delay(
-    () =>
-      adminSet(
-        `${base}/items/g1`,
-        item(uid, {
-          title: 'Live gate item',
-          stepId: 'review',
-          status: 'waiting',
-          gate: { stepId: 'review', approvals: {}, rejections: {} },
-        }),
-      ),
-    () => expect(page.getByText('Live gate item').first()).toBeVisible({ timeout: LIMIT_MS }),
-  );
-
-  await page.goto(`/p/${pid}`);
-  await expect(page.getByRole('heading', { name: /Blog/ })).toBeVisible();
-  seen.board = await delay(
-    () => adminSet(`${base}/items/b1`, item(uid, { title: 'Live board item' })),
-    () => expect(page.getByText('Live board item')).toBeVisible({ timeout: LIMIT_MS }),
-  );
-
-  await page.goto('/activity');
-  await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
-  await page.waitForTimeout(1500);
-  seen.activity = await delay(
-    () =>
-      adminSet(`workspaces/${wid}/events/rt1`, {
-        actor: { type: 'agent', id: 'scout', name: 'Scout' },
-        projectId: pid,
-        itemId: 'b1',
-        runId: null,
-        type: 'message.posted',
-        data: { kind: 'question' },
-        at: new Date(),
-      }),
-    () =>
-      expect(page.getByText(/Scout asked a question on/).first()).toBeVisible({
-        timeout: LIMIT_MS,
-      }),
-  );
-
-  test.info().annotations.push({ type: 'delay-ms', description: JSON.stringify(seen) });
-  console.log('REALTIME delay ms', JSON.stringify(seen));
-});
-
 test('a silently dropped connection shows Reconnecting within ~10 s, and clears when it is back', async ({
   page,
 }) => {

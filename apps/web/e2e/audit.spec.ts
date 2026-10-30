@@ -9,15 +9,8 @@ const DIR = process.env.AUDIT_DIR;
 const ROUTES: Array<[string, string]> = [
   ['needs-you', '/'],
   ['needs-you-questions', '/?f=questions'],
-  ['projects', '/projects'],
-  ['board', '/p/blog'],
-  ['board-list', '/p/blog?view=list'],
-  ['board-item', '/p/blog?item=i1'],
-  ['board-empty', '/p/empty'],
-  ['process', '/p/blog/process'],
-  ['viewer', '/p/blog/i/i2/view/a2'],
+  ['inbox', '/inbox'],
   ['insights', '/insights'],
-  ['project-insights', '/p/blog/insights'],
   ['activity', '/activity'],
   ['agents', '/agents'],
   ['agent', '/agents/scout'],
@@ -25,7 +18,6 @@ const ROUTES: Array<[string, string]> = [
   ['settings-organization', '/settings/organization'],
   ['settings-members', '/settings/members'],
   ['settings-groups', '/settings/groups'],
-  ['settings-projects', '/settings/projects'],
   ['settings-notifications', '/account/notifications'],
   ['kit', '/kit'],
 ];
@@ -59,8 +51,7 @@ async function walk(page: Page, routes: Array<[string, string]>, group: number) 
     // The read count wants a fixed window after a cold load; the axe check only needs a settled page.
     if (DIR) await page.waitForTimeout(1800);
     // Loaded: the screen has its heading (a still, blank page during sign-in would pass as settled).
-    // A phone opened on an item shows only the full-screen detail (no board, no h1 under it).
-    await expect(page.locator('h1, article[aria-label^="Item: "]').first()).toBeAttached({
+    await expect(page.locator('h1').first()).toBeAttached({
       timeout: 15_000,
     });
     await settle(page, { loading: name !== 'kit' });

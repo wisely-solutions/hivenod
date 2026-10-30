@@ -10,4 +10,3 @@ describe('small helpers', () => {
     expect(hostOf('https://example.com/a?b')).toBe('example.com');
   });
 });
-
