@@ -83,6 +83,9 @@ func (c *Client) PlanPropose(ctx context.Context, threadID string, note, confide
 	if err != nil {
 		return nil, err
 	}
+	if err := c.refuseOff(ctx, t.MemberUID, func(s int64) bool { return touchedSince(t, s) }); err != nil {
+		return nil, err
+	}
 	if steps == nil {
 		steps = []PlanStepArg{}
 	}

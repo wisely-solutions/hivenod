@@ -38,6 +38,9 @@ type Client struct {
 	WebURL string
 	// The channel session's presence identity (presence.go, item N0biX); "" outside one.
 	sessionID, hostID string
+	// off (slice 7): member -> since (ms) this agent is Off for them, kept by the channel's
+	// listener (nil: no listener; the tools then read the member's Off doc).
+	off map[string]int64
 }
 
 // Connect signs in with the token (tok "" = HIVENOD_TOKEN, then the saved pairing) and reads

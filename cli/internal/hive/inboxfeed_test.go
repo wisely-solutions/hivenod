@@ -33,6 +33,8 @@ type fakeInbox struct {
 	subs     int
 	threads  []FeedThread
 	outcomes []FeedOutcome
+	onOff    func([]FeedOff)
+	offs     []FeedOff
 }
 
 func (f *fakeInbox) WatchThreads(_ context.Context, on func([]FeedThread)) {
@@ -111,6 +113,14 @@ func (f *fakeInbox) Wake(_ context.Context, id string) error {
 	return nil
 }
 
+func (f *fakeInbox) WatchOff(_ context.Context, on func([]FeedOff)) {
+	f.mu.Lock()
+	f.onOff = on
+	rows := f.offs
+	f.mu.Unlock()
+	on(rows)
+}
+
 func (f *fakeInbox) Heartbeat(_ context.Context, id string) error {
 	f.mu.Lock()
 	f.beats = append(f.beats, id)
@@ -169,6 +179,10 @@ func (r *feedRig) kinds() []string {
 	defer r.mu.Unlock()
 	out := []string{}
 	for _, e := range r.pushed {
+		if e.Meta["kind"] == "info" {
+			out = append(out, "info:"+e.Meta["code"])
+			continue
+		}
 		k := e.Meta["thread_id"] + ":" + e.Meta["reason"]
 		if e.Meta["update"] == "true" {
 			k += "+"
@@ -965,4 +979,133 @@ func TestInboxFeedScheduledReadFails(t *testing.T) {
 	if m := r.meta(0); m["schedule_id"] != "s1" || m["period"] != "2026-11" {
 		t.Fatal(m)
 	}
+}
+
+func (r *feedRig) offs(rows []FeedOff) {
+	r.src.mu.Lock()
+	r.src.offs = rows
+	on := r.src.onOff
+	r.src.mu.Unlock()
+	if on != nil {
+		on(rows)
+	}
+	r.settle()
+}
+
+// The Off switch (scheduled tasks slice 7, design 6.2): while the member has this agent Off, the
+// feed holds what the agent would act on by itself and delivers what the member does himself;
+// the agent is told once (info off, naming the work in its hands) and again when it is On.
+func TestInboxFeedOffHoldsAutomatedWork(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 10, MaxSteps: 2, NudgeAfter: time.Hour})
+	since := r.now.UnixMilli()
+	r.feed.Start()
+	// A long step already running in this session's hands.
+	r.plans([]FeedPlan{{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"b1"}}, {ID: "p2", ThreadID: "t2", State: "active", Steps: []string{"a1"}}, {ID: "p3", ThreadID: "t3", State: "active", Steps: []string{"a2"}}})
+	r.set(nil, []FeedOutcome{{ID: "b1", ThreadID: "t1", MemberUID: "joao", Type: "build", PlanID: "p1", CreatedAtMs: since - 5000, DecidedAtMs: since - 5000}})
+	r.runningSteps([]FeedRunning{{ID: "b1", ThreadID: "t1", MemberUID: "joao", Type: "build", PlanID: "p1", Long: true, BeatAtMs: since}})
+	r.want("t1:carry_out")
+
+	r.offs([]FeedOff{{MemberUID: "joao", SinceMs: since}})
+	r.want("t1:carry_out", "info:off")
+	if m := r.meta(1); m["member"] != "joao" || m["outcome_ids"] != "b1" {
+		t.Fatal(m)
+	}
+	r.mu.Lock()
+	c := r.pushed[1].Content
+	r.mu.Unlock()
+	for _, w := range []string{"turned agents Off at", "start nothing on your own", "stop at a safe point and report", "build (outcome b1) on thread t1", "outcome_done still work"} {
+		if !strings.Contains(c, w) {
+			t.Fatalf("missing %q in %s", w, c)
+		}
+	}
+	// The same Off again (a reconnect): not told twice.
+	r.offs([]FeedOff{{MemberUID: "joao", SinceMs: since}})
+	r.want("t1:carry_out", "info:off")
+
+	r.advance(2 * time.Hour)
+	before := FeedOutcome{ID: "a1", ThreadID: "t2", MemberUID: "joao", Type: "reply", PlanID: "p2", CreatedAtMs: since - 1000, DecidedAtMs: since - 1000}
+	after := FeedOutcome{ID: "a2", ThreadID: "t3", MemberUID: "joao", Type: "reply", PlanID: "p3", CreatedAtMs: since - 1000, DecidedAtMs: since + 1000}
+	other := FeedOutcome{ID: "x1", ThreadID: "t9", MemberUID: "ana", Type: "reply", CreatedAtMs: since - 1000, DecidedAtMs: since - 1000}
+	r.event("m-in", "inbox.added", map[string]any{"newThread": true})
+	r.event("m-new", "thread.created", map[string]any{})
+	r.event("m-ans", "thread.answered", map[string]any{"question": "Thursday?", "answer": "Yes"})
+	until := since + 1000
+	threads := []FeedThread{
+		r.th("tin", func(t *FeedThread) { t.LastEventID = "m-in" }),
+		r.th("tnew", func(t *FeedThread) { t.LastEventID = "m-new" }),
+		r.th("tans", func(t *FeedThread) { t.LastEventID = "m-ans" }),
+		r.th("tw", func(t *FeedThread) {
+			t.State, t.LastEventID, t.Waiting, t.UpdatedAtMs = "waiting", "w1", &FeedWaiting{On: "them"}, since
+		}),
+		r.th("ts", func(t *FeedThread) {
+			t.State, t.LastEventID, t.Waiting = "waiting", "s1", &FeedWaiting{On: "date", UntilMs: &until}
+		}),
+	}
+	r.instruct([]FeedInstruct{{ThreadID: "tq", MemberUID: "joao", Title: "Q", ID: "ins1", Text: "Draft it", AtMs: since + 2000}})
+	r.set(threads, []FeedOutcome{before, after, other})
+	// Delivered: the step approved after Off, another member's work, his New thread, his answer,
+	// his Ask the agent. Held: the step approved before Off, the message brought in, the nudge, the wake.
+	got := fmt.Sprint(r.kinds())
+	for _, w := range []string{"t3:carry_out", "t9:carry_out", "tnew:new", "tans:answered", "tq:instruct"} {
+		if !strings.Contains(got, w) {
+			t.Fatalf("%s not delivered: %s", w, got)
+		}
+	}
+	for _, w := range []string{"t2:carry_out", "tin:new", "tw:nudge_due"} {
+		if strings.Contains(got, w) {
+			t.Fatalf("%s delivered while Off: %s", w, got)
+		}
+	}
+	r.src.mu.Lock()
+	woken := len(r.src.woken)
+	r.src.mu.Unlock()
+	if woken != 0 {
+		t.Fatal("woke a snoozed thread while Off")
+	}
+
+	// On again: told once, and what waited goes out (the step at its cursor again).
+	n := len(r.kinds())
+	r.offs(nil)
+	r.feed.Evaluate()
+	r.settle()
+	rest := fmt.Sprint(r.kinds()[n:])
+	for _, w := range []string{"info:on", "t2:carry_out", "tin:new", "tw:nudge_due"} {
+		if !strings.Contains(rest, w) {
+			t.Fatalf("%s not sent after On: %s", w, rest)
+		}
+	}
+	if r.kinds()[n] != "info:on" {
+		t.Fatalf("On is told first: %s", rest)
+	}
+	r.src.mu.Lock()
+	woken = len(r.src.woken)
+	r.src.mu.Unlock()
+	if woken != 1 {
+		t.Fatalf("woken %d after On", woken)
+	}
+}
+
+// A long step approved before Off waits and does not take a max_items slot from one the
+// member approves while Off; a session resuming a running step while Off waits too.
+func TestInboxFeedOffLongSteps(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 3, MaxSteps: 1})
+	since := r.now.UnixMilli()
+	r.src.mu.Lock()
+	r.src.offs = []FeedOff{{MemberUID: "joao", SinceMs: since}}
+	r.src.mu.Unlock()
+	r.feed.Start()
+	r.settle()
+	r.want("info:off") // already Off when the session starts: told once
+	r.plans([]FeedPlan{{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"b1"}}, {ID: "p2", ThreadID: "t2", State: "active", Steps: []string{"b2"}}, {ID: "p3", ThreadID: "t3", State: "active", Steps: []string{"x", "b3"}, Cursor: 1}})
+	r.runningSteps([]FeedRunning{{ID: "b3", ThreadID: "t3", MemberUID: "joao", Type: "release", PlanID: "p3", Long: true, BeatAtMs: since - 3_600_000}})
+	r.set(nil, []FeedOutcome{
+		{ID: "b1", ThreadID: "t1", MemberUID: "joao", Type: "build", PlanID: "p1", CreatedAtMs: since - 10, DecidedAtMs: since - 10},
+		{ID: "b2", ThreadID: "t2", MemberUID: "joao", Type: "build", PlanID: "p2", CreatedAtMs: since - 5, DecidedAtMs: since + 10},
+	})
+	r.want("info:off") // b3 is running (it fills the one slot) and its resume waits
+	r.runningSteps(nil)
+	r.advance(11 * time.Second)
+	r.feed.Evaluate()
+	r.settle()
+	r.want("info:off", "t2:carry_out")
 }

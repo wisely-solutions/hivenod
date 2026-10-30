@@ -20,6 +20,7 @@ import {
   type OutcomeStateOf,
   type ThreadStateOf,
   paths,
+  setAgentsOff,
 } from '@hive/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { as, getEnv, now, put, useEmulator, W } from '../../../packages/shared/rules/harness';
@@ -427,6 +428,59 @@ d('hivenod mcp --channel inbox events (item 4PEHr)', () => {
     });
     await pause(1200);
     expect(inbox(s)).toHaveLength(2);
+  });
+
+  it('Off (scheduled tasks slice 7): a step approved before Off is held and refused, inbox_add refused; On sends it', async () => {
+    const { token } = await newAgent();
+    const s1 = await session(token, 3);
+    const tid = (await s1.call('inbox_add', msg())).threadId as string;
+    await s1.next('inbox');
+    const oid = (
+      await s1.call('outcome_propose', {
+        threadId: tid,
+        type: 'reply',
+        fields: { text: 'Thursday works.' },
+      })
+    ).outcomeId as string;
+    await s1.close();
+    const o = owner();
+    await o.run(
+      approveOutcome(o.ctx, {
+        outcomeId: oid,
+        outcome: (await read(inboxPaths.outcome(W, oid))) as unknown as OutcomeStateOf,
+        thread: await thread(tid),
+      }),
+    );
+    await o.run(setAgentsOff(o.ctx, { all: true }));
+
+    const s = await session(token, 3);
+    const info = (code: string) =>
+      s.events.filter((e) => e.meta.kind === 'info' && e.meta.code === code);
+    const waitFor = async (f: () => boolean, ms = 5000) => {
+      for (const t0 = Date.now(); !f(); await pause(50))
+        if (Date.now() - t0 > ms) throw new Error(`timed out: ${JSON.stringify(s.events)}`);
+    };
+    await waitFor(() => info('off').length === 1);
+    expect(info('off')[0]!.meta).toMatchObject({ member: 'owner' });
+    expect(info('off')[0]!.content).toMatch(/start nothing on your own/);
+    await pause(1500);
+    expect(inbox(s)).toHaveLength(0); // the carry_out and the resume wait
+    await expect(
+      s.call('outcome_done', { outcomeId: oid, status: 'done', result: { text: 'sent' } }),
+    ).rejects.toThrow(/turned agents Off/);
+    await expect(
+      s.call('inbox_add', msg({ messageId: 'm-2', text: 'Another one' })),
+    ).rejects.toThrow(/turned agents Off/);
+    await expect(
+      s.call('outcome_propose', { threadId: tid, type: 'reply', fields: { text: 'Hi' } }),
+    ).rejects.toThrow(/turned agents Off/);
+
+    await o.run(setAgentsOff(o.ctx, { all: false }));
+    await waitFor(() => info('on').length === 1);
+    await waitFor(() =>
+      inbox(s).some((e) => e.meta.reason === 'carry_out' && e.meta.outcome_id === oid),
+    );
+    await s.call('outcome_done', { outcomeId: oid, status: 'done', result: { text: 'sent' } });
   });
 
   it('plans (item qwFAW): one carry_out per step, only at its turn, with plan_id and step', async () => {

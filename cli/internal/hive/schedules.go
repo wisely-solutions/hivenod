@@ -121,6 +121,10 @@ func (c *Client) SchedulePropose(ctx context.Context, in ScheduleProposeIn) (map
 		if err != nil {
 			return nil, err
 		}
+		// Off (slice 7): a schedule only when the member asked for it while Off.
+		if err := c.refuseOff(ctx, t.MemberUID, func(s int64) bool { return touchedSince(t, s) }); err != nil {
+			return nil, err
+		}
 		if !in.SubjectID.Set {
 			// Filed with the thread it was asked on, unless the agent names a subject.
 			si.SubjectID = t.SubjectID

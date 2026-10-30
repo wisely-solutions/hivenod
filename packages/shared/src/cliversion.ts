@@ -67,6 +67,12 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * refuses the step type and never wakes on their reply.
    */
   their_reply: '0.2.251',
+  /**
+   * The Off switch (scheduled tasks, slice 7): while the member has an agent Off, the channel
+   * holds what it would do on its own (info off / on) and its tools refuse automated writes. An
+   * older CLI is not silenced by Hivenod (the rules still refuse its step starts).
+   */
+  off: '0.2.258',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */
