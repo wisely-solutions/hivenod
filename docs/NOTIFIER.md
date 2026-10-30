@@ -94,6 +94,8 @@ Firestore side. `HIVE_SCHEDULER=off` in the environment leaves it out.
   (or, with a thread, retries the failed step / asks the agent to start); Try later runs the gates
   again at that time and asks again if it still cannot run.
 
+- **Events** the scheduler writes (`inboxEvents`, actor "Hivenod scheduler", shown on Activity under Schedules): `run.fired`, `run.started`, `run.done`, `run.cantRun`, `run.expired`, each with `runId`, `scheduleId` and the `why` code.
+
 **Cost** (no polling; free quota 50,000 reads and 20,000 writes a day):
 
 | Per day                                    | Reads                        | Writes                                |

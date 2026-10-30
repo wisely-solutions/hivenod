@@ -2,6 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   FEED_TYPES,
+  feedChunks,
+  isScheduleEvent,
+  typeChunks,
+  WHY_TEXT,
   foldProgress,
   groupOf,
   linkLabel,
@@ -16,14 +20,14 @@ const agent = { type: 'agent' as const, id: 'hive', name: 'Hive' };
 const e = (
   type: string,
   data: Record<string, unknown> = {},
-  actor: typeof human | typeof agent = agent,
+  actor: { type: 'human' | 'agent' | 'system'; id: string; name: string } = agent,
 ) => ({ type, data, actor }) as never;
 
 describe('the thread feed', () => {
   it('always reads the member’s own events, by group', () => {
     expect(threadFeedConstraints('u1', '')).toEqual([
       ['memberUid', '==', 'u1'],
-      ['type', 'in', [...FEED_TYPES]],
+      ['type', 'in', typeChunks(FEED_TYPES)[0]],
     ]);
     expect(threadFeedConstraints('u1', 'summaries')[1]).toEqual([
       'type',
@@ -90,5 +94,101 @@ describe('the thread feed', () => {
     expect(recommendationKind('Reject')).toBe('reject');
     expect(recommendationKind('Do not ship')).toBe('reject');
     expect(recommendationKind('Hmm')).toBeNull();
+  });
+
+  it('the all view asks in chunks of 30 types', () => {
+    expect(feedChunks('')).toBe(2);
+    expect(typeChunks(FEED_TYPES).flat()).toEqual([...FEED_TYPES]);
+    expect(feedChunks('schedules')).toBe(1);
+  });
+});
+
+/** Scheduled tasks, slice 8: schedule, run and Off events in Activity. */
+describe('schedule events', () => {
+  const sys = { type: 'system' as const, id: 'scheduler', name: 'Hivenod scheduler' };
+  it('belongs to the Schedules group, and only the schedule outcome among the outcomes', () => {
+    for (const t of [
+      'schedule.created',
+      'schedule.updated',
+      'schedule.paused',
+      'schedule.resumed',
+      'schedule.deleted',
+      'run.fired',
+      'run.cantRun',
+      'run.decided',
+      'agents.off',
+      'agents.on',
+    ])
+      expect(groupOf(e(t, {}, sys))).toBe('schedules');
+    expect(groupOf(e('outcome.proposed', { type: 'schedule' }))).toBe('schedules');
+    expect(groupOf(e('outcome.proposed', { type: 'reply' }))).toBe('plans');
+    expect(isScheduleEvent(e('outcome.approved', { type: 'reply' }, human))).toBe(false);
+  });
+  it('filters: Schedules shows only schedule rows; plans and decisions drop the schedule outcome', () => {
+    const all = { group: '' as const, actor: 'all' };
+    expect(matches(e('outcome.proposed', { type: 'reply' }), { ...all, group: 'schedules' })).toBe(
+      false,
+    );
+    expect(
+      matches(e('outcome.proposed', { type: 'schedule' }), { ...all, group: 'schedules' }),
+    ).toBe(true);
+    expect(matches(e('outcome.proposed', { type: 'schedule' }), { ...all, group: 'plans' })).toBe(
+      false,
+    );
+    expect(matches(e('outcome.proposed', { type: 'schedule' }), all)).toBe(true);
+    expect(matches(e('run.fired', {}, sys), { ...all, group: 'schedules' })).toBe(true);
+    expect(matches(e('run.fired', {}, sys), { ...all, group: 'threads' })).toBe(true);
+  });
+  it('says each in one line', () => {
+    expect(
+      threadSentence(
+        e('outcome.proposed', { type: 'schedule', fields: { sentence: 'Every Monday at 08:00' } }),
+      ),
+    ).toEqual({
+      before: 'proposed the schedule ',
+      after: ' · Every Monday at 08:00',
+      target: 'schedule',
+    });
+    expect(
+      threadSentence(e('outcome.approved', { type: 'schedule', edited: true }, human)).before,
+    ).toBe('edited and approved the schedule ');
+    expect(threadSentence(e('schedule.updated', { ruleChanged: true }, human))).toMatchObject({
+      before: 'edited the schedule ',
+      after: ' · new times',
+    });
+    for (const [t, w] of [
+      ['schedule.created', 'added'],
+      ['schedule.paused', 'paused'],
+      ['schedule.resumed', 'resumed'],
+      ['schedule.deleted', 'deleted'],
+    ] as const)
+      expect(threadSentence(e(t, {}, human))).toMatchObject({
+        before: `${w} the schedule `,
+        target: 'schedule',
+      });
+    expect(threadSentence(e('run.fired', {}, sys), 0, 'Weekly report')).toEqual({
+      before: 'started the scheduled run ',
+      after: ' · Weekly report',
+    });
+    expect(threadSentence(e('run.cantRun', { why: 'offline' }, sys), 0, 'Weekly report')).toEqual({
+      before: 'could not run ',
+      after: `: ${WHY_TEXT.offline} · asked what to do · Weekly report`,
+    });
+    expect(
+      threadSentence(e('run.decided', { choice: 'later' }, human), 0, 'Weekly report'),
+    ).toEqual({
+      before: 'chose “Try later” for ',
+      after: ' · Weekly report',
+    });
+    expect(threadSentence(e('agents.off', { all: true, agents: [] }, human))).toMatchObject({
+      before: 'turned all agents Off',
+      target: 'none',
+    });
+    expect(threadSentence(e('agents.off', { all: false, agents: ['a'] }, human)).before).toBe(
+      'turned 1 agent Off',
+    );
+    expect(threadSentence(e('agents.on', { all: false, agents: [] }, human)).before).toBe(
+      'turned agents back On',
+    );
   });
 });

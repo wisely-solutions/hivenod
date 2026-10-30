@@ -20,7 +20,7 @@ import type { z } from 'zod';
 import { db } from '../lib/db';
 import type { Row } from '../lib/live';
 import { isIndexBuilding, PAGE_SIZE } from './logic';
-import { threadFeedConstraints, type ThreadGroupId } from './threadLogic';
+import { feedChunks, MAX_CHUNKS, threadFeedConstraints, type ThreadGroupId } from './threadLogic';
 
 /** A clock that re-renders every `ms` milliseconds. */
 export function useNow(ms: number): number {
@@ -95,23 +95,61 @@ export function useThreadFeed(
   group: '' | ThreadGroupId,
   enabled: boolean,
 ): Feed<InboxEvent> {
-  const key = `${wid}|${uid}|${group}`;
-  return usePagedFeed(
-    key,
-    (after) => {
-      const parts = [
-        collection(db, `workspaces/${wid}/inboxEvents`),
-        ...threadFeedConstraints(uid, group).map(([f, op, v]) => where(f, op, v)),
-        orderBy('at', 'desc'),
-        ...(after ? [startAfter(after)] : []),
-        limit(PAGE_SIZE),
-      ] as const;
-      const [col, ...rest] = parts;
-      return query(col, ...rest);
-    },
-    inboxEventSchema,
-    enabled,
+  const chunks = feedChunks(group);
+  // One listener per chunk of 30 types (a hook count that never changes: MAX_CHUNKS).
+  const feeds = Array.from({ length: MAX_CHUNKS }, (_, c) =>
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    usePagedFeed(
+      `${wid}|${uid}|${group}|${c}`,
+      (after) => {
+        const parts = [
+          collection(db, `workspaces/${wid}/inboxEvents`),
+          ...threadFeedConstraints(uid, group, c).map(([f, op, v]) => where(f, op, v)),
+          orderBy('at', 'desc'),
+          ...(after ? [startAfter(after)] : []),
+          limit(PAGE_SIZE),
+        ] as const;
+        const [col, ...rest] = parts;
+        return query(col, ...rest);
+      },
+      inboxEventSchema,
+      enabled && c < chunks,
+    ),
   );
+  return mergeFeeds(feeds.slice(0, chunks));
+}
+
+/**
+ * Several feeds read by newest first merge into one. A row is shown only down to the oldest row
+ * every unfinished feed has read, so an older page of one feed never leaves a hole in the other.
+ */
+function mergeFeeds(feeds: Feed<InboxEvent>[]): Feed<InboxEvent> {
+  if (feeds.length === 1) return feeds[0]!;
+  const state = feeds.some((f) => f.state === 'error')
+    ? 'error'
+    : feeds.every((f) => f.state === 'ready')
+      ? 'ready'
+      : 'loading';
+  let horizon = 0;
+  for (const f of feeds) {
+    if (f.hasMore && f.rows.length) {
+      horizon = Math.max(horizon, f.rows[f.rows.length - 1]!.data.at.toMillis());
+    }
+  }
+  const rows = feeds
+    .flatMap((f) => f.rows)
+    .filter((r) => r.data.at.toMillis() >= horizon)
+    .sort((a, b) => b.data.at.toMillis() - a.data.at.toMillis() || b.id.localeCompare(a.id));
+  return {
+    state,
+    rows,
+    fresh: new Set(feeds.flatMap((f) => [...f.fresh])),
+    hasMore: feeds.some((f) => f.hasMore),
+    complete: feeds.every((f) => f.complete),
+    loadingMore: feeds.some((f) => f.loadingMore),
+    loadMore: () => feeds.filter((f) => f.hasMore).forEach((f) => f.loadMore()),
+    indexBuilding: feeds.some((f) => f.indexBuilding),
+  };
 }
 
 /** One live listener on the newest page of `build()`, older pages read on demand. */
@@ -289,5 +327,52 @@ export function useThreadTitles(
   const settled = wanted.every((t) => threadTitleCache.has(`${wid}/${t}`));
   const titleOf = (tid: string | null) =>
     tid ? (threadTitleCache.get(`${wid}/${tid}`) ?? null) : null;
+  return Object.assign(titleOf, { settled });
+}
+
+// ---------- schedule titles (slice 8) ----------
+
+const scheduleTitleCache = new Map<string, string | null>();
+
+/** Titles of the schedules the given events name, read once each and remembered. */
+export function useScheduleTitles(
+  wid: string,
+  events: ReadonlyArray<{ type: string; data: Record<string, unknown> }>,
+): ((sid: unknown) => string | null) & { settled: boolean } {
+  const [, bump] = useState(0);
+  const wanted = useMemo(
+    () => [
+      ...new Set(
+        events.flatMap((e) =>
+          typeof e.data.scheduleId === 'string' && e.type !== 'schedule.deleted'
+            ? [e.data.scheduleId]
+            : [],
+        ),
+      ),
+    ],
+    [events],
+  );
+  useEffect(() => {
+    let live = true;
+    const missing = wanted.filter((t) => !scheduleTitleCache.has(`${wid}/${t}`));
+    if (!missing.length) return;
+    void Promise.all(
+      missing.map(async (t) => {
+        try {
+          const snap = await getDoc(doc(db, `workspaces/${wid}/schedules/${t}`));
+          const title = snap.exists() ? (snap.data() as { title?: unknown }).title : null;
+          scheduleTitleCache.set(`${wid}/${t}`, typeof title === 'string' ? title : null);
+        } catch {
+          scheduleTitleCache.set(`${wid}/${t}`, null);
+        }
+      }),
+    ).then(() => live && bump((n) => n + 1));
+    return () => {
+      live = false;
+    };
+  }, [wid, wanted]);
+  const settled = wanted.every((t) => scheduleTitleCache.has(`${wid}/${t}`));
+  const titleOf = (sid: unknown) =>
+    typeof sid === 'string' ? (scheduleTitleCache.get(`${wid}/${sid}`) ?? null) : null;
   return Object.assign(titleOf, { settled });
 }
