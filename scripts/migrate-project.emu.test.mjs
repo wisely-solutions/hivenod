@@ -210,9 +210,9 @@ describe.skipIf(!host)('migrate-project-to-threads on the emulator', () => {
 
   it('a dry run prints the mapping and writes nothing', async () => {
     const r = await run(true);
-    expect(rowOf(r, 'iApprove')).toMatchObject({ to: '2 Approve idea (of 6)', action: 'create' });
+    expect(rowOf(r, 'iApprove')).toMatchObject({ to: '2 Approve idea (of 7)', action: 'create' });
     expect(rowOf(r, 'iAccept')).toMatchObject({
-      to: '6 Accept on live (of 6)',
+      to: '7 Accept on live (of 7)',
       action: 'create',
       attachments: '2/2',
     });
@@ -268,7 +268,7 @@ describe.skipIf(!host)('migrate-project-to-threads on the emulator', () => {
       state: 'active',
       templateId: 'dev',
     });
-    expect(planOf(threadIdFor(W, PID, 'iAccept'))).toMatchObject({ cursor: 5, state: 'active' });
+    expect(planOf(threadIdFor(W, PID, 'iAccept'))).toMatchObject({ cursor: 6, state: 'active' });
     expect(planOf(findingRefs('joao', 'fNew').threadId)).toMatchObject({
       cursor: 0,
       state: 'proposed',

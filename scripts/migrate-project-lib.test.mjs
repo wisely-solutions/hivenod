@@ -38,9 +38,9 @@ const item = (over = {}) => ({
 describe('mapItem', () => {
   it('maps people steps to the Development gates', () => {
     expect(mapItem(item(), STEPS, NOW)).toEqual({ kind: 'thread', cursor: 1 });
-    expect(mapItem(item({ stepId: 'accept' }), STEPS, NOW)).toEqual({ kind: 'thread', cursor: 5 });
-    expect(mappingLabel({ kind: 'thread', cursor: 1 })).toBe('2 Approve idea (of 6)');
-    expect(mappingLabel({ kind: 'thread', cursor: 5 })).toBe('6 Accept on live (of 6)');
+    expect(mapItem(item({ stepId: 'accept' }), STEPS, NOW)).toEqual({ kind: 'thread', cursor: 6 });
+    expect(mappingLabel({ kind: 'thread', cursor: 1 })).toBe('2 Approve idea (of 7)');
+    expect(mappingLabel({ kind: 'thread', cursor: 6 })).toBe('7 Accept on live (of 7)');
   });
   it('never migrates agent steps mid-flight', () => {
     for (const stepId of ['shape', 'build', 'release', 'test'])
@@ -152,6 +152,7 @@ describe('buildItemMigration', () => {
       'done',
       'proposed',
       'approved',
+      'approved',
       'proposed',
       'approved',
       'proposed',
@@ -173,20 +174,22 @@ describe('buildItemMigration', () => {
     ]);
   });
 
-  it('parks an Accept item at Accept on live with steps 1-5 done', () => {
+  it('parks an Accept item at Accept on live with steps 1-6 done', () => {
     const b = buildItemMigration(
       base(
-        { kind: 'thread', cursor: 5 },
+        { kind: 'thread', cursor: 6 },
         { subject: { id: 'sjX', name: 'Hivenod development', exists: true } },
       ),
     );
-    expect(b.cursor).toBe(5);
+    expect(b.cursor).toBe(6);
     expect(b.state).toBe('yourCall');
-    expect(stepStates(b)).toEqual(['done', 'done', 'done', 'done', 'done', 'proposed']);
+    expect(stepStates(b)).toEqual(['done', 'done', 'done', 'done', 'done', 'done', 'proposed']);
     const plan = b.store.get(`workspaces/w1/inboxPlans/${b.planId}`);
     const build = b.store.get(`workspaces/w1/inboxOutcomes/${plan.steps[2]}`);
     expect(build.result.permalink).toBe('https://github.com/o/r/pull/9');
-    const rel = b.store.get(`workspaces/w1/inboxOutcomes/${plan.steps[4]}`);
+    const green = b.store.get(`workspaces/w1/inboxOutcomes/${plan.steps[3]}`);
+    expect(green.result.text).toBe('Kept green in the Hive project.');
+    const rel = b.store.get(`workspaces/w1/inboxOutcomes/${plan.steps[5]}`);
     expect(rel.result.text).toContain('release 12, live commit abcdef1');
     const gate = b.store.get(`workspaces/w1/inboxOutcomes/${plan.steps[1]}`);
     expect(gate.decision.byUid).toBe('joao');
@@ -225,7 +228,7 @@ describe('buildItemMigration', () => {
     const at = ts('2026-10-29T00:00:00Z');
     const b = buildItemMigration(
       base(
-        { kind: 'thread', cursor: 5 },
+        { kind: 'thread', cursor: 6 },
         {
           attachments: [
             {
@@ -286,8 +289,8 @@ describe('buildItemMigration', () => {
   });
 
   it('is deterministic (a rerun builds the same ids)', () => {
-    const a = buildItemMigration(base({ kind: 'thread', cursor: 5 }));
-    const b = buildItemMigration(base({ kind: 'thread', cursor: 5 }));
+    const a = buildItemMigration(base({ kind: 'thread', cursor: 6 }));
+    const b = buildItemMigration(base({ kind: 'thread', cursor: 6 }));
     expect([...a.store.docs.keys()]).toEqual([...b.store.docs.keys()]);
   });
 });
