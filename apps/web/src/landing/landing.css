@@ -374,7 +374,7 @@
   background: var(--lp-ink);
   color: var(--lp-bg);
 }
-.lp-tab-projects[aria-selected='true'] .lp-ico {
+.lp-tab-plans[aria-selected='true'] .lp-ico {
   background: var(--lp-hon);
   color: #15171b;
 }
@@ -424,10 +424,10 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.lp-t-proj {
+.lp-t-plans {
   color: var(--lp-hon-text);
 }
-.lp-t-proj .lp-ico {
+.lp-t-plans .lp-ico {
   background: rgb(245 181 46 / 0.16);
 }
 .lp-t-inbox {

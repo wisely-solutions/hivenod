@@ -207,7 +207,10 @@ misleading 409 "release already exists". This is a size limit for the whole file
   cheap to compile) until Google refuses it,
   and reads the size from the 400 (two pad sizes give the cost per pad, which is subtracted). It deletes
   every ruleset and release it creates (Google keeps at most 2500 rulesets). It needs the deploy service
-  account (`GOOGLE_APPLICATION_CREDENTIALS`) and takes about a minute.
+  account (`GOOGLE_APPLICATION_CREDENTIALS`) and takes about a minute. The rules are uploaded without comments and
+  indentation (they cost nothing compiled), and the padding never passes Google's 256 KiB source limit; if it
+  still cannot reach the compiled limit, the rules fit and the probe passes with
+  `rules fit: compiled size is at most N of 256000 bytes ...` (an upper bound, not an exact size).
 - **Release guard:** `pnpm release` runs the same probe before deploying rules and stops with
   "rules too big: N of 256000 bytes" (nothing deployed). A 409 behind which the 400 hides is reported the same
   way and never retried.

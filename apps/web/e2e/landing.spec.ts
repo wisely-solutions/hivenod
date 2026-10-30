@@ -46,22 +46,19 @@ for (const theme of ['light', 'dark'] as const) {
         name: /Agents do the work\.\s*You make the calls\./,
       }),
     ).toBeVisible();
-    await expect(page.getByText('Your inbox and calendar, run by your agents')).toBeVisible();
+    await expect(page.getByText('Your inbox, run by your agents')).toBeVisible();
     await expect(page.getByText(INSTALL)).toBeVisible();
-    // The two usages: Projects first, with the real board and gate screenshots.
+    // The two usages: Inbox first, with the real Today screens and the real sources.
     const tabs = page.getByRole('tablist', { name: 'Two ways to use Hivenod' });
-    await expect(tabs.getByRole('tab', { name: 'Projects' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    const projects = page.getByRole('tabpanel', { name: 'Projects' });
+    await expect(tabs.getByRole('tab', { name: 'Inbox' })).toHaveAttribute('aria-selected', 'true');
+    const inbox = page.getByRole('tabpanel', { name: 'Inbox' });
     await expect(
-      projects.getByRole('heading', { name: 'Agents build it. You approve it.' }),
+      inbox.getByRole('heading', { name: 'Agents answer it. You OK it.' }),
     ).toBeVisible();
-    await expect(projects.getByRole('img', { name: /The Website project.s board/ })).toBeAttached();
+    await expect(inbox.getByRole('img', { name: /^Today: the morning brief/ })).toBeVisible();
     await expect(
-      projects.getByRole('img', { name: /On a phone: the Pricing page rewrite/ }),
-    ).toBeAttached();
+      inbox.getByRole('list', { name: 'Sources your agents can bring in' }).getByRole('listitem'),
+    ).toHaveText(['Mail', 'Teams', 'Slack', 'Jira', 'GitLab', 'GitHub', 'Telegram']);
     // Needs you for both, the day timeline, how it works, trust and open source.
     await expect(
       page.getByRole('heading', { name: /Every decision,\s*from every workspace\./ }),
@@ -72,8 +69,8 @@ for (const theme of ['light', 'dark'] as const) {
     for (const h of [
       'Your morning brief',
       'A plan waits at your gate',
-      'A meeting finds its slot',
-      'Shipped, tested, live',
+      'A reply, drafted and checked',
+      'Shipped, checked, live',
     ])
       await expect(day.getByRole('heading', { name: h })).toBeVisible();
     await expect(
@@ -118,31 +115,22 @@ for (const theme of ['light', 'dark'] as const) {
       path: `${shots}/landing-${theme}-${page.viewportSize()!.width}.png`,
       fullPage: true,
     });
-    // The other tab: Inbox and Calendar, with the shipped Today screens and the real sources.
-    await tabs.getByRole('tab', { name: 'Inbox & Calendar' }).click();
-    const inbox = page.getByRole('tabpanel', { name: 'Inbox & Calendar' });
+    // The other tab: Plans, with the decision page screenshots.
+    await tabs.getByRole('tab', { name: 'Plans' }).click();
+    const plans = page.getByRole('tabpanel', { name: 'Plans' });
     await expect(
-      inbox.getByRole('heading', { name: 'Agents answer it. You OK it.' }),
+      plans.getByRole('heading', { name: 'Agents build it. You approve it.' }),
     ).toBeVisible();
-    await expect(projects).toBeHidden();
-    await expect(inbox.getByRole('img', { name: /^Today: the morning brief/ })).toBeVisible();
+    await expect(inbox).toBeHidden();
     await expect(
-      inbox.getByRole('list', { name: 'Sources your agents can bring in' }).getByRole('listitem'),
-    ).toHaveText([
-      'Mail',
-      'Teams',
-      'Slack',
-      'Jira',
-      'GitLab',
-      'GitHub',
-      'Telegram',
-      'Google Calendar',
-    ]);
+      plans.getByRole('img', { name: /^A decision page: Ship release 175/ }),
+    ).toBeVisible();
+    await expect(page.getByText(/calendar|your projects/i)).toHaveCount(0);
     await expectNoHorizontalScroll(page);
     await settle(page);
     await axe(page);
     await page.screenshot({
-      path: `${shots}/landing-inbox-${theme}-${page.viewportSize()!.width}.png`,
+      path: `${shots}/landing-plans-${theme}-${page.viewportSize()!.width}.png`,
     });
   });
 }
@@ -152,39 +140,36 @@ test('the usage tabs work from the keyboard: arrows, Home and End, one tab stop'
 }) => {
   await page.goto('/');
   const tabs = page.getByRole('tablist', { name: 'Two ways to use Hivenod' });
-  const projects = tabs.getByRole('tab', { name: 'Projects' });
-  const inbox = tabs.getByRole('tab', { name: 'Inbox & Calendar' });
-  await expect(projects).toHaveAttribute('tabindex', '0');
-  await expect(inbox).toHaveAttribute('tabindex', '-1');
-  await expect(projects).toHaveAttribute('aria-controls', 'projects');
-  await projects.focus();
+  const inbox = tabs.getByRole('tab', { name: 'Inbox' });
+  const plans = tabs.getByRole('tab', { name: 'Plans' });
+  await expect(inbox).toHaveAttribute('tabindex', '0');
+  await expect(plans).toHaveAttribute('tabindex', '-1');
+  await expect(inbox).toHaveAttribute('aria-controls', 'inbox');
+  await inbox.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(plans).toBeFocused();
+  await expect(plans).toHaveAttribute('aria-selected', 'true');
+  await expect(inbox).toHaveAttribute('aria-selected', 'false');
+  await expect(page.getByRole('tabpanel', { name: 'Plans' })).toBeVisible();
   await page.keyboard.press('ArrowRight');
   await expect(inbox).toBeFocused();
-  await expect(inbox).toHaveAttribute('aria-selected', 'true');
-  await expect(projects).toHaveAttribute('aria-selected', 'false');
-  await expect(page.getByRole('tabpanel', { name: 'Inbox & Calendar' })).toBeVisible();
-  await page.keyboard.press('ArrowRight');
-  await expect(projects).toBeFocused();
-  await expect(page.getByRole('tabpanel', { name: 'Projects' })).toBeVisible();
+  await expect(page.getByRole('tabpanel', { name: 'Inbox' })).toBeVisible();
   await page.keyboard.press('End');
-  await expect(inbox).toHaveAttribute('aria-selected', 'true');
+  await expect(plans).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('Home');
-  await expect(projects).toHaveAttribute('aria-selected', 'true');
-  await page.keyboard.press('ArrowLeft');
   await expect(inbox).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowLeft');
+  await expect(plans).toHaveAttribute('aria-selected', 'true');
   // Tab leaves the tab list for the panel's content.
   await page.keyboard.press('Tab');
-  await expect(inbox).not.toBeFocused();
-  // A link to #inbox opens on that tab; the nav's links switch it.
-  await page.goto('/#inbox');
-  await expect(inbox).toHaveAttribute('aria-selected', 'true');
+  await expect(plans).not.toBeFocused();
+  // A link to #plans opens on that tab; the nav's links switch it.
+  await page.goto('/#plans');
+  await expect(plans).toHaveAttribute('aria-selected', 'true');
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page
-    .getByRole('navigation', { name: 'Main' })
-    .getByRole('link', { name: 'Projects' })
-    .click();
-  await expect(projects).toHaveAttribute('aria-selected', 'true');
-  await expect(page).toHaveURL(/#projects$/);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Inbox' }).click();
+  await expect(inbox).toHaveAttribute('aria-selected', 'true');
+  await expect(page).toHaveURL(/#inbox$/);
 });
 
 test('without JavaScript both usages are readable', async ({ browser }) => {
@@ -195,10 +180,10 @@ test('without JavaScript both usages are readable', async ({ browser }) => {
     page.getByRole('heading', { level: 1, name: 'Agents do the work. You make the calls.' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Projects: agents build it. You approve it.' }),
+    page.getByRole('heading', { name: 'Inbox: agents answer it. You OK it.' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Inbox and Calendar: agents answer it. You OK it.' }),
+    page.getByRole('heading', { name: 'Plans: agents build it. You approve it.' }),
   ).toBeVisible();
   await expect(page.locator('code')).toHaveText(INSTALL);
   await expect(
@@ -221,23 +206,21 @@ test('phones at 390: stacked, no sideways scroll, accessible in both themes and 
       page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^Star on GitHub/ }),
     ).toBeVisible();
     // On phones the screenshots lead and the usage's text follows.
-    const panel = page.getByRole('tabpanel', { name: 'Projects' });
-    const shot = await panel
-      .getByRole('img', { name: /The Website project.s board/ })
-      .boundingBox();
-    const text = await panel.getByRole('heading', { name: /Agents build it/ }).boundingBox();
+    const panel = page.getByRole('tabpanel', { name: 'Inbox' });
+    const shot = await panel.getByRole('img', { name: /^Today: the morning brief/ }).boundingBox();
+    const text = await panel.getByRole('heading', { name: /Agents answer it/ }).boundingBox();
     expect(shot!.y).toBeLessThan(text!.y);
     await expectNoHorizontalScroll(page);
     await settle(page);
     await axe(page);
     await loadAll(page);
     await page.screenshot({ path: `${shots}/landing-${theme}-390.png`, fullPage: true });
-    await page.getByRole('tab', { name: 'Inbox & Calendar' }).click();
-    await expect(page.getByRole('tabpanel', { name: 'Inbox & Calendar' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Plans' }).click();
+    await expect(page.getByRole('tabpanel', { name: 'Plans' })).toBeVisible();
     await expectNoHorizontalScroll(page);
     await settle(page);
     await axe(page);
-    await page.screenshot({ path: `${shots}/landing-inbox-${theme}-390.png` });
+    await page.screenshot({ path: `${shots}/landing-plans-${theme}-390.png` });
   }
 });
 
@@ -268,19 +251,19 @@ test('page weight: the first load stays within budget; the hidden tab loads lazi
   await page.waitForLoadState('networkidle');
   const first = await weight(page);
   console.log(`landing first load at ${page.viewportSize()!.width}: ${JSON.stringify(first)}`);
-  // The Inbox tab's own phone screenshot waits until that tab is opened.
-  expect(first.imageNames.filter((n) => /^today-phone/.test(n))).toEqual([]);
+  // The Plans tab's own phone screenshot waits until that tab is opened.
+  expect(first.imageNames.filter((n) => /^decision-phone/.test(n))).toEqual([]);
   // Budgets (uncompressed; hosting gzips the text): everything fetched, and images alone.
   expect(first.images).toBeLessThan(450 * 1024);
   expect(first.total).toBeLessThan(1600 * 1024);
   // Scrolled to the end with both tabs seen: still bounded.
-  await page.getByRole('tab', { name: 'Inbox & Calendar' }).click();
+  await page.getByRole('tab', { name: 'Plans' }).click();
   for (let y = 0; y < 12; y++) await page.mouse.wheel(0, 900);
   await page.getByRole('contentinfo').scrollIntoViewIfNeeded();
   await page.waitForLoadState('networkidle');
   const all = await weight(page);
   console.log(`landing after scroll at ${page.viewportSize()!.width}: ${JSON.stringify(all)}`);
-  expect(all.imageNames.some((n) => /^today-phone/.test(n))).toBe(true);
+  expect(all.imageNames.some((n) => /^decision-phone/.test(n))).toBe(true);
   expect(all.images).toBeLessThan(1100 * 1024);
 });
 
