@@ -1327,7 +1327,12 @@
             "<id>",
             "<id>"
           ],
-          "planId": "<id>"
+          "planId": "<id>",
+          "recommended": null,
+          "stepLabel": "Approve plan",
+          "summaryVersion": null,
+          "templateId": null,
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -1345,7 +1350,12 @@
           "edited": false,
           "outcomeId": "<id>",
           "planId": "<id>",
-          "type": "approval"
+          "recommended": null,
+          "stepLabel": "New price list",
+          "summaryVersion": null,
+          "templateId": null,
+          "type": "approval",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -1374,6 +1384,7 @@
         "confidence": "medium",
         "createdAt": "<ts>",
         "cursor": 4,
+        "cursorAt": "<ts>",
         "lastEventId": "<id>",
         "memberUid": "owner",
         "note": "Confirm, get your OK on the prices, update the site, then tell Sam.",

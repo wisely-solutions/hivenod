@@ -638,7 +638,12 @@
           "edited": false,
           "outcomeId": "l2",
           "planId": "lp1",
-          "type": "approval"
+          "recommended": null,
+          "stepLabel": "Approve idea",
+          "summaryVersion": null,
+          "templateId": "dev",
+          "type": "approval",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -650,6 +655,7 @@
       {
         "createdAt": "<ts>",
         "cursor": 3,
+        "cursorAt": "<ts>",
         "lastEventId": "<id>",
         "memberUid": "owner",
         "note": "",

@@ -1215,7 +1215,12 @@
         "data": {
           "edited": false,
           "outcomeId": "<id>",
-          "type": "snooze"
+          "recommended": null,
+          "stepLabel": "Snooze",
+          "summaryVersion": null,
+          "templateId": null,
+          "type": "snooze",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": "<id>",
@@ -1235,7 +1240,12 @@
             "text": "Thursday 10:00 works."
           },
           "outcomeId": "<id>",
-          "type": "reply"
+          "recommended": null,
+          "stepLabel": "Reply",
+          "summaryVersion": null,
+          "templateId": null,
+          "type": "reply",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": "<id>",

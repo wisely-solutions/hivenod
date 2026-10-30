@@ -94,10 +94,12 @@ async function seed(page: Page) {
   return { pid };
 }
 
-test('insights: KPIs, tag bars filter the log, search, CSV', async ({ page }, info) => {
+// The project's Insights tab keeps the item decisions until Projects go (slice 10); Decision
+// insights on threads: threadactivity.spec.ts.
+test('project insights: KPIs, tag bars filter the log, search, CSV', async ({ page }, info) => {
   const { pid } = await seed(page);
-  await page.goto('/insights?range=30');
-  await expect(page.getByRole('heading', { name: 'Decision insights' })).toBeVisible();
+  await page.goto(`/p/${pid}/insights?range=30`);
+  await expect(page.getByRole('heading', { name: 'Insights', exact: true })).toBeVisible();
   // 6 decisions in 30 days (the 60-day-old one is out). First time: 3 approvals + (sentBack, sentBack, stopped) -> distinct items all first: 3/6.
   await expect(page.getByText('Decisions made')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Key numbers' })).toContainText('3 approved');
@@ -139,11 +141,6 @@ test('insights: KPIs, tag bars filter the log, search, CSV', async ({ page }, in
   expect(text).toContain('"\'=SUM(1,2) not wanted"');
   expect(text).toMatch(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z/);
 
-  // The project tab shows the same numbers.
-  await page.goto(`/p/${pid}/insights`);
-  await expect(page.getByRole('heading', { name: 'Insights', exact: true })).toBeVisible();
-  await expect(page.getByTestId('median-wait')).toHaveText('25 min');
-
   await settle(page);
   const { violations } = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
@@ -166,13 +163,13 @@ test('insights: empty period', async ({ page }) => {
 
 test('screenshots', async ({ page }, info) => {
   test.skip(!process.env.SHOTS_DIR, 'set SHOTS_DIR to capture');
-  await seed(page);
+  const { pid } = await seed(page);
   const dir = process.env.SHOTS_DIR!;
   mkdirSync(dir, { recursive: true });
   const size = (info.project.use.viewport?.width ?? 375) >= 1000 ? '1440' : '375';
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
-    await page.goto('/insights?range=30');
+    await page.goto(`/p/${pid}/insights?range=30`);
     await expect(page.getByTestId('median-wait')).toBeVisible();
     for (let y = 0; y < 6000; y += 400) {
       await page.evaluate((v) => window.scrollTo(0, v), y);
