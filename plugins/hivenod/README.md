@@ -52,7 +52,7 @@ caps the threads sent at once). The limit is per session: to do more work at onc
 another machine with its own agent. See [Many agents, many machines](../../docs/SCALING.md).
 
 The channel protocol only states the contract. How the session organises the work is the plugin's
-`hivenod` skill (`skills/hivenod/SKILL.md`, new in 0.2.0; threads only since 0.3.8): the main
+`hivenod` skill (`skills/hivenod/SKILL.md`, new in 0.2.0; threads only since 0.3.9): the main
 session stays a thin orchestrator and runs each Inbox thread in a background sub-agent of its own,
 and routes the thread's follow-up events to it. Other agent hosts get the contract only. Update the plugin
 (`claude plugin update hivenod@hivenod`) to get the skill.

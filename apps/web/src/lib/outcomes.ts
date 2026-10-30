@@ -11,10 +11,14 @@ export function effectLines(
   ctx: { agent: string; channel?: string; to?: string },
 ): { lead: string; lines: string[] } {
   const t = outcomeType(type);
-  // Retired with Calendar (slice 5): old bookings are never approved now.
+  // Retired with Calendar (slice 5) and Projects (slice 11): old bookings and Build it steps are
+  // never approved now.
   if (t?.retired)
     return {
-      lead: 'Bookings were removed with Calendar:',
+      lead:
+        type === 'make_it_work'
+          ? 'Items were removed with Projects:'
+          : 'Bookings were removed with Calendar:',
       lines: ['This proposal can only be rejected'],
     };
   const s = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
@@ -37,11 +41,6 @@ export function effectLines(
       break;
     case 'nudge':
       lines.push(`Send the reminder${to}${on}, as you`);
-      break;
-    case 'make_it_work':
-      lines.push(
-        `Create the item “${s(fields.title)}”${s(fields.project) ? ` in ${s(fields.project)}` : ''}`,
-      );
       break;
     case 'handover':
       lines.push(`Hand it over to ${s(fields.to)}`);

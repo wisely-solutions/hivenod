@@ -13,9 +13,11 @@ describe('effectLines (item kt3E7, design 3.8)', () => {
       lead: 'When you approve, it takes effect at once:',
       lines: ['Ignore the thread; nothing is sent'],
     });
-    expect(effectLines('make_it_work', { title: 'Fix it' }, { agent: 'A' }).lines).toEqual([
-      'Create the item “Fix it”',
-      'Keep the thread waiting on the item',
-    ]);
+  });
+  it('a retired Build it step is never approved (Projects removed, slice 11)', () => {
+    expect(effectLines('make_it_work', { title: 'Fix it' }, { agent: 'A' })).toEqual({
+      lead: 'Items were removed with Projects:',
+      lines: ['This proposal can only be rejected'],
+    });
   });
 });

@@ -29,8 +29,8 @@ describe('hivenod plugin skill', () => {
     for (const w of ['sub-agent', 'SendMessage', 'TaskStop', 'inbox', 'threadId', 'thread_read'])
       expect(skill).toContain(w);
   });
-  it('is shipped by the plugin at version 0.3.8 and the marketplace points at it', () => {
-    expect(JSON.parse(read('plugins/hivenod/.claude-plugin/plugin.json')).version).toBe('0.3.8');
+  it('is shipped by the plugin at version 0.3.9 and the marketplace points at it', () => {
+    expect(JSON.parse(read('plugins/hivenod/.claude-plugin/plugin.json')).version).toBe('0.3.9');
     const m = JSON.parse(read('.claude-plugin/marketplace.json'));
     expect(JSON.stringify(m)).toContain('./plugins/hivenod');
   });
