@@ -183,6 +183,8 @@ service cloud.firestore {
     function changed(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
+    // changed(keys), plus the updatedAt and lastEventId stamps every tracked write carries.
+    function touched(keys) { return changed(keys.concat(['updatedAt', 'lastEventId'])); }
     function exactKeys(d, keys) { return d.keys().hasAll(keys) && d.keys().hasOnly(keys); }
     function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
     function strOrNull(v, max) { return v == null || (v is string && v.size() <= max); }
@@ -290,16 +292,20 @@ service cloud.firestore {
 
       // `hivenod connect` (item EJ2Cxq4k) adds kind 'connect': a device-login style request that
       // any member confirms for their own projects, valid 10 minutes instead of 15.
-      allow create: if code.matches('^[A-HJKMNP-Z2-9]{8}$')
-        && (exactKeys(request.resource.data, ['publicKey', 'cli', 'host', 'folder', 'status', 'createdAt'])
-            || (exactKeys(request.resource.data, ['publicKey', 'cli', 'host', 'folder', 'status', 'createdAt', 'kind'])
-                && request.resource.data.kind == 'connect'))
-        && str(request.resource.data.publicKey, 80, 200)
-        && str(request.resource.data.cli, 1, 40)
-        && str(request.resource.data.host, 0, 80)
-        && str(request.resource.data.folder, 0, 120)
-        && request.resource.data.status == 'pending'
-        && request.resource.data.createdAt == request.time;
+      allow create: if pairingsCreateOk(code);
+      function pairingsCreateOk(code) {
+        let d = request.resource.data;
+        return code.matches('^[A-HJKMNP-Z2-9]{8}$')
+        && (exactKeys(d, ['publicKey', 'cli', 'host', 'folder', 'status', 'createdAt'])
+            || (exactKeys(d, ['publicKey', 'cli', 'host', 'folder', 'status', 'createdAt', 'kind'])
+                && d.kind == 'connect'))
+        && str(d.publicKey, 80, 200)
+        && str(d.cli, 1, 40)
+        && str(d.host, 0, 80)
+        && str(d.folder, 0, 120)
+        && d.status == 'pending'
+        && d.createdAt == request.time;
+      }
 
       // Completed once, within 15 minutes (a connect request: 10), by an admin, or for a connect
       // request by any member, for an agent they just created.
@@ -337,18 +343,22 @@ service cloud.firestore {
     match /users/{uid} {
       // Other people's names come from the per-organization members/{uid} cards, never from here.
       allow read: if signedIn() && uid == me();
-      allow create, update: if signedIn() && uid == me() && !isAgentEmail()
+      allow create, update: if usersCreateUpdateOk(uid);
+      function usersCreateUpdateOk(uid) {
+        let d = request.resource.data;
+        return signedIn() && uid == me() && !isAgentEmail()
         // workspaceIds is missing on profiles that predate organizations; the next write adds it.
-        && request.resource.data.keys().hasAll(['name', 'email', 'photoURL', 'color', 'workspaceId', 'theme'])
-        && request.resource.data.keys().hasOnly(['name', 'email', 'photoURL', 'color', 'workspaceId', 'workspaceIds', 'theme'])
-        && str(request.resource.data.name, 0, 200)
-        && str(request.resource.data.email, 0, 320)
-        && strOrNull(request.resource.data.photoURL, 2048)
-        && str(request.resource.data.color, 0, 32)
-        && request.resource.data.theme in [null, 'light', 'dark']
-        && (request.resource.data.workspaceId == null || isMemberAfter(request.resource.data.workspaceId))
-        && validWorkspaceIds(request.resource.data.get('workspaceIds', []),
+        && d.keys().hasAll(['name', 'email', 'photoURL', 'color', 'workspaceId', 'theme'])
+        && d.keys().hasOnly(['name', 'email', 'photoURL', 'color', 'workspaceId', 'workspaceIds', 'theme'])
+        && str(d.name, 0, 200)
+        && str(d.email, 0, 320)
+        && strOrNull(d.photoURL, 2048)
+        && str(d.color, 0, 32)
+        && d.theme in [null, 'light', 'dark']
+        && (d.workspaceId == null || isMemberAfter(d.workspaceId))
+        && validWorkspaceIds(d.get('workspaceIds', []),
              resource == null ? [] : resource.data.get('workspaceIds', []));
+      }
       allow delete: if false;
 
       // ---------- notifications (card rN5Q12W2) ----------
@@ -356,16 +366,20 @@ service cloud.firestore {
       // notifier service only (admin SDK, no rule applies); the person may unlink it by deleting it.
       match /notify/prefs {
         allow read: if signedIn() && uid == me();
-        allow create, update: if signedIn() && uid == me() && !isAgentEmail()
-          && exactKeys(request.resource.data, ['push', 'telegram', 'digest', 'quiet'])
-          && request.resource.data.push is bool
-          && request.resource.data.telegram is bool
-          && request.resource.data.digest is bool
-          && exactKeys(request.resource.data.quiet, ['enabled', 'from', 'to', 'tz'])
-          && request.resource.data.quiet.enabled is bool
-          && str(request.resource.data.quiet.from, 5, 5)
-          && str(request.resource.data.quiet.to, 5, 5)
-          && str(request.resource.data.quiet.tz, 1, 64);
+        allow create, update: if prefsCreateUpdateOk(uid);
+        function prefsCreateUpdateOk(uid) {
+          let d = request.resource.data;
+          return signedIn() && uid == me() && !isAgentEmail()
+          && exactKeys(d, ['push', 'telegram', 'digest', 'quiet'])
+          && d.push is bool
+          && d.telegram is bool
+          && d.digest is bool
+          && exactKeys(d.quiet, ['enabled', 'from', 'to', 'tz'])
+          && d.quiet.enabled is bool
+          && str(d.quiet.from, 5, 5)
+          && str(d.quiet.to, 5, 5)
+          && str(d.quiet.tz, 1, 64);
+        }
         allow delete: if false;
       }
       match /notify/telegram {
@@ -417,13 +431,17 @@ service cloud.firestore {
       // them when the member is in the agent's organization (agentHomes/{agentUid} says which).
       match /busy/{bid} {
         allow read: if signedIn() && (uid == me() || busyReader(uid));
-        allow create, update: if signedIn() && validBusy(request.resource.data)
-          && bid.size() > request.resource.data.workspaceId.size() + 1
-          && bid[0:request.resource.data.workspaceId.size() + 1] == request.resource.data.workspaceId + '_'
-          && (resource == null || resource.data.workspaceId == request.resource.data.workspaceId)
-          && busyWriter(request.resource.data.workspaceId, uid)
-          && request.resource.data.updatedAt == request.time
-          && tracked(request.resource.data.workspaceId, request.resource.data.lastEventId, ['calendar.changed']);
+        allow create, update: if busyCreateUpdateOk(uid, bid);
+        function busyCreateUpdateOk(uid, bid) {
+          let d = request.resource.data;
+          return signedIn() && validBusy(d)
+          && bid.size() > d.workspaceId.size() + 1
+          && bid[0:d.workspaceId.size() + 1] == d.workspaceId + '_'
+          && (resource == null || resource.data.workspaceId == d.workspaceId)
+          && busyWriter(d.workspaceId, uid)
+          && d.updatedAt == request.time
+          && tracked(d.workspaceId, d.lastEventId, ['calendar.changed']);
+        }
         // A member clears their own blocks of an organization they have left (or that is gone); an
         // admin of an organization being deleted clears its blocks in the members' stores (the
         // organization id is the part of the block id before the first underscore).
@@ -610,16 +628,20 @@ service cloud.firestore {
         allow get: if isAdmin(wid)
           || (signedIn() && resource.data.email == request.auth.token.get('email', '').lower());
         allow list: if isAdmin(wid);
-        allow create: if isAdmin(wid)
-          && exactKeys(request.resource.data, ['email', 'role', 'createdBy', 'expiresAt', 'usedBy', 'lastEventId'])
-          && str(request.resource.data.email, 3, 320)
-          && request.resource.data.email == request.resource.data.email.lower()
-          && request.resource.data.role in ['admin', 'member']
-          && request.resource.data.createdBy == me()
-          && request.resource.data.expiresAt is timestamp
-          && request.resource.data.expiresAt > request.time
-          && request.resource.data.usedBy == null
-          && tracked(wid, request.resource.data.lastEventId, ['member.invited']);
+        allow create: if invitesCreateOk(wid);
+        function invitesCreateOk(wid) {
+          let d = request.resource.data;
+          return isAdmin(wid)
+          && exactKeys(d, ['email', 'role', 'createdBy', 'expiresAt', 'usedBy', 'lastEventId'])
+          && str(d.email, 3, 320)
+          && d.email == d.email.lower()
+          && d.role in ['admin', 'member']
+          && d.createdBy == me()
+          && d.expiresAt is timestamp
+          && d.expiresAt > request.time
+          && d.usedBy == null
+          && tracked(wid, d.lastEventId, ['member.invited']);
+        }
         // The invitee marks the invite used, in the same batch that adds them to memberRoles.
         allow update: if signedIn() && !isAgentEmail()
           && changed(['usedBy', 'lastEventId'])
@@ -659,64 +681,73 @@ service cloud.firestore {
       match /agents/{aid} {
         allow read: if isMember(wid) || (signedIn() && aid == me() && isActiveAgent(wid));
 
-        allow create: if (isAdmin(wid) || memberConnects(request.resource.data)) && verified()
+        allow create: if agentsCreateOk(wid, aid);
+        function agentsCreateOk(wid, aid) {
+          let d = request.resource.data;
+          return (isAdmin(wid) || memberConnects(d)) && verified()
           && aid != me() && !(aid in get(wsPath(wid)).data.memberRoles)
-          && request.resource.data.keys().hasAll(['name', 'color', 'projectIds', 'createdBy', 'createdAt',
+          && d.keys().hasAll(['name', 'color', 'projectIds', 'createdBy', 'createdAt',
                'revokedAt', 'lastSeenAt', 'tokenHint', 'previousAgentUid', 'lastEventId'])
           // guardrails and permissions are optional (absent = defaults); a new agent is never paused.
-          && request.resource.data.keys().hasOnly(['name', 'color', 'projectIds', 'createdBy', 'createdAt',
+          && d.keys().hasOnly(['name', 'color', 'projectIds', 'createdBy', 'createdAt',
                'revokedAt', 'lastSeenAt', 'tokenHint', 'previousAgentUid', 'guardrails', 'permissions',
                'scope', 'lastEventId'])
           // An Inbox and Calendar agent (item fJnu6) is created by an admin only.
-          && (!('scope' in request.resource.data) || isAdmin(wid))
-          && validAgentFields(request.resource.data)
-          && request.resource.data.createdBy == me()
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.revokedAt == null
-          && request.resource.data.lastSeenAt == null
-          && strOrNull(request.resource.data.previousAgentUid, 128)
-          && tracked(wid, request.resource.data.lastEventId, ['agent.created', 'agent.rotated']);
+          && (!('scope' in d) || isAdmin(wid))
+          && validAgentFields(d)
+          && d.createdBy == me()
+          && d.createdAt == request.time
+          && d.revokedAt == null
+          && d.lastSeenAt == null
+          && strOrNull(d.previousAgentUid, 128)
+          && tracked(wid, d.lastEventId, ['agent.created', 'agent.rotated']);
+        }
 
         // Admins edit settings, resume a paused agent or revoke (revocation is final). Resuming only
         // clears the pause: an admin never pauses an agent by hand (revoke is the stop switch).
         // The agent itself may only stamp presence, and keep its own failure streak.
-        allow update: if (isAdmin(wid)
-            && resource.data.revokedAt == null
+        allow update: if agentsUpdateOk(wid, aid);
+        function agentsUpdateOk(wid, aid) {
+          let d = request.resource.data;
+          let r = resource.data;
+          return (isAdmin(wid)
+            && r.revokedAt == null
             && changed(['name', 'color', 'projectIds', 'revokedAt', 'guardrails', 'permissions',
                         'failStreak', 'pausedAt', 'pausedReason', 'lastEventId'])
-            && validAgentFields(request.resource.data)
+            && validAgentFields(d)
             // The name changes only with an agent.renamed event, and that event only with a new name.
-            && ((request.resource.data.name == resource.data.name
-                  && getAfter(eventPath(wid, request.resource.data.lastEventId)).data.type != 'agent.renamed')
-                || (request.resource.data.name != resource.data.name
-                  && getAfter(eventPath(wid, request.resource.data.lastEventId)).data.type == 'agent.renamed'))
-            && (request.resource.data.revokedAt == null || request.resource.data.revokedAt == request.time)
-            && (request.resource.data.get('pausedAt', null) == resource.data.get('pausedAt', null)
-                || request.resource.data.get('pausedAt', null) == null)
-            && (request.resource.data.get('pausedReason', null) == resource.data.get('pausedReason', null)
-                || request.resource.data.get('pausedReason', null) == null)
-            && request.resource.data.get('failStreak', 0) in [0, resource.data.get('failStreak', 0)]
-            && tracked(wid, request.resource.data.lastEventId, ['agent.updated', 'agent.renamed', 'agent.revoked', 'agent.rotated']))
+            && ((d.name == r.name
+                  && getAfter(eventPath(wid, d.lastEventId)).data.type != 'agent.renamed')
+                || (d.name != r.name
+                  && getAfter(eventPath(wid, d.lastEventId)).data.type == 'agent.renamed'))
+            && (d.revokedAt == null || d.revokedAt == request.time)
+            && (d.get('pausedAt', null) == r.get('pausedAt', null)
+                || d.get('pausedAt', null) == null)
+            && (d.get('pausedReason', null) == r.get('pausedReason', null)
+                || d.get('pausedReason', null) == null)
+            && d.get('failStreak', 0) in [0, r.get('failStreak', 0)]
+            && tracked(wid, d.lastEventId, ['agent.updated', 'agent.renamed', 'agent.revoked', 'agent.rotated']))
           // A member revokes an agent they connected (also undoes a connect that did not finish).
-          || (roleOf(wid) == 'member' && resource.data.createdBy == me()
-            && resource.data.revokedAt == null
+          || (roleOf(wid) == 'member' && r.createdBy == me()
+            && r.revokedAt == null
             && changed(['revokedAt', 'lastEventId'])
-            && request.resource.data.revokedAt == request.time
-            && tracked(wid, request.resource.data.lastEventId, ['agent.revoked']))
+            && d.revokedAt == request.time
+            && tracked(wid, d.lastEventId, ['agent.revoked']))
           || (signedIn() && aid == me() && isActiveAgent(wid)
             && changed(['lastSeenAt', 'seenHost', 'cliVersion', 'seenSession', 'seenHostId'])
-            && request.resource.data.lastSeenAt == request.time
-            && strOrNull(request.resource.data.get('seenHost', null), 80)
+            && d.lastSeenAt == request.time
+            && strOrNull(d.get('seenHost', null), 80)
             // The CLI's own version (item N9EEn), shown on cards and the agent page.
-            && strOrNull(request.resource.data.get('cliVersion', null), 40)
+            && strOrNull(d.get('cliVersion', null), 40)
             // The channel session and its machine (item N0biX): a restart on the same machine takes over.
-            && strOrNull(request.resource.data.get('seenSession', null), 64)
-            && strOrNull(request.resource.data.get('seenHostId', null), 64))
+            && strOrNull(d.get('seenSession', null), 64)
+            && strOrNull(d.get('seenHostId', null), 64))
           // Presence: the agent's `hive run` session stopped (shown offline at once).
           || (signedIn() && aid == me() && isActiveAgent(wid)
             && changed(['signedOutAt'])
-            && request.resource.data.signedOutAt == request.time)
+            && d.signedOutAt == request.time)
           || (signedIn() && aid == me() && isActiveAgent(wid) && keepsStreak(wid));
+        }
 
         // Removing a revoked agent for good (item 81P4s): an admin only, and only once it is revoked.
         // Its past work keeps the name (events carry actor.name). A live agent, a member or an agent
@@ -795,20 +826,23 @@ service cloud.firestore {
           || (resource.data.projectId != null && isProjectMember(wid, resource.data.projectId))
           || (isActiveAgent(wid) && resource.data.projectId != null
               && agentCanProject(wid, resource.data.projectId));
-        allow create: if signedIn() && !isDeleting(wid)
-          && exactKeys(request.resource.data, ['actor', 'projectId', 'itemId', 'runId', 'type', 'data', 'at'])
-          && exactKeys(request.resource.data.actor, ['type', 'id', 'name'])
-          && request.resource.data.actor.id == me()
-          && str(request.resource.data.actor.name, 0, 200)
-          && request.resource.data.at == request.time
-          && request.resource.data.data is map
-          && strOrNull(request.resource.data.projectId, 128)
-          && strOrNull(request.resource.data.itemId, 128)
-          && strOrNull(request.resource.data.runId, 128)
-          && ((request.resource.data.actor.type == 'human' && isMemberAfter(wid)
-                && (request.resource.data.projectId == null
-                    || canProjectAfter(wid, request.resource.data.projectId))
-                && request.resource.data.type in [
+        allow create: if eventsCreateOk(wid);
+        function eventsCreateOk(wid) {
+          let d = request.resource.data;
+          return signedIn() && !isDeleting(wid)
+          && exactKeys(d, ['actor', 'projectId', 'itemId', 'runId', 'type', 'data', 'at'])
+          && exactKeys(d.actor, ['type', 'id', 'name'])
+          && d.actor.id == me()
+          && str(d.actor.name, 0, 200)
+          && d.at == request.time
+          && d.data is map
+          && strOrNull(d.projectId, 128)
+          && strOrNull(d.itemId, 128)
+          && strOrNull(d.runId, 128)
+          && ((d.actor.type == 'human' && isMemberAfter(wid)
+                && (d.projectId == null
+                    || canProjectAfter(wid, d.projectId))
+                && d.type in [
                   'item.created', 'item.moved', 'item.updated', 'item.deleted', 'item.released', 'item.archived', 'item.restored', 'item.erasing', 'attachment.added', 'message.posted',
                   'decision.approved', 'decision.sentBack', 'decision.stopped', 'decision.answered',
                   'finding.triaged', 'agent.created', 'agent.revoked', 'agent.removed', 'agent.renamed', 'agent.rotated', 'agent.updated',
@@ -820,23 +854,24 @@ service cloud.firestore {
                   'step.rejected'])
             // Stop work / Resume (card BrK0r2FE), on a project item. A branch of their own so the
             // other events do not pay for it (the rules' expression budget is tight on decisions).
-            || (request.resource.data.actor.type == 'human'
-                && request.resource.data.type in ['item.workStopped', 'item.resumed']
-                && request.resource.data.projectId != null && isMemberAfter(wid)
-                && canProjectAfter(wid, request.resource.data.projectId))
+            || (d.actor.type == 'human'
+                && d.type in ['item.workStopped', 'item.resumed']
+                && d.projectId != null && isMemberAfter(wid)
+                && canProjectAfter(wid, d.projectId))
             // Leaving: the actor is no longer a member after the batch, so check before it.
-            || (request.resource.data.actor.type == 'human' && isMember(wid)
-                && request.resource.data.projectId == null
-                && request.resource.data.type == 'member.left')
-            || (request.resource.data.actor.type == 'agent'
-                && request.resource.data.projectId != null
-                && projectAgent(wid, request.resource.data.projectId)
-                && request.resource.data.type in [
+            || (d.actor.type == 'human' && isMember(wid)
+                && d.projectId == null
+                && d.type == 'member.left')
+            || (d.actor.type == 'agent'
+                && d.projectId != null
+                && projectAgent(wid, d.projectId)
+                && d.type in [
                   'item.claimed', 'item.released', 'item.completed', 'item.updated',
                   'item.created', 'attachment.added', 'message.posted', 'finding.raised',
                   'run.started', 'run.heartbeat', 'run.ended',
                   'item.shaped', 'item.pathChanged', 'step.proposed', 'item.sentBack'])
             || calendarEventOk(wid));
+        }
         allow update, delete: if false;
 
         // Calendar writes (item w9SAf): outside any project, by an agent of the organization or
@@ -860,17 +895,21 @@ service cloud.firestore {
       // The document id starts with the member's uid, so one member cannot take another's id.
       match /calendar/{eid} {
         allow read: if isMember(wid) || isActiveAgent(wid);
-        allow create, update: if signedIn() && validCalendarEvent(request.resource.data)
-          && eid.size() > request.resource.data.memberUid.size() + 1
-          && eid[0:request.resource.data.memberUid.size() + 1] == request.resource.data.memberUid + '_'
+        allow create, update: if calendarCreateUpdateOk(wid, eid);
+        function calendarCreateUpdateOk(wid, eid) {
+          let d = request.resource.data;
+          return signedIn() && validCalendarEvent(d)
+          && eid.size() > d.memberUid.size() + 1
+          && eid[0:d.memberUid.size() + 1] == d.memberUid + '_'
           && (resource == null
-              || (resource.data.memberUid == request.resource.data.memberUid
-                  && resource.data.source == request.resource.data.source
-                  && resource.data.sourceEventId == request.resource.data.sourceEventId))
-          && calendarWriter(wid, request.resource.data.memberUid)
-          && request.resource.data.updatedBy == me_(isActiveAgent(wid) ? 'agent' : 'human')
-          && request.resource.data.updatedAt == request.time
-          && tracked(wid, request.resource.data.lastEventId, ['calendar.changed']);
+              || (resource.data.memberUid == d.memberUid
+                  && resource.data.source == d.source
+                  && resource.data.sourceEventId == d.sourceEventId))
+          && calendarWriter(wid, d.memberUid)
+          && d.updatedBy == me_(isActiveAgent(wid) ? 'agent' : 'human')
+          && d.updatedAt == request.time
+          && tracked(wid, d.lastEventId, ['calendar.changed']);
+        }
         allow delete: if false;
       }
       function validCalendarEvent(d) {
@@ -898,29 +937,33 @@ service cloud.firestore {
           || isProjectMember(wid, resource.data.projectId);
 
         // Created by the claiming agent in the same batch as the claim.
-        allow create: if projectAgent(wid, request.resource.data.projectId)
-          && (exactKeys(request.resource.data, ['agentUid', 'projectId', 'itemId', 'stepId', 'startedAt',
+        allow create: if runsCreateOk(wid, rid);
+        function runsCreateOk(wid, rid) {
+          let d = request.resource.data;
+          return projectAgent(wid, d.projectId)
+          && (exactKeys(d, ['agentUid', 'projectId', 'itemId', 'stepId', 'startedAt',
                'heartbeatAt', 'heartbeatEventAt', 'endedAt', 'status', 'costEur', 'tokensIn',
                'tokensOut', 'model', 'summary', 'lastEventId'])
               // A shaping run (card st5INNZj).
-              || (exactKeys(request.resource.data, ['agentUid', 'projectId', 'itemId', 'stepId', 'startedAt',
+              || (exactKeys(d, ['agentUid', 'projectId', 'itemId', 'stepId', 'startedAt',
                'heartbeatAt', 'heartbeatEventAt', 'endedAt', 'status', 'costEur', 'tokensIn',
                'tokensOut', 'model', 'summary', 'job', 'lastEventId'])
-                  && request.resource.data.job == 'shape'))
-          && request.resource.data.agentUid == me()
-          && request.resource.data.status == 'running'
-          && request.resource.data.startedAt == request.time
-          && request.resource.data.heartbeatAt == request.time
-          && request.resource.data.heartbeatEventAt == request.time
-          && request.resource.data.endedAt == null
-          && request.resource.data.costEur == 0
-          && request.resource.data.tokensIn == 0
-          && request.resource.data.tokensOut == 0
-          && request.resource.data.model == null
-          && request.resource.data.summary == null
-          && runMatchesClaim(wid, rid, request.resource.data)
-          && tracked(wid, request.resource.data.lastEventId, ['item.claimed', 'run.started'])
-          && getAfter(eventPath(wid, request.resource.data.lastEventId)).data.runId == rid;
+                  && d.job == 'shape'))
+          && d.agentUid == me()
+          && d.status == 'running'
+          && d.startedAt == request.time
+          && d.heartbeatAt == request.time
+          && d.heartbeatEventAt == request.time
+          && d.endedAt == null
+          && d.costEur == 0
+          && d.tokensIn == 0
+          && d.tokensOut == 0
+          && d.model == null
+          && d.summary == null
+          && runMatchesClaim(wid, rid, d)
+          && tracked(wid, d.lastEventId, ['item.claimed', 'run.started'])
+          && getAfter(eventPath(wid, d.lastEventId)).data.runId == rid;
+        }
 
         // Only the run's own agent, only while the run is open, never its identity fields.
         allow update: if isActiveAgent(wid)
@@ -931,20 +974,25 @@ service cloud.firestore {
 
         // Stop work (card BrK0r2FE): a person ends the open run as stopped (not failed), in the
         // batch that clears the item's claim with the same event; the item rules check who may.
-        allow update: if request.resource.data.status == 'stopped'
-          && canProject(wid, resource.data.projectId)
-          && resource.data.endedAt == null
+        allow update: if runsUpdateOk(wid, rid);
+        function runsUpdateOk(wid, rid) {
+          let d = request.resource.data;
+          let r = resource.data;
+          return d.status == 'stopped'
+          && canProject(wid, r.projectId)
+          && r.endedAt == null
           && changed(['status', 'endedAt', 'stoppedBy', 'summary', 'lastEventId'])
-          && request.resource.data.status == 'stopped'
-          && request.resource.data.endedAt == request.time
-          && request.resource.data.stoppedBy is map
-          && exactKeys(request.resource.data.stoppedBy, ['uid', 'name'])
-          && request.resource.data.stoppedBy.uid == me()
-          && str(request.resource.data.stoppedBy.name, 0, 200)
-          && strOrNull(request.resource.data.summary, 4000)
-          && tracked(wid, request.resource.data.lastEventId, ['item.workStopped'])
-          && getAfter(eventPath(wid, request.resource.data.lastEventId)).data.runId == rid
-          && stoppedWithItem(wid, rid, resource.data, request.resource.data.lastEventId);
+          && d.status == 'stopped'
+          && d.endedAt == request.time
+          && d.stoppedBy is map
+          && exactKeys(d.stoppedBy, ['uid', 'name'])
+          && d.stoppedBy.uid == me()
+          && str(d.stoppedBy.name, 0, 200)
+          && strOrNull(d.summary, 4000)
+          && tracked(wid, d.lastEventId, ['item.workStopped'])
+          && getAfter(eventPath(wid, d.lastEventId)).data.runId == rid
+          && stoppedWithItem(wid, rid, r, d.lastEventId);
+        }
 
         // An admin releases a stalled run (no heartbeat for 10 minutes), with the item's release.
         allow update: if isAdmin(wid)
@@ -1287,39 +1335,48 @@ service cloud.firestore {
         allow read: if inboxReader(wid, resource.data);
         // An agent proposes: cursor 0, 1-8 distinct steps, each created in the same batch as a
         // step of this plan, with one plan.proposed event that lists them.
-        allow create: if isActiveAgent(wid)
-          && request.resource.data.keys().hasAll(['memberUid', 'threadId', 'proposedBy', 'steps', 'cursor',
+        allow create: if inboxPlansCreateOk(wid, pid);
+        function inboxPlansCreateOk(wid, pid) {
+          let d = request.resource.data;
+          return isActiveAgent(wid)
+          && d.keys().hasAll(['memberUid', 'threadId', 'proposedBy', 'steps', 'cursor',
                'state', 'note', 'createdAt', 'updatedAt', 'lastEventId'])
-          && request.resource.data.keys().hasOnly(['memberUid', 'threadId', 'proposedBy', 'steps', 'cursor',
+          && d.keys().hasOnly(['memberUid', 'threadId', 'proposedBy', 'steps', 'cursor',
                'state', 'note', 'createdAt', 'updatedAt', 'lastEventId', 'confidence'])
-          && (!('confidence' in request.resource.data) || request.resource.data.confidence in ['high', 'medium', 'low'])
-          && request.resource.data.proposedBy == me()
-          && request.resource.data.state == 'proposed' && request.resource.data.cursor == 0
-          && request.resource.data.steps is list && request.resource.data.steps.size() >= 1
-          && request.resource.data.steps.size() <= 8
-          && request.resource.data.steps.toSet().size() == request.resource.data.steps.size()
-          && str(request.resource.data.note, 0, 2000)
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time
-          && get(inboxDoc(wid, 'inboxThreads', request.resource.data.threadId)).data.memberUid == request.resource.data.memberUid
-          && inboxTrackedThread(wid, request.resource.data.lastEventId, ['plan.proposed'],
-               request.resource.data.memberUid, request.resource.data.threadId)
-          && inboxEv(wid, request.resource.data.lastEventId).data.data.planId == pid
-          && inboxEv(wid, request.resource.data.lastEventId).data.data.steps == request.resource.data.steps
-          && inboxStepsMade(wid, pid, request.resource.data.steps);
-        allow update: if request.resource.data.updatedAt == request.time
-          && changed(['steps', 'cursor', 'state', 'updatedAt', 'lastEventId'])
-          && request.resource.data.steps is list && request.resource.data.steps.size() >= 1
-          && request.resource.data.steps.size() <= 8
-          && request.resource.data.cursor is int && request.resource.data.cursor >= 0
-          && request.resource.data.cursor <= request.resource.data.steps.size()
-          && inboxTrackedThread(wid, request.resource.data.lastEventId,
+          && (!('confidence' in d) || d.confidence in ['high', 'medium', 'low'])
+          && d.proposedBy == me()
+          && d.state == 'proposed' && d.cursor == 0
+          && d.steps is list && d.steps.size() >= 1
+          && d.steps.size() <= 8
+          && d.steps.toSet().size() == d.steps.size()
+          && str(d.note, 0, 2000)
+          && d.createdAt == request.time
+          && d.updatedAt == request.time
+          && get(inboxDoc(wid, 'inboxThreads', d.threadId)).data.memberUid == d.memberUid
+          && inboxTrackedThread(wid, d.lastEventId, ['plan.proposed'],
+               d.memberUid, d.threadId)
+          && inboxEv(wid, d.lastEventId).data.data.planId == pid
+          && inboxEv(wid, d.lastEventId).data.data.steps == d.steps
+          && inboxStepsMade(wid, pid, d.steps);
+        }
+        allow update: if inboxPlansUpdateOk(wid, pid);
+        function inboxPlansUpdateOk(wid, pid) {
+          let d = request.resource.data;
+          let r = resource.data;
+          return d.updatedAt == request.time
+          && touched(['steps', 'cursor', 'state'])
+          && d.steps is list && d.steps.size() >= 1
+          && d.steps.size() <= 8
+          && d.cursor is int && d.cursor >= 0
+          && d.cursor <= d.steps.size()
+          && inboxTrackedThread(wid, d.lastEventId,
                ['outcome.approved', 'outcome.rejected', 'plan.approved', 'plan.rejected', 'plan.edited',
                 'plan.retried', 'plan.skipped', 'plan.stopped', 'outcome.done', 'outcome.failed', 'thread.woke'],
-               resource.data.memberUid, resource.data.threadId)
-          && inboxEv(wid, request.resource.data.lastEventId).data.data.planId == pid
-          && inboxPlanMoved(wid, pid, request.resource.data, resource.data,
-               inboxEv(wid, request.resource.data.lastEventId).data);
+               r.memberUid, r.threadId)
+          && inboxEv(wid, d.lastEventId).data.data.planId == pid
+          && inboxPlanMoved(wid, pid, d, r,
+               inboxEv(wid, d.lastEventId).data);
+        }
         allow delete: if false;
 
         // What each event may change: `e` is the event, `d` and `r` the plan after and before.
@@ -1389,32 +1446,36 @@ service cloud.firestore {
 
       match /inboxEvents/{eid} {
         allow read: if inboxReader(wid, resource.data);
-        allow create: if signedIn() && !isDeleting(wid)
-          && exactKeys(request.resource.data, ['actor', 'memberUid', 'threadId', 'subjectId', 'type', 'data', 'at'])
-          && exactKeys(request.resource.data.actor, ['type', 'id', 'name'])
-          && request.resource.data.actor.id == me()
-          && str(request.resource.data.actor.name, 0, 200)
-          && request.resource.data.at == request.time
-          && request.resource.data.data is map
-          && strOrNull(request.resource.data.threadId, 128)
-          && strOrNull(request.resource.data.subjectId, 128)
-          && ((request.resource.data.actor.type == 'human' && isMember(wid)
-                && request.resource.data.memberUid == me()
-                && request.resource.data.type in ['thread.titled', 'thread.answered', 'thread.ignored',
+        allow create: if inboxEventsCreateOk(wid);
+        function inboxEventsCreateOk(wid) {
+          let d = request.resource.data;
+          return signedIn() && !isDeleting(wid)
+          && exactKeys(d, ['actor', 'memberUid', 'threadId', 'subjectId', 'type', 'data', 'at'])
+          && exactKeys(d.actor, ['type', 'id', 'name'])
+          && d.actor.id == me()
+          && str(d.actor.name, 0, 200)
+          && d.at == request.time
+          && d.data is map
+          && strOrNull(d.threadId, 128)
+          && strOrNull(d.subjectId, 128)
+          && ((d.actor.type == 'human' && isMember(wid)
+                && d.memberUid == me()
+                && d.type in ['thread.titled', 'thread.answered', 'thread.ignored',
                   'thread.closed', 'thread.restored', 'thread.moved', 'thread.itemMade', 'outcome.approved',
                   'outcome.rejected', 'outcome.revise_requested', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area', 'subject.label',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged', 'thread.due', 'plan.approved', 'plan.rejected', 'plan.edited',
                   'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
                   'thread.instructed'])
-                && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))
-            || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
-                && inboxMember(wid, request.resource.data.memberUid)
-                && request.resource.data.type in ['inbox.added', 'thread.filed', 'thread.note',
+                && (d.type != 'thread.itemMade' || inboxItemMade(wid, d))
+            || (d.actor.type == 'agent' && isActiveAgent(wid)
+                && inboxMember(wid, d.memberUid)
+                && d.type in ['inbox.added', 'thread.filed', 'thread.note',
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.revised',
                   'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
                   'plan.proposed', 'outcome.started', 'thread.rechecked',
                   'thread.instruction_answered', 'thread.chips_suggested', 'summary.written']));
+        }
         allow update, delete: if false;
       }
 
@@ -1422,13 +1483,17 @@ service cloud.firestore {
       // The id is the dedup key's hash, so the same message twice is refused (an update).
       match /inboxMessages/{mid} {
         allow read: if inboxReader(wid, resource.data);
-        allow create: if isActiveAgent(wid)
-          && inboxMessageOk(wid, request.resource.data)
-          && inboxTrackedThread(wid, request.resource.data.lastEventId, ['inbox.added'],
-               request.resource.data.memberUid, request.resource.data.threadId)
-          && inboxEv(wid, request.resource.data.lastEventId).data.data.messageDocId == mid
-          && getAfter(inboxDoc(wid, 'inboxThreads', request.resource.data.threadId)).data.memberUid == request.resource.data.memberUid
-          && getAfter(inboxDoc(wid, 'inboxThreads', request.resource.data.threadId)).data.lastEventId == request.resource.data.lastEventId;
+        allow create: if inboxMessagesCreateOk(wid, mid);
+        function inboxMessagesCreateOk(wid, mid) {
+          let d = request.resource.data;
+          return isActiveAgent(wid)
+          && inboxMessageOk(wid, d)
+          && inboxTrackedThread(wid, d.lastEventId, ['inbox.added'],
+               d.memberUid, d.threadId)
+          && inboxEv(wid, d.lastEventId).data.data.messageDocId == mid
+          && getAfter(inboxDoc(wid, 'inboxThreads', d.threadId)).data.memberUid == d.memberUid
+          && getAfter(inboxDoc(wid, 'inboxThreads', d.threadId)).data.lastEventId == d.lastEventId;
+        }
         allow update, delete: if false;
 
         function inboxMessageOk(wid, d) {
@@ -1452,50 +1517,59 @@ service cloud.firestore {
         // Members list theirs with where('memberUid', '==', uid).
         allow read: if inboxReader(wid, resource.data);
         // A new thread comes with its first message, from an agent.
-        allow create: if isActiveAgent(wid)
-          && exactKeys(request.resource.data, ['memberUid', 'subjectId', 'state', 'waiting', 'question',
+        allow create: if inboxThreadsCreateOk(wid, tid);
+        function inboxThreadsCreateOk(wid, tid) {
+          let d = request.resource.data;
+          return isActiveAgent(wid)
+          && exactKeys(d, ['memberUid', 'subjectId', 'state', 'waiting', 'question',
                'title', 'refs', 'lastMessageAt', 'fetchedBy', 'createdAt', 'updatedAt', 'lastEventId'])
-          && inboxMember(wid, request.resource.data.memberUid)
-          && request.resource.data.subjectId == null
-          && request.resource.data.state == 'investigating'
-          && request.resource.data.waiting == null && request.resource.data.question == null
-          && str(request.resource.data.title, 0, 200)
-          && request.resource.data.refs is list && request.resource.data.refs.size() == 1
-          && request.resource.data.fetchedBy == me()
-          && request.resource.data.lastMessageAt == request.time
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time
-          && inboxTrackedThread(wid, request.resource.data.lastEventId, ['inbox.added'],
-               request.resource.data.memberUid, tid)
-          && inboxMessageIn(wid, request.resource.data.lastEventId, tid);
-        allow update: if request.resource.data.updatedAt == request.time
+          && inboxMember(wid, d.memberUid)
+          && d.subjectId == null
+          && d.state == 'investigating'
+          && d.waiting == null && d.question == null
+          && str(d.title, 0, 200)
+          && d.refs is list && d.refs.size() == 1
+          && d.fetchedBy == me()
+          && d.lastMessageAt == request.time
+          && d.createdAt == request.time
+          && d.updatedAt == request.time
+          && inboxTrackedThread(wid, d.lastEventId, ['inbox.added'],
+               d.memberUid, tid)
+          && inboxMessageIn(wid, d.lastEventId, tid);
+        }
+        allow update: if inboxThreadsUpdateOk(wid, tid);
+        function inboxThreadsUpdateOk(wid, tid) {
+          let d = request.resource.data;
+          let r = resource.data;
+          return d.updatedAt == request.time
           // Summaries (item OE8FmrTaIxFVGcaeGG3N): the home agent's mirror of the summary it wrote.
-          && ((changed(['summary', 'updatedAt', 'lastEventId']) && isActiveAgent(wid)
-              && inboxSummaryMirrored(wid, tid, request.resource.data, resource.data))
-            || (isActiveAgent(wid) && inboxThreadAgent(wid, tid, request.resource.data, resource.data))
-            || (inboxOwner(wid, resource.data) && inboxThreadOwner(wid, tid, request.resource.data, resource.data))
-            || ((isActiveAgent(wid) || inboxOwner(wid, resource.data))
-              && changed(['title', 'updatedAt', 'lastEventId'])
-              && str(request.resource.data.title, 1, 200)
-              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.titled'], resource.data.memberUid, tid))
+          && ((touched(['summary']) && isActiveAgent(wid)
+              && inboxSummaryMirrored(wid, tid, d, r))
+            || (isActiveAgent(wid) && inboxThreadAgent(wid, tid, d, r))
+            || (inboxOwner(wid, r) && inboxThreadOwner(wid, tid, d, r))
+            || ((isActiveAgent(wid) || inboxOwner(wid, r))
+              && touched(['title'])
+              && str(d.title, 1, 200)
+              && inboxTrackedThread(wid, d.lastEventId, ['thread.titled'], r.memberUid, tid))
             // Urgent or not (thread_flag): its agents or its member.
-            || ((isActiveAgent(wid) || inboxOwner(wid, resource.data))
-              && changed(['urgent', 'updatedAt', 'lastEventId'])
-              && request.resource.data.urgent is bool
-              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.flagged'], resource.data.memberUid, tid))
+            || ((isActiveAgent(wid) || inboxOwner(wid, r))
+              && touched(['urgent'])
+              && d.urgent is bool
+              && inboxTrackedThread(wid, d.lastEventId, ['thread.flagged'], r.memberUid, tid))
             // A deadline, or none (thread_due): its agents or its member.
-            || ((isActiveAgent(wid) || inboxOwner(wid, resource.data))
-              && changed(['due', 'updatedAt', 'lastEventId'])
-              && (request.resource.data.due == null || request.resource.data.due is timestamp)
-              && inboxTrackedThread(wid, request.resource.data.lastEventId, ['thread.due'], resource.data.memberUid, tid))
+            || ((isActiveAgent(wid) || inboxOwner(wid, r))
+              && touched(['due'])
+              && (d.due == null || d.due is timestamp)
+              && inboxTrackedThread(wid, d.lastEventId, ['thread.due'], r.memberUid, tid))
             // Re-check (item bmNoIvvqKCdAorLSShE9): the member asks, the home agent answers.
-            || (inboxOwner(wid, resource.data) && inboxRecheckAsked(wid, tid, request.resource.data, resource.data))
-            || (isActiveAgent(wid) && inboxRecheckAnswered(wid, tid, request.resource.data, resource.data))
+            || (inboxOwner(wid, r) && inboxRecheckAsked(wid, tid, d, r))
+            || (isActiveAgent(wid) && inboxRecheckAnswered(wid, tid, d, r))
             // Ask the agent (item w6O2KOw4ys70TQv9I1xD): the member asks, the home agent answers
             // and suggests chips.
-            || (inboxOwner(wid, resource.data) && inboxInstructed(wid, tid, request.resource.data, resource.data))
-            || (isActiveAgent(wid) && inboxInstructionAnswered(wid, tid, request.resource.data, resource.data))
-            || (isActiveAgent(wid) && inboxChipsSuggested(wid, tid, request.resource.data, resource.data)));
+            || (inboxOwner(wid, r) && inboxInstructed(wid, tid, d, r))
+            || (isActiveAgent(wid) && inboxInstructionAnswered(wid, tid, d, r))
+            || (isActiveAgent(wid) && inboxChipsSuggested(wid, tid, d, r)));
+        }
         allow delete: if false;
 
         // The mirror equals the summary written in this batch (its event is this write's). The
@@ -1520,7 +1594,7 @@ service cloud.firestore {
           let diff = d.instructions.diff(before);
           let n = d.instructions[id];
           let e = inboxEv(wid, id).data.data;
-          return changed(['instructions', 'instruct', 'updatedAt', 'lastEventId'])
+          return touched(['instructions', 'instruct'])
             && d.instructions is map
             && diff.addedKeys() == [id].toSet() && diff.changedKeys().size() == 0
             && (before.size() < 20
@@ -1543,7 +1617,7 @@ service cloud.firestore {
           let id = e.instructionId;
           let a = r.instructions[id];
           let b = d.instructions[id];
-          return changed(['instructions', 'instruct', 'updatedAt', 'lastEventId'])
+          return touched(['instructions', 'instruct'])
             && r.fetchedBy == me()
             && r.get('instructions', null) != null && id is string && id in r.instructions
             && d.instructions.diff(r.instructions).affectedKeys() == [id].toSet()
@@ -1563,7 +1637,7 @@ service cloud.firestore {
         }
         // Only the home agent: 0-5 known chips, once each.
         function inboxChipsSuggested(wid, tid, d, r) {
-          return changed(['suggestedChips', 'updatedAt', 'lastEventId'])
+          return touched(['suggestedChips'])
             && r.fetchedBy == me()
             && d.suggestedChips is list && d.suggestedChips.size() <= 5
             && d.suggestedChips.hasOnly(['prepare_meeting', 'recheck', 'follow_up', 'summarize', 'draft_reply'])
@@ -1574,7 +1648,7 @@ service cloud.firestore {
         // Only on a thread with something open, and not while a request (under 30 minutes old)
         // waits for the agent.
         function inboxRecheckAsked(wid, tid, d, r) {
-          return changed(['recheck', 'updatedAt', 'lastEventId'])
+          return touched(['recheck'])
             && r.state in ['yourCall', 'waiting']
             && (r.get('recheck', null) == null || r.recheck.state == 'done'
               || r.recheck.requestedAt + duration.value(30, 'm') <= request.time)
@@ -1586,7 +1660,7 @@ service cloud.firestore {
         }
         // Only the home agent, only a pending request, with the result its event names.
         function inboxRecheckAnswered(wid, tid, d, r) {
-          return changed(['recheck', 'updatedAt', 'lastEventId'])
+          return touched(['recheck'])
             && r.fetchedBy == me()
             && r.get('recheck', null) != null && r.recheck.state == 'pending'
             && exactKeys(d.recheck, ['state', 'by', 'requestedAt', 'result', 'note', 'at'])
@@ -1599,12 +1673,12 @@ service cloud.firestore {
         }
 
         function inboxThreadAgent(wid, tid, d, r) {
-          return (changed(['refs', 'lastMessageAt', 'state', 'waiting', 'updatedAt', 'lastEventId'])
+          return (touched(['refs', 'lastMessageAt', 'state', 'waiting'])
               && inboxGotMessage(wid, tid, d, r))
-            || (changed(['subjectId', 'updatedAt', 'lastEventId'])
+            || (touched(['subjectId'])
               && inboxSubjectOf(wid, d.subjectId, r.memberUid)
               && inboxTrackedThread(wid, d.lastEventId, ['thread.filed'], r.memberUid, tid))
-            || (changed(['state', 'question', 'updatedAt', 'lastEventId'])
+            || (touched(['state', 'question'])
               && r.state != 'ignored' && d.state == 'needsYou'
               && d.question.keys().hasAll(['text', 'by', 'at', 'answer', 'answeredAt'])
               && d.question.keys().hasOnly(['text', 'by', 'at', 'answer', 'answeredAt', 'options'])
@@ -1612,7 +1686,7 @@ service cloud.firestore {
               && str(d.question.text, 1, 4000) && d.question.by == me()
               && d.question.at == request.time && d.question.answer == null && d.question.answeredAt == null
               && inboxTrackedThread(wid, d.lastEventId, ['thread.asked'], r.memberUid, tid))
-            || (changed(['state', 'waiting', 'updatedAt', 'lastEventId'])
+            || (touched(['state', 'waiting'])
               && inboxThreadAgentState(wid, tid, d, r));
         }
         // A message joins the thread: a message from them reopens a waiting, done or ignored one.
@@ -1673,14 +1747,14 @@ service cloud.firestore {
                         : o.state == 'done' && inboxPlanNextOk(wid, d, p))));
         }
         function inboxThreadOwner(wid, tid, d, r) {
-          return (changed(['state', 'question', 'updatedAt', 'lastEventId'])
+          return (touched(['state', 'question'])
               && r.state == 'needsYou' && r.question != null && d.state == 'investigating'
               && d.question.diff(r.question).affectedKeys().hasOnly(['answer', 'answeredAt'])
               && str(d.question.answer, 1, 4000) && d.question.answeredAt == request.time
               && inboxTrackedThread(wid, d.lastEventId, ['thread.answered'], me(), tid))
-            || (changed(['state', 'waiting', 'updatedAt', 'lastEventId'])
+            || (touched(['state', 'waiting'])
               && inboxThreadOwnerState(wid, tid, d, r))
-            || (changed(['subjectId', 'updatedAt', 'lastEventId'])
+            || (touched(['subjectId'])
               && inboxSubjectOf(wid, d.subjectId, me())
               && inboxTracked(wid, d.lastEventId, ['thread.moved', 'subject.merged', 'subject.split'], me()));
         }
@@ -1719,29 +1793,33 @@ service cloud.firestore {
         allow read: if inboxReader(wid, resource.data);
         // An agent proposes; who carries it out is fixed here: the thread's home agent, or nobody
         // for the types that take effect on approval.
-        allow create: if (isActiveAgent(wid)
-          && request.resource.data.keys().hasAll(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
+        allow create: if inboxOutcomesCreateOk(wid, oid);
+        function inboxOutcomesCreateOk(wid, oid) {
+          let d = request.resource.data;
+          return (isActiveAgent(wid)
+          && d.keys().hasAll(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
                'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId'])
-          && request.resource.data.keys().hasOnly(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
+          && d.keys().hasOnly(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
                'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId',
                'confidence', 'checks'])
           // How sure the agent is, and what it verified (item kt3E7u9EliL3q2veDDI0): optional.
-          && (!('confidence' in request.resource.data) || request.resource.data.confidence in ['high', 'medium', 'low'])
-          && (!('checks' in request.resource.data) || (request.resource.data.checks is list && request.resource.data.checks.size() <= 6))
+          && (!('confidence' in d) || d.confidence in ['high', 'medium', 'low'])
+          && (!('checks' in d) || (d.checks is list && d.checks.size() <= 6))
           // Alone: never a plan-only type (approval, book: item qwFAWxZM5xkcE7PPjAzi).
-          && request.resource.data.type in outcomeSingle()
-          && inboxFieldsOk(request.resource.data.type, request.resource.data.fields)
-          && request.resource.data.state == 'proposed'
-          && str(request.resource.data.note, 0, 2000)
-          && request.resource.data.proposedBy == me()
-          && request.resource.data.decision == null && request.resource.data.result == null
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time
-          && inboxProposalOk(wid, request.resource.data, get(inboxDoc(wid, 'inboxThreads', request.resource.data.threadId)).data)
-          && inboxTrackedThread(wid, request.resource.data.lastEventId, ['outcome.proposed'],
-               request.resource.data.memberUid, request.resource.data.threadId)
-          && inboxEv(wid, request.resource.data.lastEventId).data.data.outcomeId == oid)
-          || inboxStepCreate(wid, oid, request.resource.data);
+          && d.type in outcomeSingle()
+          && inboxFieldsOk(d.type, d.fields)
+          && d.state == 'proposed'
+          && str(d.note, 0, 2000)
+          && d.proposedBy == me()
+          && d.decision == null && d.result == null
+          && d.createdAt == request.time
+          && d.updatedAt == request.time
+          && inboxProposalOk(wid, d, get(inboxDoc(wid, 'inboxThreads', d.threadId)).data)
+          && inboxTrackedThread(wid, d.lastEventId, ['outcome.proposed'],
+               d.memberUid, d.threadId)
+          && inboxEv(wid, d.lastEventId).data.data.outcomeId == oid)
+          || inboxStepCreate(wid, oid, d);
+        }
         allow update: if request.resource.data.updatedAt == request.time
           && (inboxChecked(wid, oid, request.resource.data, resource.data)
             || (resource.data.get('planId', null) != null
@@ -1754,7 +1832,7 @@ service cloud.firestore {
         function inboxChecked(wid, oid, d, r) {
           let e = inboxEv(wid, d.lastEventId);
           return isActiveAgent(wid)
-            && changed(['checkedAt', 'updatedAt', 'lastEventId'])
+            && touched(['checkedAt'])
             && d.checkedAt == request.time
             && inboxTrackedThread(wid, d.lastEventId, ['thread.rechecked'], r.memberUid, r.threadId)
             && e.data.data.result == 'still_good' && oid in e.data.data.checked
@@ -1850,7 +1928,7 @@ service cloud.firestore {
           let turn = inboxAtCursor(p, oid);
           return (inboxOwner(wid, r) && inboxPlanLive(p)
               && ((e.type == 'outcome.approved' && r.state in ['proposed', 'revising']
-                  && changed(['state', 'fields', 'decision', 'revise', 'updatedAt', 'lastEventId'])
+                  && touched(['state', 'fields', 'decision', 'revise'])
                   && d.get('revise', null) == null && inboxFieldsOk(r.type, d.fields)
                   && inboxStepDecision(d) && d.decision.reason == null
                   && d.decision.keys().hasOnly(['byUid', 'at', 'edited', 'reason', 'version'])
@@ -1861,12 +1939,12 @@ service cloud.firestore {
                     ? turn && r.state == 'proposed' && d.state == 'done' && pa.cursor == p.cursor + 1
                     : d.state == 'approved'))
                 || (e.type == 'outcome.rejected' && human && turn && r.state == 'proposed'
-                  && changed(['state', 'decision', 'updatedAt', 'lastEventId'])
+                  && touched(['state', 'decision'])
                   && d.state == 'rejected' && exactKeys(d.decision, ['byUid', 'at', 'edited', 'reason'])
                   && inboxStepDecision(d) && d.decision.edited == false && strOrNull(d.decision.reason, 1000)
                   && pa.state == 'stopped')
                 || (e.type == 'plan.approved' && !human && r.state == 'proposed'
-                  && changed(['state', 'decision', 'updatedAt', 'lastEventId']) && d.state == 'approved'
+                  && touched(['state', 'decision']) && d.state == 'approved'
                   && inboxStepDecision(d) && d.decision.edited == false && d.decision.reason == null
                   && d.decision.keys().hasOnly(['byUid', 'at', 'edited', 'reason', 'version'])
                   && d.decision.get('version', null)
@@ -1875,19 +1953,19 @@ service cloud.firestore {
                   && (e.type == 'plan.rejected' ? pa.state == 'stopped'
                     : e.data.op == 'remove' && oid in p.steps && !(oid in pa.steps))
                   && r.state in ['proposed', 'revising', 'approved'] && !(turn && r.state == 'approved')
-                  && changed(['state', 'decision', 'revise', 'updatedAt', 'lastEventId'])
+                  && touched(['state', 'decision', 'revise'])
                   && d.state == 'rejected' && d.get('revise', null) == null
                   && exactKeys(d.decision, ['byUid', 'at', 'edited', 'reason'])
                   && inboxStepDecision(d) && d.decision.edited == false
                   && (e.type == 'plan.edited' ? d.decision.reason == 'removed' : strOrNull(d.decision.reason, 1000)))
                 || (e.type == 'plan.retried' && turn && p.state == 'blocked' && r.state == 'failed'
-                  && changed(['state', 'result', 'updatedAt', 'lastEventId'])
+                  && touched(['state', 'result'])
                   && d.state == 'approved' && d.result == null)
                 || (e.type == 'plan.skipped' && turn && p.state == 'blocked' && r.state == 'failed'
-                  && changed(['state', 'updatedAt', 'lastEventId'])
+                  && touched(['state'])
                   && d.state == 'rejected' && pa.cursor == p.cursor + 1)))
             || (isActiveAgent(wid) && turn && p.state in ['proposed', 'active']
-              && changed(['state', 'result', 'updatedAt', 'lastEventId']) && inboxStepResult(d)
+              && touched(['state', 'result']) && inboxStepResult(d)
               && ((e.type in ['outcome.done', 'outcome.failed', 'outcome.started'] && r.executor == me()
                   && (e.type == 'outcome.started'
                     ? r.state == 'approved' && d.state == 'running'
@@ -1916,7 +1994,7 @@ service cloud.firestore {
             && ((type == 'outcome.approved'
                 && r.state in ['proposed', 'revising']
                 && d.decision.keys().hasOnly(['byUid', 'at', 'edited', 'reason', 'version'])
-                && changed(['state', 'fields', 'decision', 'revise', 'updatedAt', 'lastEventId'])
+                && touched(['state', 'fields', 'decision', 'revise'])
                 && d.get('revise', null) == null
                 && inboxFieldsOk(r.type, d.fields)
                 && d.state == (r.type in outcomeImmediate() ? 'done' : 'approved')
@@ -1927,7 +2005,7 @@ service cloud.firestore {
               || (type == 'outcome.rejected'
                 && r.state == 'proposed'
                 && exactKeys(d.decision, ['byUid', 'at', 'edited', 'reason'])
-                && changed(['state', 'decision', 'updatedAt', 'lastEventId'])
+                && touched(['state', 'decision'])
                 && d.state == 'rejected' && d.decision.edited == false
                 && strOrNull(d.decision.reason, 1000)));
         }
@@ -1936,7 +2014,7 @@ service cloud.firestore {
         // thread is not touched and nothing is rejected.
         function inboxReviseAsk(d, r, type) {
           return type == 'outcome.revise_requested'
-            && changed(['state', 'revise', 'updatedAt', 'lastEventId'])
+            && touched(['state', 'revise'])
             && r.type in ['reply', 'reply_book', 'nudge', 'handover', 'make_it_work']
             && ((r.state == 'proposed' && d.state == 'revising'
                 && exactKeys(d.revise, ['instruction', 'chips', 'byUid', 'at'])
@@ -1959,8 +2037,8 @@ service cloud.firestore {
             && (r.state == 'revising' || inboxRecheckRevise(wid, oid, r))
             && d.state == 'proposed'
             && r.proposedBy == me()
-            && changed(['state', 'fields', 'note', 'confidence', 'checks', 'versions', 'revise',
-                        'decision', 'updatedAt', 'lastEventId'])
+            && touched(['state', 'fields', 'note', 'confidence', 'checks', 'versions', 'revise',
+                        'decision'])
             && (r.state == 'approved' ? d.decision == null : d.decision == r.decision)
             && d.revise == null
             && inboxFieldsOk(r.type, d.fields)
@@ -1998,7 +2076,7 @@ service cloud.firestore {
         // Its executor reports an approved outcome as done or failed.
         function inboxCarriedOut(d, r, type) {
           return r.state == 'approved' && r.executor == me()
-            && changed(['state', 'result', 'updatedAt', 'lastEventId'])
+            && touched(['state', 'result'])
             && ((type == 'outcome.done' && d.state == 'done') || (type == 'outcome.failed' && d.state == 'failed'))
             && exactKeys(d.result, ['text', 'permalink', 'itemId', 'error', 'by', 'at'])
             && strOrNull(d.result.text, 20000) && strOrNull(d.result.permalink, 2048)
@@ -2034,45 +2112,59 @@ service cloud.firestore {
         allow read: if inboxReader(wid, resource.data);
         // An agent names a new subject while filing a thread (with a suggested label at most);
         // the member makes one by a split.
-        allow create: if request.resource.data.keys().hasAll(['memberUid', 'name', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
-          && request.resource.data.keys().hasOnly(['memberUid', 'name', 'area', 'label', 'labelSuggested', 'labelBy', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
-          && str(request.resource.data.name, 1, 120)
-          && inboxAreaOk(request.resource.data)
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time
-          && ((isActiveAgent(wid) && inboxMember(wid, request.resource.data.memberUid)
-                && inboxAgentLabel(request.resource.data)
-                && request.resource.data.createdBy == me_('agent')
-                && inboxTracked(wid, request.resource.data.lastEventId, ['thread.filed'], request.resource.data.memberUid)
-                && inboxEv(wid, request.resource.data.lastEventId).data.subjectId == sid)
-            || (isMember(wid) && request.resource.data.memberUid == me()
-                && inboxNoLabel(request.resource.data)
-                && request.resource.data.createdBy == me_('human')
-                && inboxTracked(wid, request.resource.data.lastEventId, ['subject.split', 'subject.created'], me())));
+        allow create: if inboxSubjectsCreateOk(wid, sid);
+        function inboxSubjectsCreateOk(wid, sid) {
+          let d = request.resource.data;
+          return d.keys().hasAll(['memberUid', 'name', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
+          && d.keys().hasOnly(['memberUid', 'name', 'area', 'label', 'labelSuggested', 'labelBy', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
+          && str(d.name, 1, 120)
+          && inboxAreaOk(d)
+          && d.createdAt == request.time
+          && d.updatedAt == request.time
+          && ((isActiveAgent(wid) && inboxMember(wid, d.memberUid)
+                && inboxAgentLabel(d)
+                && d.createdBy == me_('agent')
+                && inboxTracked(wid, d.lastEventId, ['thread.filed'], d.memberUid)
+                && inboxEv(wid, d.lastEventId).data.subjectId == sid)
+            || (isMember(wid) && d.memberUid == me()
+                && inboxNoLabel(d)
+                && d.createdBy == me_('human')
+                && inboxTracked(wid, d.lastEventId, ['subject.split', 'subject.created'], me())));
+        }
         // Only the member renames, sets the area, confirms or changes the label (or touches
         // them in a merge). A label change always comes with a subject.label event.
-        allow update: if inboxOwner(wid, resource.data)
-          && changed(['name', 'area', 'label', 'labelSuggested', 'labelBy', 'updatedAt', 'lastEventId'])
-          && str(request.resource.data.name, 1, 120)
-          && inboxAreaOk(request.resource.data)
-          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(inboxLabelKeys())
-              || (request.resource.data.keys().hasAll(inboxLabelKeys())
-                  && inboxMemberLabel(wid, request.resource.data, resource.data)
-                  && inboxEv(wid, request.resource.data.lastEventId).data.type == 'subject.label'))
-          && request.resource.data.updatedAt == request.time
-          && inboxTracked(wid, request.resource.data.lastEventId, ['subject.renamed', 'subject.merged', 'subject.area', 'subject.label'], me());
+        allow update: if inboxSubjectsUpdateOk2(wid);
+        function inboxSubjectsUpdateOk2(wid) {
+          let d = request.resource.data;
+          let r = resource.data;
+          return inboxOwner(wid, r)
+          && touched(['name', 'area', 'label', 'labelSuggested', 'labelBy'])
+          && str(d.name, 1, 120)
+          && inboxAreaOk(d)
+          && (!d.diff(r).affectedKeys().hasAny(inboxLabelKeys())
+              || (d.keys().hasAll(inboxLabelKeys())
+                  && inboxMemberLabel(wid, d, r)
+                  && inboxEv(wid, d.lastEventId).data.type == 'subject.label'))
+          && d.updatedAt == request.time
+          && inboxTracked(wid, d.lastEventId, ['subject.renamed', 'subject.merged', 'subject.area', 'subject.label'], me());
+        }
         // An agent sets the area of the member's subject while filing a thread under it, and
         // suggests a label if the member has not decided one.
-        allow update: if isActiveAgent(wid) && inboxMember(wid, resource.data.memberUid)
-          && changed(['area', 'label', 'labelSuggested', 'labelBy', 'updatedAt', 'lastEventId'])
-          && inboxAreaOk(request.resource.data)
-          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(inboxLabelKeys())
-              || (request.resource.data.keys().hasAll(inboxLabelKeys())
-                  && inboxAgentLabel(request.resource.data)
-                  && !(resource.data.get('labelBy', null) == 'member')))
-          && request.resource.data.updatedAt == request.time
-          && inboxTracked(wid, request.resource.data.lastEventId, ['thread.filed'], resource.data.memberUid)
-          && inboxEv(wid, request.resource.data.lastEventId).data.subjectId == sid;
+        allow update: if inboxSubjectsUpdateOk(wid, sid);
+        function inboxSubjectsUpdateOk(wid, sid) {
+          let d = request.resource.data;
+          let r = resource.data;
+          return isActiveAgent(wid) && inboxMember(wid, r.memberUid)
+          && touched(['area', 'label', 'labelSuggested', 'labelBy'])
+          && inboxAreaOk(d)
+          && (!d.diff(r).affectedKeys().hasAny(inboxLabelKeys())
+              || (d.keys().hasAll(inboxLabelKeys())
+                  && inboxAgentLabel(d)
+                  && !(r.get('labelBy', null) == 'member')))
+          && d.updatedAt == request.time
+          && inboxTracked(wid, d.lastEventId, ['thread.filed'], r.memberUid)
+          && inboxEv(wid, d.lastEventId).data.subjectId == sid;
+        }
         // A merge deletes the subject it empties, with the tombstone event del-subject-<sid>.
         allow delete: if inboxOwner(wid, resource.data)
           && inboxTracked(wid, 'del-subject-' + sid, ['subject.merged'], me());
@@ -2097,24 +2189,28 @@ service cloud.firestore {
       // (back to rejected). Never deleted.
       match /inboxRelations/{rid} {
         allow read: if inboxReader(wid, resource.data);
-        allow create: if exactKeys(request.resource.data, ['memberUid', 'a', 'b', 'note', 'state',
+        allow create: if inboxRelationsCreateOk(wid, rid);
+        function inboxRelationsCreateOk(wid, rid) {
+          let d = request.resource.data;
+          return exactKeys(d, ['memberUid', 'a', 'b', 'note', 'state',
                'proposedBy', 'decision', 'createdAt', 'updatedAt', 'lastEventId'])
-          && inboxRelationPairOk(wid, rid, request.resource.data)
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time
-          && inboxEv(wid, request.resource.data.lastEventId).data.data.relationId == rid
-          && ((isActiveAgent(wid) && inboxMember(wid, request.resource.data.memberUid)
-                && request.resource.data.state == 'proposed'
-                && request.resource.data.proposedBy == me_('agent')
-                && request.resource.data.decision == null
-                && inboxTracked(wid, request.resource.data.lastEventId, ['relation.proposed'], request.resource.data.memberUid))
-            || (isMember(wid) && request.resource.data.memberUid == me()
-                && request.resource.data.state == 'related'
-                && request.resource.data.proposedBy == me_('human')
-                && inboxRelationDecisionOk(request.resource.data)
-                && inboxTracked(wid, request.resource.data.lastEventId, ['relation.created'], me())));
+          && inboxRelationPairOk(wid, rid, d)
+          && d.createdAt == request.time
+          && d.updatedAt == request.time
+          && inboxEv(wid, d.lastEventId).data.data.relationId == rid
+          && ((isActiveAgent(wid) && inboxMember(wid, d.memberUid)
+                && d.state == 'proposed'
+                && d.proposedBy == me_('agent')
+                && d.decision == null
+                && inboxTracked(wid, d.lastEventId, ['relation.proposed'], d.memberUid))
+            || (isMember(wid) && d.memberUid == me()
+                && d.state == 'related'
+                && d.proposedBy == me_('human')
+                && inboxRelationDecisionOk(d)
+                && inboxTracked(wid, d.lastEventId, ['relation.created'], me())));
+        }
         allow update: if inboxOwner(wid, resource.data)
-          && changed(['state', 'note', 'decision', 'updatedAt', 'lastEventId'])
+          && touched(['state', 'note', 'decision'])
           && str(request.resource.data.note, 0, 500)
           && request.resource.data.updatedAt == request.time
           && inboxRelationDecisionOk(request.resource.data)
@@ -2151,60 +2247,69 @@ service cloud.firestore {
           || (isMember(wid) && me() in resource.data.memberUids);
 
         // Admins create projects for anyone; a member can create one only for themselves.
-        allow create: if isMember(wid)
-          && request.resource.data.keys().hasAll(['name', 'emoji', 'color', 'templateId',
+        allow create: if projectsCreateOk(wid, pid);
+        function projectsCreateOk(wid, pid) {
+          let d = request.resource.data;
+          return isMember(wid)
+          && d.keys().hasAll(['name', 'emoji', 'color', 'templateId',
                'steps', 'stepIndex', 'memberUids', 'createdBy', 'createdAt', 'archivedAt', 'lastEventId'])
           // shapeNewItems (card st5INNZj): new items wait to be shaped by an agent.
-          && request.resource.data.keys().hasOnly(['name', 'emoji', 'color', 'templateId',
+          && d.keys().hasOnly(['name', 'emoji', 'color', 'templateId',
                'steps', 'stepIndex', 'memberUids', 'createdBy', 'createdAt', 'archivedAt',
                'shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter', 'lastEventId'])
-          && request.resource.data.get('shapeNewItems', false) is bool
-          && request.resource.data.get('agentsMayCreateItems', false) is bool
-          && request.resource.data.get('statusEvery', 0) in [0, 15, 30, 60]
-          && request.resource.data.get('silenceAfter', 40) in [0, 20, 40, 60, 120]
-          && validProject(request.resource.data)
-          && (isAdmin(wid) || request.resource.data.memberUids == [me()])
-          && request.resource.data.createdBy == me()
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.archivedAt == null
-          && trackedFor(wid, request.resource.data.lastEventId, ['project.created'], pid, null);
+          && d.get('shapeNewItems', false) is bool
+          && d.get('agentsMayCreateItems', false) is bool
+          && d.get('statusEvery', 0) in [0, 15, 30, 60]
+          && d.get('silenceAfter', 40) in [0, 20, 40, 60, 120]
+          && validProject(d)
+          && (isAdmin(wid) || d.memberUids == [me()])
+          && d.createdBy == me()
+          && d.createdAt == request.time
+          && d.archivedAt == null
+          && trackedFor(wid, d.lastEventId, ['project.created'], pid, null);
+        }
 
-        allow update: if (canProject(wid, pid)
+        allow update: if projectsUpdateOk(wid, pid);
+        function projectsUpdateOk(wid, pid) {
+          let d = request.resource.data;
+          let r = resource.data;
+          return (canProject(wid, pid)
             && changed(['name', 'emoji', 'description', 'color', 'templateId', 'steps', 'stepIndex',
                         'archivedAt', 'memberUids', 'stepAgents', 'shapeNewItems',
                         'agentsMayCreateItems', 'statusEvery', 'silenceAfter', 'lastEventId'])
-            && validProject(request.resource.data)
+            && validProject(d)
             // Shaping new items (card st5INNZj), "Agents may create items" (item DhsO9), the status
             // interval and the silence threshold (item AzveC) are switched by admins and the
             // project's creator. One check for all: long processes are close to the rules budget.
-            && (!request.resource.data.diff(resource.data).affectedKeys()
+            && (!d.diff(r).affectedKeys()
                   .hasAny(['shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter'])
-                || (canSetStepAgents(wid, resource.data)
-                    && request.resource.data.get('shapeNewItems', false) is bool
-                    && request.resource.data.get('agentsMayCreateItems', false) is bool
-                    && request.resource.data.get('statusEvery', 0) in [0, 15, 30, 60]
-                    && request.resource.data.get('silenceAfter', 40) in [0, 20, 40, 60, 120]))
-            && gatesAllowed(wid, resource.data, request.resource.data)
+                || (canSetStepAgents(wid, r)
+                    && d.get('shapeNewItems', false) is bool
+                    && d.get('agentsMayCreateItems', false) is bool
+                    && d.get('statusEvery', 0) in [0, 15, 30, 60]
+                    && d.get('silenceAfter', 40) in [0, 20, 40, 60, 120]))
+            && gatesAllowed(wid, r, d)
             // Unchanged per-step agents cost little: long processes are close to the rules budget.
-            && (request.resource.data.get('stepAgents', {}) == resource.data.get('stepAgents', {})
-                || stepAgentsAllowed(wid, resource.data, request.resource.data))
+            && (d.get('stepAgents', {}) == r.get('stepAgents', {})
+                || stepAgentsAllowed(wid, r, d))
             // Only an admin archives or restores.
-            && (request.resource.data.archivedAt == resource.data.archivedAt
+            && (d.archivedAt == r.archivedAt
                 || (isAdmin(wid)
-                    && (request.resource.data.archivedAt == null
-                        || request.resource.data.archivedAt == request.time)))
-            && (trackedFor(wid, request.resource.data.lastEventId,
+                    && (d.archivedAt == null
+                        || d.archivedAt == request.time)))
+            && (trackedFor(wid, d.lastEventId,
                  ['project.updated', 'project.processChanged', 'project.archived'], pid, null)
                 // An approver adds an agent's proposed step (card st5INNZj); the event names the item.
-                || (tracked(wid, request.resource.data.lastEventId, ['step.accepted'])
-                    && canSetStepAgents(wid, resource.data)
-                    && getAfter(eventPath(wid, request.resource.data.lastEventId)).data.projectId == pid))
-            && membersOnlyGainDeciders(resource.data, request.resource.data))
+                || (tracked(wid, d.lastEventId, ['step.accepted'])
+                    && canSetStepAgents(wid, r)
+                    && getAfter(eventPath(wid, d.lastEventId)).data.projectId == pid))
+            && membersOnlyGainDeciders(r, d))
           // Only an admin decides who is on a project.
           || (isAdmin(wid)
             && changed(['memberUids', 'lastEventId'])
-            && validProject(request.resource.data)
-            && trackedFor(wid, request.resource.data.lastEventId, ['project.membersChanged'], pid, null));
+            && validProject(d)
+            && trackedFor(wid, d.lastEventId, ['project.membersChanged'], pid, null));
+        }
 
         // Projects are archived, never deleted in normal use; only an organization delete removes them.
         allow delete: if false;
@@ -2281,17 +2386,21 @@ service cloud.firestore {
         // with a reason agents can read.
         match /stepProposals/{sid} {
           allow read: if projectReader(wid, pid);
-          allow create: if projectAgent(wid, pid)
-            && exactKeys(request.resource.data, ['name', 'kind', 'description', 'instructions', 'outputs',
+          allow create: if stepProposalsCreateOk(wid, pid);
+          function stepProposalsCreateOk(wid, pid) {
+            let d = request.resource.data;
+            return projectAgent(wid, pid)
+            && exactKeys(d, ['name', 'kind', 'description', 'instructions', 'outputs',
                  'afterStepId', 'deciderUids', 'reason', 'itemId', 'by', 'at', 'status', 'decision',
                  'lastEventId'])
-            && validProposal(request.resource.data)
-            && request.resource.data.by == me_('agent')
-            && request.resource.data.at == request.time
-            && request.resource.data.status == 'open' && request.resource.data.decision == null
-            && get(itemPath(wid, pid, request.resource.data.itemId)).data.claim.agentUid == me()
-            && trackedFor(wid, request.resource.data.lastEventId, ['step.proposed'], pid,
-                 request.resource.data.itemId);
+            && validProposal(d)
+            && d.by == me_('agent')
+            && d.at == request.time
+            && d.status == 'open' && d.decision == null
+            && get(itemPath(wid, pid, d.itemId)).data.claim.agentUid == me()
+            && trackedFor(wid, d.lastEventId, ['step.proposed'], pid,
+                 d.itemId);
+          }
           allow update: if isMember(wid) && canSetStepAgents(wid, get(projPath(wid, pid)).data)
             && resource.data.status == 'open'
             && changed(['status', 'decision', 'lastEventId'])
@@ -2325,26 +2434,30 @@ service cloud.firestore {
 
         match /decisions/{did} {
           allow read: if projectReader(wid, pid);
-          allow create: if canProject(wid, pid)
-            && (exactKeys(request.resource.data, ['workspaceId', 'projectId', 'itemId', 'itemTitle',
+          allow create: if decisionsCreateOk(wid, pid, did);
+          function decisionsCreateOk(wid, pid, did) {
+            let d = request.resource.data;
+            return canProject(wid, pid)
+            && (exactKeys(d, ['workspaceId', 'projectId', 'itemId', 'itemTitle',
                  'stepId', 'outcome', 'toStepId', 'byUid', 'rationale', 'tags', 'at', 'lastEventId'])
-                || (exactKeys(request.resource.data, ['workspaceId', 'projectId', 'itemId', 'itemTitle',
+                || (exactKeys(d, ['workspaceId', 'projectId', 'itemId', 'itemTitle',
                  'stepId', 'outcome', 'toStepId', 'byUid', 'rationale', 'tags', 'waitMs', 'at',
                  'lastEventId'])
-                    && request.resource.data.waitMs is int && request.resource.data.waitMs >= 0))
-            && request.resource.data.workspaceId == wid
-            && request.resource.data.projectId == pid
-            && request.resource.data.lastEventId == did
-            && request.resource.data.byUid == me()
-            && request.resource.data.at == request.time
-            && str(request.resource.data.itemTitle, 0, 300)
-            && str(request.resource.data.rationale, 0, 4000)
-            && request.resource.data.tags is list && request.resource.data.tags.size() <= 20
-            && strOrNull(request.resource.data.toStepId, 40)
-            && trackedFor(wid, did, ['decision.' + request.resource.data.outcome], pid,
-                 request.resource.data.itemId)
-            && (gateDecision(wid, pid, did, request.resource.data)
-                || answerDecision(wid, pid, did, request.resource.data));
+                    && d.waitMs is int && d.waitMs >= 0))
+            && d.workspaceId == wid
+            && d.projectId == pid
+            && d.lastEventId == did
+            && d.byUid == me()
+            && d.at == request.time
+            && str(d.itemTitle, 0, 300)
+            && str(d.rationale, 0, 4000)
+            && d.tags is list && d.tags.size() <= 20
+            && strOrNull(d.toStepId, 40)
+            && trackedFor(wid, did, ['decision.' + d.outcome], pid,
+                 d.itemId)
+            && (gateDecision(wid, pid, did, d)
+                || answerDecision(wid, pid, did, d));
+          }
           allow update, delete: if false;
 
           // approved / sentBack / stopped: made by a decider of the item's current human step,
@@ -2373,28 +2486,32 @@ service cloud.firestore {
           allow read: if projectReader(wid, pid);
 
           // attachmentCount (card 05PEkpwG) starts at 0; clients from before it omit it (read as 0).
-          allow create: if request.resource.data.keys().hasAll(['title', 'type', 'stepId', 'status',
+          allow create: if itemsCreateOk(wid, pid, iid);
+          function itemsCreateOk(wid, pid, iid) {
+            let d = request.resource.data;
+            return d.keys().hasAll(['title', 'type', 'stepId', 'status',
                  'summary', 'source', 'createdBy', 'parentItemId', 'sourceRunId', 'claim', 'progress',
                  'gate', 'triage', 'sendBackCount', 'costEur', 'order', 'updatedAt', 'lastEventId'])
-            && request.resource.data.keys().hasOnly(['title', 'type', 'stepId', 'status',
+            && d.keys().hasOnly(['title', 'type', 'stepId', 'status',
                  'summary', 'source', 'createdBy', 'parentItemId', 'sourceRunId', 'claim', 'progress',
                  'gate', 'triage', 'sendBackCount', 'attachmentCount', 'costEur', 'order', 'updatedAt',
                  'shape', 'stepAt', 'lastEventId'])
-            && request.resource.data.get('attachmentCount', 0) == 0
-            && request.resource.data.get('stepAt', request.time) == request.time
-            && validItemText(request.resource.data)
-            && request.resource.data.updatedAt == request.time
-            && request.resource.data.sendBackCount == 0
-            && request.resource.data.costEur == 0
-            && request.resource.data.triage == null
-            && request.resource.data.progress == null
-            && ('shape' in request.resource.data
+            && d.get('attachmentCount', 0) == 0
+            && d.get('stepAt', request.time) == request.time
+            && validItemText(d)
+            && d.updatedAt == request.time
+            && d.sendBackCount == 0
+            && d.costEur == 0
+            && d.triage == null
+            && d.progress == null
+            && ('shape' in d
                 // A new item waiting to be shaped (card st5INNZj).
-                ? unshapedAt0(request.resource.data, get(projPath(wid, pid)).data)
+                ? unshapedAt0(d, get(projPath(wid, pid)).data)
                   && newItemBy(wid, pid, iid)
-                : ((arrivesAt(request.resource.data, get(projPath(wid, pid)).data, 0)
+                : ((arrivesAt(d, get(projPath(wid, pid)).data, 0)
                     && newItemBy(wid, pid, iid))
                   || agentRaiseFinding(wid, pid, iid)));
+          }
 
           allow update: if validItemText(request.resource.data)
             && request.resource.data.createdBy == resource.data.createdBy
@@ -2526,7 +2643,7 @@ service cloud.firestore {
           function claimIt(wid, pid, iid, r, p, shaping) {
             let d = request.resource.data;
             let run = getAfter(runPath(wid, d.claim.runId));
-            return changed(['claim', 'status', 'updatedAt', 'lastEventId'])
+            return touched(['claim', 'status'])
               && (shaping ? run.data.get('job', '') == 'shape' : agentAllowedAtStep(p, r.stepId))
               && get(agentPath(wid, me())).data.get('pausedAt', null) == null
               && r.status in ['queued', 'working']
@@ -2556,7 +2673,7 @@ service cloud.firestore {
           function releaseIt(wid, pid, iid, r) {
             let d = request.resource.data;
             return ownsClaim(r)
-              && changed(['claim', 'status', 'awaitingAnswer', 'costEur', 'updatedAt', 'lastEventId'])
+              && touched(['claim', 'status', 'awaitingAnswer', 'costEur'])
               && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
               && d.costEur is number && d.costEur >= r.costEur
               && (d.get('awaitingAnswer', null) == r.get('awaitingAnswer', null)
@@ -2577,7 +2694,7 @@ service cloud.firestore {
           }
           function progressIt(wid, pid, iid, r) {
             let d = request.resource.data;
-            return ownsClaim(r) && changed(['progress', 'costEur', 'updatedAt', 'lastEventId'])
+            return ownsClaim(r) && touched(['progress', 'costEur'])
               && d.updatedAt == request.time
               && (d.progress == null || (exactKeys(d.progress, ['done', 'total'])
                   && d.progress.done is int && d.progress.total is int
@@ -2589,7 +2706,7 @@ service cloud.firestore {
           // A park names that claim's run, so it is void once the claim moves on.
           function parkIt(wid, pid, iid, r) {
             let d = request.resource.data;
-            return ownsClaim(r) && changed(['parked', 'updatedAt', 'lastEventId'])
+            return ownsClaim(r) && touched(['parked'])
               && d.updatedAt == request.time
               && (d.parked == null
                 || (exactKeys(d.parked, ['runId', 'reason', 'at'])
@@ -2602,7 +2719,7 @@ service cloud.firestore {
           function statusIt(wid, pid, iid, r) {
             let d = request.resource.data;
             let s = d.statusUpdate;
-            return ownsClaim(r) && changed(['statusUpdate', 'updatedAt', 'lastEventId'])
+            return ownsClaim(r) && touched(['statusUpdate'])
               && d.updatedAt == request.time
               && exactKeys(s, ['runId', 'text', 'pct', 'at', 'by'])
               && s.runId == r.claim.runId && s.by == me() && s.at == request.time
@@ -2614,7 +2731,7 @@ service cloud.firestore {
           function completeIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
             return ownsClaim(r)
-              && changed(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'updatedAt', 'lastEventId'])
+              && touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur'])
               && d.updatedAt == request.time
               && d.costEur is number && d.costEur >= r.costEur
               && nextOk(d, r, p)
@@ -2633,8 +2750,7 @@ service cloud.firestore {
             let between = p.steps[i + 1:j];
             let n = j - i - 1;
             return ownsClaim(r) && n <= 12
-              && changed(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'agentSendBacks',
-                          'updatedAt', 'lastEventId'])
+              && touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'agentSendBacks'])
               && d.agentSendBacks == r.get('agentSendBacks', 0) + 1 && d.agentSendBacks <= 3
               && i < j && p.steps[i].id == d.stepId && p.steps[i].kind == 'agent'
               && !(d.stepId in r.get('pathSkips', {}))
@@ -2721,7 +2837,7 @@ service cloud.firestore {
           // admin may move it forward (that skips the gates in between).
           function moveIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
-            return changed(['stepId', 'stepAt', 'status', 'claim', 'gate', 'agentSendBacks', 'updatedAt', 'lastEventId'])
+            return touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'agentSendBacks'])
               && roundsReset(r)
               && d.updatedAt == request.time
               && r.status in ['queued', 'waiting'] && r.claim == null
@@ -2736,7 +2852,7 @@ service cloud.firestore {
           // decision. Restore (Undo) is the same people, back to a fresh arrival at the same step.
           function archiveIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
-            return changed(['status', 'claim', 'gate', 'archivedAt', 'updatedAt', 'lastEventId'])
+            return touched(['status', 'claim', 'gate', 'archivedAt'])
               && d.updatedAt == request.time
               && r.status in ['queued', 'waiting'] && r.claim == null
               && r.get('archivedAt', null) == null
@@ -2749,7 +2865,7 @@ service cloud.firestore {
           // in chunks. The creator or an admin, nobody holding it. Idempotent.
           function beginEraseIt(wid, pid, iid, r) {
             let d = request.resource.data;
-            return changed(['erasing', 'status', 'claim', 'gate', 'archivedAt', 'updatedAt', 'lastEventId'])
+            return touched(['erasing', 'status', 'claim', 'gate', 'archivedAt'])
               && d.updatedAt == request.time
               && r.claim == null
               && d.erasing == true
@@ -2760,7 +2876,7 @@ service cloud.firestore {
           }
           function restoreIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
-            return changed(['status', 'claim', 'gate', 'archivedAt', 'stepAt', 'updatedAt', 'lastEventId'])
+            return touched(['status', 'claim', 'gate', 'archivedAt', 'stepAt'])
               && d.updatedAt == request.time
               // Any stopped item: archived in bulk, or rejected at a gate (card lvPPSnV2).
               && r.status == 'stopped' && r.get('workStopped', null) == null
@@ -2782,7 +2898,7 @@ service cloud.firestore {
               // A shaping run (card st5INNZj) may sit at a first step that is a people step.
               && hasStep(p, r.stepId) && (unshaped(r) || stepOf(p, r.stepId).kind == 'agent')
               && r.status in ['queued', 'working']
-              && changed(['claim', 'status', 'workStopped', 'costEur', 'updatedAt', 'lastEventId'])
+              && touched(['claim', 'status', 'workStopped', 'costEur'])
               && d.claim == null && d.updatedAt == request.time
               && d.costEur is number && d.costEur >= r.costEur
               && w is map && exactKeys(w, ['mode', 'byUid', 'at', 'reason', 'runId'])
@@ -2804,7 +2920,7 @@ service cloud.firestore {
             return d.get('workStopped', 'missing') == null
               && r.get('workStopped', null) != null && r.workStopped.mode == 'back'
               && r.status != 'stopped'
-              && changed(['workStopped', 'updatedAt', 'lastEventId'])
+              && touched(['workStopped'])
               && d.updatedAt == request.time
               && trackedFor(wid, d.lastEventId, ['item.resumed'], pid, iid)
               && canStopWork(wid, p,
@@ -2815,7 +2931,7 @@ service cloud.firestore {
             let d = request.resource.data;
             return isAdmin(wid) && r.claim != null
               && getAfter(agentPath(wid, r.claim.agentUid)).data.revokedAt != null
-              && changed(['claim', 'status', 'updatedAt', 'lastEventId'])
+              && touched(['claim', 'status'])
               && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
               && tracked(wid, d.lastEventId, ['agent.revoked', 'agent.rotated']);
           }
@@ -2831,7 +2947,7 @@ service cloud.firestore {
                     && a != null && a.data.kind == 'answer'
                     && (h == null || a.data.replyTo == h.questionId))
                   || (isAdmin(wid) && h != null
-                    && changed(['awaitingAnswer', 'updatedAt', 'lastEventId'])
+                    && touched(['awaitingAnswer'])
                     && d.updatedAt == request.time
                     && trackedFor(wid, d.lastEventId, ['item.updated'], pid, iid)));
           }
@@ -2841,7 +2957,7 @@ service cloud.firestore {
             let d = request.resource.data;
             return isAdmin(wid) && r.claim != null
               && r.claim.heartbeatAt < request.time - duration.value(10, 'm')
-              && changed(['claim', 'status', 'updatedAt', 'lastEventId'])
+              && touched(['claim', 'status'])
               && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
               && getAfter(runPath(wid, r.claim.runId)).data.status == 'released'
               && trackedFor(wid, d.lastEventId, ['item.released'], pid, iid);
@@ -2852,7 +2968,7 @@ service cloud.firestore {
           function relocateIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
             let pa = getAfter(projPath(wid, pid)).data;
-            return changed(['stepId', 'stepAt', 'status', 'claim', 'gate', 'updatedAt', 'lastEventId'])
+            return touched(['stepId', 'stepAt', 'status', 'claim', 'gate'])
               && d.updatedAt == request.time
               && r.status in ['queued', 'working', 'waiting']
               && hasStep(p, r.stepId) && !hasStep(pa, r.stepId)
@@ -2873,7 +2989,7 @@ service cloud.firestore {
           // Text and priority only. Never the step, status, gate, claim or counters.
           function humanEdit(wid, pid, iid, r) {
             let d = request.resource.data;
-            return changed(['title', 'summary', 'type', 'order', 'updatedAt', 'lastEventId'])
+            return touched(['title', 'summary', 'type', 'order'])
               && d.updatedAt == request.time
               && (d.type == 'finding') == (r.type == 'finding')
               // Edit after adding (card mpWuccjl): the wording (title, summary, type) is changed by
@@ -2886,7 +3002,7 @@ service cloud.firestore {
           // "Add to this item": the triage event of a finding may also append to its parent.
           function addFindingToItem(wid, pid, iid, d) {
             let e = getAfter(eventPath(wid, d.lastEventId)).data;
-            return changed(['summary', 'updatedAt', 'lastEventId'])
+            return touched(['summary'])
               && tracked(wid, d.lastEventId, ['finding.triaged'])
               && e.projectId == pid && e.data.parentItemId == iid;
           }
@@ -2896,7 +3012,7 @@ service cloud.firestore {
             let d = request.resource.data;
             return r.type == 'finding' && r.triage == null && r.status == 'suggested'
               && canTriage(wid, p)
-              && changed(['triage', 'type', 'stepId', 'stepAt', 'status', 'gate', 'claim', 'shape', 'updatedAt', 'lastEventId'])
+              && touched(['triage', 'type', 'stepId', 'stepAt', 'status', 'gate', 'claim', 'shape'])
               && d.updatedAt == request.time
               && exactKeys(d.triage, ['outcome', 'reason', 'byUid', 'at'])
               && d.triage.byUid == me() && d.triage.at == request.time
@@ -2934,8 +3050,8 @@ service cloud.firestore {
             let d = request.resource.data;
             let s = d.get('shape', null);
             let k = d.get('pathSkips', null);
-            return changed(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'shape',
-                            'pathSkips', 'pathRev', 'updatedAt', 'lastEventId'])
+            return touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'shape',
+                            'pathSkips', 'pathRev'])
               && d.updatedAt == request.time && openItem(r) && r.get('archivedAt', null) == null
               && s is map && exactKeys(s, ['by', 'at', 'note']) && s.by == me_(type)
               && s.at == request.time && str(s.note, 0, 300)
@@ -2958,7 +3074,7 @@ service cloud.firestore {
             let st = e.data.get('stepId', '');
             let gate = stepOf(p, st).kind == 'human';
             let after = gate ? d.get('gateSkips', {}) : d.get('pathSkips', {});
-            return changed(['pathSkips', 'gateSkips', 'pathRev', 'updatedAt', 'lastEventId'])
+            return touched(['pathSkips', 'gateSkips', 'pathRev'])
               && d.updatedAt == request.time && openItem(r) && !unshaped(r)
               && hasStep(p, st) && p.stepIndex[st] > p.stepIndex[r.stepId]
               && d.get('pathSkips', null) is map
@@ -2980,7 +3096,7 @@ service cloud.firestore {
             let st = e.data.get('stepId', '');
             let before = r.get('pathRequests', {});
             let q = d.get('pathRequests', {}).get(st, null);
-            return changed(['pathRequests', 'pathRev', 'updatedAt', 'lastEventId'])
+            return touched(['pathRequests', 'pathRev'])
               && d.updatedAt == request.time && openItem(r)
               && d.pathRequests is map && d.pathRequests.diff(before).affectedKeys() == [st].toSet()
               && !(st in before)
@@ -3009,17 +3125,17 @@ service cloud.firestore {
               && d.updatedAt == request.time
               && trackedFor(wid, d.lastEventId, ['item.pathChangeDecided'], pid, iid)
               && (e.data.get('outcome', '') == 'refused'
-                ? changed(['pathRequests', 'pathRefused', 'pathRev', 'updatedAt', 'lastEventId'])
+                ? touched(['pathRequests', 'pathRefused', 'pathRev'])
                   && d.get('pathRefused', []) == (st in refused ? refused : refused.concat([st]))
                 : e.data.get('outcome', '') == 'approved' && openItem(r)
                   && d.get('pathSkips', null) is map && d.pathSkips == r.get('pathSkips', {})
                   && after is map && after.diff(before).affectedKeys() == [st].toSet()
                   && (q.op == 'drop' ? st in after && str(after[st], 0, 300) : !(st in after))
                   && (p.stepIndex[st] > p.stepIndex[r.stepId]
-                    ? changed(['pathSkips', 'gateSkips', 'pathRequests', 'pathRev', 'updatedAt', 'lastEventId'])
+                    ? touched(['pathSkips', 'gateSkips', 'pathRequests', 'pathRev'])
                     : q.op == 'drop' && st == r.stepId && r.status == 'waiting'
-                      && changed(['stepId', 'stepAt', 'status', 'gate', 'claim', 'pathSkips', 'gateSkips',
-                                  'pathRequests', 'pathRev', 'updatedAt', 'lastEventId'])
+                      && touched(['stepId', 'stepAt', 'status', 'gate', 'claim', 'pathSkips', 'gateSkips',
+                                  'pathRequests', 'pathRev'])
                       && movesOver(d, r, p, p.stepIndex[r.stepId], d.pathSkips, after)));
           }
 
@@ -3059,7 +3175,7 @@ service cloud.firestore {
           // Record an approval without moving (the rule is not yet satisfied, or not chosen).
           function approveStay(wid, pid, iid, r) {
             let d = request.resource.data;
-            return changed(['gate', 'updatedAt', 'lastEventId'])
+            return touched(['gate'])
               && exactKeys(d.gate, ['stepId', 'approvals', 'rejections'])
               && d.gate.stepId == r.gate.stepId && d.gate.rejections == r.gate.rejections
               && addsOnlyMe(d.gate.approvals, r.gate.approvals)
@@ -3069,7 +3185,7 @@ service cloud.firestore {
           // Pass the gate: approvals so far plus mine must satisfy the step's rule.
           function approveAdvance(wid, pid, iid, r, p) {
             let d = request.resource.data;
-            return changed(['stepId', 'stepAt', 'status', 'gate', 'claim', 'agentSendBacks', 'updatedAt', 'lastEventId'])
+            return touched(['stepId', 'stepAt', 'status', 'gate', 'claim', 'agentSendBacks'])
               && roundsReset(r)
               && gateSatisfied(stepOf(p, r.stepId).gate,
                    r.gate.approvals.keys().toSet().union([me()].toSet()))
@@ -3079,7 +3195,7 @@ service cloud.firestore {
           // Record a rejection without moving (majority policy, not yet a majority).
           function rejectStay(wid, pid, iid, r) {
             let d = request.resource.data;
-            return changed(['gate', 'updatedAt', 'lastEventId'])
+            return touched(['gate'])
               && exactKeys(d.gate, ['stepId', 'approvals', 'rejections'])
               && d.gate.stepId == r.gate.stepId && d.gate.approvals == r.gate.approvals
               && addsOnlyMe(d.gate.rejections, r.gate.rejections)
@@ -3093,7 +3209,7 @@ service cloud.firestore {
           // Send back to an earlier step; the claim is cleared and sendBackCount increments.
           function sendBackMove(wid, pid, iid, r, p) {
             let d = request.resource.data;
-            return changed(['stepId', 'stepAt', 'status', 'gate', 'claim', 'sendBackCount', 'agentSendBacks', 'updatedAt', 'lastEventId'])
+            return touched(['stepId', 'stepAt', 'status', 'gate', 'claim', 'sendBackCount', 'agentSendBacks'])
               && roundsReset(r)
               && rejectionsOk(r, p)
               && hasStep(p, d.stepId) && p.stepIndex[d.stepId] < p.stepIndex[r.stepId]
@@ -3104,7 +3220,7 @@ service cloud.firestore {
           }
           function stopIt(wid, pid, iid, r, p) {
             let d = request.resource.data;
-            return changed(['status', 'gate', 'claim', 'updatedAt', 'lastEventId'])
+            return touched(['status', 'gate', 'claim'])
               && rejectionsOk(r, p)
               && d.status == 'stopped' && d.gate == null && d.claim == null
               && decisionWritten(wid, pid, iid, 'stopped');
@@ -3114,28 +3230,32 @@ service cloud.firestore {
 
           match /attachments/{aid} {
             allow read: if projectReader(wid, pid);
-            allow create: if exactKeys(request.resource.data, ['kind', 'name', 'content', 'url', 'bytes',
+            allow create: if attachmentsCreateOk(wid, pid, iid);
+            function attachmentsCreateOk(wid, pid, iid) {
+              let d = request.resource.data;
+              return exactKeys(d, ['kind', 'name', 'content', 'url', 'bytes',
                    'runId', 'by', 'at', 'lastEventId'])
-              && str(request.resource.data.name, 1, 200)
-              && request.resource.data.at == request.time
-              && request.resource.data.bytes is int
-              && request.resource.data.bytes >= 0 && request.resource.data.bytes <= 921600
-              && ((request.resource.data.kind == 'link' && request.resource.data.content == null
-                    && str(request.resource.data.url, 8, 2048)
-                    && request.resource.data.url.matches('^https?://.+'))
-                  || (request.resource.data.kind in ['html', 'markdown', 'text', 'image', 'pdf']
-                    && request.resource.data.url == null
-                    && str(request.resource.data.content, 0, 921600)))
-              && trackedFor(wid, request.resource.data.lastEventId, ['attachment.added'], pid, iid)
-              && ((canProject(wid, pid) && request.resource.data.by == me_('human')
-                    && request.resource.data.runId == null)
-                  || (projectAgent(wid, pid) && request.resource.data.by == me_('agent')
-                    && (request.resource.data.runId == null
+              && str(d.name, 1, 200)
+              && d.at == request.time
+              && d.bytes is int
+              && d.bytes >= 0 && d.bytes <= 921600
+              && ((d.kind == 'link' && d.content == null
+                    && str(d.url, 8, 2048)
+                    && d.url.matches('^https?://.+'))
+                  || (d.kind in ['html', 'markdown', 'text', 'image', 'pdf']
+                    && d.url == null
+                    && str(d.content, 0, 921600)))
+              && trackedFor(wid, d.lastEventId, ['attachment.added'], pid, iid)
+              && ((canProject(wid, pid) && d.by == me_('human')
+                    && d.runId == null)
+                  || (projectAgent(wid, pid) && d.by == me_('agent')
+                    && (d.runId == null
                       // An item the agent created (item DhsO9), while nobody holds it.
                       ? get(itemPath(wid, pid, iid)).data.createdBy == me_('agent')
                         && get(itemPath(wid, pid, iid)).data.claim == null
                       : get(itemPath(wid, pid, iid)).data.claim.agentUid == me()
-                        && get(itemPath(wid, pid, iid)).data.claim.runId == request.resource.data.runId)));
+                        && get(itemPath(wid, pid, iid)).data.claim.runId == d.runId)));
+            }
             allow update: if false;
             // Erased together with its item.
             allow delete: if eraseWith(wid, pid, iid);

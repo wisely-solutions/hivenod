@@ -35,22 +35,22 @@ const AGENT_TYPES = "'item.claimed', 'item.released', 'item.completed', 'item.up
 const MUTATIONS = [
   [
     'agent cliVersion unbounded',
-    [["&& strOrNull(request.resource.data.get('cliVersion', null), 40))", '&& true)']],
+    [["&& strOrNull(d.get('cliVersion', null), 40)", '']],
   ],
   [
     'agent seenSession unbounded',
-    [["&& strOrNull(request.resource.data.get('seenSession', null), 64)", '']],
+    [["&& strOrNull(d.get('seenSession', null), 64)", '']],
   ],
   [
     'agent seenHostId unbounded',
-    [["&& strOrNull(request.resource.data.get('seenHostId', null), 64))", ')']],
+    [["&& strOrNull(d.get('seenHostId', null), 64))", ')']],
   ],
   [
     'cliVersion without presence',
     [
       [
-        "&& request.resource.data.lastSeenAt == request.time\n            && strOrNull(request.resource.data.get('seenHost', null), 80)",
-        "&& strOrNull(request.resource.data.get('seenHost', null), 80)",
+        "&& d.lastSeenAt == request.time\n            && strOrNull(d.get('seenHost', null), 80)",
+        "&& strOrNull(d.get('seenHost', null), 80)",
       ],
     ],
   ],
@@ -58,8 +58,8 @@ const MUTATIONS = [
     'agents may decide',
     [
       [
-        "allow create: if canProject(wid, pid)\n            && (exactKeys(request.resource.data, ['workspaceId', 'projectId', 'itemId', 'itemTitle',",
-        "allow create: if (canProject(wid, pid) || projectAgent(wid, pid))\n            && (exactKeys(request.resource.data, ['workspaceId', 'projectId', 'itemId', 'itemTitle',",
+        "return canProject(wid, pid)\n            && (exactKeys(d, ['workspaceId', 'projectId', 'itemId', 'itemTitle',",
+        "return (canProject(wid, pid) || projectAgent(wid, pid))\n            && (exactKeys(d, ['workspaceId', 'projectId', 'itemId', 'itemTitle',",
       ],
       [AGENT_TYPES, AGENT_TYPES + " 'decision.approved', 'decision.sentBack', 'decision.stopped',"],
     ],
@@ -98,8 +98,8 @@ const MUTATIONS = [
     [
       ['&& e.data.at == request.time', ''],
       [
-        '&& request.resource.data.at == request.time\n          && request.resource.data.data is map',
-        '&& request.resource.data.data is map',
+        '&& d.at == request.time\n          && d.data is map',
+        '&& d.data is map',
       ],
     ],
   ],
@@ -107,7 +107,7 @@ const MUTATIONS = [
     'event actor not checked',
     [
       ['&& e.data.actor.id == me() && e.data.at', '&& e.data.at'],
-      ['&& request.resource.data.actor.id == me()\n', '\n'],
+      ['&& d.actor.id == me()\n', '\n'],
     ],
   ],
   [
@@ -136,8 +136,8 @@ const MUTATIONS = [
     'agents emit human events',
     [
       [
-        "request.resource.data.actor.type == 'human' && isMemberAfter(wid)",
-        '(isMemberAfter(wid) || isActiveAgent(wid))',
+        "&& ((d.actor.type == 'human' && isMemberAfter(wid)",
+        '&& (((isMemberAfter(wid) || isActiveAgent(wid))',
       ],
     ],
   ],
@@ -289,7 +289,7 @@ const MUTATIONS = [
     'humans move items',
     [
       [
-        "changed(['title', 'summary', 'type', 'order', 'updatedAt', 'lastEventId'])",
+        "touched(['title', 'summary', 'type', 'order'])",
         "changed(['title', 'summary', 'type', 'order', 'updatedAt', 'lastEventId', 'stepId', 'status', 'gate', 'claim'])",
       ],
     ],
@@ -307,8 +307,8 @@ const MUTATIONS = [
     'agents by members',
     [
       [
-        'allow create: if (isAdmin(wid) || memberConnects(request.resource.data)) && verified()\n          && aid != me()',
-        'allow create: if isMember(wid) && verified()\n          && aid != me()',
+        'return (isAdmin(wid) || memberConnects(d)) && verified()\n          && aid != me()',
+        'return isMember(wid) && verified()\n          && aid != me()',
       ],
     ],
   ],
@@ -354,10 +354,10 @@ const MUTATIONS = [
     'attachments oversize',
     [
       [
-        'str(request.resource.data.content, 0, 921600)',
-        'str(request.resource.data.content, 0, 2000000)',
+        'str(d.content, 0, 921600)',
+        'str(d.content, 0, 2000000)',
       ],
-      ['request.resource.data.bytes <= 921600', 'request.resource.data.bytes <= 2000000'],
+      ['d.bytes <= 921600', 'd.bytes <= 2000000'],
     ],
   ],
   // Inbox (item 4PEHrOW5IfXBQWgOK9wo)
@@ -431,8 +431,8 @@ const MUTATIONS = [
     'plans: agent decides a step',
     [
       [
-        "'plan.proposed', 'outcome.started']));",
-        "'plan.proposed', 'outcome.started', 'outcome.approved']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'outcome.approved']));",
       ],
       [
         'return (inboxOwner(wid, r) && inboxPlanLive(p)',
@@ -465,15 +465,15 @@ const MUTATIONS = [
     'plans: agent edits steps',
     [
       [
-        "'plan.proposed', 'outcome.started']));",
-        "'plan.proposed', 'outcome.started', 'plan.edited']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'plan.edited']));",
       ],
       ['return (inboxOwner(wid, r)\n', 'return ((inboxOwner(wid, r) || isActiveAgent(wid))\n'],
     ],
   ],
   [
     'plans: nine steps',
-    [['request.resource.data.steps.size() <= 8', 'request.resource.data.steps.size() <= 9']],
+    [['d.steps.size() <= 8', 'd.steps.size() <= 9']],
   ],
   [
     'plans: step on another thread',
@@ -492,8 +492,8 @@ const MUTATIONS = [
     'inbox: plan-only type proposed alone',
     [
       [
-        '&& request.resource.data.type in outcomeSingle()',
-        '&& request.resource.data.type in outcomeTypes()',
+        '&& d.type in outcomeSingle()',
+        '&& d.type in outcomeTypes()',
       ],
     ],
   ],
@@ -513,7 +513,7 @@ const MUTATIONS = [
     'inbox: agent rewrites more than a subject area',
     [
       [
-        "&& changed(['area', 'label', 'labelSuggested', 'labelBy', 'updatedAt', 'lastEventId'])",
+        "&& touched(['area', 'label', 'labelSuggested', 'labelBy'])",
         '',
       ],
     ],
@@ -522,7 +522,7 @@ const MUTATIONS = [
     'inbox: agent sets an area outside a filing',
     [
       [
-        "inboxTracked(wid, request.resource.data.lastEventId, ['thread.filed'], resource.data.memberUid)\n          && inboxEv(wid, request.resource.data.lastEventId).data.subjectId == sid;",
+        "inboxTracked(wid, d.lastEventId, ['thread.filed'], r.memberUid)\n          && inboxEv(wid, d.lastEventId).data.subjectId == sid;",
         'true;',
       ],
     ],
@@ -542,7 +542,7 @@ const MUTATIONS = [
   ],
   [
     'inbox: agent overwrites a confirmed label',
-    [["&& !(resource.data.get('labelBy', null) == 'member')))", '&& true))']],
+    [["&& !(r.get('labelBy', null) == 'member')))", '&& true))']],
   ],
   [
     'inbox: unbounded agent label',
@@ -563,14 +563,14 @@ const MUTATIONS = [
   ],
   [
     'inbox: label change without its event',
-    [["&& inboxEv(wid, request.resource.data.lastEventId).data.type == 'subject.label'))", '))']],
+    [["&& inboxEv(wid, d.lastEventId).data.type == 'subject.label'))", '))']],
   ],
   [
     'inbox: people create labelled subjects',
     [
       [
-        "&& inboxNoLabel(request.resource.data)\n                && request.resource.data.createdBy == me_('human')",
-        "&& request.resource.data.createdBy == me_('human')",
+        "&& inboxNoLabel(d)\n                && d.createdBy == me_('human')",
+        "&& d.createdBy == me_('human')",
       ],
     ],
   ],
@@ -600,8 +600,8 @@ const MUTATIONS = [
     'inbox: people write agent events',
     [
       [
-        "'relation.removed',\n                  'thread.flagged', 'thread.due'])",
-        "'relation.removed',\n                  'thread.flagged', 'thread.due', 'outcome.done'])",
+        "'thread.recheck_requested',\n                  'thread.instructed'])",
+        "'thread.recheck_requested',\n                  'thread.instructed', 'outcome.done'])",
       ],
     ],
   ],
@@ -625,7 +625,7 @@ const MUTATIONS = [
   ['inbox: early wake', [['&& r.waiting.until <= request.time', '']]],
   [
     'inbox: an item link without the item',
-    [['|| inboxItemMade(wid, request.resource.data))', '|| true)']],
+    [['|| inboxItemMade(wid, d))', '|| true)']],
   ],
   [
     "inbox: linking another member's thread",
@@ -635,12 +635,12 @@ const MUTATIONS = [
     'inbox: agents decide relations',
     [
       [
-        "'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due']));",
-        "'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due', 'relation.accepted']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'relation.accepted']));",
       ],
       [
-        "allow update: if inboxOwner(wid, resource.data)\n          && changed(['state', 'note', 'decision'",
-        "allow update: if (inboxOwner(wid, resource.data) || isActiveAgent(wid))\n          && changed(['state', 'note', 'decision'",
+        "allow update: if inboxOwner(wid, resource.data)\n          && touched(['state', 'note', 'decision'",
+        "allow update: if (inboxOwner(wid, resource.data) || isActiveAgent(wid))\n          && touched(['state', 'note', 'decision'",
       ],
       [
         "['relation.accepted', 'relation.created', 'relation.rejected', 'relation.removed'], me())",
@@ -653,27 +653,36 @@ const MUTATIONS = [
     [['&& inboxSubjectOf(wid, d.a, d.memberUid) && inboxSubjectOf(wid, d.b, d.memberUid);', ';']],
   ],
   ['inbox: relation id forged', [["&& d.a < d.b && rid == 'rel-' + d.a + '-' + d.b", '']]],
-  ['inbox: urgent not a boolean', [['&& request.resource.data.urgent is bool', '']]],
+  ['inbox: urgent not a boolean', [['&& d.urgent is bool', '']]],
   [
     'inbox: agents propose a related link',
     [
       [
-        "&& request.resource.data.state == 'proposed'\n                && request.resource.data.proposedBy == me_('agent')",
-        "&& request.resource.data.proposedBy == me_('agent')",
+        "&& d.state == 'proposed'\n                && d.proposedBy == me_('agent')",
+        "&& d.proposedBy == me_('agent')",
       ],
     ],
   ],
   // Decision data (item kt3E7u9EliL3q2veDDI0)
   [
     'inbox: any confidence',
-    [["|| request.resource.data.confidence in ['high', 'medium', 'low'])", '|| true)']],
+    [
+      [
+        "|| d.confidence in ['high', 'medium', 'low'])\n          && d.proposedBy == me()",
+        '|| true)\n          && d.proposedBy == me()',
+      ],
+      [
+        "|| d.confidence in ['high', 'medium', 'low'])\n          && (!('checks' in d) || (d.checks is list && d.checks.size() <= 6))\n          // Alone",
+        "|| true)\n          && (!('checks' in d) || (d.checks is list && d.checks.size() <= 6))\n          // Alone",
+      ],
+    ],
   ],
   [
     'inbox: unbounded checks',
     [
       [
-        '(request.resource.data.checks is list && request.resource.data.checks.size() <= 6))',
-        '(request.resource.data.checks is list))',
+        "(d.checks is list && d.checks.size() <= 6))\n          // Alone",
+        "(d.checks is list))\n          // Alone",
       ],
     ],
   ],
@@ -690,21 +699,21 @@ const MUTATIONS = [
     'inbox: due without its event',
     [
       [
-        "['thread.due'], resource.data.memberUid, tid)",
-        "['thread.due', 'thread.flagged'], resource.data.memberUid, tid)",
+        "['thread.due'], r.memberUid, tid)",
+        "['thread.due', 'thread.flagged'], r.memberUid, tid)",
       ],
     ],
   ],
   [
     'inbox: due not a timestamp',
-    [['&& (request.resource.data.due == null || request.resource.data.due is timestamp)', '']],
+    [['&& (d.due == null || d.due is timestamp)', '']],
   ],
   [
     'inbox: due rewrites more',
     [
       [
-        "changed(['due', 'updatedAt', 'lastEventId'])",
-        "changed(['due', 'state', 'updatedAt', 'lastEventId'])",
+        "touched(['due'])",
+        "touched(['due', 'state'])",
       ],
     ],
   ],
@@ -764,7 +773,7 @@ const MUTATIONS = [
   ],
   [
     'inbox: member rewrites fields while asking',
-    [["changed(['state', 'revise', 'updatedAt', 'lastEventId'])", 'true']],
+    [["touched(['state', 'revise'])", 'true']],
   ],
   [
     'inbox: reject while revising',
@@ -777,7 +786,7 @@ const MUTATIONS = [
   ], // Re-check (item bmNoIvvqKCdAorLSShE9).
   [
     'recheck: another member asks',
-    [['(inboxOwner(wid, resource.data) && inboxRecheckAsked(', '(inboxRecheckAsked(']],
+    [['(inboxOwner(wid, r) && inboxRecheckAsked(', '(inboxRecheckAsked(']],
   ],
   [
     'recheck: ask while pending',
@@ -787,8 +796,8 @@ const MUTATIONS = [
     'recheck: ask with nothing open',
     [
       [
-        "return changed(['recheck', 'updatedAt', 'lastEventId'])\n            && r.state in ['yourCall', 'waiting']",
-        "return changed(['recheck', 'updatedAt', 'lastEventId'])",
+        "return touched(['recheck'])\n            && r.state in ['yourCall', 'waiting']",
+        "return touched(['recheck'])",
       ],
     ],
   ],
@@ -840,7 +849,7 @@ const MUTATIONS = [
   ],
   [
     'recheck: checkedAt with other changes',
-    [["changed(['checkedAt', 'updatedAt', 'lastEventId'])", 'true']],
+    [["touched(['checkedAt'])", 'true']],
   ],
   [
     'recheck: unasked revise without a request',
@@ -871,7 +880,7 @@ const MUTATIONS = [
   // Ask the agent (item w6O2KOw4ys70TQv9I1xD).
   [
     'instruct: another member asks',
-    [['(inboxOwner(wid, resource.data) && inboxInstructed(', '(inboxInstructed(']],
+    [['(inboxOwner(wid, r) && inboxInstructed(', '(inboxInstructed(']],
   ],
   [
     'instruct: ask while pending',
@@ -945,8 +954,8 @@ const MUTATIONS = [
     'chips: any agent',
     [
       [
-        "return changed(['suggestedChips', 'updatedAt', 'lastEventId'])\n            && r.fetchedBy == me()",
-        "return changed(['suggestedChips', 'updatedAt', 'lastEventId'])",
+        "return touched(['suggestedChips'])\n            && r.fetchedBy == me()",
+        "return touched(['suggestedChips'])",
       ],
     ],
   ],
