@@ -1049,6 +1049,44 @@ const MUTATIONS = [
       ],
     ],
   ],
+  // Slice 7: the Off backstop. An agent starts no step approved before its member turned it Off.
+  [
+    'off: single outcome done while Off',
+    [
+      [
+        "&& r.executor == me() && (type == 'outcome.failed' || inboxOnFor(r))",
+        '&& r.executor == me()',
+      ],
+    ],
+  ],
+  [
+    'off: plan step started while Off',
+    [
+      [
+        "\n              && (e.type == 'outcome.failed' || r.state == 'running' || inboxOnFor(r))",
+        '',
+      ],
+    ],
+  ],
+  ['off: since ignored', [['return o == null || o.data.since == null ||', 'return true ||']]],
+  [
+    'off: a listed agent is not silenced',
+    [['!(o.data.all || me() in o.data.agents)', '!o.data.all']],
+  ],
+  [
+    'off: running step cannot report',
+    [["e.type == 'outcome.failed' || r.state == 'running' ||", "e.type == 'outcome.failed' ||"]],
+  ],
+  ['off: failure refused', [["(type == 'outcome.failed' || inboxOnFor(r))", 'inboxOnFor(r)']]],
+  [
+    'off: approval while Off ignored',
+    [
+      [
+        "\n            || (r.get('decision', null) == null ? r.createdAt : r.decision.at) > o.data.since;",
+        ';',
+      ],
+    ],
+  ],
   // Slice 5: the agent revises its own proposal after Ask for changes, with the outcome.
   [
     'schedule revise: any version',

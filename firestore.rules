@@ -1521,6 +1521,7 @@ service cloud.firestore {
                   && touched(['state'])
                   && d.state == 'rejected' && pa.cursor == p.cursor + 1)))
             || (isActiveAgent(wid) && turn && p.state in ['proposed', 'active']
+              && (e.type == 'outcome.failed' || r.state == 'running' || inboxOnFor(r))
               && touched(['state', 'result']) && (exactKeys(d.result, ['text', 'permalink', 'itemId', 'error', 'by', 'at'])
             && strOrNull(d.result.text, 20000) && strOrNull(d.result.permalink, 2048)
             && strOrNull(d.result.itemId, 128) && strOrNull(d.result.error, 1000)
@@ -1540,6 +1541,13 @@ service cloud.firestore {
                   && get(inboxDoc('inboxThreads', r.threadId)).data.waiting.until <= request.time)));
         }
 
+        // Off (scheduled tasks slice 7): an agent starts no step approved before its member
+        // turned it Off; one approved while Off (his saying so) goes, as does reporting a failure.
+        function inboxOnFor(r) {
+          let o = get(inboxDoc('agentsOff', r.memberUid));
+          return o == null || o.data.since == null || !(o.data.all || me() in o.data.agents)
+            || (r.get('decision', null) == null ? r.createdAt : r.decision.at) > o.data.since;
+        }
         function inboxProposalOk(d, t) {
           return t.memberUid == d.memberUid
             && d.executor == (d.type in outcomeImmediate() ? null : t.fetchedBy);
@@ -1635,7 +1643,7 @@ service cloud.firestore {
         }
         // Its executor reports an approved outcome as done or failed.
         function inboxCarriedOut(d, r, type) {
-          return r.state == 'approved' && r.executor == me()
+          return r.state == 'approved' && r.executor == me() && (type == 'outcome.failed' || inboxOnFor(r))
             && touched(['state', 'result'])
             && ((type == 'outcome.done' && d.state == 'done') || (type == 'outcome.failed' && d.state == 'failed'))
             && exactKeys(d.result, ['text', 'permalink', 'itemId', 'error', 'by', 'at'])
