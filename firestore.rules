@@ -188,6 +188,8 @@ service cloud.firestore {
     }
     // changed(keys), plus the updatedAt and lastEventId stamps every tracked write carries.
     function touched(keys) { return changed(keys.concat(['updatedAt', 'lastEventId'])); }
+    // d has every key of `req`, and no key outside `req` and `opt`.
+    function keysOk(d, req, opt) { return d.keys().hasAll(req) && d.keys().hasOnly(req.concat(opt)); }
     function exactKeys(d, keys) { return d.keys().hasAll(keys) && d.keys().hasOnly(keys); }
     function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
     function strOrNull(v, max) { return v == null || (v is string && v.size() <= max); }
@@ -357,8 +359,8 @@ service cloud.firestore {
         let d = request.resource.data;
         return signedIn() && uid == me() && !isAgentEmail()
         // workspaceIds is missing on profiles that predate organizations; the next write adds it.
-        && d.keys().hasAll(['name', 'email', 'photoURL', 'color', 'workspaceId', 'theme'])
-        && d.keys().hasOnly(['name', 'email', 'photoURL', 'color', 'workspaceId', 'workspaceIds', 'theme'])
+        && keysOk(d, ['name', 'email', 'photoURL', 'color', 'workspaceId', 'theme'],
+             ['workspaceIds'])
         && str(d.name, 0, 200)
         && str(d.email, 0, 320)
         && strOrNull(d.photoURL, 2048)
@@ -727,12 +729,10 @@ service cloud.firestore {
           let d = request.resource.data;
           return (isAdmin(wid) || memberConnects(d)) && verified()
           && aid != me() && !(aid in get(wsPath(wid)).data.memberRoles)
-          && d.keys().hasAll(['name', 'color', 'projectIds', 'createdBy', 'createdAt',
-               'revokedAt', 'lastSeenAt', 'tokenHint', 'previousAgentUid', 'lastEventId'])
+          && keysOk(d, ['name', 'color', 'projectIds', 'createdBy', 'createdAt',
+               'revokedAt', 'lastSeenAt', 'tokenHint', 'previousAgentUid', 'lastEventId'],
           // guardrails and permissions are optional (absent = defaults); a new agent is never paused.
-          && d.keys().hasOnly(['name', 'color', 'projectIds', 'createdBy', 'createdAt',
-               'revokedAt', 'lastSeenAt', 'tokenHint', 'previousAgentUid', 'guardrails', 'permissions',
-               'scope', 'lastEventId'])
+               ['guardrails', 'permissions', 'scope'])
           // An Inbox and Calendar agent (item fJnu6) is created by an admin only.
           && (!('scope' in d) || isAdmin(wid))
           && validAgentFields(d)
@@ -1400,10 +1400,9 @@ service cloud.firestore {
         function inboxPlansCreateOk() {
           let d = request.resource.data;
           return isActiveAgent(wid)
-          && d.keys().hasAll(['memberUid', 'threadId', 'proposedBy', 'steps', 'cursor',
-               'state', 'note', 'createdAt', 'updatedAt', 'lastEventId'])
-          && d.keys().hasOnly(['memberUid', 'threadId', 'proposedBy', 'steps', 'cursor',
-               'state', 'note', 'createdAt', 'updatedAt', 'lastEventId', 'confidence'])
+          && keysOk(d, ['memberUid', 'threadId', 'proposedBy', 'steps', 'cursor',
+               'state', 'note', 'createdAt', 'updatedAt', 'lastEventId'],
+               ['confidence'])
           && (!('confidence' in d) || d.confidence in ['high', 'medium', 'low'])
           && d.proposedBy == me()
           && d.state == 'proposed' && d.cursor == 0
@@ -1741,8 +1740,8 @@ service cloud.firestore {
               && inboxDocTracked(d, ['thread.filed'], r.memberUid, tid))
             || (touched(['state', 'question'])
               && r.state != 'ignored' && d.state == 'needsYou'
-              && d.question.keys().hasAll(['text', 'by', 'at', 'answer', 'answeredAt'])
-              && d.question.keys().hasOnly(['text', 'by', 'at', 'answer', 'answeredAt', 'options'])
+              && keysOk(d.question, ['text', 'by', 'at', 'answer', 'answeredAt'],
+                   ['options'])
               && (!('options' in d.question) || (d.question.options is list && d.question.options.size() <= 4))
               && str(d.question.text, 1, 4000) && d.question.by == me()
               && d.question.at == request.time && d.question.answer == null && d.question.answeredAt == null
@@ -1858,11 +1857,9 @@ service cloud.firestore {
         function inboxOutcomesCreateOk() {
           let d = request.resource.data;
           return (isActiveAgent(wid)
-          && d.keys().hasAll(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
-               'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId'])
-          && d.keys().hasOnly(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
-               'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId',
-               'confidence', 'checks'])
+          && keysOk(d, ['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
+               'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId'],
+               ['confidence', 'checks'])
           // How sure the agent is, and what it verified (item kt3E7u9EliL3q2veDDI0): optional.
           && (!('confidence' in d) || d.confidence in ['high', 'medium', 'low'])
           && (!('checks' in d) || (d.checks is list && d.checks.size() <= 6))
@@ -1935,11 +1932,9 @@ service cloud.firestore {
         function inboxStepCreate(d) {
           let p = getAfter(inboxPlanDoc(d.planId)).data;
           let e = inboxEv(d.lastEventId).data;
-          return d.keys().hasAll(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
-                 'proposedBy', 'executor', 'decision', 'result', 'planId', 'createdAt', 'updatedAt', 'lastEventId'])
-            && d.keys().hasOnly(['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
-                 'proposedBy', 'executor', 'decision', 'result', 'planId', 'createdAt', 'updatedAt', 'lastEventId',
-                 'confidence', 'checks'])
+          return keysOk(d, ['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
+                 'proposedBy', 'executor', 'decision', 'result', 'planId', 'createdAt', 'updatedAt', 'lastEventId'],
+                 ['confidence', 'checks'])
             && (!('confidence' in d) || d.confidence in ['high', 'medium', 'low'])
             && (!('checks' in d) || (d.checks is list && d.checks.size() <= 6))
             && d.planId is string && p.threadId == d.threadId && p.memberUid == d.memberUid && oid in p.steps
@@ -2182,8 +2177,8 @@ service cloud.firestore {
         allow create: if inboxSubjectsCreateOk();
         function inboxSubjectsCreateOk() {
           let d = request.resource.data;
-          return d.keys().hasAll(['memberUid', 'name', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
-          && d.keys().hasOnly(['memberUid', 'name', 'area', 'label', 'labelSuggested', 'labelBy', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
+          return keysOk(d, ['memberUid', 'name', 'createdBy', 'createdAt', 'updatedAt', 'lastEventId'],
+               ['area', 'label', 'labelSuggested', 'labelBy'])
           && str(d.name, 1, 120)
           && inboxAreaOk(d)
           && d.createdAt == request.time
@@ -2327,12 +2322,10 @@ service cloud.firestore {
         function projectsCreateOk() {
           let d = request.resource.data;
           return isMember(wid)
-          && d.keys().hasAll(['name', 'emoji', 'color', 'templateId',
-               'steps', 'stepIndex', 'memberUids', 'createdBy', 'createdAt', 'archivedAt', 'lastEventId'])
+          && keysOk(d, ['name', 'emoji', 'color', 'templateId',
+               'steps', 'stepIndex', 'memberUids', 'createdBy', 'createdAt', 'archivedAt', 'lastEventId'],
           // shapeNewItems (card st5INNZj): new items wait to be shaped by an agent.
-          && d.keys().hasOnly(['name', 'emoji', 'color', 'templateId',
-               'steps', 'stepIndex', 'memberUids', 'createdBy', 'createdAt', 'archivedAt',
-               'shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter', 'lastEventId'])
+               ['shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter'])
           && d.get('shapeNewItems', false) is bool
           && d.get('agentsMayCreateItems', false) is bool
           && d.get('statusEvery', 0) in [0, 15, 30, 60]
@@ -2401,16 +2394,18 @@ service cloud.firestore {
           let x = a.steps;
           let y = b.steps;
           return x == y || isAdmin(wid) || b.createdBy == me()
-            || (gateKept(b, x, y, n, 0) && gateKept(b, x, y, n, 1) && gateKept(b, x, y, n, 2) && gateKept(b, x, y, n, 3) && gateKept(b, x, y, n, 4)
-            && (n <= 5 || (gateKept(b, x, y, n, 5) && gateKept(b, x, y, n, 6) && gateKept(b, x, y, n, 7) && gateKept(b, x, y, n, 8) && gateKept(b, x, y, n, 9)
-            && (n <= 10 || (gateKept(b, x, y, n, 10) && gateKept(b, x, y, n, 11) && gateKept(b, x, y, n, 12) && gateKept(b, x, y, n, 13) && gateKept(b, x, y, n, 14)
-            && (n <= 15 || (gateKept(b, x, y, n, 15) && gateKept(b, x, y, n, 16) && gateKept(b, x, y, n, 17) && gateKept(b, x, y, n, 18) && gateKept(b, x, y, n, 19)
-            && (n <= 20 || (gateKept(b, x, y, n, 20) && gateKept(b, x, y, n, 21) && gateKept(b, x, y, n, 22) && gateKept(b, x, y, n, 23) && gateKept(b, x, y, n, 24)
-            && (n <= 25 || (gateKept(b, x, y, n, 25) && gateKept(b, x, y, n, 26) && gateKept(b, x, y, n, 27) && gateKept(b, x, y, n, 28) && gateKept(b, x, y, n, 29))))))))))));
+            || ((n <= 0 || x[0] == y[0] || gateMoved(b, x[0], y, 0)) && (n <= 1 || x[1] == y[1] || gateMoved(b, x[1], y, 1)) && (n <= 2 || x[2] == y[2] || gateMoved(b, x[2], y, 2)) && (n <= 3 || x[3] == y[3] || gateMoved(b, x[3], y, 3)) && (n <= 4 || x[4] == y[4] || gateMoved(b, x[4], y, 4))
+            && (n <= 5 || ((n <= 5 || x[5] == y[5] || gateMoved(b, x[5], y, 5)) && (n <= 6 || x[6] == y[6] || gateMoved(b, x[6], y, 6)) && (n <= 7 || x[7] == y[7] || gateMoved(b, x[7], y, 7)) && (n <= 8 || x[8] == y[8] || gateMoved(b, x[8], y, 8)) && (n <= 9 || x[9] == y[9] || gateMoved(b, x[9], y, 9))
+            && (n <= 10 || ((n <= 10 || x[10] == y[10] || gateMoved(b, x[10], y, 10)) && (n <= 11 || x[11] == y[11] || gateMoved(b, x[11], y, 11)) && (n <= 12 || x[12] == y[12] || gateMoved(b, x[12], y, 12)) && (n <= 13 || x[13] == y[13] || gateMoved(b, x[13], y, 13)) && (n <= 14 || x[14] == y[14] || gateMoved(b, x[14], y, 14))
+            && (n <= 15 || ((n <= 15 || x[15] == y[15] || gateMoved(b, x[15], y, 15)) && (n <= 16 || x[16] == y[16] || gateMoved(b, x[16], y, 16)) && (n <= 17 || x[17] == y[17] || gateMoved(b, x[17], y, 17)) && (n <= 18 || x[18] == y[18] || gateMoved(b, x[18], y, 18)) && (n <= 19 || x[19] == y[19] || gateMoved(b, x[19], y, 19))
+            && (n <= 20 || ((n <= 20 || x[20] == y[20] || gateMoved(b, x[20], y, 20)) && (n <= 21 || x[21] == y[21] || gateMoved(b, x[21], y, 21)) && (n <= 22 || x[22] == y[22] || gateMoved(b, x[22], y, 22)) && (n <= 23 || x[23] == y[23] || gateMoved(b, x[23], y, 23)) && (n <= 24 || x[24] == y[24] || gateMoved(b, x[24], y, 24))
+            && (n <= 25 || ((n <= 25 || x[25] == y[25] || gateMoved(b, x[25], y, 25)) && (n <= 26 || x[26] == y[26] || gateMoved(b, x[26], y, 26)) && (n <= 27 || x[27] == y[27] || gateMoved(b, x[27], y, 27)) && (n <= 28 || x[28] == y[28] || gateMoved(b, x[28], y, 28)) && (n <= 29 || x[29] == y[29] || gateMoved(b, x[29], y, 29)))))))))))));
         }
-        // Position i (of n) keeps its step, or its gate, or may change it (gateOk).
-        function gateKept(b, x, y, n, i) {
-          return n <= i || x[i] == y[i] || x[i].get('gate', null) == y[i].get('gate', null) || gateOk(b, x[i]);
+        // Step s, now at position i, differs from what was there (y = the steps before): it keeps
+        // its gate, or may change it (gateOk). The plain x[i] == y[i] check stays inline, so an
+        // unchanged step costs no call (the expression budget, see gateOk).
+        function gateMoved(b, s, y, i) {
+          return s.get('gate', null) == y[i].get('gate', null) || gateOk(b, s);
         }
         // A position whose gate is the same as it was needs no check (that gate already existed; an
         // out-of-range read errors, which falls through to the full check). Only a changed gate
@@ -2570,13 +2565,10 @@ service cloud.firestore {
           allow create: if itemsCreateOk();
           function itemsCreateOk() {
             let d = request.resource.data;
-            return d.keys().hasAll(['title', 'type', 'stepId', 'status',
+            return keysOk(d, ['title', 'type', 'stepId', 'status',
                  'summary', 'source', 'createdBy', 'parentItemId', 'sourceRunId', 'claim', 'progress',
-                 'gate', 'triage', 'sendBackCount', 'costEur', 'order', 'updatedAt', 'lastEventId'])
-            && d.keys().hasOnly(['title', 'type', 'stepId', 'status',
-                 'summary', 'source', 'createdBy', 'parentItemId', 'sourceRunId', 'claim', 'progress',
-                 'gate', 'triage', 'sendBackCount', 'attachmentCount', 'costEur', 'order', 'updatedAt',
-                 'shape', 'stepAt', 'lastEventId'])
+                 'gate', 'triage', 'sendBackCount', 'costEur', 'order', 'updatedAt', 'lastEventId'],
+                 ['attachmentCount', 'shape', 'stepAt'])
             && d.get('attachmentCount', 0) == 0
             && d.get('stepAt', request.time) == request.time
             && validItemText(d)

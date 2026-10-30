@@ -651,8 +651,8 @@ const MUTATIONS = [
     'inbox: outcomes with any keys',
     [
       [
-        "'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId',\n               'confidence', 'checks'])",
-        "'proposedBy', 'executor', 'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId',\n               'confidence', 'checks', 'score'])",
+        "'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId'],\n               ['confidence', 'checks'])",
+        "'decision', 'result', 'createdAt', 'updatedAt', 'lastEventId'],\n               ['confidence', 'checks', 'score'])",
       ],
     ],
   ],
@@ -673,7 +673,12 @@ const MUTATIONS = [
   ],
   [
     'inbox: questions with any keys',
-    [["&& d.question.keys().hasOnly(['text', 'by', 'at', 'answer', 'answeredAt', 'options'])", '']],
+    [
+      [
+        "keysOk(d.question, ['text', 'by', 'at', 'answer', 'answeredAt'],\n                   ['options'])",
+        "d.question.keys().hasAll(['text', 'by', 'at', 'answer', 'answeredAt'])",
+      ],
+    ],
   ],
   [
     'inbox: the answer rewrites the question',
