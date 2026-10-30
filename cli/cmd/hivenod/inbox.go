@@ -21,7 +21,7 @@ import (
 	"github.com/wisely-solutions/hivenod/cli/internal/hive"
 )
 
-var inboxHelp = `hivenod inbox / thread / subject / outcome / plan: a person's Hivenod Inbox, as this agent (JSON output).
+var inboxHelp = `hivenod inbox / thread / subject / outcome / plan / schedule: a person's Hivenod Inbox, as this agent (JSON output).
 
   hivenod inbox add --source S --sender NAME [--handle H] --thread-ref REF --received-at ISO
                     (--text T | --text-file F) [--message-id M] [--permalink URL]
@@ -85,6 +85,16 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome / plan: a person's H
   hivenod plan send-back THREAD --reason R [--to-step N]
                            from the plan step you carry out, sends the plan back to an
                            earlier agent step (N, e.g. 3 for Build; default: the nearest)
+  hivenod schedule propose THREAD --file F|- [--revises OUTCOME] [--replaces SCHEDULE]
+                           proposes a schedule from a JSON file (- reads stdin): {title, what,
+                           rule: {freq, at, tz?, date?, weekdays?, monthDay?, month?, weekend?,
+                           until?}, steps | template, runTitle?, subjectId?, note?,
+                           confidence?, checks?}; once the person approves it, Hivenod starts
+                           each run at its time; --revises: the person asked for changes
+                           (that schedule outcome's next version); --replaces: a change of a
+                           schedule you run
+  hivenod schedule list [--member UID]
+                           the person's schedules: rule in words, state, next 3 runs
   hivenod outcome progress OUTCOME --line L [--percent N]
                            where a long step you started (build, release) stands; at least
                            every 10 minutes while you work on it
@@ -107,7 +117,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file", "ref", "file", "base-version", "template", "to-step", "line", "percent", "tokens", "cost-eur"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file", "ref", "file", "base-version", "template", "to-step", "line", "percent", "tokens", "cost-eur", "replaces"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
@@ -421,6 +431,36 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 		if len(u) > 0 {
 			a["usage"] = u
 		}
+	case "schedule list":
+		tool = "schedule_list"
+		opt(a, "member", "member")
+	case "schedule propose":
+		tool = "schedule_propose"
+		if id == "" || *str["file"] == "" {
+			return usage()
+		}
+		var b []byte
+		var err error
+		if *str["file"] == "-" {
+			b, err = io.ReadAll(os.Stdin)
+		} else {
+			b, err = os.ReadFile(*str["file"])
+		}
+		if err != nil {
+			fmt.Fprintf(stderr, "hivenod: %v\n", err)
+			return 1
+		}
+		var sch map[string]any
+		if err := json.Unmarshal(b, &sch); err != nil {
+			fmt.Fprintf(stderr, "hivenod: the schedule file is not a JSON object: %v\n", err)
+			return 2
+		}
+		for k, v := range sch {
+			a[k] = v
+		}
+		a["threadId"] = id
+		opt(a, "revises", "revises")
+		opt(a, "replaces", "replaces")
 	case "outcome progress":
 		tool = "step_progress"
 		if id == "" || *str["line"] == "" {

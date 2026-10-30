@@ -979,6 +979,234 @@
         }
       },
       {
+        "name": "schedule_propose",
+        "description": "Propose a schedule when the person asks for something recurring or at a later time (\"every 1st at 9, prepare the invoices and ask me before sending\"; \"every Friday at 16:00\"; \"on 12 Nov remind them\"). Hivenod owns the clock: once the person approves (Set up schedule), it starts each run at its time as a new thread with this plan, filed under the subject, and sends you its carry_out; never keep a timer, cron or reminder of your own for it. The person sees the rule in words, the next 3 runs and the plan of each run, and approves, asks for changes (you get a revise event: schedule_propose revises=<outcomeId> with the whole schedule again, changing only what they asked) or says not now. The plan of each run is plan steps (as in plan_propose): put an approval step before anything that sends, pays or publishes. Check schedule_list first so you never schedule the same thing twice; to change a schedule you run, propose with replaces=<scheduleId>. Never through outcome_propose or as a plan step. Frequencies: once, daily (optionally only some weekdays), weekly, monthly, quarterly, yearly; no hourly.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The person's thread where they asked for it (you are its home agent)"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "Short name, e.g. Send invoices"
+            },
+            "what": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000,
+              "description": "The instruction for each run, in the person's words plus what you will do: the first message of every run thread"
+            },
+            "rule": {
+              "type": "object",
+              "description": "When it runs (Hivenod checks it): freq and at always; weekly needs weekdays; monthly, quarterly and yearly need monthDay; yearly needs month; once needs date",
+              "properties": {
+                "freq": {
+                  "type": "string",
+                  "enum": [
+                    "once",
+                    "daily",
+                    "weekly",
+                    "monthly",
+                    "quarterly",
+                    "yearly"
+                  ],
+                  "description": "How often"
+                },
+                "at": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 5,
+                  "description": "Local wall time HH:MM, 00:00-23:59"
+                },
+                "tz": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "description": "IANA time zone of the person, e.g. Europe/Lisbon (the default)"
+                },
+                "date": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 10,
+                  "description": "YYYY-MM-DD: once: the day; otherwise the first possible run day"
+                },
+                "weekdays": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 7,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "description": "1 = Monday ... 7 = Sunday: weekly (required) or daily (only those days)"
+                },
+                "monthDay": {
+                  "type": "integer",
+                  "minimum": -1,
+                  "maximum": 31,
+                  "description": "Day of the month 1-31 (a shorter month uses its last day), or -1 for the last day"
+                },
+                "month": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 12,
+                  "description": "yearly: the month; quarterly: the first month of the cycle (default 1: Jan, Apr, Jul, Oct)"
+                },
+                "weekend": {
+                  "type": "string",
+                  "enum": [
+                    "keep",
+                    "before",
+                    "after"
+                  ],
+                  "description": "monthly, quarterly, yearly: a run on Sat/Sun moves to the Friday before or the Monday after (default keep)"
+                },
+                "until": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 10,
+                  "description": "YYYY-MM-DD: the last possible run day"
+                }
+              },
+              "required": [
+                "freq",
+                "at"
+              ]
+            },
+            "template": {
+              "type": "string",
+              "enum": [
+                "dev"
+              ],
+              "description": "A plan template for each run instead of your own steps"
+            },
+            "steps": {
+              "description": "The plan of each run, in order (1-8 plan steps, as in plan_propose); with a template, the fields of its steps in order. Texts may hold {date} (1 Nov 2026), {month} (Nov), {year}, {quarter} (Q4) and {period}",
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "reply",
+                      "handover",
+                      "snooze",
+                      "nudge",
+                      "shape",
+                      "build",
+                      "release",
+                      "approval"
+                    ],
+                    "description": "The step's outcome type"
+                  },
+                  "fields": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "boolean"
+                      ]
+                    },
+                    "description": "The type's fields"
+                  }
+                },
+                "required": [
+                  "type",
+                  "fields"
+                ]
+              }
+            },
+            "runTitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "description": "Title of each run's thread with placeholders, e.g. Send invoices · {month} {year} (default: <title> · {period})"
+            },
+            "subjectId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "The subject the run threads are filed under (subject_list); default the thread's subject on approval"
+            },
+            "note": {
+              "description": "Why this schedule, in 1-2 sentences: the person reads it first",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "confidence": {
+              "description": "How sure you are: high only when you verified what each run needs (e.g. you did it by hand before); low when you are guessing",
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            "checks": {
+              "description": "What you verified, one line each (at most 6)",
+              "type": "array",
+              "maxItems": 6,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "revises": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The schedule outcome id the person asked changes for (inbox reason revise): this becomes its next version"
+            },
+            "replaces": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The id of an active or paused schedule you run that this proposal changes (schedule_list); approving it rewrites that one"
+            }
+          },
+          "required": [
+            "threadId",
+            "title",
+            "what",
+            "rule"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "schedule_list",
+        "description": "The person's schedules in this organization (the one who connected you, or member): title, state (proposed, active, paused, ended), which agent runs it (yours: you), the rule in words, the next 3 runs (active and proposed ones), the plan's step types and the subject. Read it to answer \"what is scheduled?\" and before schedule_propose, so nothing is scheduled twice.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member": {
+              "description": "User id of the person; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "outcome_done",
         "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, keepgreen, release): report status started when you begin, step_progress as you go, then done. Keep green: done once the PR is green and current with main (Ship it? is offered); failed with the evidence (failing check, log excerpt, what you tried) when it is not solvable: a rebase conflict that needs a product decision, the same check failing after 3 fixes, or an infrastructure failure.",
         "inputSchema": {
@@ -2084,6 +2312,234 @@
             "reason"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
+        }
+      },
+      {
+        "name": "schedule_propose",
+        "description": "Propose a schedule when the person asks for something recurring or at a later time (\"every 1st at 9, prepare the invoices and ask me before sending\"; \"every Friday at 16:00\"; \"on 12 Nov remind them\"). Hivenod owns the clock: once the person approves (Set up schedule), it starts each run at its time as a new thread with this plan, filed under the subject, and sends you its carry_out; never keep a timer, cron or reminder of your own for it. The person sees the rule in words, the next 3 runs and the plan of each run, and approves, asks for changes (you get a revise event: schedule_propose revises=<outcomeId> with the whole schedule again, changing only what they asked) or says not now. The plan of each run is plan steps (as in plan_propose): put an approval step before anything that sends, pays or publishes. Check schedule_list first so you never schedule the same thing twice; to change a schedule you run, propose with replaces=<scheduleId>. Never through outcome_propose or as a plan step. Frequencies: once, daily (optionally only some weekdays), weekly, monthly, quarterly, yearly; no hourly.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The person's thread where they asked for it (you are its home agent)"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "Short name, e.g. Send invoices"
+            },
+            "what": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000,
+              "description": "The instruction for each run, in the person's words plus what you will do: the first message of every run thread"
+            },
+            "rule": {
+              "type": "object",
+              "description": "When it runs (Hivenod checks it): freq and at always; weekly needs weekdays; monthly, quarterly and yearly need monthDay; yearly needs month; once needs date",
+              "properties": {
+                "freq": {
+                  "type": "string",
+                  "enum": [
+                    "once",
+                    "daily",
+                    "weekly",
+                    "monthly",
+                    "quarterly",
+                    "yearly"
+                  ],
+                  "description": "How often"
+                },
+                "at": {
+                  "type": "string",
+                  "minLength": 5,
+                  "maxLength": 5,
+                  "description": "Local wall time HH:MM, 00:00-23:59"
+                },
+                "tz": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "description": "IANA time zone of the person, e.g. Europe/Lisbon (the default)"
+                },
+                "date": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 10,
+                  "description": "YYYY-MM-DD: once: the day; otherwise the first possible run day"
+                },
+                "weekdays": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 7,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "description": "1 = Monday ... 7 = Sunday: weekly (required) or daily (only those days)"
+                },
+                "monthDay": {
+                  "type": "integer",
+                  "minimum": -1,
+                  "maximum": 31,
+                  "description": "Day of the month 1-31 (a shorter month uses its last day), or -1 for the last day"
+                },
+                "month": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 12,
+                  "description": "yearly: the month; quarterly: the first month of the cycle (default 1: Jan, Apr, Jul, Oct)"
+                },
+                "weekend": {
+                  "type": "string",
+                  "enum": [
+                    "keep",
+                    "before",
+                    "after"
+                  ],
+                  "description": "monthly, quarterly, yearly: a run on Sat/Sun moves to the Friday before or the Monday after (default keep)"
+                },
+                "until": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 10,
+                  "description": "YYYY-MM-DD: the last possible run day"
+                }
+              },
+              "required": [
+                "freq",
+                "at"
+              ]
+            },
+            "template": {
+              "type": "string",
+              "enum": [
+                "dev"
+              ],
+              "description": "A plan template for each run instead of your own steps"
+            },
+            "steps": {
+              "description": "The plan of each run, in order (1-8 plan steps, as in plan_propose); with a template, the fields of its steps in order. Texts may hold {date} (1 Nov 2026), {month} (Nov), {year}, {quarter} (Q4) and {period}",
+              "type": "array",
+              "minItems": 0,
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "reply",
+                      "handover",
+                      "snooze",
+                      "nudge",
+                      "shape",
+                      "build",
+                      "release",
+                      "approval"
+                    ],
+                    "description": "The step's outcome type"
+                  },
+                  "fields": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "boolean"
+                      ]
+                    },
+                    "description": "The type's fields"
+                  }
+                },
+                "required": [
+                  "type",
+                  "fields"
+                ]
+              }
+            },
+            "runTitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "description": "Title of each run's thread with placeholders, e.g. Send invoices · {month} {year} (default: <title> · {period})"
+            },
+            "subjectId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "The subject the run threads are filed under (subject_list); default the thread's subject on approval"
+            },
+            "note": {
+              "description": "Why this schedule, in 1-2 sentences: the person reads it first",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "confidence": {
+              "description": "How sure you are: high only when you verified what each run needs (e.g. you did it by hand before); low when you are guessing",
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            "checks": {
+              "description": "What you verified, one line each (at most 6)",
+              "type": "array",
+              "maxItems": 6,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "revises": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The schedule outcome id the person asked changes for (inbox reason revise): this becomes its next version"
+            },
+            "replaces": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The id of an active or paused schedule you run that this proposal changes (schedule_list); approving it rewrites that one"
+            }
+          },
+          "required": [
+            "threadId",
+            "title",
+            "what",
+            "rule"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "schedule_list",
+        "description": "The person's schedules in this organization (the one who connected you, or member): title, state (proposed, active, paused, ended), which agent runs it (yours: you), the rule in words, the next 3 runs (active and proposed ones), the plan's step types and the subject. Read it to answer \"what is scheduled?\" and before schedule_propose, so nothing is scheduled twice.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "member": {
+              "description": "User id of the person; defaults to the person who connected this agent",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
         }
       },
       {
