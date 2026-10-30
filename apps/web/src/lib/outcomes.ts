@@ -31,6 +31,12 @@ export function effectLines(
   ctx: { agent: string; channel?: string; to?: string },
 ): { lead: string; lines: string[] } {
   const t = outcomeType(type);
+  // Retired with Calendar (slice 5): old bookings are never approved now.
+  if (t?.retired)
+    return {
+      lead: 'Bookings were removed with Calendar:',
+      lines: ['This proposal can only be rejected'],
+    };
   const s = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
   const on = ctx.channel ? ` on ${ctx.channel}` : '';
   const to = ctx.to ? ` to ${ctx.to}` : '';
@@ -49,14 +55,6 @@ export function effectLines(
     case 'reply':
       lines.push(`Send ${fields.holding ? 'the holding reply' : 'the reply'}${to}${on}, as you`);
       break;
-    case 'reply_book': {
-      const end = typeof fields.end === 'string' ? at(fields.end).split(' ').pop() : '';
-      lines.push(
-        `Book ${at(fields.start)}${end ? `–${end}` : ''} in your calendar and invite ${s(fields.with)}`,
-      );
-      lines.push(`Send the reply${to}${on}, as you`);
-      break;
-    }
     case 'nudge':
       lines.push(`Send the reminder${to}${on}, as you`);
       break;

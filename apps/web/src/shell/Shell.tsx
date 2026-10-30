@@ -30,7 +30,6 @@ import { ModalProvider } from './modals';
 import { ME, NAV, type NavEntry } from './nav';
 import { ShellPalette } from './palette';
 import { useAppBadge } from './pwa';
-import { useCleanStaleBusy } from './useCleanStaleBusy';
 import { useReplayPending } from './useReplayPending';
 import { ShortcutsProvider, useShortcut } from './shortcuts';
 import { useUndoLast } from '../ui/overlay';
@@ -140,7 +139,6 @@ function Frame({ children }: { children?: ReactNode }) {
   const [palette, setPalette] = useState(false);
   const { session } = useReady();
   useReplayPending();
-  useCleanStaleBusy();
   const { needsReady, unreachable, retry, retrying } = useShellData();
   // Counts every organization (item 2YZRd): the app icon and the tab title too.
   const all = useNeedsAll();

@@ -1,14 +1,7 @@
 import type { InboxOutcome, InboxThread } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
 import { bandOf, rankThreads } from '../threads/logic';
-import {
-  greeting,
-  isTidyUp,
-  proposalSentence,
-  replaceSlotText,
-  slotOptions,
-  tidySummary,
-} from './logic';
+import { greeting, isTidyUp, proposalSentence, tidySummary } from './logic';
 
 const ts = (ms: number) => ({ toMillis: () => ms, seconds: ms / 1000, nanoseconds: 0 });
 const H = 3_600_000;
@@ -129,7 +122,7 @@ describe('the proposal as one sentence', () => {
         end: new Date(2026, 9, 29, 11).toISOString(),
         with: 'Sam Okafor',
       }),
-    ).toBe('Reply and book Thu 29 Oct, 10:00–11:00 with Sam Okafor: “Booked.”');
+    ).toBe('Booking (retired) Thu 29 Oct, 10:00–11:00 with Sam Okafor: “Booked.”');
     expect(proposalSentence('make_it_work', { title: 'Sign off the price list' })).toBe(
       'Create the item “Sign off the price list”',
     );
@@ -150,54 +143,5 @@ describe('greeting', () => {
     expect(greeting(new Date(2026, 9, 29, 9).getTime())).toBe('Good morning');
     expect(greeting(new Date(2026, 9, 29, 13).getTime())).toBe('Good afternoon');
     expect(greeting(new Date(2026, 9, 29, 19).getTime())).toBe('Good evening');
-  });
-});
-
-describe('slot options for a reply_book (design 3.6)', () => {
-  const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m);
-  const block = (d: number, h1: number, h2: number) => ({ start: at(d, h1), end: at(d, h2) });
-  it('the agent’s slot, then up to 2 more free same-length slots that day in working hours', () => {
-    const slots = slotOptions({
-      start: at(29, 10),
-      end: at(29, 11),
-      busy: [block(29, 9, 10), block(29, 10, 11), block(29, 11, 14)],
-      now: at(29, 9, 12).getTime(),
-    });
-    expect(slots.map((s) => [s.start.getHours(), s.end.getHours(), s.start.getDate()])).toEqual([
-      [10, 11, 29],
-      [14, 15, 29],
-      [15, 16, 29],
-    ]);
-  });
-  it('looks at the next working day when the day is full (Friday to Monday)', () => {
-    const slots = slotOptions({
-      start: at(30, 16),
-      end: at(30, 17),
-      busy: [block(30, 9, 16), block(30, 17, 18)],
-      now: at(30, 8).getTime(),
-    });
-    expect(slots.map((s) => [s.start.getDate(), s.start.getHours()])).toEqual([
-      [30, 16],
-      [2, 9],
-      [2, 10],
-    ]);
-  });
-});
-
-describe('the reply’s time text follows the slot', () => {
-  const at = (h: number, m = 0) => new Date(2026, 9, 29, h, m);
-  it('replaces the old range when it appears exactly once, keeping the dash', () => {
-    expect(
-      replaceSlotText('I booked 10:00–11:00, see you.', at(10), at(11), at(14), at(15, 30)),
-    ).toBe('I booked 14:00–15:30, see you.');
-    expect(replaceSlotText('Booked 10:00-11:00.', at(10), at(11), at(14), at(15))).toBe(
-      'Booked 14:00-15:00.',
-    );
-  });
-  it('gives up when it is missing or there twice', () => {
-    expect(replaceSlotText('Thursday morning works.', at(10), at(11), at(14), at(15))).toBeNull();
-    expect(
-      replaceSlotText('10:00-11:00 or 10:00–11:00', at(10), at(11), at(14), at(15)),
-    ).toBeNull();
   });
 });

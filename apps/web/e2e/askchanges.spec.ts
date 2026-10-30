@@ -17,7 +17,7 @@ import {
   settle,
   UNDO_WAIT,
 } from './helpers';
-import { at, seedInbox, type Seed } from './inboxSeed';
+import { seedInbox, type Seed } from './inboxSeed';
 
 async function axe(page: Page) {
   const { violations } = await new AxeBuilder({ page })
@@ -83,12 +83,7 @@ async function askFor(where: Locator) {
   return box;
 }
 
-const v2Fields = () => ({
-  text: V2,
-  start: at(1, 10).toISOString(),
-  end: at(1, 11).toISOString(),
-  with: 'Sam Okafor',
-});
+const v2Fields = () => ({ text: V2 });
 
 test.describe('desktop 1440', () => {
   test.skip(({ isMobile }) => isMobile, 'desktop layout');
@@ -110,7 +105,7 @@ test.describe('desktop 1440', () => {
       await expect(card.locator('[data-revising]')).toContainText(
         'Desk agent is revising · Shorter, Add my availability · “Mention 14:00 as a backup”',
       );
-      await expect(card.getByRole('button', { name: /Send and book v1/ })).toBeVisible();
+      await expect(card.getByRole('button', { name: /Send v1/ })).toBeVisible();
       await expect(
         card.getByRole('button', { name: 'Revising, cancel the request' }),
       ).toBeVisible();
@@ -145,7 +140,7 @@ test.describe('desktop 1440', () => {
       await expect(card.locator('[data-versions]')).toContainText('v1 of 2');
       await expect(card.locator('[data-sentence]')).toContainText(V1);
       await expect(card.locator('[data-diff]')).toHaveCount(0);
-      await expect(card.getByRole('button', { name: /Send and book v1/ })).toBeVisible();
+      await expect(card.getByRole('button', { name: /Send v1/ })).toBeVisible();
       await card.getByRole('button', { name: 'Next version' }).click();
       await expect(card.locator('[data-versions]')).toContainText('v2 of 2');
       await card.getByRole('button', { name: 'Previous version' }).click();
@@ -154,7 +149,7 @@ test.describe('desktop 1440', () => {
       await expect(card.locator('[data-versions]')).toContainText('v2 of 2');
 
       // Approve v2: Undo on the button, no toast; the window commits v2's fields.
-      await card.getByRole('button', { name: /Send and book v2/ }).click();
+      await card.getByRole('button', { name: /Send v2/ }).click();
       await expect(card.locator('button[data-undo]')).toBeVisible();
       await expect(page.locator('[data-toast-region] > *')).toHaveCount(0);
       await expect
@@ -199,7 +194,7 @@ test.describe('desktop 1440', () => {
         .poll(async () => (await s.agent.outcome(s.outcomes.book)).state, { timeout: 15_000 })
         .toBe('revising');
       const stale = await s.agent.outcome(s.outcomes.book);
-      await card.getByRole('button', { name: /Send and book v1/ }).click();
+      await card.getByRole('button', { name: /Send v1/ }).click();
       await expect
         .poll(async () => (await outcomeDoc(s)).state!.stringValue, { timeout: UNDO_WAIT + 8000 })
         .toBe('approved');
@@ -220,7 +215,7 @@ test.describe('desktop 1440', () => {
       const card = await todayCard(page);
       await card.getByRole('button', { name: /^Edit/ }).click();
       await card.getByLabel('Reply', { exact: true }).fill('Tuesday 10:00 works, Sam.');
-      await card.getByRole('button', { name: /Send and book/ }).click();
+      await card.getByRole('button', { name: /^Send/ }).click();
       await expect
         .poll(async () => (await outcomeDoc(s)).state!.stringValue, { timeout: UNDO_WAIT + 8000 })
         .toBe('approved');
@@ -250,20 +245,20 @@ test.describe('phone 390', () => {
       await look(page, 'box-390');
       await box.getByRole('button', { name: /Ask agent/ }).click();
       await expect(sheet.locator('[data-revising]')).toContainText('Desk agent is revising');
-      await expect(sheet.getByRole('button', { name: /Send and book v1/ })).toBeVisible();
+      await expect(sheet.getByRole('button', { name: /Send v1/ })).toBeVisible();
       expect(await threadState(s)).toBe('yourCall');
       await look(page, 'revising-390');
 
       await s.agent.revise(s.outcomes.book, v2Fields(), 'Shorter.');
       await expect(sheet.locator('[data-versions]')).toContainText('v2 of 2');
       await expect(sheet.locator('[data-diff="ins"]').first()).toBeVisible();
-      await expect(sheet.getByRole('button', { name: /Send and book v2/ })).toBeInViewport();
+      await expect(sheet.getByRole('button', { name: /Send v2/ })).toBeInViewport();
       await look(page, 'v2-390');
       await sheet.getByRole('button', { name: 'Previous version' }).click();
       await expect(sheet.locator('[data-versions]')).toContainText('v1 of 2');
-      await expect(sheet.getByRole('button', { name: /Send and book v1/ })).toBeVisible();
+      await expect(sheet.getByRole('button', { name: /Send v1/ })).toBeVisible();
       await sheet.getByRole('button', { name: 'Next version' }).click();
-      await sheet.getByRole('button', { name: /Send and book v2/ }).click();
+      await sheet.getByRole('button', { name: /Send v2/ }).click();
       await expect(sheet.locator('button[data-undo]')).toBeVisible();
       await expect
         .poll(async () => (await outcomeDoc(s)).state!.stringValue, { timeout: UNDO_WAIT + 8000 })
@@ -285,7 +280,7 @@ test.describe('phone 390', () => {
       await expect(sheet).toBeVisible({ timeout: 20_000 });
       await sheet.getByRole('button', { name: /^Edit/ }).click();
       await sheet.getByLabel('Reply', { exact: true }).fill('Tuesday 10:00 works, Sam.');
-      await sheet.getByRole('button', { name: /Send and book/ }).click();
+      await sheet.getByRole('button', { name: /^Send/ }).click();
       await expect
         .poll(async () => (await outcomeDoc(s)).state!.stringValue, { timeout: UNDO_WAIT + 8000 })
         .toBe('approved');

@@ -154,7 +154,7 @@ export function statusText(s: AgentStatus, now: number): string {
 }
 
 export function scopeText(agent: Agent, projects: Row<Project>[]): string {
-  if (agent.scope === 'inbox') return 'Inbox and Calendar only';
+  if (agent.scope === 'inbox') return 'Inbox only';
   if (agent.projectIds === '*') return 'All projects';
   const names = agent.projectIds
     .map((id) => projects.find((p) => p.id === id)?.data.name)

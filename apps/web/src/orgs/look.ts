@@ -10,7 +10,7 @@ export interface OrgLook {
 }
 
 /**
- * The colour of each of the member's organizations (the same as in Calendar and Today) and which
+ * The colour of each of the member's organizations (the same in Inbox and Today) and which
  * one is their Personal organization. Before the list has loaded, the one on screen still gets its
  * colour from its name alone.
  */

@@ -1,4 +1,3 @@
-import { clearBusyOf } from '../../calendar/data';
 import { beginOrgDelete, leaveOrganization, renameWorkspace } from '@hive/shared';
 import { DoorOpen, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -51,8 +50,6 @@ export function OrganizationTab() {
     setBusy('leave');
     try {
       await run(leaveOrganization(ctx, { adminUids }));
-      // Then my busy time of it goes too (allowed now that I am out); best effort.
-      await clearBusyOf(ctx.actor.id, workspaceId).catch(() => undefined);
       setLeaving(false);
     } catch {
       toast.push({ message: 'Could not leave the organization. Try again.' });

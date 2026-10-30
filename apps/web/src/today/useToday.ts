@@ -1,20 +1,17 @@
 /**
  * Everything the Today page shows around the stack (item kt3E7u9EliL3q2veDDI0): senders, areas,
- * organization colours, the brief's counts, the agenda with proposed bookings and free time, the
- * threads waiting on others and those agents are working on.
+ * organization colours, the brief's counts, the threads waiting on others and those agents are
+ * working on.
  */
-import { freeSlots, type InboxMessage } from '@hive/shared';
+import type { InboxMessage } from '@hive/shared';
 import { useMemo, useState } from 'react';
 import { useReady } from '../auth/context';
-import { useCalendarBlocks } from '../calendar/data';
-import { addDays, isWorkDay, startOfDay, WORK_HOURS } from '../calendar/logic';
 import type { NeedsAll } from '../needs/data';
 import { briefOf, type Brief, type Segment } from '../needs/brief';
 import { entryBand, type NeedsEntry } from '../needs/logic';
 import { orgColor } from '../orgs/color';
 import { useLatestNotes, useMessagesSince, useSubjectsById, useThreadMessages } from './data';
 import { dueShort } from './logic';
-import type { AgendaRow } from './TodayRail';
 
 const DAY = 86_400_000;
 
@@ -65,8 +62,6 @@ export function useToday(
     useMemo(() => investigating.map((t) => ({ wid: t.wid, id: t.id })), [investigating]),
   );
 
-  const { calendar, busy, from } = useMyCalendar(all.orgs, now);
-
   const colorOf = (wid: string) => orgColor(wid, all.orgs);
   const orgOf = (wid: string) => {
     const o = all.orgs.find((x) => x.wid === wid);
@@ -84,55 +79,6 @@ export function useToday(
     const sid = e.thread?.data.subjectId;
     return sid ? (subjects.get(`${e.wid}/${sid}`)?.area ?? null) : null;
   };
-
-  // The agenda: today's events and bookings the agents proposed (dashed).
-  const agenda = useMemo<AgendaRow[] | null>(() => {
-    if (calendar.state === 'loading') return null;
-    const end = from + DAY;
-    const rows: AgendaRow[] = calendar.blocks
-      .filter((b) => !b.allDay && b.start.getTime() < end && b.end.getTime() > from)
-      .map((b) => ({
-        id: b.id,
-        start: b.start,
-        end: b.end,
-        title: b.title,
-        kind: b.kind === 'busy' ? 'busy' : 'event',
-        color: orgColor(b.id.split('/')[0] ?? '', all.orgs),
-      }));
-    for (const i of all.inputs)
-      for (const o of i.openOutcomes) {
-        if (o.data.type !== 'reply_book') continue;
-        const s = Date.parse(String(o.data.fields.start ?? ''));
-        const e = Date.parse(String(o.data.fields.end ?? ''));
-        if (Number.isNaN(s) || s >= end || e <= from) continue;
-        const title =
-          String(o.data.fields.title ?? '') || `Meeting with ${String(o.data.fields.with ?? '')}`;
-        rows.push({
-          id: `proposed/${o.id}`,
-          start: new Date(s),
-          end: new Date(e),
-          title,
-          kind: 'proposed',
-          sub: 'proposed, waiting for your OK',
-        });
-      }
-    return rows.sort((a, b) => a.start.getTime() - b.start.getTime());
-  }, [calendar, from, all.inputs, all.orgs]);
-
-  // Free time left today in working hours (30 min at least).
-  const freeMinutes = useMemo(() => {
-    if (calendar.state === 'loading') return null;
-    const day = new Date(from);
-    if (!isWorkDay(day)) return 0;
-    const ws = new Date(from).setHours(WORK_HOURS.start, 0, 0, 0);
-    const we = new Date(from).setHours(WORK_HOURS.end, 0, 0, 0);
-    const lo = Math.max(ws, now);
-    if (lo >= we) return 0;
-    const slots = freeSlots({ from: new Date(lo), to: new Date(we), busy, minMinutes: 30 });
-    return Math.round(
-      slots.reduce((n, s) => n + (s.end.getTime() - s.start.getTime()), 0) / 60_000,
-    );
-  }, [calendar.state, busy, from, now]);
 
   const waiting = useMemo(
     () =>
@@ -196,28 +142,5 @@ export function useToday(
     });
   }, [recent, stack, tidy.length, investigating.length, now, doneCount]);
 
-  return { brief, busy, agenda, freeMinutes, waiting, working, orgOf, senderOf, areaOf };
-}
-
-/**
- * The member's own calendar in every organization, from the start of today for 14 days: the
- * agenda, the free time and the slot strip of a reply_book (item kt3E7).
- */
-export function useMyCalendar(orgsIn: ReadonlyArray<{ wid: string; name: string }>, now: number) {
-  const { session } = useReady();
-  const orgs = useMemo(() => orgsIn.map((o) => ({ id: o.wid, name: o.name })), [orgsIn]);
-  const from = startOfDay(new Date(now)).getTime();
-  const calendar = useCalendarBlocks({
-    scope: 'all',
-    uid: session.me.uid,
-    orgs,
-    memberName: () => '',
-    from: useMemo(() => new Date(from), [from]),
-    to: useMemo(() => addDays(new Date(from), 14), [from]),
-  });
-  const busy = useMemo(
-    () => calendar.blocks.filter((b) => !b.allDay).map((b) => ({ start: b.start, end: b.end })),
-    [calendar.blocks],
-  );
-  return { calendar, busy, from };
+  return { brief, waiting, working, orgOf, senderOf, areaOf };
 }

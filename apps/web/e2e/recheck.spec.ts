@@ -70,12 +70,7 @@ async function written(s: Seed, tid: string, oid: string, createdH: number, mess
 
 const V1 = 'Tuesday works. I booked 10:00-11:00 and sent the invite. See you then.';
 const V2 = 'Tuesday 14:00 works now, invite sent. The morning got booked since.';
-const v2Fields = () => ({
-  text: V2,
-  start: at(1, 14).toISOString(),
-  end: at(1, 15).toISOString(),
-  with: 'Sam Okafor',
-});
+const v2Fields = () => ({ text: V2 });
 
 /** Today at 1440: the decision card whose title matches. */
 async function todayCard(page: Page, title: RegExp) {
@@ -108,8 +103,9 @@ test.describe('desktop 1440', () => {
     const s = await open(page);
     try {
       const panel = page.locator('[data-decision-page]');
-      // The slot has passed (the reply_book's start is before now).
+      // The slot has passed (an old reply_book's start is before now; bookings are retired).
       await adminUpdate(`workspaces/${s.wid}/inboxOutcomes/${s.outcomes.book}`, {
+        type: 'reply_book',
         fields: {
           text: V1,
           start: at(0, 9).toISOString(),
@@ -203,7 +199,7 @@ test.describe('desktop 1440', () => {
       await expect(card.locator('[data-recheck-result="revised"]')).toContainText(
         'new version below',
       );
-      await expect(card.getByRole('button', { name: /Send and book v2/ })).toBeVisible();
+      await expect(card.getByRole('button', { name: /Send v2/ })).toBeVisible();
       await look(page, 'v2-1440');
     } finally {
       await s.stop();
@@ -280,7 +276,7 @@ test.describe('phone 390', () => {
       await s.agent.recheck(s.threads.review, 'revised', 'Moved to 14:00.');
       await expect(sheet.locator('[data-versions]')).toContainText('v2 of 2');
       await expect(sheet.locator('[data-recheck-result="revised"]')).toBeVisible();
-      await expect(sheet.getByRole('button', { name: /Send and book v2/ })).toBeInViewport();
+      await expect(sheet.getByRole('button', { name: /Send v2/ })).toBeInViewport();
       await look(page, 'v2-390');
       // The stale flag of the thread page (2 days old) is gone with the new version.
       await expect(sheet.locator('[data-stale]')).toHaveCount(0);

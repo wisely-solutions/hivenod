@@ -1,8 +1,8 @@
 /**
  * Today's extra data (item kt3E7u9EliL3q2veDDI0), beside the Needs-you feeds (needs/data.tsx):
  * the messages of the last 24 hours (the brief), the sender of each thread in the stack, the
- * latest agent note of each thread being investigated, the member's subjects (area chips) and
- * their calendar for the agenda and the slot strip. Every query is the member's own
+ * latest agent note of each thread being investigated and the member's subjects (area chips).
+ * Every query is the member's own
  * (memberUid == me), which is all the rules let them read.
  */
 import {

@@ -685,7 +685,6 @@ export function InboxPage() {
               area={today.areaOf(r)}
               sender={today.senderOf(r)}
               now={now}
-              busy={today.busy}
               agentName={(id) => agentNameOf(r.wid, id)}
               onOpen={() => openRow(r)}
               onSkip={() => skip(r.key)}
@@ -1116,13 +1115,7 @@ export function InboxPage() {
             )}
           </div>
           <aside aria-label="Your day" className="mt-6 xl:mt-0">
-            <TodayRail
-              agenda={today.agenda}
-              freeMinutes={today.freeMinutes}
-              waiting={today.waiting}
-              working={today.working}
-              now={now}
-            />
+            <TodayRail waiting={today.waiting} working={today.working} now={now} />
           </aside>
         </div>
       )}

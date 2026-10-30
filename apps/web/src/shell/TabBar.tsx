@@ -40,7 +40,7 @@ export function useScrollHidden(): boolean {
 }
 
 /**
- * The fifth tab (item icVly, model A): the organization picked in the switcher, as its mark and
+ * The last tab (item icVly, model A): the organization picked in the switcher, as its mark and
  * name. It opens the organization hub (projects, agents, settings, switch) and is lit on every
  * organization page. A dot when something in its projects needs you.
  */
@@ -92,23 +92,9 @@ export function TabBar({ hidden }: { hidden: boolean }) {
         (hidden ? 'translate-y-full focus-within:translate-y-0' : 'translate-y-0')
       }
     >
-      <ul className="grid grid-cols-[1fr_1fr_4rem_1fr_1fr]">
-        {TABS.map((t, i) => (
+      <ul className="grid grid-cols-[1fr_1fr_4rem_1fr]">
+        {TABS.map((t) => (
           <Fragment key={t.to}>
-            {i === 2 ? (
-              <li>
-                <button
-                  type="button"
-                  aria-label="Add an item"
-                  onClick={() => capture.open()}
-                  className="flex min-h-14 w-full items-center justify-center foc:outline-2 foc:outline-focus"
-                >
-                  <span className="grid size-11 place-items-center rounded-full bg-ink text-surface shadow-e2 transition-transform duration-120 ease-standard act:scale-95">
-                    <Icon icon={Plus} size={22} />
-                  </span>
-                </button>
-              </li>
-            ) : null}
             <li>
               <Link
                 to={t.to}
@@ -145,6 +131,18 @@ export function TabBar({ hidden }: { hidden: boolean }) {
             </li>
           </Fragment>
         ))}
+        <li>
+          <button
+            type="button"
+            aria-label="Add an item"
+            onClick={() => capture.open()}
+            className="flex min-h-14 w-full items-center justify-center foc:outline-2 foc:outline-focus"
+          >
+            <span className="grid size-11 place-items-center rounded-full bg-ink text-surface shadow-e2 transition-transform duration-120 ease-standard act:scale-95">
+              <Icon icon={Plus} size={22} />
+            </span>
+          </button>
+        </li>
         <li className="min-w-0">
           <OrgTab />
         </li>

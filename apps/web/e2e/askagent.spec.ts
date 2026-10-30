@@ -20,7 +20,7 @@ import {
   settle,
   UNDO_WAIT,
 } from './helpers';
-import { seedInbox, type Seed } from './inboxSeed';
+import { makeOldBooking, seedInbox, type Seed } from './inboxSeed';
 
 const H = 3_600_000;
 
@@ -170,10 +170,9 @@ test.describe('desktop 1440', () => {
       const panel = page.locator('[data-decision-page]');
       const chips = box(panel).locator('[data-ask-chip]');
 
-      // A meeting booked (the reply_book approved, Tuesday 10:00): Prepare for the meeting.
-      await adminPatch(`workspaces/${s.wid}/inboxOutcomes/${s.outcomes.book}`, {
-        state: 'approved',
-      });
+      // A meeting booked (an old reply_book approved before Calendar went, Tuesday 10:00):
+      // Prepare for the meeting.
+      await makeOldBooking(s, 'approved');
       await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
       await expect(box(panel).locator('[data-ask-chip="prepare_meeting"]')).toBeVisible({
         timeout: 20_000,

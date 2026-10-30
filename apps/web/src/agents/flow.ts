@@ -19,7 +19,7 @@ export interface NewAgentInput {
   name: string;
   color: string;
   projectIds: string[] | '*';
-  /** 'inbox': Inbox and Calendar only (item fJnu6). */
+  /** 'inbox': Inbox only (item fJnu6). */
   scope?: 'inbox';
 }
 

@@ -1,8 +1,7 @@
 /**
  * The decision card (item kt3E7u9EliL3q2veDDI0, design 2.2): the focused Inbox thread of the
  * Today stack, drawn in full. Who and where, the rank, the title as the headline, the proposal as
- * one sentence with the agent's confidence and its reason, for a reply_book the slot and a
- * free/busy strip, and Approve · Edit · Other · Skip. A question gets answer chips instead.
+ * one sentence with the agent's confidence and its reason, and Approve · Edit · Other · Skip. A question gets answer chips instead.
  *
  * Approve (and Reject, Ignore, Mark done) count down on the pressed button with Undo (no toast):
  * the plan is written when the window ends, then the card collapses to a one-line done row.
@@ -25,6 +24,7 @@ import {
   type InboxPlan,
   type InboxThread,
   type PlanInput,
+  isRetiredOutcome,
 } from '@hive/shared';
 import {
   ArrowRight,
@@ -98,7 +98,7 @@ import { UndoButton } from '../ui/UndoButton';
 import { RecheckLine, StaleChip, useRecheck } from '../threads/Recheck';
 import { AskAgentDialog } from '../threads/AskAgent';
 import { waitLabel } from '../inbox/logic';
-import { dayLabel, hhmm, proposalSentence, replaceSlotText, slotOptions, type Slot } from './logic';
+import { proposalSentence } from './logic';
 import {
   bandEdge,
   Chip,
@@ -127,8 +127,6 @@ export interface DecisionCardProps {
   area: string | null;
   sender: { name: string; source: string; at: number } | null;
   now: number;
-  /** The member's calendar (busy blocks with details or not), for the slot strip. */
-  busy: ReadonlyArray<{ start: Date; end: Date }>;
   agentName: (id: string) => string;
   onOpen: () => void;
   onSkip: () => void;
@@ -140,7 +138,6 @@ export interface DecisionCardProps {
 
 const TYPE_ICON: Record<string, LucideIcon> = {
   reply: Reply,
-  reply_book: CalendarClock,
   no_reply: CircleCheck,
   make_it_work: ListChecks,
   handover: Forward,
@@ -150,7 +147,6 @@ const TYPE_ICON: Record<string, LucideIcon> = {
 };
 const DONE_WORD: Record<string, string> = {
   reply: 'Sent',
-  reply_book: 'Sent',
   nudge: 'Sent',
   no_reply: 'Closed',
   make_it_work: 'Approved',
@@ -256,7 +252,6 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
                   proposals={entry.proposals ?? []}
                   sender={props.sender}
                   now={props.now}
-                  busy={props.busy}
                   agentName={props.agentName}
                   onDone={props.onDone}
                   onOpen={props.onOpen}
@@ -576,7 +571,6 @@ const PlanDecision = forwardRef<
           proposals={[atRow]}
           sender={props.sender}
           now={props.now}
-          busy={props.busy}
           agentName={agentName}
           onDone={props.onDone}
           onOpen={props.onOpen}
@@ -711,7 +705,6 @@ export interface ProposalPanelProps {
   proposals: Row<InboxOutcome>[];
   sender: { name: string; source: string; at: number } | null;
   now: number;
-  busy: ReadonlyArray<{ start: Date; end: Date }>;
   agentName: (id: string) => string;
   onDone: (label: string) => void;
   /** Open thread (in the Other menu); left out on the thread page itself. */
@@ -720,7 +713,7 @@ export interface ProposalPanelProps {
   onSkip?: () => void;
   /** Under the proposal block: the thread page's "When you approve…" preview. */
   after?: (shown: Row<InboxOutcome>) => ReactNode;
-  /** Phone bottom sheet, collapsed: no reason, no slot strip. */
+  /** Phone bottom sheet, collapsed: no reason. */
   compact?: boolean;
   /** A narrow column (the thread page's panel): Other is an icon. */
   narrow?: boolean;
@@ -749,7 +742,7 @@ export interface ProposalPanelProps {
  */
 export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
   function ProposalPanel(props, ref) {
-    const { wid, thread, proposals, now, busy, agentName, onSkip, onDone, onOpen, sender } = props;
+    const { wid, thread, proposals, now, agentName, onSkip, onDone, onOpen, sender } = props;
     const { after, compact, onShown, narrow, plan: inPlan, onRemove } = props;
     const recheckUi = props.recheckUi ?? true;
     const { session, actionContext, run } = useReady();
@@ -758,6 +751,8 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
     const [shownId, setShownId] = useState<string | null>(null);
     const shown: Row<InboxOutcome> | undefined =
       proposals.find((p) => p.id === shownId) ?? proposals[0];
+    // A retired type (bookings, slice 5): shown read-only, never approved or edited.
+    const retired = !!shown && isRetiredOutcome(shown.data.type);
     const key = shown ? `io:${wid}:${shown.id}` : `io:${wid}:none`;
     const counting = useCountdown(key);
     const threadCounting = useCountdown(`it:${wid}:${thread.id}`);
@@ -869,7 +864,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
 
     function approve() {
       const ctx = actionContext(wid);
-      if (!ctx || !shown || pending) return;
+      if (!ctx || !shown || pending || retired) return;
       setError(null);
       let plan;
       try {
@@ -1003,34 +998,6 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
       },
       version: (step) => goVersion(viewN + step),
     }));
-
-    // reply_book: the agent's slot plus up to two more free ones (design 3.6).
-    const book = shown?.data.type === 'reply_book';
-    const slots = useMemo<Slot[]>(() => {
-      if (!book || !shown) return [];
-      const s = Date.parse(String(shown.data.fields.start ?? ''));
-      const e = Date.parse(String(shown.data.fields.end ?? ''));
-      if (Number.isNaN(s) || Number.isNaN(e)) return [];
-      return slotOptions({ start: new Date(s), end: new Date(e), busy, now });
-    }, [book, shown, busy, now]);
-    const curStart = Date.parse(String(current.start ?? ''));
-    const pick = (slot: Slot) => {
-      if (!shown || pending) return;
-      const oldS = new Date(Date.parse(String(current.start)));
-      const oldE = new Date(Date.parse(String(current.end)));
-      const text = typeof values.text === 'string' ? values.text : '';
-      const moved = replaceSlotText(text, oldS, oldE, slot.start, slot.end);
-      setValues((v) => ({
-        ...v,
-        start: slot.start.toISOString(),
-        end: slot.end.toISOString(),
-        ...(moved !== null ? { text: moved } : {}),
-      }));
-      if (moved === null && text && slot.start.getTime() !== oldS.getTime()) {
-        setEditing(true);
-        setNote(`The reply still mentions ${hhmm(oldS)}–${hhmm(oldE)}: check it.`);
-      } else setNote(null);
-    };
 
     if (!shown) return null;
     const others = proposals.filter((p) => p.id !== shown.id);
@@ -1246,15 +1213,10 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
           {recheckUi && !revising && !compact ? (
             <StaleChip outcome={shown} thread={thread} now={now} rc={rc} />
           ) : null}
-          {book && slots.length ? (
-            <SlotStrip
-              slots={slots}
-              chosen={curStart}
-              busy={busy}
-              disabled={!!pending}
-              onPick={pick}
-              compact={compact}
-            />
+          {retired ? (
+            <p data-retired="" className="mt-2 text-14 text-text-2">
+              Bookings were removed with Calendar: this proposal can only be rejected.
+            </p>
           ) : null}
         </div>
         {after && !compact ? after(shown) : null}
@@ -1274,6 +1236,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
             <Button
               variant="approve"
               className="max-sm:flex-1"
+              disabled={retired}
               onClick={approve}
               leading={<Icon icon={Check} size={16} />}
             >
@@ -1283,7 +1246,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
           )}
           <Button
             variant="secondary"
-            disabled={!!pending}
+            disabled={!!pending || retired}
             aria-pressed={editing}
             onClick={() => {
               if (editing) {
@@ -1427,101 +1390,6 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
     );
   },
 );
-
-/** The slot choices of a reply_book, and a free/busy strip of that day (08-18). */
-function SlotStrip({
-  slots,
-  chosen,
-  busy,
-  disabled,
-  onPick,
-  compact,
-}: {
-  slots: Slot[];
-  chosen: number;
-  busy: ReadonlyArray<{ start: Date; end: Date }>;
-  disabled: boolean;
-  onPick: (s: Slot) => void;
-  /** Slots only, no free/busy strip (the phone sheet, collapsed). */
-  compact?: boolean;
-}) {
-  const pickedSlot = slots.find((s) => s.start.getTime() === chosen) ?? slots[0]!;
-  const day = new Date(pickedSlot.start);
-  const from = new Date(day);
-  from.setHours(8, 0, 0, 0);
-  const to = new Date(day);
-  to.setHours(18, 0, 0, 0);
-  const span = to.getTime() - from.getTime();
-  const pos = (s: Date, e: Date) => {
-    const a = Math.max(s.getTime(), from.getTime());
-    const b = Math.min(e.getTime(), to.getTime());
-    return b > a
-      ? { left: `${((a - from.getTime()) / span) * 100}%`, width: `${((b - a) / span) * 100}%` }
-      : null;
-  };
-  const sameDay = (d: Date) => d.toDateString() === day.toDateString();
-  return (
-    <div className="mt-3">
-      <p className="font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3">
-        Book · {dayLabel(day)}
-      </p>
-      <div role="group" aria-label="Pick a time" className="mt-2 grid grid-cols-3 gap-2">
-        {slots.map((s, i) => {
-          const on = s.start.getTime() === pickedSlot.start.getTime();
-          return (
-            <button
-              key={s.start.toISOString()}
-              type="button"
-              aria-pressed={on}
-              disabled={disabled}
-              data-slot={i}
-              onClick={() => onPick(s)}
-              className={cn(
-                'flex min-h-11 flex-col items-start rounded-btn border px-2.5 py-1.5 text-left transition-colors duration-120',
-                'foc:outline-2 foc:outline-offset-2 foc:outline-focus disabled:opacity-60',
-                on
-                  ? 'border-approve bg-approve-bg text-ink'
-                  : 'border-line bg-surface text-ink hov:bg-canvas',
-              )}
-            >
-              <span className="whitespace-nowrap text-13 font-semibold tabular-nums sm:text-14">
-                {hhmm(s.start)}–{hhmm(s.end)}
-              </span>
-              <span className="text-12 text-text-2">
-                {i === 0 ? 'agent’s pick' : sameDay(s.start) ? 'free' : dayLabel(s.start)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      {compact ? null : (
-        <div
-          aria-hidden
-          data-freebusy=""
-          className="relative mt-2 h-7 overflow-hidden rounded-btn border border-line bg-surface"
-        >
-          {busy.map((b, i) => {
-            const p = sameDay(b.start) ? pos(b.start, b.end) : null;
-            return p ? (
-              <span key={i} className="absolute inset-y-1 rounded-sm bg-line-strong/40" style={p} />
-            ) : null;
-          })}
-          {(() => {
-            const p = pos(pickedSlot.start, pickedSlot.end);
-            return p ? (
-              <span
-                className="absolute inset-y-0.5 rounded-sm border-2 border-dashed border-gate bg-gate-bg"
-                style={p}
-              />
-            ) : null;
-          })()}
-          <span className="absolute bottom-0 left-1 text-[10px] text-text-3">08</span>
-          <span className="absolute bottom-0 right-1 text-[10px] text-text-3">18</span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** A question from the agent: up to 4 answer chips, or a written answer. */
 export function QuestionPanel({

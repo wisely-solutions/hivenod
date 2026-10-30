@@ -8,6 +8,7 @@ import {
   SINGLE_TYPES,
   cleanOutcomeFields,
   outcomeGuide,
+  isRetiredOutcome,
   outcomeKind,
   outcomeRulesBlock,
   type OutcomeType,
@@ -61,15 +62,18 @@ describe('the registry', () => {
     for (const k of Object.keys(all)) if (k !== 'approval') expect(outcomeKind(k)).toBe('agent');
     expect(outcomeKind('nope')).toBe('agent');
   });
-  it('has book, a booking without the reply', () => {
-    expect(all.book!.executor).toBe('agent');
+  it('keeps book and reply_book as retired types for old records (Calendar removed, slice 5)', () => {
     expect(Object.keys(all.book!.fields)).toEqual(['start', 'end', 'with', 'title']);
+    for (const k of ['book', 'reply_book']) {
+      expect(isRetiredOutcome(k), k).toBe(true);
+      expect(all[k]!.plan, k).toBeUndefined();
+      expect(all[k]!.planOnly, k).toBe(true);
+    }
+    expect(isRetiredOutcome('reply')).toBe(false);
   });
   it('allows the design types in a plan, never no_reply or ignore', () => {
     expect(PLAN_TYPES).toEqual([
       'reply',
-      'reply_book',
-      'book',
       'make_it_work',
       'handover',
       'snooze',
@@ -80,7 +84,6 @@ describe('the registry', () => {
   it('keeps approval and book out of single proposals', () => {
     expect(SINGLE_TYPES).toEqual([
       'reply',
-      'reply_book',
       'no_reply',
       'make_it_work',
       'handover',
@@ -88,7 +91,8 @@ describe('the registry', () => {
       'nudge',
       'ignore',
     ]);
-    for (const [k, t] of Object.entries(all)) if (t.planOnly) expect(t.plan, k).toBe(true);
+    for (const [k, t] of Object.entries(all))
+      if (t.planOnly && !t.retired) expect(t.plan, k).toBe(true);
   });
   it('the guides list the single or the plan types', () => {
     expect(outcomeGuide()).not.toMatch(/^approval:/m);
@@ -99,8 +103,11 @@ describe('the registry', () => {
   it('the rules block carries the single, plan and human lists', () => {
     const b = outcomeRulesBlock();
     expect(b).toContain(
-      "function outcomeSingle() { return ['reply', 'reply_book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore']; }",
+      "function outcomeSingle() { return ['reply', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore']; }",
     );
+    // Retired types have no field lists: the rules refuse proposing, revising or approving them.
+    expect(b).not.toMatch(/function outcomeFieldKeys\(\) \{[^\n]*'reply_book'/);
+    expect(b).toMatch(/function outcomeAfter\(\) \{[^\n]*'reply_book'/);
     expect(b).toContain("function outcomeHuman() { return ['approval']; }");
     expect(b).toMatch(/function outcomePlanTypes\(\) \{ return \['reply', .*'approval'\]; \}/);
   });
@@ -135,7 +142,7 @@ describe('proposeOutcome', () => {
         type: 'book',
         fields: { start: '2026-11-05T10:00:00Z', end: '2026-11-05T11:00:00Z', with: 'Sam' },
       }),
-    ).toThrow(/only a step of a plan/);
+    ).toThrow(/retired with Calendar/);
   });
 });
 

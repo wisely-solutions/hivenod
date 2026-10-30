@@ -117,7 +117,7 @@ describe('plans on the thread page (item qwFAW, slice 4)', () => {
     );
     expect(stepTitle('handover', { to: 'Maria' })).toBe('Hand over to Maria');
     expect(stepTitle('book', { start: '2026-10-30T10:00:00Z' })).toMatch(
-      /^Book Fri 30 Oct, \d\d:00$/,
+      /^Booking \(retired\) Fri 30 Oct, \d\d:00$/,
     );
     expect(stepTitle(null, {})).toBe('…');
     expect(stepTitle('reply', { text: 'x'.repeat(80) }).length).toBeLessThan(60);

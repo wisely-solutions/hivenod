@@ -1,6 +1,6 @@
 /**
- * Item icVly (model A): the sidebar has two zones. "You · all organizations" (Today, Inbox,
- * Calendar) spans every organization; below a divider, the organization picked in the switcher
+ * Item icVly (model A): the sidebar has two zones. "You · all organizations" (Today, Inbox; no
+ * Calendar since OE8Fm slice 5) spans every organization; below a divider, the organization picked in the switcher
  * (its projects, Projects, Agents, Activity, Decision insights, Organization settings). Switching
  * changes only the second zone, and each badge counts one named scope.
  *
@@ -176,7 +176,7 @@ for (const theme of ['light', 'dark'] as const) {
       const org = side.getByRole('navigation', { name: 'Organization, Brightline Studio' });
       await expect(you).toBeVisible({ timeout: 20_000 });
       await expect(you.getByText('all organizations')).toBeVisible();
-      for (const name of [/^Today/, /^Inbox/, /^Calendar$/])
+      for (const name of [/^Today/, /^Inbox/])
         await expect(you.getByRole('link', { name })).toBeVisible();
       await expect(org.getByRole('link', { name: /^Website relaunch/ })).toBeVisible();
       for (const name of [
@@ -224,11 +224,8 @@ for (const theme of ['light', 'dark'] as const) {
       await expectNoHorizontalScroll(page);
       await axe(page);
 
-      await you.getByRole('link', { name: /^Calendar$/ }).click();
-      await expect(page.getByRole('heading', { name: 'Calendar', level: 1 })).toBeVisible();
-      await expect(page.locator('main [data-scope-pill]')).toBeVisible();
-      await shot(page, `A-calendar-1440-${theme}`);
-      await axe(page);
+      // No Calendar under You (removed, OE8Fm slice 5).
+      await expect(you.getByRole('link', { name: /^Calendar$/ })).toHaveCount(0);
 
       // Switching organization changes only the Organization zone.
       await page.goto('/');
@@ -237,7 +234,7 @@ for (const theme of ['light', 'dark'] as const) {
       const todayBefore = await today.getAttribute('aria-label');
       await switcher(page).first().click();
       await expect(page.locator('[data-switch-scope]')).toContainText(
-        'Today, Inbox and Calendar stay across all your organizations',
+        'Today and Inbox stay across all your organizations',
       );
       await shot(page, `A-switcher-1440-${theme}`);
       await page.keyboard.press('Escape');
@@ -292,12 +289,7 @@ for (const theme of ['light', 'dark'] as const) {
       await expectNoHorizontalScroll(page);
       await shot(page, `A-today-390-${theme}`);
       await axe(page);
-      await tabs.getByRole('link', { name: /^Calendar/ }).click();
-      await expect(page.getByRole('heading', { name: 'Calendar', level: 1 })).toBeVisible();
-      await expect(page.locator('main [data-scope-pill]')).toBeVisible();
-      await expectNoHorizontalScroll(page);
-      await shot(page, `A-calendar-390-${theme}`);
-      await axe(page);
+      await expect(tabs.getByRole('link', { name: /^Calendar/ })).toHaveCount(0);
       // The organization hub: its projects, agents, settings and the switcher.
       await orgTab.click();
       await expect(page).toHaveURL(/\/org$/);
@@ -397,7 +389,7 @@ for (const theme of ['light', 'dark'] as const) {
 }
 
 for (const theme of ['light', 'dark'] as const) {
-  test(`organization colours, the Personal mark and the chips that narrow Today, Inbox and Calendar (${theme})`, async ({
+  test(`organization colours, the Personal mark and the chips that narrow Today and Inbox (${theme})`, async ({
     page,
   }) => {
     test.setTimeout(240_000);
@@ -477,21 +469,6 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.getByText('Dentist').first()).toBeVisible();
       await expect(page.getByText('Q4 price list')).toHaveCount(0);
       await expectNoHorizontalScroll(page);
-      await axe(page);
-
-      // Calendar: one organization's view, kept in the URL.
-      await page.goto('/calendar');
-      await chips.locator(`[data-org-chip="${s.client}"]`).click();
-      await expect(page).toHaveURL(new RegExp(`/calendar\\?org=${s.client}`));
-      await expect(page.locator('main [data-scope-pill]')).toHaveCount(0);
-      await page.reload();
-      await expect(chips.locator(`[data-org-chip="${s.client}"]`)).toHaveAttribute(
-        'aria-pressed',
-        'true',
-        { timeout: 20_000 },
-      );
-      await expectNoHorizontalScroll(page);
-      await shot(page, `A-calendar-chips-${vw}-${theme}`);
       await axe(page);
     } finally {
       await s.stop();

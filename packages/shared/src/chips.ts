@@ -1,7 +1,7 @@
 /**
  * Ask the agent (item w6O2KOw4ys70TQv9I1xD): the quick chips that fit a thread now, computed in
  * the browser, nothing stored. The home agent's suggestions (suggestedChips) come first, then:
- *  - prepare_meeting: only when the home agent suggests it (bookings were retired with Calendar);
+ *  - prepare_meeting: a booking (reply_book or book) approved or done, starting in the next 7 days;
  *  - recheck: an open proposal (or an unrun live-plan step) may be out of date (stale.ts);
  *  - follow_up: the thread waits on them, with no message for 3 days or more;
  *  - summarize: 8 messages or more;
@@ -14,6 +14,7 @@ import { staleReason, type StaleOutcomeOf } from './stale';
 
 export const CHIPS_SHOWN = 3;
 export const FOLLOW_UP_AFTER_MS = 3 * 86_400_000;
+export const PREPARE_WITHIN_MS = 7 * 86_400_000;
 export const SUMMARIZE_FROM = 8;
 
 type Ms = { toMillis(): number } | null | undefined;
@@ -44,7 +45,12 @@ export function contextChips(input: {
   const fits = (c: InstructChip): boolean => {
     switch (c) {
       case 'prepare_meeting':
-        return false;
+        return outcomes.some((o) => {
+          if (o.type !== 'reply_book' && o.type !== 'book') return false;
+          if (o.state !== 'approved' && o.state !== 'done') return false;
+          const start = typeof o.fields.start === 'string' ? Date.parse(o.fields.start) : NaN;
+          return !Number.isNaN(start) && start > nowMs && start - nowMs <= PREPARE_WITHIN_MS;
+        });
       case 'recheck':
         return (
           input.canRecheck &&

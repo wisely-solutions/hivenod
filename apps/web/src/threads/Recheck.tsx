@@ -148,8 +148,8 @@ export function RecheckLine({
         >
           <Icon icon={Loader2} size={15} className="mt-0.5 shrink-0 motion-safe:animate-spin" />
           <span className="min-w-0">
-            <span className="font-semibold">Checking again…</span> {agent} re-reads the thread, your
-            calendar and what changed.
+            <span className="font-semibold">Checking again…</span> {agent} re-reads the thread and
+            what changed.
           </span>
         </p>
         {old ? (

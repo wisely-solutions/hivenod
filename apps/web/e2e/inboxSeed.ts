@@ -1,8 +1,8 @@
 /**
- * The Inbox and Calendar redesign seed (item kt3E7u9EliL3q2veDDI0, design section 5), written
+ * The Inbox redesign seed (item kt3E7u9EliL3q2veDDI0, design section 5), written
  * with the shared actions as the agent tools do: 2 organizations, 6 subjects, 8 threads (1 urgent
- * with a due date in 2 days, 1 reply_book proposed with high confidence and 2 checks, 1 question
- * with 2 options, 3 tidy-ups) and 15 calendar events. Times follow the frozen NOW (helpers.ts):
+ * with a due date in 2 days, 1 reply proposed with high confidence and 2 checks, 1 question
+ * with 2 options, 3 tidy-ups). Calendar events went with Calendar (OE8Fm slice 5). Times follow the frozen NOW (helpers.ts):
  * call freezeClock(page) before the first goto.
  */
 import { expect, type Page } from '@playwright/test';
@@ -11,7 +11,6 @@ import {
   addThreadNote,
   askMember,
   assignSubject,
-  calendarUpsert,
   digest24,
   dueThread,
   flagThread,
@@ -52,6 +51,7 @@ import { createHash } from 'node:crypto';
 import {
   adminDoc,
   adminSet,
+  adminUpdate,
   AUTH_PORT,
   FIRESTORE_PORT,
   NOW,
@@ -270,8 +270,6 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
       await run(p);
       return p.version;
     },
-    cal: (memberUid: string, events: Parameters<typeof calendarUpsert>[1]['events']) =>
-      run(calendarUpsert(ctx, { memberUid, events })),
     outcome: async (oid: string) =>
       (await getDoc(doc(db, inboxPaths.outcome(wid, oid)))).data() as OutcomeStateOf,
     stop: () => deleteApp(app),
@@ -288,6 +286,24 @@ export const at = (offset: number, hour: number, minute = 0) => {
 const ago = (hours: number) => new Date(NOW - hours * H);
 
 export type Seed = Awaited<ReturnType<typeof seedInbox>>;
+
+/**
+ * Turns the seed's `book` proposal into an old booking (reply_book, retired with Calendar in
+ * OE8Fm slice 5), as records from before the removal are: written as the emulator's admin, since
+ * no agent may propose one now.
+ */
+export async function makeOldBooking(s: Seed, state = 'proposed') {
+  await adminUpdate(`workspaces/${s.wid}/inboxOutcomes/${s.outcomes.book}`, {
+    type: 'reply_book',
+    state,
+    fields: {
+      text: 'Tuesday works. I booked 10:00-11:00 and sent the invite. See you then.',
+      start: at(1, 10).toISOString(),
+      end: at(1, 11).toISOString(),
+      with: 'Sam Okafor',
+    },
+  });
+}
 
 /** Signs a new person in and seeds their two organizations. The page ends on Today. */
 export async function seedInbox(page: Page, name = 'Cara Lindqvist') {
@@ -344,7 +360,7 @@ export async function seedInbox(page: Page, name = 'Cara Lindqvist') {
     },
   );
 
-  // 2. Reply and book, with confidence and checks.
+  // 2. A reply about a meeting, with confidence and checks.
   const review = await agent.add(uid, {
     source: 'teams',
     from: 'Sam Okafor',
@@ -355,14 +371,12 @@ export async function seedInbox(page: Page, name = 'Cara Lindqvist') {
   });
   const sReview = await agent.file(review, { newName: 'Payments review', area: 'Finance' });
   await agent.note(review, 'Tuesday 10:00-11:00 and 14:00-15:00 are free in your calendar.');
+  // Bookings were retired with Calendar (OE8Fm slice 5): a plain reply now (the key stays `book`).
   const oBook = await agent.propose(
     review,
-    'reply_book',
+    'reply',
     {
       text: 'Tuesday works. I booked 10:00-11:00 and sent the invite. See you then.',
-      start: at(1, 10).toISOString(),
-      end: at(1, 11).toISOString(),
-      with: 'Sam Okafor',
     },
     'Sam asked for a new date; Tuesday 10:00 is free and Rita agreed.',
     {
@@ -456,42 +470,6 @@ export async function seedInbox(page: Page, name = 'Cara Lindqvist') {
     'Zoe asked for an agenda; this follows last month’s.',
     { confidence: 'medium' },
   );
-
-  // 15 calendar events this week, in both organizations.
-  const ev = (
-    id: string,
-    title: string,
-    d: number,
-    h1: number,
-    m1: number,
-    h2: number,
-    m2: number,
-  ) => ({
-    source: 'google',
-    sourceEventId: id,
-    title,
-    start: at(d, h1, m1),
-    end: at(d, h2, m2),
-  });
-  await agent.cal(uid, [
-    ev('a1', 'Team standup', 0, 9, 0, 9, 30),
-    ev('a2', 'Team standup', 1, 9, 0, 9, 30),
-    ev('a3', 'Team standup', 2, 9, 0, 9, 30),
-    ev('a4', 'Team standup', 3, 9, 0, 9, 30),
-    ev('a5', 'Team standup', 4, 9, 0, 9, 30),
-    ev('b1', 'Budget check-in', 0, 14, 0, 15, 0),
-    ev('b2', 'Supplier visit', 1, 13, 0, 15, 0),
-    ev('b3', 'Hiring panel: ops lead', 2, 14, 0, 15, 30),
-    ev('b4', '1:1 Nina', 0, 16, 0, 16, 30),
-    ev('b5', 'Board pack prep', 3, 10, 0, 12, 0),
-    ev('b6', 'Lunch with Ava', 4, 12, 30, 13, 30),
-    ev('b7', 'Design review', 1, 11, 0, 12, 0),
-  ]);
-  await other.cal(uid, [
-    ev('n1', 'Northwind workshop', 2, 9, 30, 12, 0),
-    ev('n2', 'Northwind steering', 0, 12, 30, 13, 30),
-    ev('n3', 'Northwind retro', 3, 15, 0, 16, 0),
-  ]);
 
   return {
     me,

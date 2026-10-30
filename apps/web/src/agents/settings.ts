@@ -5,7 +5,7 @@ export interface SettingsDraft {
   allProjects: boolean;
   projectIds: string[];
   maxFailedRuns: string;
-  /** An Inbox and Calendar agent (item fJnu6): no projects to pick, ever. */
+  /** An Inbox-only agent (item fJnu6): no projects to pick, ever. */
   inboxOnly?: boolean;
 }
 

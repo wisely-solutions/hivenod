@@ -45,7 +45,6 @@ import { orgColor } from '../orgs/color';
 import { useBriefing, type BriefingFrom } from '../today/briefing';
 import { dueShort } from '../today/logic';
 import { Chip, OrgChip } from '../today/parts';
-import { useMyCalendar } from '../today/useToday';
 import { Pill } from '../ui/badge';
 import { Button, IconButton } from '../ui/button';
 import { cn } from '../ui/cn';
@@ -117,7 +116,6 @@ export function ThreadPage() {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
-  const { busy: calendarBusy } = useMyCalendar(all.orgs, now);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [makeOpen, setMakeOpen] = useState(false);
@@ -199,7 +197,7 @@ export function ThreadPage() {
         search: { from },
       });
     else if (n) void navigate({ to: '/', search: { sel: n.key } });
-    else void navigate({ to: from === 'calendar' ? '/calendar' : '/' });
+    else void navigate({ to: '/' });
   };
 
   const agentName = (id: string) =>
@@ -390,7 +388,6 @@ export function ThreadPage() {
       outcomes={allOutcomes}
       sender={sender}
       now={now}
-      busy={calendarBusy}
       agentName={agentName}
       rail={rail}
     />
@@ -468,7 +465,6 @@ export function ThreadPage() {
             outcomes={allOutcomes}
             messages={msgs}
             now={now}
-            busy={calendarBusy}
             agentName={agentName}
             agent={agentInfo}
             onDone={() => (from ? goNext() : undefined)}

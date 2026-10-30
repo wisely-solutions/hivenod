@@ -62,9 +62,7 @@ test.describe('desktop 1440', () => {
       // The decision page (item OE8FmrTaIxFVGcaeGG3N): no summary yet, so the app's own top line.
       const top = page.getByRole('region', { name: 'Decision' });
       await expect(top.locator('[data-kicker]')).toHaveText('Your approval');
-      await expect(top.getByRole('heading', { level: 2 })).toHaveText(
-        'Desk agent proposes: Reply and book',
-      );
+      await expect(top.getByRole('heading', { level: 2 })).toHaveText('Desk agent proposes: Reply');
       // Everything: the conversation, with the agent's note inline.
       await fold(page, 'Everything').click();
       const talk = page.getByRole('region', { name: 'Conversation' });
@@ -79,8 +77,8 @@ test.describe('desktop 1440', () => {
       await expect(p.locator('[data-reason]')).toContainText('Rita agreed');
       const effects = p.locator('[data-effects]');
       await expect(effects).toContainText('When you approve, Desk agent will:');
-      await expect(effects).toContainText(/Book Tue 16 Jun 10:00–11:00 in your calendar/);
-      await expect(p.getByRole('button', { name: /Send and book/ })).toBeVisible();
+      await expect(effects).toContainText(/Send the reply/);
+      await expect(p.getByRole('button', { name: /^Send/ })).toBeVisible();
       await expect(p.getByRole('region', { name: 'Related subjects' })).toBeVisible();
       // The ⋯ menu holds the other actions.
       await page.getByRole('button', { name: 'Thread actions' }).click();
@@ -137,9 +135,7 @@ test.describe('desktop 1440', () => {
       const bar = page.getByRole('navigation', { name: 'Briefing' });
       await expect(bar.locator('[data-position]')).toHaveText('2 of 4');
       await expect(bar).toContainText('Next: Which room for the payments review?');
-      await panel(page)
-        .getByRole('button', { name: /Send and book/ })
-        .click();
+      await panel(page).getByRole('button', { name: /^Send/ }).click();
       await expect(page).toHaveURL(new RegExp(`/inbox/${s.wid}/t/${s.threads.room}\\?from=today`), {
         timeout: UNDO_WAIT + 8000,
       });
@@ -165,7 +161,7 @@ test.describe('phone 390', () => {
     const s = await open(page);
     try {
       await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
-      const approve = panel(page).getByRole('button', { name: /Send and book/ });
+      const approve = panel(page).getByRole('button', { name: /^Send/ });
       await expect(approve).toBeInViewport({ timeout: 20_000 });
       await look(page, 'thread-390');
       await fold(page, 'More detail').click();

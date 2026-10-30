@@ -3,7 +3,7 @@ import { cn } from '../ui/cn';
 import { orgColor } from './color';
 
 /**
- * Organization colour chips (item icVly, model A): narrow Today, Inbox or Calendar to one
+ * Organization colour chips (item icVly, model A): narrow Today or Inbox to one
  * organization, or show them all. A filter only: the switcher never changes it, and the page keeps
  * the choice in its URL (`?org=`). The colours are the ones the organization has everywhere.
  */

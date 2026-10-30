@@ -32,7 +32,7 @@ const entry = (key: string, over: Partial<NeedsEntry> & { type?: string; urgent?
 describe('briefing (design 2.2)', () => {
   const todo = [
     entry('reply', { since: 1 }),
-    entry('book', { since: 2, type: 'reply_book' }),
+    entry('book', { since: 2, type: 'nudge' }),
     entry('item', { kind: 'approval', since: 0 }),
     entry('urgent', { since: 3, urgent: true }),
   ];
@@ -43,8 +43,5 @@ describe('briefing (design 2.2)', () => {
       'reply',
       'book',
     ]);
-  });
-  it('from the calendar: only the proposed bookings', () => {
-    expect(briefingList(todo, 'calendar', 10).map((e) => e.key)).toEqual(['book']);
   });
 });

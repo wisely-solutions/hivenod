@@ -1,27 +1,14 @@
 /**
  * The right rail of Today (item kt3E7u9EliL3q2veDDI0, design 2.1), beside the stack from 1280 px
- * and under it below: today's agenda with proposed bookings dashed and the free time, the threads
- * waiting on others, and what the agents are working on.
+ * and under it below: the threads waiting on others, and what the agents are working on (the
+ * agenda went with Calendar, item OE8FmrTaIxFVGcaeGG3N slice 5).
  */
 import { Link } from '@tanstack/react-router';
 import { Bot } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
 import { WorkingDots } from '../ui/feedback';
 import { waitLabel } from '../inbox/logic';
-import { hhmm } from './logic';
-
-export interface AgendaRow {
-  id: string;
-  start: Date;
-  end: Date;
-  title: string;
-  /** A booking an agent proposed (dashed), a busy block without details, or an event. */
-  kind: 'event' | 'busy' | 'proposed';
-  color?: string;
-  sub?: string;
-}
 
 function Panel({
   title,
@@ -49,59 +36,17 @@ function Panel({
 }
 
 export function TodayRail({
-  agenda,
-  freeMinutes,
   waiting,
   working,
   now,
 }: {
-  agenda: AgendaRow[] | null;
-  freeMinutes: number | null;
   waiting: Array<{ key: string; wid: string; tid: string; title: string; on: string; at: number }>;
   working: Array<{ key: string; wid: string; tid: string; title: string; note: string }>;
   now: number;
 }) {
-  const free =
-    freeMinutes === null
-      ? null
-      : freeMinutes >= 60
-        ? `${Math.floor(freeMinutes / 60)} h${freeMinutes % 60 ? ` ${freeMinutes % 60}` : ''} free`
-        : `${freeMinutes} min free`;
+  if (!waiting.length && !working.length) return null;
   return (
     <div className="flex flex-col gap-4" data-today-rail="">
-      <Panel title="Today" label="Today's agenda" aside={free}>
-        {agenda === null ? (
-          <p className="text-13 text-text-2">Loading your calendar…</p>
-        ) : agenda.length === 0 ? (
-          <p className="text-13 text-text-2">Nothing in your calendar today.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {agenda.map((a) => (
-              <li key={a.id} className="flex items-start gap-3" data-agenda={a.kind}>
-                <span className="w-11 shrink-0 pt-1.5 text-12 tabular-nums text-text-2">
-                  {hhmm(a.start)}
-                </span>
-                <span
-                  className={cn(
-                    'min-w-0 flex-1 rounded-btn border-l-[3px] px-2.5 py-1.5 text-13',
-                    a.kind === 'proposed'
-                      ? 'border border-dashed border-gate bg-gate-bg text-ink'
-                      : a.kind === 'busy'
-                        ? 'bg-canvas text-text-2'
-                        : 'bg-agent-soft text-ink',
-                  )}
-                  style={a.kind === 'event' && a.color ? { borderLeftColor: a.color } : undefined}
-                >
-                  <span className="block font-medium [overflow-wrap:anywhere]">
-                    {a.title || 'Busy'}
-                  </span>
-                  {a.sub ? <span className="block text-12 text-text-2">{a.sub}</span> : null}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
       {waiting.length ? (
         <Panel title="Waiting on others" label="Waiting on others" aside={String(waiting.length)}>
           <ul className="flex flex-col divide-y divide-line">

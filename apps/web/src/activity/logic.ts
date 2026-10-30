@@ -279,7 +279,6 @@ export const TYPE_GROUPS = [
     ],
   },
   { id: 'files', label: 'Files and messages', types: ['attachment.added', 'message.posted'] },
-  { id: 'calendar', label: 'Calendar', types: ['calendar.changed'] },
   {
     id: 'setup',
     label: 'Setup and people',
@@ -308,6 +307,8 @@ export const TYPE_GROUPS = [
       'group.created',
       'group.updated',
       'group.deleted',
+      // Old calendar syncs (Calendar removed in OE8Fm slice 5): no group of their own any more.
+      'calendar.changed',
       'step.proposed',
       'step.accepted',
       'step.rejected',

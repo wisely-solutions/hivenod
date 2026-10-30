@@ -64,10 +64,10 @@ export function stepTitle(type: string | null, fields: Readonly<Record<string, u
   switch (type) {
     case 'reply':
       return str(fields.text) ? `Reply: “${clip(str(fields.text), 50)}”` : 'Reply';
+    // Retired with Calendar (slice 5): old records only.
     case 'reply_book':
-      return `Reply and book ${when(fields.start)}`.trim();
     case 'book':
-      return `Book ${when(fields.start)}`.trim();
+      return `Booking (retired) ${when(fields.start)}`.trim();
     case 'approval':
       return `You approve: ${clip(str(fields.what))}`;
     case 'make_it_work':

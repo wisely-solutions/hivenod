@@ -25,13 +25,13 @@ test('the shell frames the app and has no accessibility violations', async ({ pa
   if (isPhone()) {
     const tabs = page.getByRole('navigation', { name: 'Tabs' });
     await expect(tabs).toBeVisible();
-    await expect(tabs.getByRole('link')).toHaveCount(4);
+    // No Calendar tab (OE8Fm slice 5): Today · Inbox · + · the organization.
+    await expect(tabs.getByRole('link')).toHaveCount(3);
     await expect(tabs.getByRole('link').or(tabs.getByRole('button'))).toHaveText([
       /^Today/,
       /^Inbox/,
       '',
-      /^Calendar/,
-      // The fifth tab is the organization (item icVly): its mark and name.
+      // The last tab is the organization (item icVly): its mark and name.
       /’s organization\s*$/,
     ]);
     await expect(tabs.locator('[data-org-tab]')).toHaveAttribute('href', '/org');
@@ -52,6 +52,11 @@ test('the shell frames the app and has no accessibility violations', async ({ pa
     for (const name of ['Today', 'Projects', 'Decision insights', 'Activity', 'Agents']) {
       await expect(side.getByRole('link', { name, exact: true })).toBeVisible();
     }
+    // Calendar was removed (OE8Fm slice 5): no entry, and /calendar is not a page.
+    await expect(side.getByRole('link', { name: 'Calendar', exact: true })).toHaveCount(0);
+    await page.goto('/calendar');
+    await expect(page).toHaveURL(/\/$/);
+    await expect(side.getByRole('link', { name: 'Today', exact: true })).toBeVisible();
     await expect(side.getByText('0 agents working · 0 idle')).toBeVisible();
     await expect(side.getByText(/^Spend this month €0$/)).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Tabs' })).toBeHidden();
