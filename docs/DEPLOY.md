@@ -153,7 +153,7 @@ misleading 409 "release already exists". This is a size limit for the whole file
 1000-expression budget per request that `test:rules:headroom` measures.
 
 - **Measure:** `node scripts/rules-size.mjs [file]` prints the compiled size Google computes, e.g.
-  `rules compiled size: 232600 of 256000 bytes (9% headroom)`, and exits 1 over the budget. Nothing
+  `rules compiled size: 232566 of 256000 bytes (9% headroom)`, and exits 1 over the budget. Nothing
   reports the size of rules that fit, so it uploads a throwaway ruleset and tries a throwaway release
   `size-probe` (never `cloud.firestore`), padded with identical unused functions until Google refuses it,
   and reads the size from the 400 (two pad sizes give the cost per pad, which is subtracted). It deletes
@@ -165,14 +165,14 @@ misleading 409 "release already exists". This is a size limit for the whole file
 - **Offline budget (before merging):** `pnpm test:scripts` (`scripts/rules-size.test.mjs`) fails when the
   _estimated_ compiled size of `firestore.rules` is over **235000 bytes** (`RULES_COMPILED_BUDGET`, about 8%
   under the limit). The estimate (`estimateCompiledSize` in `scripts/rules-size-lib.mjs`) is
-  3.3424 x tokens + 1.3917 x characters of names, strings and numbers - 8074, comments and whitespace
-  excluded, fitted on measured rulesets within about 400 bytes. Every token costs about 3 bytes and every
-  character of a name about 1.4, so what grows the size is repeated code, not comments.
+  4.4727 x tokens + 0.9526 x characters of names, strings and numbers - 10837, comments and whitespace
+  excluded, fitted on eight measured rulesets, within about 1500 bytes. Every token costs about 4.5 bytes and every
+  character of a name about 1, so what grows the size is repeated code, not comments.
 - **When it is tight:** measure with the probe, then trim without weakening a guarantee: repeated
   `request.resource.data` / `resource.data` become `let d` / `let r` in a function; functions inside a match
   read its wildcards (`wid`, `pid`, `iid`, ...) instead of taking them as parameters; `touched(keys)` is
   `changed(keys + ['updatedAt', 'lastEventId'])`; repeated unrolled checks become a small function.
-  Re-fit the estimate if the probe and the estimate drift apart by more than about 1000 bytes.
+  Re-fit the estimate if the probe and the estimate drift apart by more than about 2000 bytes.
 
 ## GitHub Actions
 

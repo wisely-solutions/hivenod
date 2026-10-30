@@ -178,7 +178,7 @@ const MUTATIONS = [
   [
     'paths: unshaped items worked',
     [
-      ['(claimIt(r, p, true)', '(claimIt(r, p, false)'],
+      ['(claimIt(r, p, true, d)', '(claimIt(r, p, false, d)'],
       ["(shaping ? run.data.get('job', '') == 'shape' : agentAllowedAtStep(p, r.stepId))", 'true'],
     ],
   ],

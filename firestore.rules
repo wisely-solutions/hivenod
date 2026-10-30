@@ -787,7 +787,7 @@ service cloud.firestore {
           || (signedIn() && aid == me() && isActiveAgent(wid)
             && changed(['signedOutAt'])
             && d.signedOutAt == request.time)
-          || (signedIn() && aid == me() && isActiveAgent(wid) && keepsStreak());
+          || (signedIn() && aid == me() && isActiveAgent(wid) && keepsStreak(d));
         }
 
         // Removing a revoked agent for good (item 81P4s): an admin only, and only once it is revoked.
@@ -835,8 +835,7 @@ service cloud.firestore {
         // The failure streak (card zSzW3LXy), written by the agent in the batch that ends one of
         // its runs: a done run resets it; a failed run adds exactly one, and when that reaches the
         // agent's limit (default 3) the agent pauses itself. A released run does not count.
-        function keepsStreak() {
-          let d = request.resource.data;
+        function keepsStreak(d) {
           let b = resource.data;
           let e = getAfter(eventPath(wid, d.lastEventId)).data;
           let run = getAfter(runPath(wid, e.runId)).data;
@@ -911,14 +910,13 @@ service cloud.firestore {
                   'item.created', 'attachment.added', 'message.posted', 'finding.raised',
                   'run.started', 'run.heartbeat', 'run.ended',
                   'item.shaped', 'item.pathChanged', 'step.proposed', 'item.sentBack'])
-            || calendarEventOk());
+            || calendarEventOk(d));
         }
         allow update, delete: if false;
 
         // Calendar writes (item w9SAf): outside any project, by an agent of the organization or
         // a member. The event names whose calendars changed, never a title.
-        function calendarEventOk() {
-          let d = request.resource.data;
+        function calendarEventOk(d) {
           return d.type == 'calendar.changed' && d.projectId == null && d.itemId == null
             && d.runId == null
             && ((d.actor.type == 'agent' && isActiveAgent(wid))
@@ -1887,7 +1885,7 @@ service cloud.firestore {
             || (r.get('planId', null) != null
               ? d.get('planId', null) == r.planId
                 && inboxStepUpdate(d, r)
-              : inboxSingleUpdate()));
+              : inboxSingleUpdate(d)));
         }
 
         // Re-check "still good" (item bmNoIvvqKCdAorLSShE9): the home agent stamps checkedAt on an
@@ -1907,8 +1905,7 @@ service cloud.firestore {
         }
         allow delete: if false;
 
-        function inboxSingleUpdate() {
-          let d = request.resource.data;
+        function inboxSingleUpdate(d) {
           return inboxDocTracked(d,
                ['outcome.approved', 'outcome.rejected', 'outcome.done', 'outcome.failed',
                 'outcome.revise_requested', 'outcome.revised'],
@@ -2583,7 +2580,7 @@ service cloud.firestore {
                   && newItemBy()
                 : ((arrivesAt(d, get(projPath(wid, pid)).data, 0)
                     && newItemBy())
-                  || agentRaiseFinding()));
+                  || agentRaiseFinding(d)));
           }
 
           allow update: if itemsUpdateOk();
@@ -2642,8 +2639,7 @@ service cloud.firestore {
           // about an item of this project, holding it or not. It waits at the first step as
           // `suggested` (no claim, no gate), so it is never work. sourceRunId is the agent's own
           // current run on that item, or null when it does not hold it.
-          function agentRaiseFinding() {
-            let d = request.resource.data;
+          function agentRaiseFinding(d) {
             let p = get(projPath(wid, pid)).data;
             return projectAgent(wid, pid) && d.createdBy == me_('agent') && d.type == 'finding'
               && d.status == 'suggested' && d.stepId == p.steps[0].id
@@ -2668,43 +2664,42 @@ service cloud.firestore {
               && ((r.claim == null && r.createdBy == me_('agent')
                   && attachCounted(r))
               || (d.get('pathRev', 0) != r.get('pathRev', 0)
-                ? agentPathUpdate(r, p)
+                ? agentPathUpdate(r, p, d)
                 // An unshaped item is only shaping work (card st5INNZj), at any first step.
                 : unshaped(r)
                   ? (d.get('claim', null) == null
-                    ? (releaseIt(r) || attachCounted(r))
-                    : (claimIt(r, p, true) || heartbeatIt(r)
-                      || attachCounted(r) || parkIt(r)
-                      || statusIt(r)))
+                    ? (releaseIt(r, d) || attachCounted(r))
+                    : (claimIt(r, p, true, d) || heartbeatIt(r, d)
+                      || attachCounted(r) || parkIt(r, d)
+                      || statusIt(r, d)))
                   : stepOf(p, r.stepId).kind == 'agent'
                   // Releasing and completing clear the claim; claiming, heartbeats and progress
                   // keep one (the expression budget, see humanUpdate). An attachment changes neither.
                   && (d.get('claim', null) == null
                     // Only an agent send-back (card KLCTVnX8) changes the agent rounds.
                     ? (d.get('agentSendBacks', 0) != r.get('agentSendBacks', 0)
-                      ? agentSendBackIt(r, p)
-                      : (releaseIt(r) || completeIt(r, p)
+                      ? agentSendBackIt(r, p, d)
+                      : (releaseIt(r, d) || completeIt(r, p, d)
                         || attachCounted(r)))
-                    : (claimIt(r, p, false) || heartbeatIt(r)
-                      || progressIt(r) || attachCounted(r)
-                      || parkIt(r) || statusIt(r)))));
+                    : (claimIt(r, p, false, d) || heartbeatIt(r, d)
+                      || progressIt(r, d) || attachCounted(r)
+                      || parkIt(r, d) || statusIt(r, d)))));
           }
           // Path writes by an agent (card st5INNZj): shaping the unshaped item it holds, or, on
           // the item it holds at an agent step, changing agent steps ahead, asking for a people
           // step change, or dropping a step the library no longer has.
-          function agentPathUpdate(r, p) {
-            let d = request.resource.data;
+          function agentPathUpdate(r, p, d) {
             let e = getAfter(eventPath(wid, d.lastEventId)).data;
             return d.get('pathRev', 0) == r.get('pathRev', 0) + 1 && ownsClaim(r)
               && (unshaped(r)
                 // Shaping: the asks for people steps first, then the shape itself.
-                ? (e.type == 'item.shaped' ? shapeIt(r, p, 'agent')
+                ? (e.type == 'item.shaped' ? shapeIt(r, p, 'agent', d)
                   : e.type == 'item.pathChanged' && e.data.get('change', '') == 'ask'
-                    && pathAskIt(r, p, 'agent', e))
+                    && pathAskIt(r, p, 'agent', e, d))
                 : stepOf(p, r.stepId).kind == 'agent' && e.type == 'item.pathChanged'
                   && (e.data.get('change', '') == 'ask'
-                    ? pathAskIt(r, p, 'agent', e)
-                    : skipEditIt(r, p, 'agent', e)));
+                    ? pathAskIt(r, p, 'agent', e, d)
+                    : skipEditIt(r, p, 'agent', e, d)));
           }
           // An attachment was added in this same batch: the item's counter goes up by exactly one.
           function attachCounted(r) {
@@ -2719,8 +2714,7 @@ service cloud.firestore {
 
           // A paused agent claims nothing; a step limited to some agents is theirs alone.
           // Shaping (card st5INNZj) is open to any agent on the project, as a 'shape' run.
-          function claimIt(r, p, shaping) {
-            let d = request.resource.data;
+          function claimIt(r, p, shaping, d) {
             let run = getAfter(runPath(wid, d.claim.runId));
             return touched(['claim', 'status'])
               && (shaping ? run.data.get('job', '') == 'shape' : agentAllowedAtStep(p, r.stepId))
@@ -2741,16 +2735,14 @@ service cloud.firestore {
               && itemTracked(wid, d, ['item.claimed'], pid, iid);
           }
           // No event of its own: it must ride along with a run heartbeat (coalesced there).
-          function heartbeatIt(r) {
-            let d = request.resource.data;
+          function heartbeatIt(r, d) {
             return ownsClaim(r) && changed(['claim'])
               && exactKeys(d.claim, ['runId', 'agentUid', 'heartbeatAt'])
               && d.claim.runId == r.claim.runId && d.claim.agentUid == me()
               && d.claim.heartbeatAt == request.time
               && getAfter(runPath(wid, r.claim.runId)).data.heartbeatAt == request.time;
           }
-          function releaseIt(r) {
-            let d = request.resource.data;
+          function releaseIt(r, d) {
             return ownsClaim(r)
               && touched(['claim', 'status', 'awaitingAnswer', 'costEur'])
               && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
@@ -2771,8 +2763,7 @@ service cloud.firestore {
               && q != null && q.data.kind == 'question' && q.data.by == me_('agent')
               && q.data.answered == false;
           }
-          function progressIt(r) {
-            let d = request.resource.data;
+          function progressIt(r, d) {
             return ownsClaim(r) && touched(['progress', 'costEur'])
               && d.updatedAt == request.time
               && (d.progress == null || (exactKeys(d.progress, ['done', 'total'])
@@ -2783,8 +2774,7 @@ service cloud.firestore {
           }
           // Park / unpark (item QjTTL): only the agent holding the item, under its current claim.
           // A park names that claim's run, so it is void once the claim moves on.
-          function parkIt(r) {
-            let d = request.resource.data;
+          function parkIt(r, d) {
             return ownsClaim(r) && touched(['parked'])
               && d.updatedAt == request.time
               && (d.parked == null
@@ -2795,8 +2785,7 @@ service cloud.firestore {
           }
           // Status (item AzveC): only the agent holding the item, under its current claim, at the
           // server time; it replaces the previous status.
-          function statusIt(r) {
-            let d = request.resource.data;
+          function statusIt(r, d) {
             let s = d.statusUpdate;
             return ownsClaim(r) && touched(['statusUpdate'])
               && d.updatedAt == request.time
@@ -2807,8 +2796,7 @@ service cloud.firestore {
               && itemTracked(wid, d, ['item.updated'], pid, iid);
           }
           // Exactly one step forward; arriving at a human step opens a fresh gate.
-          function completeIt(r, p) {
-            let d = request.resource.data;
+          function completeIt(r, p, d) {
             return ownsClaim(r)
               && touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur'])
               && d.updatedAt == request.time
@@ -2822,8 +2810,7 @@ service cloud.firestore {
           // step on the path, at most 3 rounds until a person acts (resetRounds), with a reason
           // (in the event; the action also leaves it as a note). Its run ends now. At most 12
           // steps may lie between the target and the sender (the expression budget, see noGate).
-          function agentSendBackIt(r, p) {
-            let d = request.resource.data;
+          function agentSendBackIt(r, p, d) {
             let i = p.stepIndex.get(d.stepId, 99);
             let j = p.stepIndex[r.stepId];
             let between = p.steps[i + 1:j];
@@ -2864,10 +2851,10 @@ service cloud.firestore {
             return (role in ['admin', 'owner'] || (role == 'member' && me() in p.memberUids))
               // Path writes (card st5INNZj) bump pathRev; no other path below changes the path.
               && (d.get('pathRev', 0) != r.get('pathRev', 0)
-                ? humanPathUpdate(r, p)
+                ? humanPathUpdate(r, p, d)
               // Stop work / Resume are the only writes that change workStopped.
               : d.get('workStopped', null) != r.get('workStopped', null)
-                ? (stopWorkIt(r, p) || resumeIt(r, p))
+                ? (stopWorkIt(r, p, d) || resumeIt(r, p, d))
                 // Only an item waiting at a gate can be decided on.
                 : r.status == 'waiting'
                   ? waitingUpdate(r, p)
@@ -2971,8 +2958,7 @@ service cloud.firestore {
           // an agent step. The claim is cleared and the claimed run ends as stopped in the same
           // batch (or had already ended). Go back: the item stays queued at its step, on hold
           // (workStopped) until Resume; cancel: the item is stopped for good.
-          function stopWorkIt(r, p) {
-            let d = request.resource.data;
+          function stopWorkIt(r, p, d) {
             let w = d.get('workStopped', null);
             return w != null && r.get('workStopped', null) == null && r.claim != null
               // A shaping run (card st5INNZj) may sit at a first step that is a people step.
@@ -2995,8 +2981,7 @@ service cloud.firestore {
               && canStopWork(wid, p, e.data.get('gateStepId', ''));
           }
           // Resume: the hold of Go back ends; agents may take the item again.
-          function resumeIt(r, p) {
-            let d = request.resource.data;
+          function resumeIt(r, p, d) {
             return d.get('workStopped', 'missing') == null
               && r.get('workStopped', null) != null && r.workStopped.mode == 'back'
               && r.status != 'stopped'
@@ -3109,25 +3094,23 @@ service cloud.firestore {
           // ----- per-item paths (card st5INNZj) -----
 
           // A person's path write, routed by its event.
-          function humanPathUpdate(r, p) {
-            let d = request.resource.data;
+          function humanPathUpdate(r, p, d) {
             let e = getAfter(eventPath(wid, d.lastEventId)).data;
             return d.get('pathRev', 0) == r.get('pathRev', 0) + 1
               && (e.type == 'item.shaped'
-                ? unshaped(r) && r.claim == null && shapeIt(r, p, 'human')
+                ? unshaped(r) && r.claim == null && shapeIt(r, p, 'human', d)
                 : e.type == 'item.pathChanged'
                   ? (e.data.get('change', '') == 'ask'
-                    ? pathAskIt(r, p, 'human', e)
-                    : skipEditIt(r, p, 'human', e))
-                  : pathDecideIt(r, p, e));
+                    ? pathAskIt(r, p, 'human', e, d)
+                    : skipEditIt(r, p, 'human', e, d))
+                  : pathDecideIt(r, p, e, d));
           }
           function openItem(r) { return r.status in ['queued', 'working', 'waiting']; }
           // Shaping: only agent steps are skipped (gateSkips is not among the changed keys). A
           // people step's skip is a pending request, asked in its own write before the shape
           // (pathAskIt): it stays on the path until a decider approves. The item arrives at the
           // first step of its path.
-          function shapeIt(r, p, type) {
-            let d = request.resource.data;
+          function shapeIt(r, p, type, d) {
             let s = d.get('shape', null);
             let k = d.get('pathSkips', null);
             return touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'shape',
@@ -3149,8 +3132,7 @@ service cloud.firestore {
           // the agent holding the item or any person; a people step (gateSkips) only by one of
           // its deciders. The other map stays as it is (an item from before paths gets an empty
           // pathSkips with its first change).
-          function skipEditIt(r, p, type, e) {
-            let d = request.resource.data;
+          function skipEditIt(r, p, type, e, d) {
             let st = e.data.get('stepId', '');
             let gate = stepOf(p, st).kind == 'human';
             let after = gate ? d.get('gateSkips', {}) : d.get('pathSkips', {});
@@ -3171,8 +3153,7 @@ service cloud.firestore {
           }
           // A pending request to put one people step ahead on the path or skip it. An agent may
           // not ask again after a decider refused that step on this item.
-          function pathAskIt(r, p, type, e) {
-            let d = request.resource.data;
+          function pathAskIt(r, p, type, e, d) {
             let st = e.data.get('stepId', '');
             let before = r.get('pathRequests', {});
             let q = d.get('pathRequests', {}).get(st, null);
@@ -3191,8 +3172,7 @@ service cloud.firestore {
           // Any one decider of the step settles a request: refuse (kept; agents may not ask
           // again), approve a skip or an addition of a step ahead, or approve the skip of the
           // gate the item waits at (it moves on along its path).
-          function pathDecideIt(r, p, e) {
-            let d = request.resource.data;
+          function pathDecideIt(r, p, e, d) {
             let st = e.data.get('stepId', '');
             let q = r.get('pathRequests', {}).get(st, null);
             let refused = r.get('pathRefused', []);
@@ -3356,7 +3336,7 @@ service cloud.firestore {
               && d.at == request.time
               && d.answered == false
               && str(d.text, 1, 8000)
-              && (humanMessage() || agentMessage());
+              && (humanMessage(d) || agentMessage(d));
             }
             // Marking a question answered happens in the answer's batch.
             allow update: if canProject(wid, pid)
@@ -3368,8 +3348,7 @@ service cloud.firestore {
             // Erased together with its item.
             allow delete: if eraseWith(wid, pid, iid);
 
-            function humanMessage() {
-              let d = request.resource.data;
+            function humanMessage(d) {
               return canProject(wid, pid) && d.by == me_('human')
                 && ((d.kind == 'note' && d.replyTo == null
                       && itemTracked(wid, d,
@@ -3381,8 +3360,7 @@ service cloud.firestore {
                       && getAfter(msgPath(wid, pid, iid, d.replyTo)).data.answered == true
                       && itemTracked(wid, d, ['decision.answered'], pid, iid)));
             }
-            function agentMessage() {
-              let d = request.resource.data;
+            function agentMessage(d) {
               return projectAgent(wid, pid) && d.by == me_('agent')
                 && d.kind in ['question', 'note'] && d.replyTo == null
                 && get(itemPath(wid, pid, iid)).data.claim.agentUid == me()

@@ -59,7 +59,7 @@ describe('rules compiled size', () => {
   });
 
   // The offline guard (docs/DEPLOY.md "Rules size"): the estimate tracks Google's compiled size
-  // within about 400 bytes. Over the budget, trim the rules before merging; the release refuses
+  // within about 1500 bytes. Over the budget, trim the rules before merging; the release refuses
   // anything at or over 256000 bytes.
   it(`firestore.rules stays within the budget of ${RULES_COMPILED_BUDGET} bytes`, () => {
     const est = estimateCompiledSize(RULES);

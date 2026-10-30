@@ -87,12 +87,12 @@ export function rulesTokenStats(src) {
 /**
  * Offline estimate of the compiled size: Google's compiled size grows with the number of tokens
  * (AST nodes) and the length of names and strings; comments and whitespace cost nothing.
- * Calibrated by least squares on six measured rulesets (release-150 to this change), within
- * about 400 bytes of the measured size. Recalibrate with scripts/rules-size.mjs if it drifts.
+ * Calibrated by least squares on eight measured rulesets (release-150 to this change): within
+ * about 1500 bytes of the measured size. Recalibrate with scripts/rules-size.mjs if it drifts.
  */
 export function estimateCompiledSize(src) {
   const { tokens, chars } = rulesTokenStats(src);
-  return Math.round(3.3424 * tokens + 1.3917 * chars - 8074);
+  return Math.round(4.4727 * tokens + 0.9526 * chars - 10837);
 }
 
 /** One-line verdict for the deploy log. */
