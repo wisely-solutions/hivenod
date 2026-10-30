@@ -47,6 +47,20 @@ describe('mapItem', () => {
       expect(mapItem(item({ stepId, status: 'queued' }), STEPS, NOW).kind).toBe('skip');
     expect(mapItem(item({ stepId: 'build' }), STEPS, NOW).why).toMatch(/agent step Build/);
   });
+  it('with inFlight maps agent steps to the matching Development step', () => {
+    const m = (stepId, status) => mapItem(item({ stepId, status }), STEPS, NOW, { inFlight: true });
+    expect(m('shape', 'working')).toMatchObject({ kind: 'thread', cursor: 0, start: false });
+    expect(m('build', 'working')).toMatchObject({ kind: 'thread', cursor: 2, start: true });
+    expect(m('build', 'parked')).toMatchObject({ cursor: 2, start: true });
+    expect(m('build', 'queued')).toMatchObject({ cursor: 2, start: false });
+    expect(m('release', 'claimed')).toMatchObject({ cursor: 5, start: true });
+    expect(m('test', 'working')).toMatchObject({ cursor: 6, start: false });
+    expect(mappingLabel(m('build', 'working'))).toBe('in-flight → step 3 Build (of 7), running');
+    expect(mappingLabel(m('test', 'queued'))).toBe('in-flight → step 7 Accept on live (of 7)');
+    // people steps and closed items are unchanged
+    expect(mapItem(item(), STEPS, NOW, { inFlight: true })).toEqual({ kind: 'thread', cursor: 1 });
+    expect(mapItem(item({ status: 'done' }), STEPS, NOW, { inFlight: true }).kind).toBe('skip');
+  });
   it('skips closed, archived, unknown and unmapped items', () => {
     expect(mapItem(item({ status: 'done' }), STEPS, NOW)).toEqual({ kind: 'skip', why: 'done' });
     expect(mapItem(item({ status: 'stopped' }), STEPS, NOW).kind).toBe('skip');
@@ -195,6 +209,31 @@ describe('buildItemMigration', () => {
     expect(gate.decision.byUid).toBe('joao');
     expect(docs(b, 'inboxSubjects')).toEqual([]);
     expect(docs(b, 'inboxThreads')[0].subjectId).toBe('sjX');
+  });
+
+  it('in-flight Build: earlier steps done, Build running, gates after untouched', () => {
+    const b = buildItemMigration(base({ kind: 'thread', cursor: 2, inFlight: true, start: true }));
+    expect(b.cursor).toBe(2);
+    expect(stepStates(b).slice(0, 5)).toEqual(['done', 'done', 'running', 'approved', 'proposed']);
+    expect(docs(b, 'inboxEvents').map((e) => e.type)).toContain('outcome.started');
+  });
+
+  it('in-flight Build not started stays approved at Build', () => {
+    const b = buildItemMigration(base({ kind: 'thread', cursor: 2, inFlight: true, start: false }));
+    expect(b.cursor).toBe(2);
+    expect(stepStates(b).slice(0, 3)).toEqual(['done', 'done', 'approved']);
+  });
+
+  it('in-flight Release: Build and Keep green done, Ship it? passed, Release running', () => {
+    const b = buildItemMigration(base({ kind: 'thread', cursor: 5, inFlight: true, start: true }));
+    expect(b.cursor).toBe(5);
+    expect(stepStates(b).slice(0, 6)).toEqual(['done', 'done', 'done', 'done', 'done', 'running']);
+  });
+
+  it('in-flight Test lands at Accept on live like an Accept item', () => {
+    const b = buildItemMigration(base({ kind: 'thread', cursor: 6, inFlight: true, start: false }));
+    expect(b.cursor).toBe(6);
+    expect(b.state).toBe('yourCall');
   });
 
   it('turns a finding into a thread with a proposed Development plan', () => {

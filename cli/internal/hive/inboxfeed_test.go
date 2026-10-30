@@ -799,3 +799,25 @@ func TestInboxFeedKeepGreenCarryOut(t *testing.T) {
 		t.Fatal(m)
 	}
 }
+
+// Reach out (item KZ6O9): a status request on an approved step this session got the carry_out for
+// is pushed once as reason "status"; one on a step it never carried (or seen on first sight) is not.
+func TestInboxFeedStepStatusRequest(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 1})
+	r.feed.Start()
+	o := FeedOutcome{ID: "o1", ThreadID: "t9", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli()}
+	other := FeedOutcome{ID: "o2", ThreadID: "t8", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli(), AskAtMs: r.now.UnixMilli() - 1}
+	r.set(nil, []FeedOutcome{o, other})
+	r.want("t9:carry_out")
+	asked := o
+	asked.AskAtMs = r.now.UnixMilli() + 30*60_000
+	r.set(nil, []FeedOutcome{asked, other})
+	r.set(nil, []FeedOutcome{asked, other})
+	r.want("t9:carry_out", "t9:status")
+	r.mu.Lock()
+	e := r.pushed[1]
+	r.mu.Unlock()
+	if e.Meta["outcome_id"] != "o1" || !strings.Contains(e.Content, "Hivenod asks for a status on a reply (outcome o1) on thread t9") {
+		t.Fatal(e)
+	}
+}

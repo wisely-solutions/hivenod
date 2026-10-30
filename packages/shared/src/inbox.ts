@@ -513,6 +513,22 @@ export const inboxOutcomeSchema = z.object({
     .optional(),
   /** When the home agent last re-checked it and found it still good (absent: never). */
   checkedAt: timestamp.optional(),
+  /**
+   * Reach out (item KZ6O9), written by the notifier only: a status request to the executing agent
+   * on a step in its hands that went quiet (byUid 'hivenod', or the person who pressed Ping
+   * again), and the silence flag when it did not answer.
+   */
+  statusAsk: z.object({ byUid: z.string(), at: timestamp }).nullable().optional(),
+  silence: z
+    .object({
+      since: z.number(),
+      at: z.number(),
+      asked: z.number().nullable().optional(),
+      agent: z.string().max(200).optional(),
+      told: z.number().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),

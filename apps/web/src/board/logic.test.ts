@@ -389,16 +389,24 @@ describe('status checks on the card (item AzveC)', () => {
     expect(statusView({ ...base, statusUpdate: su({ runId: 'old' }) } as Item, NOW)).toEqual({});
     expect(statusView({ ...base, status: 'queued', statusUpdate: su() } as Item, NOW)).toEqual({});
   });
-  it('shows the silence flag until a newer status arrives; not while parked', () => {
-    const silence = { runId: 'r1', since: NOW - 42 * 60_000, at: NOW - 60_000 };
+  it('shows the silence flag ("Hive silent for N min") until a newer status arrives; parked too', () => {
+    const silence = { runId: 'r1', since: NOW - 42 * 60_000, at: NOW - 60_000, agent: 'Hive' };
     expect(statusView({ ...base, silence } as Item, NOW)).toEqual({
-      silence: 'No update for 42 min',
+      silence: 'Hive silent for 42 min',
     });
+    // An older flag without the agent's name (item AzveC).
+    expect(statusView({ ...base, silence: { ...silence, agent: undefined } } as Item, NOW)).toEqual(
+      {
+        silence: 'Agent silent for 42 min',
+      },
+    );
     expect(
       statusView({ ...base, silence, statusUpdate: su({ at: ts(NOW - 30_000) }) } as Item, NOW),
     ).toEqual({ status: 'Running checks · 70%' });
     const parked = { runId: 'r1', reason: 'release', at: ts(NOW) };
-    expect(statusView({ ...base, silence, parked } as Item, NOW)).toEqual({});
+    expect(statusView({ ...base, silence, parked } as Item, NOW)).toEqual({
+      silence: 'Hive silent for 42 min',
+    });
     expect(statusView({ ...base, silence: { ...silence, runId: 'old' } } as Item, NOW)).toEqual({});
   });
   it('Ask for status: on live worked items, then "Asked · waiting…" for 2 minutes', () => {

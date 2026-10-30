@@ -2481,7 +2481,7 @@
         "text": "More tests"
       },
       "output": {
-        "error": "You reported a status less than 30 seconds ago: wait a little before the next one"
+        "error": "You reported a status on this item less than 30 seconds ago (the limit is per item): wait a little before the next one"
       }
     },
     {

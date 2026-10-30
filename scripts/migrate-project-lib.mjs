@@ -9,7 +9,11 @@
 //   item waiting at a person step named Approve…  → thread, Development plan at 2 Approve idea
 //   item waiting at a person step named Accept…   → thread, steps 1-5 done, at 6 Accept on live
 //   open finding (status suggested) ≤ 30 days old → thread (source finding) with a proposed dev plan
-//   item at an agent step                         → skipped: nothing is migrated mid-flight
+//   item at an agent step                         → skipped, unless --in-flight (inFlight: true):
+//       then a thread at the matching step with every earlier step done (the Ship it? gate too),
+//       Shape → Shape, Build → Build, Release → Release, Test → Accept on live (Test counts as
+//       done); a claimed/working/parked item has its Build/Release step running, a queued one is
+//       approved, not started (Shape is not a long step: it is always just approved)
 //   done, stopped, archived, older findings       → skipped (they are in the export)
 //
 // Idempotent: thread, plan, step, message and attachment ids are derived from the item; each item
@@ -50,10 +54,17 @@ export const DEV_LABELS = PLAN_TEMPLATES.dev.steps.map(
     s.fields.what ??
     (s.type === 'keepgreen' ? 'Keep green' : s.type[0].toUpperCase() + s.type.slice(1)),
 );
-/** Where Approve idea and Accept on live sit in the template (Keep green, slice 6c, moved the latter). */
-const DEV_APPROVE = DEV_LABELS.indexOf('Approve idea');
-const DEV_ACCEPT = DEV_LABELS.indexOf('Accept on live');
 const DAY = 86_400_000;
+const devIndex = (pred) => PLAN_TEMPLATES.dev.steps.findIndex(pred);
+/** Step positions in the Development template (stable if a step like Keep green is added). */
+const DEV_AT = {
+  shape: devIndex((s) => s.type === 'shape'),
+  approveIdea: devIndex((s) => s.fields.what === 'Approve idea'),
+  build: devIndex((s) => s.type === 'build'),
+  release: devIndex((s) => s.type === 'release'),
+  accept: devIndex((s) => s.fields.what === 'Accept on live'),
+};
+const DEV_N = PLAN_TEMPLATES.dev.steps.length;
 const sha = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
 
 // ---------- time ----------
@@ -79,7 +90,7 @@ const msOf = (t) => (t && typeof t.toMillis === 'function' ? t.toMillis() : null
  * Where an item goes: {kind: 'thread', cursor} (the Development step it waits at), {kind:
  * 'finding'}, or {kind: 'skip', why}.
  */
-export function mapItem(item, steps, now = new Date()) {
+export function mapItem(item, steps, now = new Date(), { inFlight = false } = {}) {
   const skip = (why) => ({ kind: 'skip', why });
   if (item.erasing) return skip('being deleted');
   if (item.archivedAt) return skip('archived');
@@ -92,18 +103,31 @@ export function mapItem(item, steps, now = new Date()) {
   if (item.status === 'done' || item.status === 'stopped') return skip(item.status);
   const step = steps.find((s) => s.id === item.stepId);
   if (!step) return skip(`unknown step ${item.stepId}`);
-  if (step.kind !== 'human')
-    return skip(`at agent step ${step.name}: not migrated mid-flight (finish it first, rerun)`);
   const n = step.name.toLowerCase();
-  if (n.includes('accept')) return { kind: 'thread', cursor: DEV_ACCEPT };
-  if (n.includes('approv')) return { kind: 'thread', cursor: DEV_APPROVE };
+  if (step.kind !== 'human') {
+    if (!inFlight)
+      return skip(
+        `at agent step ${step.name}: not migrated mid-flight (finish it first, or --in-flight)`,
+      );
+    const running = item.status !== 'queued';
+    const at = (cursor, start) => ({ kind: 'thread', cursor, inFlight: true, start });
+    if (n.includes('shape')) return at(DEV_AT.shape, false);
+    if (n.includes('build')) return at(DEV_AT.build, running);
+    if (n.includes('release')) return at(DEV_AT.release, running);
+    if (n.includes('test')) return at(DEV_AT.accept, false);
+    return skip(`agent step ${step.name} has no Development step`);
+  }
+  if (n.includes('accept')) return { kind: 'thread', cursor: DEV_AT.accept };
+  if (n.includes('approv')) return { kind: 'thread', cursor: DEV_AT.approveIdea };
   return skip(`person step ${step.name} has no Development step`);
 }
 
 /** The table's "to" column for a mapping. */
 export function mappingLabel(m) {
-  if (m.kind === 'thread')
-    return `${m.cursor + 1} ${DEV_LABELS[m.cursor]} (of ${DEV_LABELS.length})`;
+  if (m.kind === 'thread') {
+    const at = `${m.cursor + 1} ${DEV_LABELS[m.cursor]} (of ${DEV_N})`;
+    return m.inFlight ? `in-flight → step ${at}${m.start ? ', running' : ''}` : at;
+  }
   if (m.kind === 'finding') return 'finding: dev plan proposed';
   return `skip: ${m.why}`;
 }
@@ -402,6 +426,21 @@ export function buildItemMigration(o) {
           'main',
         );
     }
+    // Mid-flight (--in-flight): the current Build/Release step is running in the Hive project.
+    if (mapping.start) {
+      const id = stepIds[mapping.cursor];
+      run(
+        finishOutcome(bot('start'), {
+          outcomeId: id,
+          outcome: store.get(inboxPaths.outcome(wid, id)),
+          thread: thread(),
+          status: 'started',
+          result: { text: `Running in the Hive project (item ${o.itemId}).`, permalink: o.url },
+          plan: planInput(),
+        }),
+        'main',
+      );
+    }
   }
 
   for (const a of o.attachments) {
@@ -587,7 +626,7 @@ function itemCommits(rest, built, docsToWrite, marker) {
  * Migrates (or, with dryRun, only plans and checks) one project's open items.
  *
  * @param {{ rest: ReturnType<typeof restClient>, wid: string, pid: string, memberUid: string,
- *   agentUid: string, dryRun: boolean, now?: Date, appUrl?: string, subjectName?: string,
+ *   agentUid: string, dryRun: boolean, inFlight?: boolean, now?: Date, appUrl?: string, subjectName?: string,
  *   findingsSubjectName?: string, log?: (s: string) => void }} o
  */
 export async function migrateProject(o) {
@@ -629,7 +668,10 @@ export async function migrateProject(o) {
 
   const order = { thread: 0, finding: 1, skip: 2 };
   const mapped = items
-    .map((it) => ({ ...it, mapping: mapItem(it.data, project.steps, now) }))
+    .map((it) => ({
+      ...it,
+      mapping: mapItem(it.data, project.steps, now, { inFlight: o.inFlight === true }),
+    }))
     .sort(
       (a, b) =>
         order[a.mapping.kind] - order[b.mapping.kind] ||

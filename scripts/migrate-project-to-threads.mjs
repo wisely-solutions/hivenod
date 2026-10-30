@@ -1,10 +1,12 @@
 // Usage: node scripts/migrate-project-to-threads.mjs --org <wid> --project <pid> --member <uid>
-//          --agent <agentId> [--dry-run] [--yes] [--emulator host:port] [--firebase-project id]
+//          --agent <agentId> [--dry-run] [--yes] [--in-flight] [--emulator host:port] [--firebase-project id]
 //          [--subject "Hivenod development"] [--findings-subject "Hive findings"] [--app-url url]
 // Turns the project's open items into Inbox threads with a Development plan (slice 8; see
 // scripts/migrate-project-lib.mjs for the mapping). --dry-run prints the mapping table and checks
 // every document it would write, writing nothing. On production (no --emulator) a real run also
 // needs --yes, and the owner's OK at run time (service account GOOGLE_APPLICATION_CREDENTIALS).
+// --in-flight also migrates items at agent steps (Shape, Build, Release, Test) as threads at the
+// matching step, earlier steps done; without it they are skipped.
 // Rerunning is safe: migrated items are skipped, a half-written one is finished.
 import { readFileSync } from 'node:fs';
 import { createSign } from 'node:crypto';
@@ -73,6 +75,7 @@ const r = await migrateProject({
   memberUid,
   agentUid,
   dryRun,
+  inFlight: flag('--in-flight'),
   ...(val('--subject') ? { subjectName: val('--subject') } : {}),
   ...(val('--findings-subject') ? { findingsSubjectName: val('--findings-subject') } : {}),
   ...(val('--app-url') ? { appUrl: val('--app-url') } : {}),
