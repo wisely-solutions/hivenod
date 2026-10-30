@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Usage: node scripts/rules-size.mjs [rules file]   (default: firestore.rules)
 // Prints the compiled size Google computes for the rules, against the 256000-byte release limit,
-// and exits 1 when it is over the budget (RULES_COMPILED_BUDGET) or the limit.
+// and exits 1 when it is over the budget (RULES_COMPILED_BUDGET) or the limit. When the padding
+// reaches Google's 256 KiB source limit before the compiled limit, the rules fit: it then prints an
+// upper bound instead of an exact size and passes.
 // It uploads throwaway rulesets and a throwaway release `size-probe` (never `cloud.firestore`)
 // with the service account in GOOGLE_APPLICATION_CREDENTIALS, and deletes them again.
 // See docs/DEPLOY.md "Rules size and compile time".
@@ -13,7 +15,9 @@ import {
   RULES_COMPILED_LIMIT,
   measureCompiledSize,
   parseCompiledSize,
-  rulesSizeVerdict,
+  isSourcesTooBig,
+  rulesSizeOutcome,
+  SourcesTooBigError,
 } from './rules-size-lib.mjs';
 
 const API = 'https://firebaserules.googleapis.com/v1';
@@ -76,6 +80,7 @@ async function tryRelease(project, token, source) {
     source: { files: [{ name: 'firestore.rules', content: source }] },
   });
   const set = await rs.json().catch(() => ({}));
+  if (!rs.ok && isSourcesTooBig(set.error?.message)) throw new SourcesTooBigError();
   if (!rs.ok || !set.name) {
     throw new Error(
       `rules size probe: ruleset upload failed: ${rs.status} ${set.error?.message ?? ''}`,
@@ -139,7 +144,7 @@ async function sweepProbeRulesets(project, token, since, uploaded) {
   }
 }
 
-/** The compiled size of `source` as Google counts it (see rules-size-lib.mjs). */
+/** The compiled size of `source` as Google counts it, exact or an upper bound (see rules-size-lib.mjs). */
 export async function measureRulesSize({ project, source, getToken = accessToken }) {
   const token = await getToken();
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
@@ -163,10 +168,11 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.error('rules-size: GOOGLE_APPLICATION_CREDENTIALS is not set');
     process.exit(2);
   }
-  const size = await measureRulesSize({ project, source: readFileSync(file, 'utf8') });
-  console.log(rulesSizeVerdict(size));
-  if (size >= RULES_COMPILED_LIMIT) process.exit(1);
-  if (size > RULES_COMPILED_BUDGET) {
+  const m = await measureRulesSize({ project, source: readFileSync(file, 'utf8') });
+  const out = rulesSizeOutcome(m);
+  console.log(out.message);
+  if (!out.pass) process.exit(1);
+  if (out.size != null && out.size > RULES_COMPILED_BUDGET) {
     console.error(
       `over the budget of ${RULES_COMPILED_BUDGET} bytes (docs/DEPLOY.md "Rules size and compile time")`,
     );
