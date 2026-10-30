@@ -236,15 +236,24 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
       );
       return oid;
     },
-    /** Reports where the running long step at the plan's turn stands (step_progress, slice 6b). */
-    async progress(pid: string, line: string, percent: number | null = null) {
+    /**
+     * Reports where the running long step at the plan's turn stands (step_progress, slice 6b).
+     * With a check (Keep green, slice 6c), on the done Keep green step before the gate at the turn.
+     */
+    async progress(
+      pid: string,
+      line: string,
+      percent: number | null = null,
+      check: 'rechecking' | 'green' | 'blocked' | null = null,
+    ) {
       const plan = (await getDoc(doc(db, inboxPaths.plan(wid, pid)))).data() as PlanInput['plan'];
       const outcomes: Record<string, OutcomeStateOf> = {};
       for (const id of plan.steps)
         outcomes[id] = (
           await getDoc(doc(db, inboxPaths.outcome(wid, id)))
         ).data() as OutcomeStateOf;
-      const oid = plan.steps[plan.cursor]!;
+      const at = plan.steps[plan.cursor]!;
+      const oid = check && outcomes[at]?.type === 'approval' ? plan.steps[plan.cursor - 1]! : at;
       await run(
         stepProgress(ctx, {
           outcomeId: oid,
@@ -252,6 +261,7 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
           thread: await thread(plan.threadId),
           line,
           percent,
+          check,
           plan: { planId: pid, plan, outcomes },
         }),
       );

@@ -3,7 +3,9 @@
  * from New thread; Shape starts without a further approval; Build waits for Approve idea (which
  * pins the summary version); at Ship it? the top card asks with Approve · Ask for changes · Not
  * now (Not approved in the ⋯ menu); Ask for changes sends the plan back to Build with the text.
- * 1440 and 390, light and dark, axe-clean.
+ * Keep green (slice 6c): after Build the agent keeps the PR green and current; Ship it? shows
+ * "Re-checking after main moved" while it re-greens; when it gives up the plan is blocked and
+ * the member may send it back to Build. 1440 and 390, light and dark, axe-clean.
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
@@ -86,8 +88,8 @@ async function newDevThread(page: Page, s: Seed, shot?: string) {
   return { tid, planId: planId! };
 }
 
-/** The agent runs Shape, the member approves the idea, the agent builds: Ship it? waits. */
-async function toShipIt(page: Page, s: Seed, tid: string, planId: string) {
+/** The agent runs Shape, the member approves the idea, the agent builds: Keep green runs. */
+async function toKeepGreen(page: Page, s: Seed, tid: string, planId: string) {
   await s.agent.finishStep(planId, 'done', { permalink: 'https://example.com/drafts/dark-mode' });
   const v = await s.agent.summary(tid, {
     headline: 'Dark mode for the board',
@@ -99,7 +101,7 @@ async function toShipIt(page: Page, s: Seed, tid: string, planId: string) {
     noVisualWhy: 'An idea: nothing to show yet.',
   });
   await expect(top(page)).toHaveAttribute('data-top', 'person', { timeout: 20_000 });
-  await expect(top(page).locator('[data-kicker]')).toContainText('step 2 of 6 · Approve idea');
+  await expect(top(page).locator('[data-kicker]')).toContainText('step 2 of 7 · Approve idea');
   await top(page).locator('[data-gate-approve]').click();
   await page.waitForTimeout(UNDO_WAIT);
   await expect.poll(() => cursorOf(s, planId)).toBe(2);
@@ -124,6 +126,26 @@ async function toShipIt(page: Page, s: Seed, tid: string, planId: string) {
   await s.agent.finishStep(planId, 'done', {
     permalink: 'https://github.com/example/board/pull/86',
   });
+  // Keep green (slice 6c): rebase on main, rerun the checks, fix, until green and current.
+  await expect(top(page).locator('[data-kicker]')).toContainText('step 4 of 7', {
+    timeout: 20_000,
+  });
+  await s.agent.finishStep(planId, 'started');
+  await s.agent.progress(planId, 'rebased on main 4f2a1c0, 212/214 green, fixing lint', 90);
+  await expect(top(page).locator('[data-progress-line]')).toHaveText(
+    'rebased on main 4f2a1c0, 212/214 green, fixing lint · 90%',
+    { timeout: 20_000 },
+  );
+  const rows = page.locator(`[data-plan="${planId}"]`).locator('li[data-step]');
+  await expect(rows.nth(3)).toHaveAttribute('data-step-ui', 'running');
+  await expect(rows.nth(3)).toContainText('Keep green');
+}
+
+/** Keep green reports green and current: Ship it? waits. */
+async function toShipIt(page: Page, s: Seed, tid: string, planId: string, shot?: string) {
+  await toKeepGreen(page, s, tid, planId);
+  if (shot) await look(page, shot);
+  await s.agent.finishStep(planId, 'done');
   await s.agent.summary(tid, {
     headline: 'Dark mode for the board: PR #86 is ready',
     ask: 'Ship it?',
@@ -139,9 +161,33 @@ async function toShipIt(page: Page, s: Seed, tid: string, planId: string) {
     ],
     visuals: [bar],
   });
-  await expect(top(page).locator('[data-kicker]')).toContainText('step 4 of 6 · Ship it?', {
+  await expect(top(page).locator('[data-kicker]')).toContainText('step 5 of 7 · Ship it?', {
     timeout: 20_000,
   });
+}
+
+/** Main moves while Ship it? waits: re-checking (Approve anyway), then green again. */
+async function recheckAtShipIt(page: Page, s: Seed, planId: string, shot: string) {
+  const card = top(page);
+  await expect(card.locator('[data-keepgreen-recheck]')).toHaveCount(0);
+  await expect(card.locator('[data-gate-approve]')).toHaveText('Approve');
+  await s.agent.progress(
+    planId,
+    'main moved to 9b1e2d3: rebasing, re-running the checks',
+    null,
+    'rechecking',
+  );
+  const note = card.locator('[data-keepgreen-recheck="rechecking"]');
+  await expect(note).toContainText('Re-checking after main moved', { timeout: 20_000 });
+  await expect(note.locator('[data-keepgreen-line]')).toHaveText(
+    'main moved to 9b1e2d3: rebasing, re-running the checks',
+  );
+  await expect(card.locator('[data-gate-approve]')).toHaveText('Approve anyway');
+  await expect(card.locator('[data-kicker]')).toContainText('step 5 of 7 · Ship it?');
+  await look(page, shot);
+  await s.agent.progress(planId, 'green on 9b1e2d3: 214/214', null, 'green');
+  await expect(card.locator('[data-keepgreen-recheck]')).toHaveCount(0, { timeout: 20_000 });
+  await expect(card.locator('[data-gate-approve]')).toHaveText('Approve');
 }
 
 async function shipItThenSendBack(page: Page, s: Seed, planId: string, shot: string) {
@@ -167,8 +213,9 @@ async function shipItThenSendBack(page: Page, s: Seed, planId: string, shot: str
   await form.locator('[data-gate-send-back]').click();
   await page.waitForTimeout(UNDO_WAIT);
   await expect.poll(() => cursorOf(s, planId)).toBe(2);
-  const [, , build, ship] = await s.agent.stepsOf(planId);
+  const [, , build, keep, ship] = await s.agent.stepsOf(planId);
   await expect.poll(() => stateOf(s, build!)).toBe('approved');
+  await expect.poll(() => stateOf(s, keep!)).toBe('approved');
   await expect.poll(() => stateOf(s, ship!)).toBe('proposed');
   const sentBack = async () => (await docOf(planPath(s, planId))).sentBack?.mapValue?.fields;
   await expect
@@ -176,7 +223,7 @@ async function shipItThenSendBack(page: Page, s: Seed, planId: string, shot: str
     .toBe('The toggle should sit at the top of Settings.');
   await expect.poll(async () => (await sentBack())?.n?.integerValue).toBe('1');
   await expect(card).toHaveAttribute('data-top', 'working', { timeout: 20_000 });
-  await expect(card.locator('[data-kicker]')).toContainText('step 3 of 6');
+  await expect(card.locator('[data-kicker]')).toContainText('step 3 of 7');
 }
 
 test.describe('desktop 1440', () => {
@@ -194,15 +241,54 @@ test.describe('desktop 1440', () => {
       // The member's plan: Shape is approved and running at once; the gates wait.
       const rail = page.locator(`[data-plan="${planId}"]`);
       const rows = rail.locator('li[data-step]');
-      await expect(rows).toHaveCount(6, { timeout: 20_000 });
+      await expect(rows).toHaveCount(7, { timeout: 20_000 });
       await expect(rows.nth(0)).toHaveAttribute('data-step-ui', 'running');
       await expect(rows.nth(2)).toHaveAttribute('data-step-ui', 'approved');
-      await expect(rows.nth(3)).toContainText('Ship it?');
+      await expect(rows.nth(3)).toContainText('Keep green');
+      await expect(rows.nth(3)).toHaveAttribute('data-step-ui', 'approved');
+      await expect(rows.nth(4)).toContainText('Ship it?');
       await expect(top(page)).toHaveAttribute('data-top', 'working');
       const [shape] = await s.agent.stepsOf(planId);
       await expect.poll(() => stateOf(s, shape!)).toBe('approved');
-      await toShipIt(page, s, tid, planId);
+      await toShipIt(page, s, tid, planId, 'slice6c-keepgreen-running-1440');
+      await recheckAtShipIt(page, s, planId, 'slice6c-shipit-rechecking-1440');
       await shipItThenSendBack(page, s, planId, 'slice6-shipit-1440');
+    } finally {
+      await s.stop();
+    }
+  });
+
+  test('Keep green gives up: the plan is blocked; the member sends it back to Build', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await fastTimers(page);
+    await freezeClock(page);
+    const s = await seedInbox(page);
+    try {
+      const { tid, planId } = await newDevThread(page, s);
+      await toKeepGreen(page, s, tid, planId);
+      await s.agent.finishStep(planId, 'failed', {
+        error: 'lint fails after 3 fixes: no-unused-vars in src/theme.ts (tried 3 fixes)',
+      });
+      const card = top(page);
+      await expect(card).toHaveAttribute('data-top', 'blocked', { timeout: 20_000 });
+      await expect(card.locator('[data-retry]')).toHaveText('Retry');
+      await expect(card.locator('[data-skip]')).toBeVisible();
+      await expect(card.locator('[data-blocked-send-back]')).toHaveText('Send back to Build');
+      await card.locator('[data-blocked-send-back]').click();
+      const form = card.locator('[data-gate-ask]');
+      await form.getByLabel('What should change?').fill('Fix the lint in Build.');
+      await look(page, 'slice6c-blocked-1440');
+      await form.locator('[data-gate-send-back]').click();
+      await page.waitForTimeout(UNDO_WAIT);
+      await expect.poll(() => cursorOf(s, planId)).toBe(2);
+      const [, , build, keep] = await s.agent.stepsOf(planId);
+      await expect.poll(() => stateOf(s, build!)).toBe('approved');
+      await expect.poll(() => stateOf(s, keep!)).toBe('approved');
+      await expect
+        .poll(async () => (await docOf(planPath(s, planId))).state?.stringValue)
+        .toBe('active');
     } finally {
       await s.stop();
     }
@@ -220,6 +306,7 @@ test.describe('phone 390', () => {
     try {
       const { tid, planId } = await newDevThread(page, s, 'slice6-newthread-390');
       await toShipIt(page, s, tid, planId);
+      await recheckAtShipIt(page, s, planId, 'slice6c-shipit-rechecking-390');
       await shipItThenSendBack(page, s, planId, 'slice6-shipit-390');
     } finally {
       await s.stop();

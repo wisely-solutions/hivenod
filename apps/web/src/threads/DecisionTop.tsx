@@ -16,7 +16,14 @@ import {
   type InboxPlan,
   type InboxThread,
 } from '@hive/shared';
-import { Check, ChevronRight, MessageSquare, MoreHorizontal, TriangleAlert } from 'lucide-react';
+import {
+  Check,
+  ChevronRight,
+  MessageSquare,
+  MoreHorizontal,
+  RefreshCw,
+  TriangleAlert,
+} from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
 import type { Row } from '../lib/live';
 import { effectLines } from '../lib/outcomes';
@@ -27,7 +34,16 @@ import { Icon } from '../ui/icon';
 import { UndoButton } from '../ui/UndoButton';
 import { AskAgent } from './AskAgent';
 import { freshness, quietFor, topState, type ShownSummary, type TopTone } from './decision';
-import { firstFree, planInputOf, planLive, planMain, sendBackChoices, stepTitle } from './plan';
+import {
+  firstFree,
+  keepGreenRecheck,
+  type KeepGreenRecheck,
+  planInputOf,
+  planLive,
+  planMain,
+  sendBackChoices,
+  stepTitle,
+} from './plan';
 import { GateAsk } from './GateAsk';
 import { ActionMenu, type MenuAction } from '../ui/menu';
 import { RecheckButton, useRecheck } from './Recheck';
@@ -201,6 +217,16 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
     const [gateAsk, setGateAsk] = useState(false);
     const gateBack =
       main?.kind === 'step' && main.gate && pl ? sendBackChoices(pl, main.index) : null;
+    // Keep green (slice 6c): main moved while Ship it? waits; the agent re-greens the PR.
+    const recheck =
+      main?.kind === 'step' && main.gate && pl
+        ? keepGreenRecheck(pl.plan.steps, outcomes, main.index)
+        : null;
+    // A plan blocked by a failed step (slice 6c: Keep green gave up) may go back to Build.
+    const blockedBack =
+      top.kind === 'blocked' && pl && live && cur?.data.state === 'failed' && view?.current
+        ? sendBackChoices(pl, view.current.index)
+        : null;
     useImperativeHandle(ref, () => ({
       approve: () => {
         if (panelRef.current) panelRef.current.approve();
@@ -247,20 +273,55 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
     if (top.kind === 'blocked' && pl && live) {
       // Blocked by its third send back (slice 6): the step is approved, not failed: go on or stop.
       const failed = cur?.data.state === 'failed';
+      const back = blockedBack && blockedBack.target !== null ? blockedBack : null;
       widget = (
-        <Row3 counting={acts.counting}>
-          <Button variant="approve" data-retry="" className="max-sm:w-full" onClick={acts.retry}>
-            {failed ? 'Retry' : 'Go on'}
-          </Button>
-          {failed ? (
-            <Button variant="secondary" data-skip="" className="max-sm:w-full" onClick={acts.skip}>
-              Skip
+        <>
+          <Row3 counting={acts.counting}>
+            <Button variant="approve" data-retry="" className="max-sm:w-full" onClick={acts.retry}>
+              {failed ? 'Retry' : 'Go on'}
             </Button>
+            {failed ? (
+              <Button
+                variant="secondary"
+                data-skip=""
+                className="max-sm:w-full"
+                onClick={acts.skip}
+              >
+                Skip
+              </Button>
+            ) : null}
+            {back ? (
+              <Button
+                variant="secondary"
+                data-blocked-send-back=""
+                aria-expanded={gateAsk}
+                className="max-sm:w-full"
+                onClick={() => setGateAsk(!gateAsk)}
+              >
+                Send back to{' '}
+                {back.choices
+                  .find((c) => c.index === back.target)
+                  ?.label.replace(/^Step \d+: /, '') ?? 'an earlier step'}
+              </Button>
+            ) : null}
+            <Button variant="sendback" data-stop="" className="max-sm:w-full" onClick={acts.stop}>
+              Stop plan
+            </Button>
+          </Row3>
+          {gateAsk && back && back.target !== null && !acts.counting ? (
+            <GateAsk
+              choices={back.choices}
+              target={back.target}
+              sentBefore={plan?.data.sentBack?.n ?? 0}
+              agent={agent}
+              onCancel={() => setGateAsk(false)}
+              onSend={(reason, to) => {
+                setGateAsk(false);
+                acts.sendBack(reason, to);
+              }}
+            />
           ) : null}
-          <Button variant="sendback" data-stop="" className="max-sm:w-full" onClick={acts.stop}>
-            Stop plan
-          </Button>
-        </Row3>
+        </>
       );
     } else if (top.kind === 'question') {
       widget = (
@@ -310,6 +371,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
               {detail}
             </p>
           ) : null}
+          {recheck ? <KeepGreenNote recheck={recheck} agent={agent} /> : null}
           <Row3 counting={acts.counting}>
             <Button
               variant="approve"
@@ -318,7 +380,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
               onClick={() => acts.gate(s, true, summary?.version)}
               leading={<Icon icon={Check} size={16} />}
             >
-              Approve
+              {recheck ? 'Approve anyway' : 'Approve'}
             </Button>
             <Button
               variant="secondary"
@@ -585,6 +647,43 @@ function LongProgress({
           {agent} quiet for {quiet}: a new session of {agent} picks this step up again.
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Keep green while Ship it? waits (slice 6c): main moved and the agent is re-greening the pull
+ * request, or it cannot. Approve stays possible (my call: the member decides, and Release
+ * rebases and re-checks again before it merges); it reads "Approve anyway".
+ */
+function KeepGreenNote({ recheck, agent }: { recheck: KeepGreenRecheck; agent: string }) {
+  const blocked = recheck.check === 'blocked';
+  return (
+    <div
+      data-keepgreen-recheck={recheck.check}
+      role="status"
+      className={cn(
+        'mt-3 rounded-card border p-3',
+        blocked ? 'border-sendback-border bg-sendback-bg' : 'border-line bg-surface-2',
+      )}
+    >
+      <p
+        className={cn(
+          'inline-flex items-center gap-1.5 text-14 font-semibold',
+          blocked ? 'text-sendback' : 'text-agent',
+        )}
+      >
+        <Icon icon={blocked ? TriangleAlert : RefreshCw} size={15} />
+        {blocked ? 'Keep green is stuck' : 'Re-checking after main moved'}
+      </p>
+      <p data-keepgreen-line="" className="mt-1 text-14 text-ink [overflow-wrap:anywhere]">
+        {recheck.line}
+      </p>
+      <p className="mt-1 text-13 text-text-2">
+        {blocked
+          ? `${agent} cannot re-green it. Ask for changes sends it back to Build; Approve anyway leaves it to Release.`
+          : `${agent} is rebasing and re-running the checks. You can approve now: Release rebases and re-checks again before it merges.`}
+      </p>
     </div>
   );
 }
