@@ -80,6 +80,7 @@ describe('the registry', () => {
       'nudge',
       'shape',
       'build',
+      'keepgreen',
       'release',
       'approval',
     ]);

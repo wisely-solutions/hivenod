@@ -46,8 +46,12 @@ const TH: ThreadStateOf = {
   fetchedBy: 'agentA',
   refs: [],
 };
+// A dev plan made before Keep green (slice 6c): six steps; existing plans keep them.
 const IDS = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'];
 const TYPES = ['shape', 'approval', 'build', 'approval', 'release', 'approval'];
+// The Development template since slice 6c: Keep green between Build and Ship it?.
+const IDS7 = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7'];
+const TYPES7 = ['shape', 'approval', 'build', 'keepgreen', 'approval', 'release', 'approval'];
 const at = (ops: WriteOp[], path: string) => ops.find((o) => o.path === path);
 const O = (id: string) => `workspaces/w1/inboxOutcomes/${id}`;
 const P = 'workspaces/w1/inboxPlans/p1';
@@ -59,28 +63,31 @@ function dev(
   cursor: number,
   state: PlanInput['plan']['state'] = 'active',
   sent = 0,
+  ids: readonly string[] = IDS,
+  types: readonly string[] = TYPES,
 ): PlanInput & { plan: PlanOf & SendBackOf } {
   return {
     planId: 'p1',
     plan: {
       memberUid: 'joao',
       threadId: 't1',
-      steps: IDS,
+      steps: [...ids],
       cursor,
       state,
-      sendBackTo: templateSendBack('dev', IDS),
+      sendBackTo:
+        ids.length === 7 ? templateSendBack('dev', ids) : { d2: 'd1', d4: 'd3', d6: 'd3' },
       ...(sent ? { sentBack: { n: sent } } : {}),
     },
     outcomes: Object.fromEntries(
-      IDS.map((id, i) => [
+      ids.map((id, i) => [
         id,
         {
           memberUid: 'joao',
           threadId: 't1',
-          type: TYPES[i]!,
-          fields: (TYPES[i] === 'approval' ? { what: 'x' } : {}) as Record<string, string>,
+          type: types[i]!,
+          fields: (types[i] === 'approval' ? { what: 'x' } : {}) as Record<string, string>,
           state: states[i]!,
-          executor: TYPES[i] === 'approval' ? null : 'agentA',
+          executor: types[i] === 'approval' ? null : 'agentA',
           planId: 'p1',
         },
       ]),
@@ -92,8 +99,8 @@ const A = 'approved' as const;
 const Pr = 'proposed' as const;
 
 describe('registry and templates', () => {
-  it('has the development step types, plan-only, agent, build and release long', () => {
-    for (const k of ['shape', 'build', 'release'] as const) {
+  it('has the development step types, plan-only, agent, build, keep green and release long', () => {
+    for (const k of ['shape', 'build', 'keepgreen', 'release'] as const) {
       expect(PLAN_TYPES).toContain(k);
       expect(SINGLE_TYPES).not.toContain(k);
       expect(OUTCOMES[k].executor).toBe('agent');
@@ -102,29 +109,37 @@ describe('registry and templates', () => {
     expect('long' in OUTCOMES.shape).toBe(false);
     expect(OUTCOMES.build.long).toBe(true);
     expect(OUTCOMES.release.long).toBe(true);
+    expect(OUTCOMES.keepgreen.long).toBe(true);
   });
-  it('the Development template: six steps, gates sending back to Shape, Build, Build', () => {
+  it('the Development template: seven steps, gates sending back to Shape, Build, Build', () => {
     const t = PLAN_TEMPLATES.dev;
-    expect(t.steps.map((s) => s.type)).toEqual(TYPES);
+    expect(t.steps.map((s) => s.type)).toEqual(TYPES7);
     expect(t.steps.length).toBeLessThanOrEqual(PLAN_LIMITS.steps);
     expect(t.steps.filter((s) => s.type === 'approval').map((s) => s.fields.what)).toEqual([
       'Approve idea',
       'Ship it?',
       'Accept on live',
     ]);
-    expect(templateSendBack('dev', IDS)).toEqual({ d2: 'd1', d4: 'd3', d6: 'd3' });
+    expect(templateSendBack('dev', IDS7)).toEqual({ d2: 'd1', d5: 'd3', d7: 'd3' });
     expect(planTemplate('nope')).toBeNull();
     expect(() => templateSteps('nope')).toThrow(/Unknown template nope. Templates: dev/);
     expect(templateSteps('dev', [{ idea: 'A' }])[0]).toEqual({
       type: 'shape',
       fields: { idea: 'A' },
     });
-    expect(() => templateSteps('dev', Array(7).fill({}))).toThrow(/has 6 steps/);
+    expect(() => templateSteps('dev', Array(8).fill({}))).toThrow(/has 7 steps/);
   });
   it('sendBackTarget: the template target, else the nearest earlier agent step', () => {
+    const types7 = Object.fromEntries(IDS7.map((id, i) => [id, TYPES7[i]]));
+    const map7 = templateSendBack('dev', IDS7);
+    expect(sendBackTarget(IDS7, types7, 1, map7)).toBe(0);
+    // Ship it? and Accept on live → Build, past Keep green (it re-greens after Build anyway).
+    expect(sendBackTarget(IDS7, types7, 4, map7)).toBe(2);
+    expect(sendBackTarget(IDS7, types7, 6, map7)).toBe(2);
+    expect(sendBackTarget(IDS7, types7, 4, null)).toBe(3);
+    // A plan made before slice 6c keeps its own map.
     const types = Object.fromEntries(IDS.map((id, i) => [id, TYPES[i]]));
-    const map = templateSendBack('dev', IDS);
-    expect(sendBackTarget(IDS, types, 1, map)).toBe(0);
+    const map = { d2: 'd1', d4: 'd3', d6: 'd3' };
     expect(sendBackTarget(IDS, types, 3, map)).toBe(2);
     expect(sendBackTarget(IDS, types, 5, map)).toBe(2);
     expect(sendBackTarget(IDS, types, 5, null)).toBe(4);
@@ -143,12 +158,12 @@ describe('plan_propose with a template', () => {
       template: 'dev',
       steps: [{ type: 'shape', fields: { idea: 'Dark mode' }, note: 'S' }],
       planId: 'p1',
-      stepIds: IDS,
+      stepIds: IDS7,
     });
     expect(at(p.ops, P)!.data).toMatchObject({
       state: 'proposed',
       templateId: 'dev',
-      sendBackTo: { d2: 'd1', d4: 'd3', d6: 'd3' },
+      sendBackTo: { d2: 'd1', d5: 'd3', d7: 'd3' },
       proposedBy: 'agentA',
     });
     expect(at(p.ops, O('d1'))!.data).toMatchObject({
@@ -157,12 +172,13 @@ describe('plan_propose with a template', () => {
       state: 'proposed',
       note: 'S',
     });
-    expect(at(p.ops, O('d4'))!.data).toMatchObject({
+    expect(at(p.ops, O('d4'))!.data).toMatchObject({ type: 'keepgreen', fields: {} });
+    expect(at(p.ops, O('d5'))!.data).toMatchObject({
       type: 'approval',
       fields: { what: 'Ship it?' },
     });
     // Agents never make approved steps.
-    for (const id of IDS) expect(at(p.ops, O(id))!.data!.state).toBe('proposed');
+    for (const id of IDS7) expect(at(p.ops, O(id))!.data!.state).toBe('proposed');
     expect(p.ops.at(-1)!.data).toMatchObject({
       type: 'plan.proposed',
       data: { templateId: 'dev' },
@@ -223,18 +239,18 @@ describe('createMemberThread', () => {
       template: 'dev',
       threadId: 't1',
       planId: 'p1',
-      stepIds: IDS,
+      stepIds: IDS7,
     });
     expect(p.planId).toBe('p1');
     expect(at(p.ops, P)!.data).toMatchObject({
       proposedBy: 'joao',
       state: 'active',
       cursor: 0,
-      steps: IDS,
+      steps: IDS7,
       templateId: 'dev',
-      sendBackTo: { d2: 'd1', d4: 'd3', d6: 'd3' },
+      sendBackTo: { d2: 'd1', d5: 'd3', d7: 'd3' },
     });
-    expect(IDS.map((id) => at(p.ops, O(id))!.data!.state)).toEqual([A, Pr, A, Pr, A, Pr]);
+    expect(IDS7.map((id) => at(p.ops, O(id))!.data!.state)).toEqual([A, Pr, A, A, Pr, A, Pr]);
     expect(at(p.ops, O('d1'))!.data).toMatchObject({
       fields: { idea: 'Add a dark mode' },
       executor: 'agentA',
@@ -249,7 +265,7 @@ describe('createMemberThread', () => {
     });
     expect(p.ops.at(-1)!.data).toMatchObject({
       type: 'thread.created',
-      data: { planId: 'p1', steps: IDS, templateId: 'dev' },
+      data: { planId: 'p1', steps: IDS7, templateId: 'dev' },
     });
   });
   it('refuses agents, an empty text and a missing agent', () => {
@@ -500,5 +516,142 @@ describe('long steps (slice 6b)', () => {
         line: 'x',
       }),
     ).toThrow(/started first/);
+  });
+});
+
+describe('Keep green (slice 6c)', () => {
+  const K = (
+    states: OutcomeStateOf['state'][],
+    cursor: number,
+    state: PlanInput['plan']['state'] = 'active',
+    sent = 0,
+  ) => dev(states, cursor, state, sent, IDS7, TYPES7);
+  const R = 'running' as const;
+  it('runs as a long step after Build: started, progress, done offers Ship it?', () => {
+    const pl = K([D, D, D, A, Pr, A, Pr], 3);
+    const st = finishOutcome(agent, {
+      outcomeId: 'd4',
+      outcome: pl.outcomes.d4!,
+      thread: TH,
+      status: 'started',
+      plan: pl,
+    });
+    expect(at(st.ops, O('d4'))!.data).toMatchObject({ state: 'running' });
+    const run = K([D, D, D, R, Pr, A, Pr], 3);
+    const base = { outcomeId: 'd4', outcome: run.outcomes.d4!, thread: TH, plan: run };
+    const p = stepProgress(agent, {
+      ...base,
+      line: 'rebased on main 4f2a1c0, 212/214 green, fixing lint',
+      percent: 60,
+    });
+    expect(at(p.ops, O('d4'))!.data).toMatchObject({ progress: { percent: 60 } });
+    const done = finishOutcome(agent, {
+      ...base,
+      status: 'done',
+      result: { text: 'Green on 4f2a1c0' },
+    });
+    expect(at(done.ops, P)!.data).toMatchObject({ cursor: 4 });
+    expect(at(done.ops, T)!.data).toMatchObject({ state: 'yourCall', waiting: null });
+  });
+  it('while Ship it? waits: re-checks on the done step (rechecking, green, blocked)', () => {
+    const pl = K([D, D, D, D, Pr, A, Pr], 4);
+    const base = { outcomeId: 'd4', outcome: pl.outcomes.d4!, thread: TH, plan: pl };
+    const p = stepProgress(agent, {
+      ...base,
+      line: 'main moved to 9b1e2d3: rebasing',
+      check: 'rechecking',
+    });
+    expect(at(p.ops, O('d4'))!.data).toEqual({
+      progress: {
+        line: 'main moved to 9b1e2d3: rebasing',
+        percent: null,
+        check: 'rechecking',
+        at: expect.anything(),
+      },
+      updatedAt: expect.anything(),
+      lastEventId: p.eventId,
+    });
+    // Only the step: the plan, the thread and the gate stay as they are.
+    expect(p.ops.map((o) => o.path)).toEqual([O('d4'), `workspaces/w1/inboxEvents/${p.eventId}`]);
+    expect(p.ops.at(-1)!.data).toMatchObject({
+      type: 'step.progress',
+      data: { check: 'rechecking' },
+    });
+    for (const c of ['green', 'blocked'] as const)
+      expect(
+        at(stepProgress(agent, { ...base, line: 'x', check: c }).ops, O('d4'))!.data,
+      ).toMatchObject({
+        progress: { check: c },
+      });
+    expect(() => stepProgress(agent, { ...base, line: 'x', check: 'red' as never })).toThrow(
+      /check is/,
+    );
+    expect(() => stepProgress(other, { ...base, line: 'x' })).toThrow(/Only the agent/);
+  });
+  it('Keep green ends once Ship it? is decided; other done steps take no progress', () => {
+    const rel = K([D, D, D, D, D, A, Pr], 5);
+    expect(() =>
+      stepProgress(agent, {
+        outcomeId: 'd4',
+        outcome: rel.outcomes.d4!,
+        thread: TH,
+        plan: rel,
+        line: 'x',
+        check: 'rechecking',
+      }),
+    ).toThrow(/Keep green ended/);
+    // Build is done before the cursor too, but it is not Keep green.
+    const pl = K([D, D, D, R, Pr, A, Pr], 3);
+    expect(() =>
+      stepProgress(agent, {
+        outcomeId: 'd3',
+        outcome: { ...pl.outcomes.d3!, state: 'done' },
+        thread: TH,
+        plan: pl,
+        line: 'x',
+      }),
+    ).toThrow(/started first/);
+    // A check only on Keep green.
+    const b = K([D, D, R, A, Pr, A, Pr], 2);
+    expect(() =>
+      stepProgress(agent, {
+        outcomeId: 'd3',
+        outcome: b.outcomes.d3!,
+        thread: TH,
+        plan: b,
+        line: 'x',
+        check: 'green',
+      }),
+    ).toThrow(/Keep green/);
+  });
+  it('unsolvable: failed blocks the plan; the member may send it back to Build', () => {
+    const run = K([D, D, D, R, Pr, A, Pr], 3);
+    const f = finishOutcome(agent, {
+      outcomeId: 'd4',
+      outcome: run.outcomes.d4!,
+      thread: TH,
+      status: 'failed',
+      plan: run,
+      result: { error: 'lint fails after 3 fixes: no-unused-vars in a.ts' },
+    });
+    expect(at(f.ops, P)!.data).toMatchObject({ state: 'blocked' });
+    const bl = K([D, D, D, 'failed', Pr, A, Pr], 3, 'blocked');
+    const p = sendBackPlan(joao, { ...bl, thread: TH, reason: 'Fix it in Build' });
+    expect(p.toStep).toBe(2);
+    expect(at(p.ops, O('d3'))!.data).toMatchObject({ state: 'approved' });
+    expect(at(p.ops, O('d4'))!.data).toEqual({
+      state: 'approved',
+      updatedAt: expect.anything(),
+      lastEventId: p.eventId,
+    });
+    expect(at(p.ops, P)!.data).toMatchObject({
+      cursor: 2,
+      state: 'active',
+      sentBack: { n: 1, to: 'd3' },
+    });
+    // The agent never sends a blocked plan back; a blocked plan without a failed step neither.
+    expect(() => sendBackPlan(agent, { ...bl, thread: TH, reason: 'x' })).toThrow(/blocked/);
+    const b3 = K([D, D, A, Pr, Pr, A, Pr], 2, 'blocked', 3);
+    expect(() => sendBackPlan(joao, { ...b3, thread: TH, reason: 'x' })).toThrow(/blocked/);
   });
 });

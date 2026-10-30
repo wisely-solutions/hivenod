@@ -50,7 +50,9 @@ export const FINDING_SOURCE = 'finding';
 export const MIGRATED_BY = 'scripts/migrate-project-to-threads';
 /** The Development template's step labels, in order. */
 export const DEV_LABELS = PLAN_TEMPLATES.dev.steps.map(
-  (s) => s.fields.what ?? s.type[0].toUpperCase() + s.type.slice(1),
+  (s) =>
+    s.fields.what ??
+    (s.type === 'keepgreen' ? 'Keep green' : s.type[0].toUpperCase() + s.type.slice(1)),
 );
 const DAY = 86_400_000;
 const devIndex = (pred) => PLAN_TEMPLATES.dev.steps.findIndex(pred);
@@ -380,6 +382,7 @@ export function buildItemMigration(o) {
       if (p.includes('/inboxMessages/') && d.threadId === threadId) d.permalink = o.url;
     file();
     const pr = o.refs.prs.at(-1) ?? null;
+    // Each agent step's result, by its type (the template's order may change).
     const byType = {
       shape: { text: `Shaped in the Hive project (item ${o.itemId}).`, permalink: o.url },
       build: {
@@ -388,6 +391,7 @@ export function buildItemMigration(o) {
           : 'Built in the Hive project.',
         permalink: pr ?? o.url,
       },
+      keepgreen: { text: 'Kept green in the Hive project.', permalink: pr ?? o.url },
       release: {
         text:
           o.refs.release !== null

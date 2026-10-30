@@ -27,7 +27,7 @@ useEmulator();
 const T = (tid: string) => inboxPaths.thread(W, tid);
 const O = (oid: string) => inboxPaths.outcome(W, oid);
 const PL = (pid: string) => inboxPaths.plan(W, pid);
-const IDS = ['dv1', 'dv2', 'dv3', 'dv4', 'dv5', 'dv6'];
+const IDS = ['dv1', 'dv2', 'dv3', 'dv4', 'dv5', 'dv6', 'dv7'];
 const thread = async (tid = 'nt1') => (await snap(T(tid))) as unknown as ThreadStateOf;
 async function load(pid = 'pd1'): Promise<PlanInput & { plan: PlanOf & SendBackOf }> {
   const plan = (await snap(PL(pid))) as unknown as PlanOf & SendBackOf;
@@ -85,12 +85,13 @@ async function gate(i: number, alice: As, summaryVersion?: number) {
     ),
   );
 }
-/** Shape done, Approve idea, Build done: the plan waits at Ship it?. */
+/** Shape done, Approve idea, Build and Keep green done: the plan waits at Ship it?. */
 async function atShipIt() {
   const alice = await newDev();
   await finish(0);
   await gate(1, alice, 2);
   await finish(2);
+  await finish(3);
   return alice;
 }
 
@@ -132,12 +133,13 @@ describe('New thread', () => {
       state: 'active',
       cursor: 0,
       templateId: 'dev',
-      sendBackTo: { dv2: 'dv1', dv4: 'dv3', dv6: 'dv3' },
+      sendBackTo: { dv2: 'dv1', dv5: 'dv3', dv7: 'dv3' },
     });
     const states = await Promise.all(IDS.map(async (id) => (await snap(O(id))).state));
     expect(states).toEqual([
       'approved',
       'proposed',
+      'approved',
       'approved',
       'proposed',
       'approved',
@@ -154,7 +156,7 @@ describe('New thread', () => {
       template: 'dev',
       threadId: 'nt3',
       planId: 'pd3',
-      stepIds: ['g1', 'g2', 'g3', 'g4', 'g5', 'g6'],
+      stepIds: ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7'],
     });
     await denied(alice.run(forge(p.ops, O('g2'), { state: 'done' })));
     await denied(alice.run(forge(p.ops, O('g2'), { state: 'approved' })));
@@ -168,7 +170,7 @@ describe('New thread', () => {
       template: 'dev',
       steps: [],
       planId: 'pa9',
-      stepIds: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'],
+      stepIds: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'],
     });
     await denied(a.run(forge(pp.ops, O('a1'), { state: 'approved' })));
     await denied(a.run(forge(pp.ops, PL('pa9'), { state: 'active' })));
@@ -195,7 +197,11 @@ describe('the Development plan runs gate by gate', () => {
     expect(await snap(O('dv2'))).toMatchObject({ state: 'done', decision: { summaryVersion: 3 } });
     expect(await snap(T('nt1'))).toMatchObject({ state: 'waiting', waiting: { on: 'agent' } });
     await finish(2);
+    // Keep green (slice 6c) runs next: the thread still waits on the work.
     expect(await snap(PL('pd1'))).toMatchObject({ cursor: 3, state: 'active' });
+    expect(await snap(T('nt1'))).toMatchObject({ state: 'waiting', waiting: { on: 'item' } });
+    await finish(3);
+    expect(await snap(PL('pd1'))).toMatchObject({ cursor: 4, state: 'active' });
     expect(await snap(T('nt1'))).toMatchObject({ state: 'yourCall' });
   });
   it('a gate pins only a whole summary version; a send back decides gates again', async () => {
@@ -215,22 +221,24 @@ describe('the Development plan runs gate by gate', () => {
     );
     await ok(alice.run(ap));
     await finish(2);
-    await gate(3, alice);
-    await finish(4);
+    await finish(3);
+    await gate(4, alice);
+    await finish(5);
     // Accept on live → Build: Ship it? must be decided again, never left passed.
     const sp = sendBackPlan(alice.ctx, { ...(await load()), thread: await thread(), reason: 'No' });
-    await denied(alice.run(forge(sp.ops, O('dv4'), { state: 'done' })));
+    await denied(alice.run(forge(sp.ops, O('dv5'), { state: 'done' })));
     await ok(alice.run(sp));
-    expect(await snap(O('dv4'))).toMatchObject({ state: 'proposed', decision: null });
-    expect(await snap(O('dv5'))).toMatchObject({ state: 'approved' });
+    expect(await snap(O('dv5'))).toMatchObject({ state: 'proposed', decision: null });
+    expect(await snap(O('dv4'))).toMatchObject({ state: 'approved' });
+    expect(await snap(O('dv6'))).toMatchObject({ state: 'approved' });
   });
   it('Release waits for Ship it?; the plan is done only after Accept on live', async () => {
     const alice = await atShipIt();
-    await gate(3, alice);
-    await finish(4);
-    expect(await snap(PL('pd1'))).toMatchObject({ cursor: 5, state: 'active' });
-    await gate(5, alice);
-    expect(await snap(PL('pd1'))).toMatchObject({ cursor: 6, state: 'done' });
+    await gate(4, alice);
+    await finish(5);
+    expect(await snap(PL('pd1'))).toMatchObject({ cursor: 6, state: 'active' });
+    await gate(6, alice);
+    expect(await snap(PL('pd1'))).toMatchObject({ cursor: 7, state: 'done' });
     expect(await snap(T('nt1'))).toMatchObject({ state: 'done' });
   });
 });
@@ -289,7 +297,7 @@ describe('send back', () => {
   });
   it('Release sends the plan back to Build (the agent)', async () => {
     const alice = await atShipIt();
-    await gate(3, alice);
+    await gate(4, alice);
     const a = as(AGENTS.a);
     await ok(
       a.run(
@@ -302,16 +310,17 @@ describe('send back', () => {
       ),
     );
     expect(await snap(PL('pd1'))).toMatchObject({ cursor: 2, sentBack: { n: 1, by: AGENTS.a } });
-    expect(await snap(O('dv4'))).toMatchObject({ state: 'proposed', decision: null });
+    expect(await snap(O('dv5'))).toMatchObject({ state: 'proposed', decision: null });
     // Another agent may not.
     await finish(2);
-    await gate(3, alice);
+    await finish(3);
+    await gate(4, alice);
     const star = as(AGENTS.star);
     const pl = await load();
     // As if it carried Release out (the action's own check passes; the rules know better).
     const fake = {
       ...pl,
-      outcomes: { ...pl.outcomes, dv5: { ...pl.outcomes.dv5!, executor: AGENTS.star } },
+      outcomes: { ...pl.outcomes, dv6: { ...pl.outcomes.dv6!, executor: AGENTS.star } },
     };
     await denied(
       star.run(sendBackPlan(star.ctx, { ...fake, thread: await thread(), reason: 'x', toStep: 2 })),
@@ -329,7 +338,10 @@ describe('send back', () => {
           }),
         ),
       );
-      if (i < 2) await finish(2);
+      if (i < 2) {
+        await finish(2);
+        await finish(3);
+      }
     }
     expect(await snap(PL('pd1'))).toMatchObject({
       state: 'blocked',
@@ -453,5 +465,113 @@ describe('long steps (slice 6b)', () => {
       plan: pl,
     });
     await denied(a.run(p));
+  });
+});
+
+describe('Keep green (slice 6c)', () => {
+  const check = async (a: As, line: string, c: 'green' | 'rechecking' | 'blocked' | null) => {
+    const pl = await load();
+    return stepProgress(a.ctx, {
+      outcomeId: 'dv4',
+      outcome: pl.outcomes.dv4!,
+      thread: await thread(),
+      line,
+      check: c,
+      plan: pl,
+    });
+  };
+  it('while Ship it? waits, its executor re-checks on the done step; the gate stays open', async () => {
+    const alice = await atShipIt();
+    const a = as(AGENTS.a);
+    await ok(a.run(await check(a, 'main moved to 9b1e2d3: rebasing', 'rechecking')));
+    expect(await snap(O('dv4'))).toMatchObject({
+      state: 'done',
+      progress: { line: 'main moved to 9b1e2d3: rebasing', check: 'rechecking' },
+    });
+    expect(await snap(PL('pd1'))).toMatchObject({ cursor: 4 });
+    await ok(a.run(await check(a, 'green on 9b1e2d3', 'green')));
+    const p = await check(a, 'x', 'blocked');
+    await denied(
+      a.run(
+        forge(p.ops, O('dv4'), {
+          progress: {
+            ...(p.ops.find((o) => o.path === O('dv4'))!.data!.progress as object),
+            check: 'red',
+          },
+        }),
+      ),
+    );
+    // Only the progress: never the state, never by another agent.
+    await denied(a.run(forge(p.ops, O('dv4'), { state: 'running' })));
+    await denied(
+      as(AGENTS.star).run(
+        p.ops.map((op) =>
+          op.path.includes('/inboxEvents/')
+            ? { ...op, data: { ...op.data, actor: { type: 'agent', id: AGENTS.star, name: 'S' } } }
+            : op,
+        ),
+      ),
+    );
+    await ok(a.run(p));
+    // A done Build takes no progress.
+    const pl = await load();
+    const b = stepProgress(a.ctx, {
+      outcomeId: 'dv3',
+      outcome: { ...pl.outcomes.dv3!, type: 'keepgreen' },
+      thread: await thread(),
+      line: 'x',
+      plan: { ...pl, plan: { ...pl.plan, cursor: 3 } },
+    });
+    await denied(a.run(b));
+    await gate(4, alice);
+  });
+  it('unsolvable: failed blocks the plan; the member sends it back to Build, not the agent', async () => {
+    const alice = await newDev();
+    await finish(0);
+    await gate(1, alice);
+    await finish(2);
+    const a = as(AGENTS.a);
+    let pl = await load();
+    await ok(
+      a.run(
+        finishOutcome(a.ctx, {
+          outcomeId: 'dv4',
+          outcome: pl.outcomes.dv4!,
+          thread: await thread(),
+          status: 'failed',
+          result: { error: 'lint fails after 3 fixes' },
+          plan: pl,
+        }),
+      ),
+    );
+    expect(await snap(PL('pd1'))).toMatchObject({ state: 'blocked', cursor: 3 });
+    pl = await load();
+    const sp = sendBackPlan(alice.ctx, {
+      ...pl,
+      thread: await thread(),
+      reason: 'Fix it in Build',
+    });
+    // The agent may not (as if it were the member's action).
+    await denied(
+      a.run(
+        sp.ops.map((op) =>
+          op.path.includes('/inboxEvents/')
+            ? { ...op, data: { ...op.data, actor: { type: 'agent', id: AGENTS.a, name: 'A' } } }
+            : op.path === PL('pd1')
+              ? {
+                  ...op,
+                  data: {
+                    ...op.data,
+                    sentBack: { ...(op.data?.sentBack as object), by: AGENTS.a },
+                  },
+                }
+              : op,
+        ),
+      ),
+    );
+    await denied(alice.run(forge(sp.ops, O('dv4'), { state: 'failed' })));
+    await ok(alice.run(sp));
+    expect(await snap(PL('pd1'))).toMatchObject({ state: 'active', cursor: 2, sentBack: { n: 1 } });
+    expect(await snap(O('dv4'))).toMatchObject({ state: 'approved' });
   });
 });
