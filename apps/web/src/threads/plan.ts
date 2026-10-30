@@ -6,7 +6,6 @@
 import {
   outcomeKind,
   outcomeType,
-  planView,
   type InboxOutcome,
   type InboxPlan,
   type PlanInput,

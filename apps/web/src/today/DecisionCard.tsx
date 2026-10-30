@@ -366,6 +366,7 @@ function CardHead({ props, label }: { props: DecisionCardProps; label?: string }
   const band = bandOf(t, now);
   const rank = rankText(t, band, now);
   const age = waitLabel(sender?.at ?? entry.since, now);
+  const line = summaryLine(t);
   return (
     <>
       <div className="flex items-start gap-3 max-sm:flex-wrap max-sm:gap-y-2">
@@ -393,25 +394,44 @@ function CardHead({ props, label }: { props: DecisionCardProps; label?: string }
           </span>
         ) : null}
       </div>
-      <h2 className="mt-3 text-16 font-semibold leading-snug text-ink sm:text-[17px]">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="text-left [overflow-wrap:anywhere] hov:underline foc:outline-2 foc:outline-offset-2 foc:outline-focus"
-          aria-label={label ? `${t.title || 'Untitled thread'}, ${label}` : undefined}
-        >
-          {t.title || 'Untitled thread'}
-        </button>
-      </h2>
-      <SummaryTop props={props} />
+      {line ? (
+        <>
+          {/* With a summary (slice 3): the thread's title is the small line, the ask the big one. */}
+          <p className="mt-3 text-13 text-text-2 [overflow-wrap:anywhere]">
+            {t.title || 'Untitled thread'}
+          </p>
+          <h2 className="mt-0.5 text-18 font-semibold leading-snug text-ink sm:text-20">
+            <button
+              type="button"
+              data-headline=""
+              onClick={onOpen}
+              className="text-left [overflow-wrap:anywhere] hov:underline foc:outline-2 foc:outline-offset-2 foc:outline-focus"
+            >
+              {line}
+            </button>
+          </h2>
+          <SummaryTop props={props} />
+        </>
+      ) : (
+        <h2 className="mt-3 text-16 font-semibold leading-snug text-ink sm:text-[17px]">
+          <button
+            type="button"
+            onClick={onOpen}
+            className="text-left [overflow-wrap:anywhere] hov:underline foc:outline-2 foc:outline-offset-2 foc:outline-focus"
+            aria-label={label ? `${t.title || 'Untitled thread'}, ${label}` : undefined}
+          >
+            {t.title || 'Untitled thread'}
+          </button>
+        </h2>
+      )}
     </>
   );
 }
 
 /**
- * The summary's top line on the card (slice 3, design 3.4): the ask (or headline), the one-line
- * answer, "<agent> recommends Approve · confidence high · updated 3 min ago". Nothing without a
- * summary: the card's own proposal line stays the fallback.
+ * Under the summary's top line on the card (slice 3, design 3.4): the one-line answer and
+ * "<agent> recommends Approve · confidence high · updated 3 min ago". Nothing without a summary:
+ * the card's own proposal line stays the fallback.
  */
 function SummaryTop({ props }: { props: DecisionCardProps }) {
   const t = props.entry.thread!.data;
@@ -421,15 +441,9 @@ function SummaryTop({ props }: { props: DecisionCardProps }) {
   const stale = s.at.toMillis() < t.updatedAt.toMillis();
   const agent = props.agentName(t.fetchedBy);
   return (
-    <div data-summary-top="" className="mt-1.5">
-      <p
-        data-headline=""
-        className="text-18 font-semibold leading-snug text-ink [overflow-wrap:anywhere] sm:text-20"
-      >
-        {line}
-      </p>
+    <div data-summary-top="" className="mt-1">
       {s.answer ? (
-        <p data-answer="" className="mt-0.5 text-14 text-ink [overflow-wrap:anywhere]">
+        <p data-answer="" className="text-14 text-ink [overflow-wrap:anywhere]">
           {s.answer}
         </p>
       ) : null}

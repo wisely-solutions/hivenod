@@ -2517,10 +2517,7 @@ export function notNowThread(
 ): ActionPlan {
   const t = input.thread;
   owner(ctx, t.memberUid);
-  need(
-    t.state === 'needsYou' || t.state === 'yourCall',
-    'Nothing on this thread waits for you.',
-  );
+  need(t.state === 'needsYou' || t.state === 'yourCall', 'Nothing on this thread waits for you.');
   const key = input.key.trim();
   need(key.length > 0 && key.length <= 200, 'Not now needs the decision it is about.');
   const until = input.until.getTime();

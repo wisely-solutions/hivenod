@@ -9,6 +9,7 @@ import {
   parseVisual,
   planFoldParts,
   safeHttps,
+  summaryLine,
   topState,
   type TopInput,
 } from './decision';
@@ -300,5 +301,29 @@ describe('fold hints', () => {
   it('excerpt cuts at a word', () => {
     expect(excerpt('Hello there big world', 12)).toBe('Hello there…');
     expect(excerpt('  short  ', 12)).toBe('short');
+  });
+});
+
+describe('summaryLine (slice 3)', () => {
+  const sum = {
+    version: 2,
+    at: { toMillis: () => 1 },
+    headline: 'Sam asks to move the review',
+    ask: 'Reply that Thursday works?',
+    answer: null,
+    recAction: 'Approve',
+    confidence: 'high' as const,
+  };
+  it('the ask while something waits, else the headline; none without a summary', () => {
+    expect(summaryLine({ state: 'yourCall', summary: sum as never })).toBe(
+      'Reply that Thursday works?',
+    );
+    expect(summaryLine({ state: 'investigating', summary: sum as never })).toBe(
+      'Sam asks to move the review',
+    );
+    expect(summaryLine({ state: 'needsYou', summary: { ...sum, ask: null } as never })).toBe(
+      'Sam asks to move the review',
+    );
+    expect(summaryLine({ state: 'yourCall' })).toBeNull();
   });
 });

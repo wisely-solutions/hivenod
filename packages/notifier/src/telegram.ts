@@ -107,7 +107,13 @@ export class TelegramBot {
     let rows: unknown[][] = [row1];
     if (action && isThread(action)) {
       const code = randomId(12);
-      const { ask: _ask, options: _options, ...doc } = action;
+      const doc: ThreadAction = {
+        kind: 'thread',
+        wid: action.wid,
+        tid: action.tid,
+        uid: action.uid,
+        arrival: action.arrival,
+      };
       await this.db.doc(`telegramActions/${code}`).set({ ...doc, chatId, createdAt: this.now() });
       rows = threadKeyboard(code, action, `${this.appUrl}${notice.url}`);
     } else if (action) {
