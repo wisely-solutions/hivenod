@@ -21,12 +21,16 @@ describe('hivenod plugin skill', () => {
     ])
       expect(skill).toContain(w);
   });
+  it('is threads only: projects were removed (item OE8FmrTaIxFVGcaeGG3N, slice 11)', () => {
+    for (const w of ['read_item', 'kind="work"', 'list_work', 'item_done', 'Build it'])
+      expect(skill).not.toContain(w);
+  });
   it('carries the orchestration hint the channel protocol no longer has', () => {
-    for (const w of ['sub-agent', 'SendMessage', 'TaskStop', 'release', 'inbox', 'itemId'])
+    for (const w of ['sub-agent', 'SendMessage', 'TaskStop', 'inbox', 'threadId', 'thread_read'])
       expect(skill).toContain(w);
   });
-  it('is shipped by the plugin at version 0.3.7 and the marketplace points at it', () => {
-    expect(JSON.parse(read('plugins/hivenod/.claude-plugin/plugin.json')).version).toBe('0.3.7');
+  it('is shipped by the plugin at version 0.3.8 and the marketplace points at it', () => {
+    expect(JSON.parse(read('plugins/hivenod/.claude-plugin/plugin.json')).version).toBe('0.3.8');
     const m = JSON.parse(read('.claude-plugin/marketplace.json'));
     expect(JSON.stringify(m)).toContain('./plugins/hivenod');
   });

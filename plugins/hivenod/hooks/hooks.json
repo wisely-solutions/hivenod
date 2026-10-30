@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"This session is a Hivenod agent. Before handling any <channel source=\\\"hivenod\\\"> event, load the hivenod skill (Skill tool) and follow it: the main session only dispatches, one background sub-agent per item.\"}}'"
+            "command": "printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"This session is a Hivenod agent. Before handling any <channel source=\\\"hivenod\\\"> event, load the hivenod skill (Skill tool) and follow it: the main session only dispatches, one background sub-agent per Inbox thread.\"}}'"
           }
         ]
       }

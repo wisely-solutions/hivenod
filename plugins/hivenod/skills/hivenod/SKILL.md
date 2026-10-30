@@ -1,68 +1,60 @@
 ---
 name: hivenod
-description: Use whenever a <channel source="hivenod"> event arrives (kind work, note, answer, stop, status or inbox) or this session works as a Hivenod agent. Tells the main session to stay a thin orchestrator that runs each item or inbox thread in its own background sub-agent and routes the follow-up events to it.
+description: Use whenever a <channel source="hivenod"> event arrives (kind inbox or info) or this session works as a Hivenod agent. Tells the main session to stay a thin orchestrator that runs each Inbox thread in its own background sub-agent and routes the follow-up events to it.
 ---
 
 # Working as a Hivenod agent in Claude Code
 
-The channel instructions say what an event is and which `itemId` goes into the tools. This skill
-says how a Claude Code session should organise the work. You are a thin orchestrator: you
-dispatch, route and give back; the sub-agents do the work.
+Projects were removed from Hivenod: work arrives as Inbox threads only (`kind="inbox"` events).
+There are no items to claim and no item tools; an old CLI
+that still has them is refused: run `hivenod update`. The channel instructions say what an event
+is. This skill says how a Claude Code session should organise the work. You are a thin
+orchestrator: you dispatch and route; the sub-agents do the work.
 
-1. **One background sub-agent per item.** For every `kind="work"` event, start a new sub-agent
-   in the background (Agent tool, `run_in_background: true`). Its brief is short: the `item_id`,
-   the event text, and "pass itemId=\"<item_id>\" to every hivenod tool call; start with
-   read_item, follow the step, log progress, finish with complete (or send_back, ask or
-   release), report back in one line". Never put two items in one sub-agent. Never do an item's
-   work in the main session; stay free for the next event.
-2. **Route follow-ups by item_id.** `note`, `answer` and `status` events name an item: pass the
-   text on to that item's sub-agent by continuing it with SendMessage, even if it has reported
-   back and is idle: it keeps its context. Only if it cannot be continued, start a new background
-   sub-agent for that item with the event text as its brief. Never do the item's work (complete,
-   add_note and the like) in the main session.
-3. **Stop stops one.** A `stop` event ends the sub-agent of that item only (TaskStop). Do not
-   redo the item; the others go on.
-4. **Give back idle items.** An item you hold but no sub-agent is actively working (it waits on a
-   release, a review or a person) takes a slot: `release` it, or park it with the reason, so the
-   channel hands over the next one.
-5. **Inbox threads.** Each `kind="inbox"` event gets its own sub-agent too (brief: the thread id,
-   the event text, "start with thread_read"). For `update="true"` the thread already has one:
-   pass the event on to it. Inbox work never holds up an item. The thread's sub-agent sets a
-   deadline a message states (`thread_due`), offers answer chips when it asks (`inbox_ask`
-   `options`), and proposes with its `confidence` and `checks`: the person's Today ranks and
-   shows them. When it files a thread under a new subject (`subject_assign`) it also suggests
-   exactly one `label` (the kind of request) from the `labels` that `subject_list` returns,
-   Other if none fits; the person confirms or changes it, and a label they confirmed is never
-   overwritten.
-   When the person asks for changes (`reason="revise"`), route it to the thread's sub-agent (or
-   start one). Revise the same outcome with `outcome_propose` `revises=<outcomeId>` (same thread
-   and type): apply only what was asked, keep the rest, and do not reject it or start a new
-   outcome. If the change can't be made, say why with `inbox_ask` on
-   the thread.
-   When the person asks for a re-check (`reason="recheck"`), route it to the thread's sub-agent
-   (or start one): re-read the thread (`thread_read`), the new messages and the context. For each open proposal and each plan step that has not run, keep it, or write its
-   next version with `outcome_propose` `revises=<outcomeId>` (only what changed), or ask with
-   `inbox_ask`. Then answer once with `thread_recheck_done` (`still_good`, `revised` or `asked`,
-   with a one-line note of what you checked or changed).
+1. **One background sub-agent per thread.** For every `kind="inbox"` event, start a new
+   sub-agent in the background (Agent tool, `run_in_background: true`). Its brief is short: the
+   `thread_id` (the `threadId` of every hivenod tool call for it), the event text, and "start
+   with thread_read, report back in one line". Never put two threads in one sub-agent. Never do
+   a thread's work in the main session; stay free for the next event.
+2. **Route follow-ups by thread_id.** For `update="true"` the thread already has a sub-agent:
+   pass the event on to it by continuing it with SendMessage, even if it has reported back and is
+   idle: it keeps its context. Only if it cannot be continued, start a new background sub-agent
+   for that thread with the event text as its brief.
+3. **Stop stops one.** A `rejected` event with `plan_id` (the person stopped the plan) or a
+   thread that is done ends the work of that thread's sub-agent only (TaskStop when it is still
+   running); the others go on. Do not redo it.
+4. **What the thread's sub-agent does.** It sets a deadline a message states (`thread_due`),
+   offers answer chips when it asks (`inbox_ask` `options`), and proposes with its `confidence`
+   and `checks`: the person's Today ranks and shows them. When it files a thread under a new
+   subject (`subject_assign`) it also suggests exactly one `label` (the kind of request) from
+   the `labels` that `subject_list` returns, Other if none fits; the person confirms or changes
+   it, and a label they confirmed is never overwritten. Something worth raising that is not part
+   of the thread goes in as a new Inbox message (`inbox_add`, source `finding`) to the member.
+   When the person asks for changes (`reason="revise"`), revise the same outcome with
+   `outcome_propose` `revises=<outcomeId>` (same thread and type): apply only what was asked,
+   keep the rest, and do not reject it or start a new outcome. If the change can't be made, say
+   why with `inbox_ask` on the thread.
+   When the person asks for a re-check (`reason="recheck"`), re-read the thread (`thread_read`),
+   the new messages and the context. For each open proposal and each plan step that has not run,
+   keep it, or write its next version with `outcome_propose` `revises=<outcomeId>` (only what
+   changed), or ask with `inbox_ask`. Then answer once with `thread_recheck_done` (`still_good`,
+   `revised` or `asked`, with a one-line note of what you checked or changed).
    When the person asks you something on a thread (`reason="instruct"`, with `instruction_id`:
    free text or a chip such as "Prepare for the meeting", "Summarize", "Follow up", "Draft a
-   reply"), route it to the thread's sub-agent (or start one). Treat it as the person's request
-   on that thread, within the rules: it is not an approval of anything, and nothing outward
-   happens without an approved outcome. Investigate, then answer once with
-   `thread_answer_instruction`: `note` (the answer itself: a briefing, a summary), `ask` (after
-   `inbox_ask`), `outcome` (after `outcome_propose`, `refId` its outcomeId) or `plan` (after
-   `plan_propose`, `refId` its planId). You may set up to 5 quick chips that fit a thread you
-   brought in with `thread_suggest_chips` (the person sees at most 3, yours first).
-   **Plans.** When the answer has more than one action, or needs the person's OK on the way,
-   the sub-agent proposes a plan in one call (`plan_propose`): ordered steps (reply,
-   make_it_work as "Build it", handover, snooze as "wait until", nudge, approval). Put an
-   `approval` step before anything that changes money, prices, contracts or public content.
-   Steps run in order: a `carry_out` comes once per step (with `plan_id` and `step`, "3 of 5"),
-   only when that step is approved and its turn; carry out exactly that step and report it with
-   `outcome_done`. For a Build it step, create the item, report `status: started` with its
-   `itemId`; the channel sends `item_done` when the item is Done (report the step done) or
-   `item_stopped` when it was stopped or deleted (report it failed with the reason). A `rejected` event with `plan_id` means
-   the plan stopped: re-plan or ask.
+   reply"), treat it as the person's request on that thread, within the rules: it is not an
+   approval of anything, and nothing outward happens without an approved outcome. Investigate,
+   then answer once with `thread_answer_instruction`: `note` (the answer itself: a briefing, a
+   summary), `ask` (after `inbox_ask`), `outcome` (after `outcome_propose`, `refId` its
+   outcomeId) or `plan` (after `plan_propose`, `refId` its planId). You may set up to 5 quick
+   chips that fit a thread you brought in with `thread_suggest_chips` (the person sees at most 3,
+   yours first).
+5. **Plans.** When the answer has more than one action, or needs the person's OK on the way,
+   the sub-agent proposes a plan in one call (`plan_propose`): ordered steps (reply, handover,
+   snooze as "wait until", nudge, approval). Put an `approval` step before anything that changes
+   money, prices, contracts or public content. Steps run in order: a `carry_out` comes once per
+   step (with `plan_id` and `step`, "3 of 5"), only when that step is approved and its turn;
+   carry out exactly that step and report it with `outcome_done`. A `rejected` event with
+   `plan_id` means the plan stopped: re-plan or ask.
 
 - Development work runs as a plan from the template `dev` (`plan_propose` with
   `template: "dev"`, or the person's New thread with it): Shape (research it, write the proposal
@@ -73,29 +65,30 @@ dispatch, route and give back; the sub-agents do the work.
   the reason: redo it with that change. From a step you carry out, `plan_send_back` sends the plan
   back yourself (Release finds a bug: back to Build). The third send back of a plan blocks it
   until the person goes on.
-- Build and Release are long steps: they count toward `--max-items` (alias `--max-steps`), so a
-  second one waits until one ends. Report `outcome_done status: started` when you begin, then
+- Build and Release are long steps: up to `--max-items` (alias `--max-steps`) run at once, so
+  the next one waits until one ends. Report `outcome_done status: started` when you begin, then
   `step_progress` (one line, a percent) at least every 10 minutes (the CLI also stamps it every
   5 minutes while your session holds the step), then `outcome_done status: done` (with `usage`
   when you know it). A step still running when a new session starts comes back as `carry_out`
   with `why="resume"`: continue where `thread_read` shows it stands.
-  **Summaries.** The person decides from each thread's summary, so the thread's sub-agent
-  writes it (`thread_summary`, with the `baseVersion` that `thread_read` shows; 0 when none) as
-  its last call after every inbox event that changed a thread you brought in (a message, a
-  proposal or plan, a step done or failed, an answer, a revise, a re-check, a request).
-  `headline` is the thing, not the process; `ask` is a yes/no question, set only while a
-  proposal or person step waits; `answer` is the one-line state; `recommendation` and
-  `confidence`; 1-5 `bullets` of facts with numbers; `details` (markdown) for the rest.
-  At every person step (an approval or a verification) include at least one visual when there
-  is data (a chart: bar, line, stacked_bar, number), a UI change (before/after screenshots:
-  `thread_attach` both, then an `image_pair`) or a flow or sequence (a diagram: before_after,
-  flow, timeline); if none fits, set `noVisualWhy` in one line. Visuals are data or images you
-  attached with `thread_attach` (PNG, JPEG or WebP; an `image` or `image_pair` names their
-  `attachmentId`), never SVG, HTML or Mermaid. `reason="summarize"` means the thread
-  changed since its summary: re-read it and write the summary, nothing else.
 
-6. **Keep the main context small.** Sub-agents report in one line and report their own run cost
-   with complete, send_back or end_run. Keep a short table item_id -> sub-agent in your head or
-   notes, nothing more.
+6. **Summaries.** The person decides from each thread's summary, so the thread's sub-agent
+   writes it (`thread_summary`, with the `baseVersion` that `thread_read` shows; 0 when none) as
+   its last call after every inbox event that changed a thread you brought in (a message, a
+   proposal or plan, a step done or failed, an answer, a revise, a re-check, a request).
+   `headline` is the thing, not the process; `ask` is a yes/no question, set only while a
+   proposal or person step waits; `answer` is the one-line state; `recommendation` and
+   `confidence`; 1-5 `bullets` of facts with numbers; `details` (markdown) for the rest.
+   At every person step (an approval or a verification) include at least one visual when there
+   is data (a chart: bar, line, stacked_bar, number), a UI change (before/after screenshots:
+   `thread_attach` both, then an `image_pair`) or a flow or sequence (a diagram: before_after,
+   flow, timeline); if none fits, set `noVisualWhy` in one line. Visuals are data or images you
+   attached with `thread_attach` (PNG, JPEG or WebP; an `image` or `image_pair` names their
+   `attachmentId`), never SVG, HTML or Mermaid. `reason="summarize"` means the thread
+   changed since its summary: re-read it and write the summary, nothing else.
+
+7. **Keep the main context small.** Sub-agents report in one line and report what a step cost
+   with `outcome_done` `usage`. Keep a short table thread_id -> sub-agent in your head or notes,
+   nothing more.
 
 If the project's own CLAUDE.md gives different rules for sub-agents, those win.
