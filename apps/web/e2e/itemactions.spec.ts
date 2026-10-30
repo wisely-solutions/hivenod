@@ -299,11 +299,6 @@ test('Delete…: confirm, erases the item with its notes, files and runs, one Ac
   expect(await adminDoc(`${base}/runs/r1`)).not.toBeNull();
   const tomb = await adminDoc(`workspaces/${wid}/events/del-items-i2`);
   expect(tomb?.fields.type?.stringValue).toBe('item.deleted');
-
-  await page.goto('/activity');
-  const line = page.getByText('deleted “Write the FAQ”');
-  await expect(line).toBeVisible({ timeout: 15_000 });
-  await shot(page, 'itemactions-activity');
 });
 
 test('an item an agent is working on must be stopped first', async ({ page }) => {

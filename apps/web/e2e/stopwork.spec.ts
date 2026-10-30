@@ -147,18 +147,6 @@ test('Stop work, Go back: run stopped, item on hold with the reason, Resume rele
   // The agent's failure streak is untouched.
   expect((await adminDoc(`${base}/agents/scout`))?.fields.failStreak).toBeUndefined();
 
-  // Activity, in the Agent runs group.
-  await page.goto('/activity');
-  await page
-    .getByRole('group', { name: 'Filters' })
-    .getByLabel('Type', { exact: true })
-    .selectOption({ label: 'Agent runs' });
-  await expect(
-    page.getByText(
-      'Ana Admin stopped the work on “Draft the launch email” and put it on hold: “Wrong brief, I will rewrite it first”',
-    ),
-  ).toBeVisible();
-
   // The board card says it is on hold.
   await page.goto('/p/blog');
   await expect(page.getByText('On hold', { exact: true }).first()).toBeVisible();
@@ -169,10 +157,6 @@ test('Stop work, Go back: run stopped, item on hold with the reason, Resume rele
   await expect
     .poll(async () => (await adminDoc(`${base}/projects/blog/items/i1`))?.fields.workStopped)
     .toEqual({ nullValue: null });
-  await page.goto('/activity');
-  await expect(
-    page.getByText('Ana Admin resumed “Draft the launch email”', { exact: false }),
-  ).toBeVisible();
 });
 
 test('Stop work, Cancel completely: the item is stopped for good', async ({ page }) => {

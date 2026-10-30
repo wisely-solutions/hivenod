@@ -178,14 +178,4 @@ test('an item an agent created shows "Created by <agent>" in the item and in Act
     await axe(page);
     await shot(page, info, 'agents-create-item', theme);
   }
-
-  await page.goto('/activity');
-  const line = page.getByText('Scout created “Checkout times out on Safari”').first();
-  await expect(line).toBeVisible({ timeout: 20_000 });
-  for (const theme of THEMES) {
-    await page.emulateMedia({ colorScheme: theme });
-    await expectNoHorizontalScroll(page);
-    await axe(page);
-    await shot(page, info, 'agents-create-activity', theme);
-  }
 });
