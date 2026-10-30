@@ -1417,8 +1417,12 @@
           "edited": false,
           "outcomeId": "ds2",
           "planId": "dp1",
+          "recommended": null,
+          "stepLabel": "Approve idea",
           "summaryVersion": 1,
-          "type": "approval"
+          "templateId": "dev",
+          "type": "approval",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -1436,8 +1440,12 @@
           "edited": false,
           "outcomeId": "ds4",
           "planId": "dp1",
+          "recommended": null,
+          "stepLabel": "Ship it?",
           "summaryVersion": 1,
-          "type": "approval"
+          "templateId": "dev",
+          "type": "approval",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -1455,8 +1463,12 @@
           "edited": false,
           "outcomeId": "ds4",
           "planId": "dp1",
+          "recommended": null,
+          "stepLabel": "Ship it?",
           "summaryVersion": 1,
-          "type": "approval"
+          "templateId": "dev",
+          "type": "approval",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -1476,10 +1488,16 @@
           "outcomeId": "ds3",
           "planId": "dp1",
           "reason": "Bigger toggle",
+          "recommended": null,
           "reset": [
             "ds3"
           ],
-          "to": 2
+          "stepLabel": "Ship it?",
+          "summaryVersion": null,
+          "templateId": "dev",
+          "to": 2,
+          "toLabel": "Build",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -1530,6 +1548,7 @@
       {
         "createdAt": "<ts>",
         "cursor": 3,
+        "cursorAt": "<ts>",
         "lastEventId": "<id>",
         "memberUid": "owner",
         "note": "",
