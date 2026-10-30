@@ -7,15 +7,13 @@ a service account that can read and write Firestore, and its own secrets file.
 
 ## What it does
 
-- A new approval (an item arriving at a gate) tells the deciders who have not voted yet; a new agent
-  question tells the project's people. Once each, with a deep link `/p/<project>?item=<item>`.
-- Telegram messages have **Open**, **Approve** and **Send back** buttons. Approve applies the same
-  action the app uses, as the linked person. Send back asks for a reason (reply, 10+ characters) and
-  sends the item to the step before the gate.
-- After the gate's "Reminder after N hours" a reminder goes out once, and `workspaces/{wid}/notified/g-<item>`
-  gets `remindedAt`, which the app shows as "Waiting 30 h · reminder sent" (Needs you and the board).
-  Without the notifier the app shows "reminder due" instead.
-- Quiet hours (per person) hold messages back until they end; several held become one summary.
+- An Inbox thread that arrives at Needs you (an agent's question) or Your call (outcomes proposed, or
+  a plan step at its turn) tells its member alone, once per arrival, with a deep link to the thread.
+  Projects and items are gone, so there are no gate, approval, reminder or question notices for them.
+- Telegram messages have **Open**, **Approve** and **Ask for changes** buttons (and the answer chips of a
+  question, **Reply**, **Not now**). Approve applies the same action the app uses, as the linked person.
+- An urgent thread skips quiet hours and the summary. Quiet hours (per person) hold other messages back
+  until they end; several held become one summary.
 - Arrivals older than 30 minutes found at start-up are recorded without a message (no replay).
 - Pop-ups are live only: a push carries its send time (`sentAt`) and a 5-minute TTL, and the
   service worker (`apps/web/public/push-sw.js`) drops a push stamped more than 5 minutes ago, so a
@@ -74,7 +72,7 @@ WantedBy=default.target
 | `users/{uid}/notify/telegram`                    | notifier (person may delete) | linked chat                                               |
 | `telegramLinks/{code}`                           | the person                   | one-time link code, 15 minutes, read by the notifier only |
 | `config/notify`                                  | notifier                     | VAPID public key and bot name (public)                    |
-| `workspaces/{wid}/notified/{key}`                | notifier                     | what was already sent per gate/question                   |
+| `workspaces/{wid}/notified/{key}`                | notifier                     | what was already sent per thread arrival                  |
 | `telegramActions/{code}`, `telegramChats/{chat}` | notifier only                | button targets (no rule: clients cannot reach them)       |
 
 ## Tests

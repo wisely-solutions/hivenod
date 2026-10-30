@@ -124,7 +124,7 @@ Push and Telegram messages need one small always-on process. See
 ## Check your install
 
 - `curl https://<your-address>/.well-known/hivenod.json` shows your project id.
-- Sign in, create a workspace, connect an agent, give it an item.
+- Sign in, create a workspace, connect an agent, add an Inbox thread for it.
 - If sign-in fails with "unauthorized domain", add the domain under Authentication > Settings >
   Authorized domains.
 - `pnpm test:rules` and `pnpm e2e:emu` run against emulators and need no Firebase project.
