@@ -179,9 +179,11 @@ type InboxRecheck struct {
 
 // InboxDecision is the member's approval or rejection of an outcome.
 type InboxDecision struct {
-	ByUID  string  `firestore:"byUid" json:"byUid"`
-	Edited bool    `firestore:"edited" json:"edited"`
-	Reason *string `firestore:"reason" json:"reason"`
+	ByUID string `firestore:"byUid" json:"byUid"`
+	// At: when it was decided (Off, slice 7: a step approved before Off waits).
+	At     *time.Time `firestore:"at" json:"at"`
+	Edited bool       `firestore:"edited" json:"edited"`
+	Reason *string    `firestore:"reason" json:"reason"`
 	// Version is the version approved (nil: never revised).
 	Version *int `firestore:"version" json:"version"`
 }

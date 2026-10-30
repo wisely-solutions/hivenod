@@ -79,6 +79,9 @@ type FeedOutcome struct {
 	PlanID string
 	// AskAtMs: Hivenod's (or the person's Ping again) status request on it (item KZ6O9); 0: none.
 	AskAtMs int64
+	// DecidedAtMs: when the member approved it (its creation when it was made approved); a step
+	// approved before the member turned Off waits while Off (slice 7).
+	DecidedAtMs int64
 }
 
 // FeedRunning is a running plan step this agent carries out: a Build it step waiting for its
@@ -194,6 +197,8 @@ type InboxSource interface {
 	Wake(ctx context.Context, threadID string) error
 	// Heartbeat stamps a running long step this session holds (step_progress, its last line).
 	Heartbeat(ctx context.Context, outcomeID string) error
+	// WatchOff (slice 7): the members who have this agent Off, and since when.
+	WatchOff(ctx context.Context, on func([]FeedOff))
 }
 
 // InboxOptions configure the feed (zero values: the defaults; MaxInbox -1 is "unset").
@@ -473,6 +478,9 @@ type feedDue struct {
 	long                              *FeedRunning
 	state                             string
 	updatedAtMs                       *int64
+	// byMember: the member did it (a thread he wrote, an answer, a rejection): it goes out while
+	// Off (slice 7).
+	byMember bool
 	// ext: a Their reply event's dedupe key (sent once per message and reason).
 	ext string
 }
@@ -551,6 +559,8 @@ type InboxFeed struct {
 	wakes         map[string]string
 	closed        bool
 	pumping       bool
+	// off (slice 7): member -> since when (ms) this agent is Off for them.
+	off map[string]int64
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -589,7 +599,7 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{}, asked: map[string]int64{},
 		inflight: map[string]*feedFlight{}, types: map[string]*FeedEvent{}, fetching: map[string]bool{},
 		scheduled: map[string]*ScheduledInfo{}, schedFetching: map[string]bool{},
-		wakes: map[string]string{}, ctx: ctx, cancel: cancel}
+		wakes: map[string]string{}, off: map[string]int64{}, ctx: ctx, cancel: cancel}
 }
 
 func (f *InboxFeed) nowMs() int64 { return f.now().UnixMilli() }
@@ -630,6 +640,7 @@ func (f *InboxFeed) Subscribe() {
 	sctx, cancel := context.WithCancel(f.ctx)
 	f.subCtx = cancel
 	f.mu.Unlock()
+	f.src.WatchOff(sctx, f.OnOff)
 	f.src.WatchPlans(sctx, f.OnPlans)
 	f.src.WatchThreads(sctx, f.OnThreads)
 	f.src.WatchOutcomes(sctx, f.OnOutcomes)
@@ -1162,6 +1173,9 @@ func (f *InboxFeed) investigating(t FeedThread) string {
 		info.Step = f.plans[r.PlanID].stepOf(r.ID)
 		reason = "external_reply"
 	}
+	// What the member did himself (slice 7: it goes out while Off): a thread he wrote, an answer,
+	// a rejection or a restore. Messages brought in, wakes, failures and resumes are automated.
+	byMember := ev != nil && (ev.Type == "thread.created" || reason == "answered" || reason == "rejected" || reason == "restored")
 	var data map[string]any
 	if ev != nil {
 		data = ev.Data
@@ -1183,13 +1197,17 @@ func (f *InboxFeed) investigating(t FeedThread) string {
 	case "failed":
 		info.Why = str("error")
 	}
-	f.due["i:"+t.ID] = &feedDue{slot: "t:" + t.ID, reason: reason, threadID: t.ID, atMs: t.LastMessageAtMs, memberUID: t.MemberUID, state: "investigating", info: info}
+	f.due["i:"+t.ID] = &feedDue{slot: "t:" + t.ID, reason: reason, threadID: t.ID, atMs: t.LastMessageAtMs, memberUID: t.MemberUID, state: "investigating", info: info, byMember: byMember}
 	return ""
 }
 
 // waiting decides a waiting thread; returns a thread id to wake, if any. Call with f.mu held.
 func (f *InboxFeed) waiting(t FeedThread, now int64) string {
 	if t.Waiting != nil && t.Waiting.UntilMs != nil {
+		// A snooze's date while Off (slice 7): it wakes once On.
+		if _, off := f.off[t.MemberUID]; off {
+			return ""
+		}
 		if *t.Waiting.UntilMs <= now && f.wakes[t.ID] != t.LastEventID {
 			f.wakes[t.ID] = t.LastEventID
 			return t.ID
@@ -1303,6 +1321,9 @@ func (f *InboxFeed) pump() []Event {
 	var out []Event
 	for _, key := range keys {
 		d := f.due[key]
+		if f.held(d) {
+			continue // Off (slice 7): it waits until the member turns this agent On
+		}
 		_, update := f.inflight[d.slot]
 		// Long steps (slice 6b) count toward max items, not toward the inbox cap.
 		long := d.long != nil || (d.outcome != nil && isLong(d.outcome.Type))
@@ -1517,6 +1538,10 @@ func (s firestoreInbox) WatchOutcomes(ctx context.Context, on func([]FeedOutcome
 			m := d.Data()
 			str := func(k string) string { v, _ := m[k].(string); return v }
 			o := FeedOutcome{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), CreatedAtMs: feedMs(m["createdAt"]), PlanID: str("planId")}
+			o.DecidedAtMs = o.CreatedAtMs
+			if dec, ok := m["decision"].(map[string]any); ok && feedMs(dec["at"]) != 0 {
+				o.DecidedAtMs = feedMs(dec["at"])
+			}
 			if sa, ok := m["statusAsk"].(map[string]any); ok {
 				o.AskAtMs = feedMs(sa["at"])
 			}
@@ -1828,7 +1853,7 @@ func (f *InboxFeed) longBusy(except string) int {
 		}
 	}
 	for _, d := range f.due {
-		if d.outcome != nil && isLong(d.outcome.Type) {
+		if d.outcome != nil && isLong(d.outcome.Type) && !f.held(d) {
 			n++
 		}
 	}
