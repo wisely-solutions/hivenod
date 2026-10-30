@@ -16,7 +16,6 @@ import {
   pairingPath,
   paths,
   sealToken,
-  sendBack,
   answerQuestion,
   rejectRelation,
   relateSubjects,
@@ -36,10 +35,9 @@ import {
   setSubjectLabel,
   type OutcomeStateOf,
   type ThreadStateOf,
-  type ItemState,
 } from '@hive/shared';
 import { toFirestoreValue } from '@hive/shared/firestore';
-import { doc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -48,11 +46,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   as,
   getEnv,
-  I,
-  itemDoc,
   now,
-  P,
-  projectDoc,
   put,
   reset,
   snap,
@@ -151,7 +145,6 @@ async function newAgent(extra: Record<string, unknown> = {}) {
     [paths.agent(W, uid)]: {
       name: 'Research agent',
       color: '#2F5FD0',
-      projectIds: ['p1'],
       createdBy: 'owner',
       createdAt: now(),
       revokedAt: null,
@@ -189,15 +182,7 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
       'inboxAttachments',
     ])
       await read(`workspaces/${W}/${c}`);
-    for (const r of await read(`workspaces/${W}/runs`)) await read(`workspaces/${W}/runs/${r}/log`);
-    for (const p of await read(`workspaces/${W}/projects`)) {
-      await read(`workspaces/${W}/projects/${p}/decisions`);
-      await read(`workspaces/${W}/projects/${p}/stepProposals`);
-      for (const i of await read(`workspaces/${W}/projects/${p}/items`)) {
-        await read(`workspaces/${W}/projects/${p}/items/${i}/attachments`);
-        await read(`workspaces/${W}/projects/${p}/items/${i}/messages`);
-      }
-    }
+    // Projects, items and runs were removed (slice 11): their old data is not the agent's.
   });
   for (const k of Object.keys(out))
     out[k] = out[k]!.map((d) => JSON.stringify(d))
@@ -273,75 +258,6 @@ const out = (r: { out: unknown }) => r.out as Record<string, unknown>;
 const d = GO ? describe : describe.skip;
 
 d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
-  it('claim, log, attach, ask, progress, finding, end run, complete', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hive-att-'));
-    const html = join(dir, 'report.html');
-    writeFileSync(html, '<h1>Bees</h1>');
-    const r = await scenario(async (call) => {
-      await call('list_work', {});
-      const { runId } = out(await call('claim', { itemId: 'i1' })) as { runId: string };
-      await call('read_item', { itemId: 'i1' });
-      await call('log', { runId, text: 'Reading the brief' });
-      await call('log', { runId, text: 'Drafting', level: 'warn' });
-      await call('attach', { itemId: 'i1', source: html });
-      await call('attach', { itemId: 'i1', source: 'https://example.com/big.pdf', name: 'Big' });
-      await call('ask', { itemId: 'i1', question: 'Which audience?' });
-      await call('progress', { itemId: 'i1', done: 1, total: 3 });
-      await call('raise_finding', { itemId: 'i1', title: 'Typo', details: 'In the hero' });
-      await call('add_note', { itemId: 'i1', text: 'Halfway there' });
-      await call('report_usage', { runId, tokensIn: 500, tokensOut: 100, model: 'm' });
-      await call('end_run', {
-        runId,
-        status: 'done',
-        costEur: 0.42,
-        tokensIn: 1000,
-        tokensOut: 200,
-        summary: 'Drafted',
-      });
-      await call('complete', { itemId: 'i1', runId });
-      await call('read_item', { itemId: 'i1' });
-    });
-    // Sanity: the scenario really worked (not two identical failures).
-    expect(r.calls.every((c) => (c as { ok: boolean }).ok)).toBe(true);
-    expect(r.calls.find((c) => (c as { tool: string }).tool === 'complete')).toMatchObject({
-      out: { movedTo: { stepId: 'review' }, status: 'waiting' },
-    });
-    expect(r.docs['workspaces/w1/runs/<id>/log']).toHaveLength(2);
-    matchesGolden(r);
-  }, 120_000);
-
-  it('create_item (item DhsO9): created where allowed, with files; refused when off or not its project', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hive-att-'));
-    const md = join(dir, 'notes.md');
-    writeFileSync(md, '# Steps');
-    {
-      const r = await scenario(async (call) => {
-        // Off (absent) in p1 at first.
-        await call('create_item', { project: 'p1', title: 'Too early' });
-        await put({ [P('p1')]: projectDoc({}, { agentsMayCreateItems: true }) });
-        await put({ [P('p2')]: projectDoc({}, { agentsMayCreateItems: true }) });
-        const made = out(
-          await call('create_item', {
-            project: 'Blog',
-            title: '  Checkout times out ',
-            description: 'Asked on Telegram.',
-            attachments: [md, join(dir, 'missing.md')],
-          }),
-        ) as { itemId: string };
-        await call('list_work', {});
-        await call('claim', { itemId: made.itemId });
-        // Not its project (p2 allows it, but the agent may use p1 only), unknown, blank title.
-        await call('create_item', { project: 'p2', title: 'Elsewhere' });
-        await call('create_item', { project: 'Nope', title: 'x' });
-        await call('create_item', { project: 'p1', title: '   ' });
-      });
-      const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
-      expect(oks).toEqual([false, true, true, true, false, false, false]);
-      expect(r.calls[1]).toMatchObject({ out: { status: 'queued', step: 'Intake' } });
-      matchesGolden(r);
-    }
-  }, 120_000);
-
   it('inbox (item 4PEHr): messages, threads, dedup, subjects, notes, questions, outcomes approved by the person', async () => {
     const r = await scenario(async (call) => {
       const base = {
@@ -1218,7 +1134,7 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
     matchesGolden(r);
   }, 120_000);
 
-  it('plans (item qwFAW): one call proposes, steps run in order, a gate waits for the person, Build it runs until done', async () => {
+  it('plans (item qwFAW): one call proposes, steps run in order, a gate waits for the person, a failed step waits for a retry', async () => {
     const r = await scenario(async (call) => {
       const owner = as('owner');
       const thread = async (tid: string) =>
@@ -1254,13 +1170,12 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
           steps: [
             { type: 'reply', fields: { text: 'On it, Sam.', holding: true }, confidence: 'high' },
             { type: 'approval', fields: { what: 'New price list', detail: 'A: 10 → 12' } },
-            { type: 'make_it_work', fields: { title: 'Update the price list', project: 'p1' } },
             { type: 'reply', fields: { text: 'Done: the new prices are live.' } },
           ],
         }),
       );
       const pid = p.planId as string;
-      const [s1, s2, s3, s4] = p.stepIds as string[];
+      const [s1, s2, s3] = p.stepIds as string[];
       await call('thread_read', { threadId: t1 });
       // Nothing approved: nothing to carry out, and step 1 cannot be reported.
       await call('inbox_list', {});
@@ -1268,7 +1183,7 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       await owner.run(approvePlan(owner.ctx, { ...(await planOf(pid)), thread: await thread(t1) }));
       // Only step 1 is its turn; step 3 is approved but must wait.
       await call('inbox_list', {});
-      await call('outcome_done', { outcomeId: s3!, status: 'started', result: { itemId: 'i1' } });
+      await call('outcome_done', { outcomeId: s3!, status: 'done' });
       await call('outcome_done', {
         outcomeId: s1!,
         status: 'done',
@@ -1287,25 +1202,19 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
         }),
       );
       await call('inbox_list', {});
-      // Build it: started with the item, done when the item is Done.
-      await call('outcome_done', { outcomeId: s3!, status: 'started' });
-      // Build it (slice 6): the item must exist; its link is filled in.
-      await call('outcome_done', { outcomeId: s3!, status: 'started', result: { itemId: 'nope' } });
+      // Build it items went with projects (slice 11): an itemId is refused.
       await call('outcome_done', { outcomeId: s3!, status: 'started', result: { itemId: 'i1' } });
-      await call('thread_read', { threadId: t1 });
-      await call('outcome_done', { outcomeId: s3!, status: 'done', result: { itemId: 'i1' } });
-      await call('inbox_list', {});
       await call('outcome_done', {
-        outcomeId: s4!,
+        outcomeId: s3!,
         status: 'failed',
         result: { error: 'Teams said 403' },
       });
       // Blocked until the person retries; then it is its turn again.
-      await call('outcome_done', { outcomeId: s4!, status: 'done' });
+      await call('outcome_done', { outcomeId: s3!, status: 'done' });
       await owner.run(
         retryPlanStep(owner.ctx, { ...(await planOf(pid)), thread: await thread(t1) }),
       );
-      await call('outcome_done', { outcomeId: s4!, status: 'done' });
+      await call('outcome_done', { outcomeId: s3!, status: 'done' });
       await call('thread_read', { threadId: t1 });
     });
     const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
@@ -1324,32 +1233,21 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       true,
       true,
       false,
-      false,
-      true,
-      true,
-      true,
-      true,
       true,
       false,
       true,
       true,
     ]);
     expect(r.calls[5]).toMatchObject({ out: { toCarryOut: [] } });
-    expect(r.calls[7]).toMatchObject({ out: { toCarryOut: [{ step: '1 of 4', type: 'reply' }] } });
+    expect(r.calls[7]).toMatchObject({ out: { toCarryOut: [{ step: '1 of 3', type: 'reply' }] } });
     expect(r.calls[10]).toMatchObject({ out: { toCarryOut: [] } });
-    expect(r.calls[12]).toMatchObject({
-      out: { toCarryOut: [{ step: '3 of 4', type: 'make_it_work' }] },
-    });
-    expect(r.calls[14]).toMatchObject({
+    expect(r.calls[12]).toMatchObject({ out: { toCarryOut: [{ step: '3 of 3', type: 'reply' }] } });
+    expect(r.calls[13]).toMatchObject({
       ok: false,
-      out: expect.stringContaining('Item nope not found'),
+      out: expect.stringContaining('Projects were removed from Hivenod'),
     });
-    expect(r.calls[15]).toMatchObject({ out: { state: 'running' } });
-    expect(r.calls[16]).toMatchObject({
-      out: { state: 'waiting', waiting: { on: 'item' }, plans: [{ progress: 'Step 3 of 4' }] },
-    });
-    expect(r.calls[19]).toMatchObject({ out: { state: 'failed', threadState: 'yourCall' } });
-    expect(r.calls[22]).toMatchObject({
+    expect(r.calls[14]).toMatchObject({ out: { state: 'failed', threadState: 'yourCall' } });
+    expect(r.calls[17]).toMatchObject({
       out: { state: 'waiting', plans: [{ state: 'done', progress: 'Done' }] },
     });
     matchesGolden(r);
@@ -1546,224 +1444,54 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
     matchesGolden(r);
   }, 120_000);
 
-  it('errors: gate, not claimed, wrong run, unknown item, oversized file, bad progress', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hive-att-'));
-    const big = join(dir, 'big.txt');
-    writeFileSync(big, 'x'.repeat(901 * 1024));
-    const r = await scenario(async (call) => {
-      await call('claim', { itemId: 'gated' });
-      await call('complete', { itemId: 'gated', runId: 'whatever' });
-      await call('ask', { itemId: 'i1', question: 'Tone?' });
-      await call('add_note', { itemId: 'i1', text: 'x' });
-      await call('read_item', { itemId: 'nope' });
-      await call('attach', { itemId: 'i1', source: big });
-      const { runId } = out(await call('claim', { itemId: 'i1' })) as { runId: string };
-      await call('progress', { itemId: 'i1', done: 3, total: 2 });
-      await call('complete', { itemId: 'i1', runId: 'not-the-run' });
-      await call('log', { runId: 'not-a-run', text: 'x' });
-      await call('log', { runId, text: 'still mine' });
-      await call('release', { itemId: 'i1' });
-      await call('release', { itemId: 'i1' });
-    });
-    expect(r.calls.filter((c) => !(c as { ok: boolean }).ok).length).toBeGreaterThanOrEqual(8);
-    matchesGolden(r);
-  }, 120_000);
-
-  it('a failed run releases the item and counts toward the pause; 3 in a row pause the agent', async () => {
-    const r = await scenario(async (call) => {
-      for (let i = 0; i < 3; i++) {
-        const { runId } = out(await call('claim', { itemId: 'i1' })) as { runId: string };
-        await call('end_run', { runId, status: 'failed', summary: `fail ${i}` });
-      }
-      await call('list_work', {});
-      await call('claim', { itemId: 'i1' });
-    });
-    matchesGolden(r);
-  }, 120_000);
-
   it('a revoked agent is told plainly', async () => {
     const r = await scenario(
       async (call) => {
-        await call('list_work', {});
-        await call('read_item', { itemId: 'i1' });
+        await call('inbox_list', {});
+        await call('thread_read', { threadId: 't1' });
       },
       { revokedAt: now() },
     );
     matchesGolden({ calls: r.calls });
   }, 60_000);
 
-  it('a person sends it back: the next claim reads the reason; agent send-back to an earlier step', async () => {
+  it('projects removed (item OE8Fm, slice 11): item and calendar tools are gone and say so; threads work', async () => {
     const r = await scenario(async (call) => {
-      // Work the draft step, complete to the gate, a person sends it back to draft.
-      const { runId } = out(await call('claim', { itemId: 'i1' })) as { runId: string };
-      await call('complete', { itemId: 'i1', runId });
-      const alice = as('alice');
-      await alice.run(
-        sendBack(alice.ctx, {
-          project: { steps: projectDoc().steps },
-          projectId: 'p1',
-          itemId: 'i1',
-          item: (await snap(I('i1'))) as unknown as ItemState,
-          toStepId: 'draft',
-          rationale: 'Needs sources for every claim',
-          tags: [],
-        }),
-      );
-      const again = out(await call('claim', { itemId: 'i1' })) as { runId: string };
-      await call('read_item', { itemId: 'i1' });
-      await call('send_back', {
-        itemId: 'i1',
-        runId: again.runId,
-        toStep: 'intake',
-        reason: 'Intake missed the audience',
-      });
-      await call('send_back', { itemId: 'i1', runId: again.runId, toStep: 'review', reason: 'x' });
-    });
-    matchesGolden(r);
-  }, 120_000);
-
-  it('paths: shaping, skip, ask path change, propose step; a legacy item without paths', async () => {
-    const r = await scenario(async (call) => {
-      // Same updatedAt for both: Timestamp.now() differs by a millisecond between the two seeds,
-      // which would decide the hand-out order instead of the id tiebreak. Far future: after the i1 seed.
-      const tie = Timestamp.fromMillis(4_000_000_000_000);
-      await put({
-        [I('u1')]: itemDoc({
-          stepId: 'intake',
-          status: 'queued',
-          shape: null,
-          title: 'Fix typo',
-          updatedAt: tie,
-        }),
-        [I('old')]: itemDoc({
-          stepId: 'intake',
-          status: 'queued',
-          title: 'Old item',
-          updatedAt: tie,
-        }),
-      });
       await call('list_work', {});
-      const { runId } = out(await call('claim', { itemId: 'u1' })) as { runId: string };
-      await call('read_item', { itemId: 'u1' });
-      await call('shape_item', {
-        itemId: 'u1',
-        runId,
-        skips: [{ stepId: 'nope', reason: 'x' }],
-        note: 'tiny',
+      await call('claim', { itemId: 'i1' });
+      await call('read_item', { itemId: 'i1' });
+      await call('create_item', { project: 'p1', title: 'x' });
+      await call('calendar_upsert', { member: 'alice', events: [] });
+      await call('inbox_add', {
+        source: 'mail',
+        sender: { name: 'Sam Example', handle: 'sam@example.com' },
+        text: 'Lunch on Friday?',
+        threadRef: 'mail-thread-1',
+        receivedAt: '2026-10-28T09:00:00Z',
+        member: 'owner',
       });
-      await call('shape_item', {
-        itemId: 'u1',
-        runId,
-        skips: [
-          { stepId: 'draft', reason: 'Nothing to write' },
-          { stepId: 'review', reason: 'A one-word copy fix' },
-        ],
-        note: 'copy fix',
-      });
-      const second = out(await call('claim', { itemId: 'u1' })) as { runId: string };
-      await call('skip_step', {
-        itemId: 'u1',
-        stepId: 'publish',
-        skip: true,
-        reason: 'Nothing to publish',
-      });
-      await call('skip_step', { itemId: 'u1', stepId: 'review', skip: true });
-      await call('ask_path_change', {
-        itemId: 'u1',
-        stepId: 'publish',
-        reason: 'Not a people step',
-      });
-      await call('propose_step', {
-        itemId: 'u1',
-        name: 'Legal review',
-        kind: 'human',
-        description: 'Check the terms',
-        afterStepId: 'review',
-        reason: 'The copy touches the terms of service',
-      });
-      await call('complete', { itemId: 'u1', runId: second.runId });
-      await call('read_item', { itemId: 'u1' });
-      // An item from before per-item paths.
-      const old = out(await call('claim', { itemId: 'old' })) as { runId: string };
-      await call('skip_step', { itemId: 'old', stepId: 'draft', skip: true, reason: 'Not needed' });
-      await call('ask_path_change', {
-        itemId: 'old',
-        stepId: 'review',
-        reason: 'A tiny copy change only',
-      });
-      await call('complete', { itemId: 'old', runId: old.runId });
     });
-    matchesGolden(r);
-  }, 120_000);
-
-  it('an Inbox-only agent is refused item tools and the removed calendar tools (items fJnu6, OE8Fm)', async () => {
-    const r = await scenario(
-      async (call) => {
-        await call('list_work', {});
-        await call('claim', { itemId: 'i1' });
-        await call('read_item', { itemId: 'i1' });
-        await call('calendar_upsert', {
-          member: 'alice',
-          events: [
-            {
-              source: 'google',
-              sourceEventId: 'g1',
-              title: 'Dentist',
-              start: '2030-01-07T09:00:00Z',
-              end: '2030-01-07T10:00:00Z',
-            },
-          ],
-        });
-        await call('inbox_add', {
-          source: 'mail',
-          sender: { name: 'Sam Example', handle: 'sam@example.com' },
-          text: 'Lunch on Friday?',
-          threadRef: 'mail-thread-1',
-          receivedAt: '2026-10-28T09:00:00Z',
-          member: 'owner',
-        });
-      },
-      { projectIds: [], scope: 'inbox' },
-    );
     expect(r.calls.map((c) => (c as { ok: boolean }).ok)).toEqual([
+      false,
       false,
       false,
       false,
       false,
       true,
     ]);
-    expect(JSON.stringify(r.calls[0])).toContain('limited to Inbox (scope');
-    matchesGolden(r);
-  }, 60_000);
-
-  it('wait_for_work returns at once when work waits, and times out when none does', async () => {
-    const r = await scenario(async (call) => {
-      await call('wait_for_work', { timeoutSeconds: 5 });
-      await put({ [I('i1')]: itemDoc({ stepId: 'review', status: 'waiting' }) });
-      await call('wait_for_work', { timeoutSeconds: 2 });
-    });
-    matchesGolden({ calls: r.calls });
-  }, 60_000);
-
-  it('the 4th agent send-back holds the item for people', async () => {
-    const r = await scenario(async (call) => {
-      await put({ [I('i1')]: itemDoc({ stepId: 'draft', status: 'queued', agentSendBacks: 3 }) });
-      const { runId } = out(await call('claim', { itemId: 'i1' })) as { runId: string };
-      await call('send_back', {
-        itemId: 'i1',
-        runId,
-        toStep: 'intake',
-        reason: 'Still missing the audience',
-      });
-      await call('list_work', {});
-      await call('read_item', { itemId: 'i1' });
-    });
+    for (const c of r.calls.slice(0, 4))
+      expect(JSON.stringify(c)).toContain(
+        'Projects were removed from Hivenod; work arrives as Inbox threads',
+      );
     matchesGolden(r);
   }, 60_000);
 
   it.each([
-    ['a project agent', { guardrails: { maxFailedRuns: 5 } }],
-    ['an Inbox-only agent (item fJnu6)', { projectIds: [], scope: 'inbox' }],
+    ['an agent with guardrails', { guardrails: { maxFailedRuns: 5 } }],
+    [
+      'an agent from before projects were removed (projectIds and scope ignored)',
+      { projectIds: ['p1'], scope: 'inbox' },
+    ],
   ])(
     'hivenod whoami --json shows the agent and its settings: %s',
     async (_, extra) => {
@@ -1823,7 +1551,6 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       [paths.agent(W, uid)]: {
         name: 'Writer (laptop)',
         color: '#2F5FD0',
-        projectIds: ['p1'],
         createdBy: 'owner',
         createdAt: now(),
         revokedAt: null,

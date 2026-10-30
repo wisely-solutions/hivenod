@@ -153,7 +153,6 @@ describe.skipIf(!GO)('self-hosted site: the CLI needs only its address', () => {
       [paths.agent(W, uid)]: {
         name: 'Self-hosted bee',
         color: '#2F5FD0',
-        projectIds: ['p1'],
         createdBy: 'owner',
         createdAt: now(),
         revokedAt: null,

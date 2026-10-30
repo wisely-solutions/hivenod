@@ -1,7 +1,6 @@
 /**
  * The Go CLI as an agent, for the black-box tests (item MlWOc3O5NyfZcLgetrVo): `hivenod mcp`
- * over stdio through the MCP SDK client, with one method per tool (the names the old TypeScript
- * client had, so the scenarios read the same), and `hivenod whoami --json`. A tool error throws
+ * over stdio through the MCP SDK client (call), and `hivenod whoami --json`. A tool error throws
  * with the tool's message.
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -22,19 +21,7 @@ type Obj = Record<string, unknown>;
 // The results are JSON; the tests read them loosely, as they did the TypeScript client's.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
-/** A work row (list_work, wait_for_work). */
-export interface WorkRow {
-  itemId: string;
-  [k: string]: Any;
-}
-/** read_item's result, typed where the tests look inside lists. */
-export interface ItemRead {
-  path: { id: string }[];
-  messages: { kind: string; text: string }[];
-  [k: string]: Any;
-}
-
-/** A new agent identity and its agent document (projects p1, like the old tests). */
+/** A new agent identity and its agent document. */
 export async function newAgent(
   over: { name?: string; revoked?: boolean; extra?: Obj; docs?: Record<string, Obj> } = {},
 ) {
@@ -45,7 +32,6 @@ export async function newAgent(
     [paths.agent(W, uid)]: {
       name: over.name ?? 'Research agent',
       color: '#2F5FD0',
-      projectIds: ['p1'],
       createdBy: 'owner',
       createdAt: now(),
       revokedAt: over.revoked ? now() : null,
@@ -136,54 +122,6 @@ export class GoAgent {
     if (r.status !== 0) throw new Error(r.stderr);
     return JSON.parse(r.stdout);
   }
-
-  listWork = (): Promise<WorkRow[]> => this.call('list_work');
-  waitForWork = ({
-    timeoutMs,
-  }: {
-    timeoutMs: number;
-  }): Promise<{ timedOut: boolean; work: WorkRow[] }> =>
-    this.call('wait_for_work', { timeoutSeconds: Math.ceil(timeoutMs / 1000) });
-  claim = (itemId: string) => this.call('claim', { itemId });
-  readItem = (itemId: string): Promise<ItemRead> => this.call('read_item', { itemId });
-  log = (runId: string, text: string, level?: string) =>
-    this.call('log', { runId, text, ...(level ? { level } : {}) });
-  attach = (itemId: string, source: string, o: { name?: string } = {}) =>
-    this.call('attach', { itemId, source, ...o });
-  ask = (itemId: string, question: string) => this.call('ask', { itemId, question });
-  progress = (itemId: string, done: number, total: number) =>
-    this.call('progress', { itemId, done, total });
-  raiseFinding = (itemId: string, title: string, details: string) =>
-    this.call('raise_finding', { itemId, title, details });
-  createItem = (project: string, title: string, description?: string, attachments?: string[]) =>
-    this.call('create_item', {
-      project,
-      title,
-      ...(description !== undefined ? { description } : {}),
-      ...(attachments ? { attachments } : {}),
-    });
-  reportUsage = (runId: string, u: Obj) => this.call('report_usage', { runId, ...u });
-  endRun = (runId: string, status: string, extra: Obj = {}) =>
-    this.call('end_run', { runId, status, ...extra });
-  complete = (itemId: string, runId: string, extra: Obj = {}) =>
-    this.call('complete', { itemId, runId, ...extra });
-  release = (itemId: string) => this.call('release', { itemId });
-  sendBack = (itemId: string, runId: string, toStep: string, reason: string, extra: Obj = {}) =>
-    this.call('send_back', { itemId, runId, toStep, reason, ...extra });
-  addNote = (itemId: string, text: string) => this.call('add_note', { itemId, text });
-  /** skips: stepId -> reason (the tool takes a list). */
-  shape = (itemId: string, runId: string, o: { skips: Record<string, string>; note: string }) =>
-    this.call('shape_item', {
-      itemId,
-      runId,
-      note: o.note,
-      skips: Object.entries(o.skips).map(([stepId, reason]) => ({ stepId, reason })),
-    });
-  skipStep = (itemId: string, stepId: string, skip: boolean, reason?: string) =>
-    this.call('skip_step', { itemId, stepId, skip, ...(reason ? { reason } : {}) });
-  askPathChange = (itemId: string, stepId: string, reason: string) =>
-    this.call('ask_path_change', { itemId, stepId, reason });
-  proposeStep = (itemId: string, p: Obj) => this.call('propose_step', { itemId, ...p });
 }
 
 /** A fresh home folder (for a CLI run that must not share the agent's). */

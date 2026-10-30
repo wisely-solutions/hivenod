@@ -1,47 +1,28 @@
 /**
- * Card KLCTVnX8 (Go-only since item MlWOc3O5NyfZcLgetrVo): `hivenod mcp --channel` (the Go binary) against the emulators and the real rules, through a real
- * MCP client that receives the `notifications/claude/channel` events (what Claude Code gets).
- * - an item reaching the agent's step is handed over within seconds, already claimed;
- * - one at a time: a second item waits until the first ends;
- * - send_back: the item comes back as new work with the reason (why="sent_back");
- * - a person's note on the current item, Stop work, and an answer (after ask held the item);
- * - offline, then reconnect: waiting work arrives; a second live session gets no handovers.
+ * Card KLCTVnX8 (Go-only since item MlWOc3O5NyfZcLgetrVo): `hivenod mcp --channel` (the Go binary)
+ * against the emulators and the real rules, through a real MCP client that receives the
+ * `notifications/claude/channel` events (what Claude Code gets). Projects were removed (item
+ * OE8FmrTaIxFVGcaeGG3N, slice 11): work arrives as Inbox threads only.
+ * - the session offers thread tools only; a removed item tool says projects were removed;
+ * - presence: online while it runs, offline at once on a clean end, one live session per agent,
+ *   a restart on the same machine takes over (item N0biX), a busy one re-checks (item AXVvH);
+ * - inbox events: new threads, updates, answers, approved outcomes, plans, caps.
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { createAgentIdentity } from '@hive/shared/agent-auth';
 import {
-  answer,
   answerQuestion,
   approveOutcome,
   approvePlan,
   type PlanInput,
-  askForStatus,
-  buildStepIndex,
   inboxPaths,
   type OutcomeStateOf,
   type ThreadStateOf,
   paths,
-  postMessage,
-  stopWork,
-  type ItemState,
-  type Step,
 } from '@hive/shared';
-import { Timestamp } from 'firebase/firestore';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  as,
-  gate,
-  getEnv,
-  I,
-  itemDoc,
-  now,
-  P,
-  projectDoc,
-  put,
-  useEmulator,
-  W,
-} from '../../../packages/shared/rules/harness';
+import { as, getEnv, now, put, useEmulator, W } from '../../../packages/shared/rules/harness';
 import { GO, goBinary, goEnv } from './gobin';
 
 /** The suites run on the Go binary; without Go they are skipped with a warning. */
@@ -53,14 +34,6 @@ useEmulator();
 
 const AUTH_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1:9099';
 const options = { apiKey: 'fake-api-key', projectId: 'hive-rules-test' };
-
-/** build → test → review (people) */
-const LIB: Step[] = [
-  { id: 'build', name: 'Build', kind: 'agent', description: '' },
-  { id: 'test', name: 'Test', kind: 'agent', description: '' },
-  { id: 'review', name: 'Review', kind: 'human', description: '', gate: gate() },
-];
-const PROJECT = { steps: LIB };
 
 interface Pushed {
   content: string;
@@ -80,7 +53,6 @@ async function newAgent() {
     [paths.agent(W, uid)]: {
       name: 'Builder',
       color: '#2F5FD0',
-      projectIds: ['p1'],
       createdBy: 'owner',
       createdAt: now(),
       revokedAt: null,
@@ -89,20 +61,26 @@ async function newAgent() {
       previousAgentUid: null,
       lastEventId: 'seed',
     },
-    [P('p1')]: projectDoc({}, { steps: LIB, stepIndex: buildStepIndex(LIB) }),
-    // The seeded item of the harness is not part of these tests.
-    [I('i1')]: itemDoc({ stepId: 'review', status: 'stopped' }),
   });
   uids.set(token, uid);
   return { uid, token };
 }
+
+/** A message for inbox_add (work for the session: it comes back as an inbox event). */
+const msg = (over: Record<string, unknown> = {}) => ({
+  source: 'teams',
+  sender: { name: 'Sam Example', handle: 'sam@example.com' },
+  text: 'Can we move the review to Thursday?',
+  threadRef: 'thread-1',
+  receivedAt: '2026-10-28T09:00:00Z',
+  ...over,
+});
 
 /** A Claude Code stand-in: an MCP client on the channel server, collecting what is pushed. */
 async function session(
   token: string,
   maxItems?: number,
   maxInbox?: number,
-  statusMinuteMs?: number,
   extraEnv: Record<string, string> = {},
 ) {
   const events: Pushed[] = [];
@@ -117,13 +95,8 @@ async function session(
     env: goEnv({
       HIVENOD_TOKEN: token,
       HIVENOD_PRESENCE_MS: '1000',
-      HIVENOD_CHANNEL_RETRY_MS: '500',
-      HIVENOD_PARK_CHECK_MS: '500',
       HIVENOD_INBOX_TICK_MS: '500',
       ...(maxInbox !== undefined ? { HIVENOD_MAX_INBOX: String(maxInbox) } : {}),
-      ...(statusMinuteMs
-        ? { HIVENOD_STATUS_MINUTE_MS: String(statusMinuteMs), HIVENOD_STATUS_CHECK_MS: '200' }
-        : {}),
       ...extraEnv,
     }),
     stderr: 'inherit',
@@ -201,136 +174,30 @@ async function exited(pid: number) {
   }
 }
 
-/** The items this agent holds (claimed), from Firestore. */
-async function heldBy(uid: string): Promise<string[]> {
-  const out: string[] = [];
-  await getEnv().withSecurityRulesDisabled(async (c) => {
-    const snap = await c.firestore().collection(`workspaces/${W}/projects/p1/items`).get();
-    for (const d of snap.docs) if (d.data().claim?.agentUid === uid) out.push(d.id);
-  });
-  return out;
-}
+const inboxEvents = (s: Awaited<ReturnType<typeof session>>) =>
+  s.events.filter((e) => e.meta.kind === 'inbox');
 
 d('hivenod mcp --channel', () => {
-  it('declares the channel and offers no claim-yourself tools', async () => {
+  it('declares the channel and offers thread tools only (projects removed, slice 11)', async () => {
     const { token } = await newAgent();
     const s = await session(token);
     const names = (await s.listTools()).tools.map((t) => t.name);
-    expect(names).toContain('send_back');
-    expect(names).not.toContain('wait_for_work');
-    await expect(s.call('claim', { itemId: 'x' })).rejects.toThrow(/already claimed/);
-  });
-
-  it('hands over one item at a time, claimed, within seconds; complete brings the next', async () => {
-    const { uid, token } = await newAgent();
-    const s = await session(token);
-    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'First', order: 1 }) });
-    const w1 = await s.next('work');
-    expect(w1.ms).toBeLessThan(5000);
-    expect(w1.meta).toMatchObject({
-      kind: 'work',
-      step: 'Build',
-      project: 'Blog',
-      why: 'arrived',
-    });
-    const first = w1.meta.item_id!;
-    expect(await read(I(first))).toMatchObject({
-      status: 'working',
-      claim: { agentUid: uid, runId: w1.meta.run_id },
-    });
-    // Presence: the agent shows online.
-    expect((await read(paths.agent(W, uid))).lastSeenAt).toBeTruthy();
-    await put({ [I('b')]: itemDoc({ stepId: 'build', title: 'Second', order: 2 }) });
-    await pause(1500);
-    expect(s.events.filter((e) => e.meta.kind === 'work')).toHaveLength(1);
-    expect((await read(I('b'))).claim).toBeNull();
-    // Finishing the first moves it to Test, which this agent also works: one at a time still.
-    await s.call('complete', { itemId: first, runId: w1.meta.run_id });
-    const w2 = await s.next('work', 2);
-    // Either the first at Test or the second at Build: the other one is not claimed meanwhile.
-    const other = w2.meta.item_id === first ? 'b' : first;
-    expect((await read(I(other))).claim).toBeNull();
-    expect(s.events.filter((e) => e.meta.kind === 'work')).toHaveLength(2);
-  });
-
-  it('send_back returns the item as new work with the reason', async () => {
-    const { token } = await newAgent();
-    const s = await session(token);
-    await put({ [I('a')]: itemDoc({ stepId: 'test', title: 'Login' }) });
-    const w = await s.next('work');
-    await s.call('send_back', {
-      itemId: 'a',
-      runId: w.meta.run_id,
-      toStep: 'build',
-      reason: 'The login test fails on Safari',
-    });
-    const back = await s.next('work', 2);
-    expect(back.meta).toMatchObject({ item_id: 'a', step: 'Build', why: 'sent_back' });
-    expect(back.content).toContain('The login test fails on Safari');
-  });
-
-  it("pushes a person's note on the current item, then Stop work", async () => {
-    const { token } = await newAgent();
-    const s = await session(token);
-    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'Docs' }) });
-    const w = await s.next('work');
-    const alice = as('alice');
-    await alice.run(
-      postMessage(alice.ctx, {
-        projectId: 'p1',
-        itemId: 'a',
-        kind: 'note',
-        text: 'Use British spelling',
-      }),
+    expect(names).toContain('thread_read');
+    expect(names).toContain('plan_propose');
+    for (const gone of [
+      'claim',
+      'list_work',
+      'read_item',
+      'complete',
+      'send_back',
+      'park',
+      'create_item',
+    ])
+      expect(names).not.toContain(gone);
+    await expect(s.call('claim', { itemId: 'x' })).rejects.toThrow(
+      /Projects were removed from Hivenod; work arrives as Inbox threads/,
     );
-    const note = await s.next('note');
-    expect(note.content).toContain('Use British spelling');
-    expect(note.meta).toMatchObject({ item_id: 'a', run_id: w.meta.run_id });
-    // Stop work (an admin).
-    const o = as('owner');
-    const item = (await read(I('a'))) as unknown as ItemState;
-    await o.run(
-      stopWork(o.ctx, {
-        project: PROJECT,
-        projectId: 'p1',
-        itemId: 'a',
-        item,
-        mode: 'back',
-        reason: 'Wrong item',
-        run: { costEur: 0, endedAt: null },
-      }),
-    );
-    const stop = await s.next('stop');
-    expect(stop.meta).toMatchObject({ item_id: 'a', run_id: w.meta.run_id });
-    expect(stop.content).toMatch(/stopped your work on "Docs"/);
-    await pause(800);
-    expect(s.events.filter((e) => e.meta.kind === 'note')).toHaveLength(1);
-  });
-
-  it('ask holds the item; the answer brings it back as new work with the answer', async () => {
-    const { token } = await newAgent();
-    const s = await session(token);
-    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'Pricing' }) });
-    const w = await s.next('work');
-    const asked = await s.call('ask', { itemId: 'a', question: 'Which currency?' });
-    expect(asked.note).toMatch(/comes back to you/);
-    const held = await read(I('a'));
-    expect(held).toMatchObject({ claim: null, awaitingAnswer: { questionId: asked.messageId } });
-    expect((await read(paths.run(W, w.meta.run_id!))).endedAt).toBeTruthy();
-    const alice = as('alice');
-    await alice.run(
-      answer(alice.ctx, {
-        projectId: 'p1',
-        itemId: 'a',
-        item: held as unknown as ItemState,
-        questionId: asked.messageId as string,
-        text: 'Euro',
-      }),
-    );
-    const again = await s.next('work', 2);
-    expect(again.meta).toMatchObject({ item_id: 'a', why: 'answered' });
-    expect(again.content).toContain('Which currency?');
-    expect(again.content).toContain('Euro');
+    expect(s.events.filter((e) => e.meta.kind === 'work')).toHaveLength(0);
   });
 
   it('goes offline at once when the session ends cleanly (client closes the connection)', async () => {
@@ -350,41 +217,37 @@ d('hivenod mcp --channel', () => {
     }
   });
 
-  it('offline, then reconnect: waiting work arrives; a second session gets no handovers', async () => {
+  it('offline, then reconnect: waiting threads arrive; a second session gets no events', async () => {
     const { uid, token } = await newAgent();
     let s = await session(token);
     await s.close();
     expect((await read(paths.agent(W, uid))).signedOutAt).toBeTruthy();
-    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'Waited' }) });
-    await pause(500);
-    expect((await read(I('a'))).claim).toBeNull();
     s = await session(token);
-    const w = await s.next('work');
-    expect(w.meta.item_id).toBe('a');
+    const tid = (await s.call('inbox_add', msg())).threadId as string;
+    expect((await s.next('inbox')).meta.thread_id).toBe(tid);
     // On another machine (item N0biX: the same machine would take over).
-    const other = await session(token, undefined, undefined, undefined, {
+    const other = await session(token, undefined, undefined, {
       HIVENOD_HOST_ID: 'other-machine',
     });
     const busy = await other.next('info');
     expect(busy.meta.code).toBe('busy');
-    await put({ [I('b')]: itemDoc({ stepId: 'build', title: 'Not for the second' }) });
+    await other.call('inbox_add', msg({ threadRef: 'thread-2', text: 'Not for the second' }));
     await pause(1500);
-    expect(other.events.filter((e) => e.meta.kind === 'work')).toHaveLength(0);
+    expect(inboxEvents(other)).toHaveLength(0);
   });
 });
 
 d('hivenod mcp --channel: restarts on the same machine take over (item N0biX)', () => {
   const HOST = { HIVENOD_HOST_ID: 'machine-1' };
   const start = (token: string, env: Record<string, string> = HOST) =>
-    session(token, undefined, undefined, undefined, env);
+    session(token, undefined, undefined, env);
   const presence = async (uid: string) => read(paths.agent(W, uid));
 
-  it('kill -9, then a new session on the same machine gets the handover within 5 s', async () => {
+  it('kill -9, then a new session on the same machine takes over within 5 s and resends its thread', async () => {
     const { uid, token } = await newAgent();
     const a = await start(token);
-    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'Held when killed' }) });
-    const wa = await a.next('work');
-    expect(wa.meta.item_id).toBe('a');
+    const tid = (await a.call('inbox_add', msg())).threadId as string;
+    expect((await a.next('inbox')).meta.thread_id).toBe(tid);
     const seenA = (await presence(uid)).seenSession as string;
     expect(seenA).toMatch(/^[0-9a-f]{24}$/);
     expect((await presence(uid)).seenHostId).toBe('machine-1');
@@ -392,17 +255,15 @@ d('hivenod mcp --channel: restarts on the same machine take over (item N0biX)', 
     expect((await presence(uid)).signedOutAt ?? null).toBeNull();
     const t0 = Date.now();
     const b = await start(token);
-    const wb = await b.next('work', 1, 5000);
+    const eb = await b.next('inbox', 1, 5000);
     expect(Date.now() - t0).toBeLessThan(5000);
-    expect(wb.meta.item_id).toBe('a'); // it resumes the item the killed session held
+    expect(eb.meta.thread_id).toBe(tid); // the thread still being investigated comes again
     expect(b.events.find((e) => e.meta.code === 'takeover')?.content).toMatch(
       /took over from an earlier session of this agent on this machine/,
     );
     expect(b.events.some((e) => e.meta.code === 'busy')).toBe(false);
     await pause(1500);
-    const now = await presence(uid);
-    expect(now.seenSession).not.toBe(seenA);
-    expect((await read(I('a'))).claim).toMatchObject({ agentUid: uid, runId: wb.meta.run_id });
+    expect((await presence(uid)).seenSession).not.toBe(seenA);
   });
 
   it('an old session still alive sees the takeover on its heartbeat and stops taking work', async () => {
@@ -414,11 +275,10 @@ d('hivenod mcp --channel: restarts on the same machine take over (item N0biX)', 
       over = a.events.find((e) => e.meta.code === 'taken_over');
     if (!over) throw new Error(`no taken_over info; got ${JSON.stringify(a.events)}`);
     expect(over.content).toMatch(/Another session of this agent took over on this machine/);
-    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'For the new one' }) });
-    const wb = await b.next('work');
-    expect(wb.meta.item_id).toBe('a');
+    const tid = (await b.call('inbox_add', msg())).threadId as string;
+    expect((await b.next('inbox')).meta.thread_id).toBe(tid);
     await pause(1500);
-    expect(a.events.filter((e) => e.meta.kind === 'work')).toHaveLength(0);
+    expect(inboxEvents(a)).toHaveLength(0);
     // The old one ending cleanly does not mark the new one offline.
     await a.signal('SIGTERM');
     const p = await presence(uid);
@@ -437,13 +297,13 @@ d('hivenod mcp --channel: restarts on the same machine take over (item N0biX)', 
       expect(out).toBeGreaterThanOrEqual(seen);
       // Even from another machine: no "another live session".
       const b = await start(token, { HIVENOD_HOST_ID: `elsewhere-${sig}` });
-      await put({ [I(`x${sig}`)]: itemDoc({ stepId: 'test', title: `After ${sig}` }) });
-      const w = await b.next('work');
-      expect(w.meta.item_id).toBe(`x${sig}`);
+      const tid = (await b.call('inbox_add', msg({ threadRef: `t-${sig}`, text: `After ${sig}` })))
+        .threadId as string;
+      expect((await b.next('inbox')).meta.thread_id).toBe(tid);
       expect(b.events.some((e) => e.meta.code === 'busy' || e.meta.code === 'takeover')).toBe(
         false,
       );
-      await b.call('complete', { itemId: w.meta.item_id, runId: w.meta.run_id });
+      await b.call('outcome_propose', { threadId: tid, type: 'no_reply', fields: {} });
       await b.close();
     }
   });
@@ -455,20 +315,20 @@ d('hivenod mcp --channel: restarts on the same machine take over (item N0biX)', 
     const busy = await b.next('info');
     expect(busy.meta.code).toBe('busy');
     expect(busy.content).toMatch(/already running in another terminal/);
-    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'For the first machine' }) });
-    expect((await a.next('work')).meta.item_id).toBe('a');
+    const tid = (await a.call('inbox_add', msg())).threadId as string;
+    expect((await a.next('inbox')).meta.thread_id).toBe(tid);
     await pause(1500);
-    expect(b.events.filter((e) => e.meta.kind === 'work')).toHaveLength(0);
+    expect(inboxEvents(b)).toHaveLength(0);
     expect(a.events.some((e) => e.meta.code === 'taken_over')).toBe(false);
     expect((await presence(uid)).seenHostId).toBe('laptop');
   });
 });
 
 d('hivenod mcp --channel: a busy session re-checks and takes over (item AXVvH)', () => {
-  it('A live on host 1, B busy on host 2: A stops, B gets the info event and the handover', async () => {
+  it('A live on host 1, B busy on host 2: A stops, B gets the info event and the threads', async () => {
     const { uid, token } = await newAgent();
-    const a = await session(token, undefined, undefined, undefined, { HIVENOD_HOST_ID: 'host-1' });
-    const b = await session(token, undefined, undefined, undefined, { HIVENOD_HOST_ID: 'host-2' });
+    const a = await session(token, undefined, undefined, { HIVENOD_HOST_ID: 'host-1' });
+    const b = await session(token, undefined, undefined, { HIVENOD_HOST_ID: 'host-2' });
     expect((await b.next('info')).meta.code).toBe('busy');
     // While A is live, B stays busy and never stamps presence.
     await pause(2500);
@@ -479,311 +339,24 @@ d('hivenod mcp --channel: a busy session re-checks and takes over (item AXVvH)',
     const take = b.events.filter((e) => e.meta.kind === 'info')[1]!;
     expect(take.meta.code).toBe('takeover');
     expect(take.content).toMatch(/The other session of this agent stopped/);
-    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'For the second machine' }) });
-    expect((await b.next('work')).meta.item_id).toBe('a');
+    const tid = (await b.call('inbox_add', msg())).threadId as string;
+    expect((await b.next('inbox')).meta.thread_id).toBe(tid);
     expect((await read(paths.agent(W, uid))).seenHostId).toBe('host-2');
   }, 120_000);
-});
-
-d('hivenod mcp --channel with max_items 3 (card cGSENsRF)', () => {
-  const works = (s: Awaited<ReturnType<typeof session>>) =>
-    s.events.filter((e) => e.meta.kind === 'work');
-
-  it('holds at most 3: a 4th waits and is pushed when one ends; events carry the contract, not a sub-agent hint', async () => {
-    const { uid, token } = await newAgent();
-    const s = await session(token, 3);
-    await put({
-      [I('a')]: itemDoc({ stepId: 'review', title: 'A', order: 1 }),
-      [I('b')]: itemDoc({ stepId: 'review', title: 'B', order: 2 }),
-      [I('c')]: itemDoc({ stepId: 'review', title: 'C', order: 3 }),
-      [I('d')]: itemDoc({ stepId: 'review', title: 'D', order: 4 }),
-    });
-    // All four reach the agent step at once.
-    await put({
-      [I('a')]: itemDoc({ stepId: 'build', title: 'A', order: 1 }),
-      [I('b')]: itemDoc({ stepId: 'build', title: 'B', order: 2 }),
-      [I('c')]: itemDoc({ stepId: 'build', title: 'C', order: 3 }),
-      [I('d')]: itemDoc({ stepId: 'build', title: 'D', order: 4 }),
-    });
-    await s.next('work', 3);
-    await pause(1500);
-    const w = works(s);
-    expect(w).toHaveLength(3);
-    const ids = w.map((e) => e.meta.item_id!);
-    expect(new Set(ids).size).toBe(3);
-    for (const e of w) {
-      expect(e.meta).toMatchObject({ max_items: '3' });
-      expect(e.content).toContain(`item_id ${e.meta.item_id}`);
-      expect(e.content).not.toMatch(/sub-agent/);
-      expect(e.content).toContain(`itemId="${e.meta.item_id}"`);
-      expect(await read(I(e.meta.item_id!))).toMatchObject({
-        claim: { agentUid: uid, runId: e.meta.run_id },
-      });
-    }
-    const waiting = ['a', 'b', 'c', 'd'].find((x) => !ids.includes(x))!;
-    expect((await read(I(waiting))).claim).toBeNull();
-    expect(await heldBy(uid)).toHaveLength(3);
-    // Without itemId, a tool is refused with the held items listed.
-    await expect(s.call('add_note', { text: 'x' })).rejects.toThrow(/holds 3 items: pass itemId/);
-    await expect(s.call('add_note', { itemId: waiting, text: 'x' })).rejects.toThrow(
-      new RegExp(`does not hold item ${waiting}`),
-    );
-    // Logging and finishing by item id alone (the run id is filled in).
-    const first = w[0]!;
-    expect(await s.call('log', { itemId: first.meta.item_id, text: 'working' })).toMatchObject({
-      runId: first.meta.run_id,
-    });
-    await s.call('complete', { itemId: first.meta.item_id });
-    // The finished item moves on to Test (also this agent's) or the 4th comes: one more, not two.
-    const w4 = await s.next('work', 4);
-    await pause(1500);
-    expect(works(s)).toHaveLength(4);
-    expect(await heldBy(uid)).toHaveLength(3);
-    expect([waiting, first.meta.item_id]).toContain(w4.meta.item_id);
-  });
-
-  it('notes and stops are per item; after a stop only that item is refused', async () => {
-    const { token } = await newAgent();
-    const s = await session(token, 3);
-    await put({
-      [I('a')]: itemDoc({ stepId: 'build', title: 'A', order: 1 }),
-      [I('b')]: itemDoc({ stepId: 'build', title: 'B', order: 2 }),
-      [I('c')]: itemDoc({ stepId: 'build', title: 'C', order: 3 }),
-    });
-    await s.next('work', 3);
-    const runOf = (id: string) => works(s).find((e) => e.meta.item_id === id)!.meta.run_id!;
-    const alice = as('alice');
-    await alice.run(
-      postMessage(alice.ctx, { projectId: 'p1', itemId: 'b', kind: 'note', text: 'Only for B' }),
-    );
-    const note = await s.next('note');
-    expect(note.meta).toMatchObject({ item_id: 'b', run_id: runOf('b') });
-    expect(note.content).toContain('(item_id b)');
-    const o = as('owner');
-    await o.run(
-      stopWork(o.ctx, {
-        project: PROJECT,
-        projectId: 'p1',
-        itemId: 'b',
-        item: (await read(I('b'))) as unknown as ItemState,
-        mode: 'back',
-        reason: 'Not B',
-        run: { costEur: 0, endedAt: null },
-      }),
-    );
-    const stop = await s.next('stop');
-    expect(stop.meta).toMatchObject({ item_id: 'b', run_id: runOf('b') });
-    expect(stop.content).toMatch(/the others go on/);
-    await pause(800);
-    expect(s.events.filter((e) => e.meta.kind === 'stop')).toHaveLength(1);
-    // B's tools refuse; A and C go on.
-    await expect(s.call('add_note', { itemId: 'b', text: 'late' })).rejects.toThrow(
-      /A person stopped the work on item b/,
-    );
-    await expect(s.call('log', { runId: runOf('b'), text: 'late' })).rejects.toThrow(
-      /stopped the work of run/,
-    );
-    await s.call('add_note', { itemId: 'a', text: 'A goes on' });
-    await s.call('complete', { itemId: 'c' });
-    expect(await read(I('c'))).toMatchObject({ stepId: 'test' });
-    expect((await read(I('a'))).claim).toMatchObject({ runId: runOf('a') });
-  });
-});
-
-d('hivenod mcp --channel hand-out order (item QjTTL)', () => {
-  const ago = (min: number) => Timestamp.fromMillis(Date.now() - min * 60_000);
-
-  it('hands out oldest first by stepAt; a given-back item skips this agent', async () => {
-    const { token } = await newAgent();
-    // Document ids in the opposite order of age, so Firestore order would be wrong.
-    await put({
-      [I('a1')]: itemDoc({ stepId: 'build', title: 'Newest', stepAt: ago(5) }),
-      [I('b1')]: itemDoc({ stepId: 'build', title: 'Middle', stepAt: ago(60) }),
-      [I('c1')]: itemDoc({ stepId: 'build', title: 'Oldest', stepAt: ago(180) }),
-    });
-    const s = await session(token);
-    const w1 = await s.next('work');
-    expect(w1.meta.item_id).toBe('c1');
-    // Given back: the next oldest comes, not the same item again.
-    await s.call('release', { itemId: 'c1' });
-    const w2 = await s.next('work', 2);
-    expect(w2.meta.item_id).toBe('b1');
-    expect((await read(I('c1'))).claim).toBeNull();
-    await s.call('complete', { itemId: 'b1' });
-    // b1 moves on to Test with a fresh stepAt (newer than a1); c1 is still skipped.
-    const w3 = await s.next('work', 3);
-    expect(w3.meta.item_id).toBe('a1');
-    expect((await read(I('b1'))).stepAt).toBeTruthy();
-    await s.call('complete', { itemId: 'a1' });
-    const w4 = await s.next('work', 4);
-    expect(w4.meta.item_id).toBe('b1');
-    await pause(1000);
-    expect(s.events.filter((e) => e.meta.kind === 'work' && e.meta.item_id === 'c1')).toHaveLength(
-      1,
-    );
-  });
-
-  it('items without stepAt count as older than any that moved (max_items 3)', async () => {
-    const { token } = await newAgent();
-    await put({
-      [I('a2')]: itemDoc({ stepId: 'build', title: 'New', stepAt: ago(1) }),
-      [I('b2')]: itemDoc({ stepId: 'build', title: 'Legacy' }),
-      [I('c2')]: itemDoc({ stepId: 'test', title: 'Old', stepAt: ago(30) }),
-    });
-    const s = await session(token, 3);
-    await s.next('work', 3);
-    const order = s.events.filter((e) => e.meta.kind === 'work').map((e) => e.meta.item_id);
-    expect(order).toEqual(['b2', 'c2', 'a2']);
-  });
-});
-
-d('hivenod mcp --channel parking (item QjTTL)', () => {
-  const works = (s: Awaited<ReturnType<typeof session>>) =>
-    s.events.filter((e) => e.meta.kind === 'work');
-  const ago = (min: number) => Timestamp.fromMillis(Date.now() - min * 60_000);
-
-  it('max_items 2: a parked item frees its slot; any tool call wakes it', async () => {
-    const { uid, token } = await newAgent();
-    await put({
-      [I('a')]: itemDoc({ stepId: 'build', title: 'A', stepAt: ago(30) }),
-      [I('b')]: itemDoc({ stepId: 'build', title: 'B', stepAt: ago(20) }),
-      [I('c')]: itemDoc({ stepId: 'build', title: 'C', stepAt: ago(10) }),
-    });
-    const s = await session(token, 2);
-    await s.next('work', 2);
-    await pause(1000);
-    expect(works(s).map((e) => e.meta.item_id)).toEqual(['a', 'b']);
-    const parked = await s.call('park', { itemId: 'a', reason: 'release batch' });
-    expect(parked).toMatchObject({ itemId: 'a', parked: { reason: 'release batch' } });
-    expect(parked.note).toMatch(/no longer counts toward max_items/);
-    const runA = works(s)[0]!.meta.run_id;
-    expect(await read(I('a'))).toMatchObject({
-      claim: { agentUid: uid, runId: runA },
-      parked: { runId: runA, reason: 'release batch' },
-    });
-    // The slot is free: the third item arrives; a stays claimed by this agent.
-    const w3 = await s.next('work', 3);
-    expect(w3.meta).toMatchObject({ item_id: 'c', holding: '2', parked: '1' });
-    expect((await heldBy(uid)).sort()).toEqual(['a', 'b', 'c']);
-    // Any tool call on it wakes it: 2 active + it, nothing more is handed over.
-    await s.call('log', { itemId: 'a', text: 'back on it' });
-    expect((await read(I('a'))).parked).toBeNull();
-    await put({ [I('d')]: itemDoc({ stepId: 'build', title: 'D' }) });
-    await pause(1500);
-    expect(works(s)).toHaveLength(3);
-    // Only the holder may park; an item this session does not hold is refused.
-    await expect(s.call('park', { itemId: 'd', reason: 'x' })).rejects.toThrow(
-      /does not hold item d/,
-    );
-  });
-
-  it('a note wakes a parked item and still reaches the session; Stop reaches it too', async () => {
-    const { token } = await newAgent();
-    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'Docs' }) });
-    const s = await session(token, 2);
-    const w = await s.next('work');
-    await s.call('park', { itemId: 'a', reason: 'review' });
-    const alice = as('alice');
-    await alice.run(
-      postMessage(alice.ctx, { projectId: 'p1', itemId: 'a', kind: 'note', text: 'Go ahead' }),
-    );
-    const note = await s.next('note');
-    expect(note.content).toContain('Go ahead');
-    expect((await read(I('a'))).parked).toBeNull();
-    await s.call('park', { itemId: 'a', reason: 'review again' });
-    const o = as('owner');
-    await o.run(
-      stopWork(o.ctx, {
-        project: PROJECT,
-        projectId: 'p1',
-        itemId: 'a',
-        item: (await read(I('a'))) as unknown as ItemState,
-        mode: 'back',
-        reason: 'Not now',
-        run: { costEur: 0, endedAt: null },
-      }),
-    );
-    const stop = await s.next('stop');
-    expect(stop.meta).toMatchObject({ item_id: 'a', run_id: w.meta.run_id });
-  });
-
-  it('a parked item resumed after a restart returns to the queue 24 h after parking', async () => {
-    const { uid, token } = await newAgent();
-    // The agent's earlier session parked it 25 hours ago (server time) and went away.
-    const runId = 'run-parked';
-    await put({
-      [paths.run(W, runId)]: {
-        agentUid: uid,
-        projectId: 'p1',
-        itemId: 'a',
-        stepId: 'build',
-        startedAt: ago(26 * 60),
-        heartbeatAt: ago(1),
-        heartbeatEventAt: ago(1),
-        endedAt: null,
-        status: 'running',
-        costEur: 0,
-        tokensIn: 0,
-        tokensOut: 0,
-        model: null,
-        summary: null,
-        lastEventId: 'seed',
-      },
-      [I('a')]: itemDoc({
-        stepId: 'build',
-        title: 'Waiting on release',
-        status: 'working',
-        claim: { runId, agentUid: uid, heartbeatAt: ago(1) },
-        parked: { runId, reason: 'release batch', at: ago(25 * 60) },
-      }),
-    });
-    const s = await session(token, 2);
-    const w = await s.next('work');
-    expect(w.meta).toMatchObject({ item_id: 'a', resumed: 'true' });
-    const back = await s.next('info', 1, 8000);
-    expect(back.meta).toMatchObject({ code: 'returned', item_id: 'a' });
-    const item = await read(I('a'));
-    expect(item).toMatchObject({ claim: null, status: 'queued' });
-    let notes: string[] = [];
-    await getEnv().withSecurityRulesDisabled(async (c) => {
-      const snap = await c
-        .firestore()
-        .collection(`workspaces/${W}/projects/p1/items/a/messages`)
-        .get();
-      notes = snap.docs.map((d) => d.data().text as string);
-    });
-    expect(notes.join('\n')).toMatch(
-      /Parked for 24 hours without activity \(waiting: release batch\)/,
-    );
-    // Given back: not handed straight back to this session.
-    await pause(1500);
-    expect(works(s)).toHaveLength(1);
-  });
 });
 
 // ---------- Inbox events (item 4PEHrOW5IfXBQWgOK9wo, part 2) ----------
 
 d('hivenod mcp --channel inbox events (item 4PEHr)', () => {
-  const msg = (over: Record<string, unknown> = {}) => ({
-    source: 'teams',
-    sender: { name: 'Sam Example', handle: 'sam@example.com' },
-    text: 'Can we move the review to Thursday?',
-    threadRef: 'thread-1',
-    receivedAt: '2026-10-28T09:00:00Z',
-    ...over,
-  });
   const inbox = (s: Awaited<ReturnType<typeof session>>) =>
     s.events.filter((e) => e.meta.kind === 'inbox');
   const thread = async (tid: string) =>
     (await read(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
   const owner = () => as('owner');
 
-  it('arrive while max_items is full, are never claimed, and items still flow', async () => {
+  it('arrive within seconds, are never claimed; updates, notes, filing and answers', async () => {
     const { token } = await newAgent();
     const s = await session(token);
-    await put({ [I('a')]: itemDoc({ stepId: 'build', title: 'First', order: 1 }) });
-    const w1 = await s.next('work');
-    // The one item slot is taken; a message comes in all the same.
     const added = await s.call('inbox_add', msg());
     const tid = added.threadId as string;
     const e1 = await s.next('inbox');
@@ -797,10 +370,6 @@ d('hivenod mcp --channel inbox events (item 4PEHr)', () => {
     });
     expect(e1.content).not.toMatch(/sub-agent/);
     expect(e1.content).toContain(`thread_read (threadId ${tid})`);
-    // Items are handed out as before.
-    await put({ [I('b')]: itemDoc({ stepId: 'build', title: 'Second', order: 2 }) });
-    await s.call('complete', { itemId: w1.meta.item_id, runId: w1.meta.run_id });
-    await s.next('work', 2);
     // A second message on the thread, while it is in flight: an update, not a new start.
     await s.call('inbox_add', msg({ messageId: 'm-2', text: 'Or Friday?' }));
     const e2 = await s.next('inbox', 2);
@@ -913,60 +482,6 @@ d('hivenod mcp --channel inbox events (item 4PEHr)', () => {
     expect(inbox(s)).toHaveLength(3);
   });
 
-  it('Build it (item qwFAW): the item made, then Done, sends item_done once', async () => {
-    const { token } = await newAgent();
-    const s = await session(token, 2);
-    await put({ [I('b1')]: itemDoc({ stepId: 'build', title: 'Update the price list' }) });
-    const tid = (await s.call('inbox_add', msg())).threadId as string;
-    await s.next('inbox');
-    const p = await s.call('plan_propose', {
-      threadId: tid,
-      steps: [
-        { type: 'make_it_work', fields: { title: 'Update the price list', project: 'p1' } },
-        { type: 'reply', fields: { text: 'Done: the new prices are live.' } },
-      ],
-    });
-    const pid = p.planId as string;
-    const [s1] = p.stepIds as string[];
-    const plan = (await read(inboxPaths.plan(W, pid))) as unknown as PlanInput['plan'];
-    const outcomes: Record<string, OutcomeStateOf> = {};
-    for (const id of plan.steps)
-      outcomes[id] = (await read(inboxPaths.outcome(W, id))) as unknown as OutcomeStateOf;
-    const o = owner();
-    await o.run(approvePlan(o.ctx, { planId: pid, plan, outcomes, thread: await thread(tid) }));
-    const e1 = await s.next('inbox', 2);
-    expect(e1.meta).toMatchObject({ reason: 'carry_out', outcome_id: s1, step: '1 of 2' });
-    expect(e1.content).toMatch(/status started/);
-    const started = await s.call('outcome_done', {
-      outcomeId: s1,
-      status: 'started',
-      result: { itemId: 'b1' },
-    });
-    expect(started).toMatchObject({ state: 'running' });
-    expect((await read(inboxPaths.outcome(W, s1!))) as unknown).toMatchObject({
-      state: 'running',
-      result: { itemId: 'b1', permalink: expect.stringMatching(/\/p\/p1\?item=b1$/) },
-    });
-    // The item reaches Done: one item_done.
-    await put({
-      [I('b1')]: itemDoc({ stepId: 'done', status: 'done', title: 'Update the price list' }),
-    });
-    const e2 = await s.next('inbox', 3);
-    expect(e2.meta).toMatchObject({
-      reason: 'item_done',
-      outcome_id: s1,
-      item_id: 'b1',
-      plan_id: pid,
-      step: '1 of 2',
-    });
-    await s.call('outcome_done', { outcomeId: s1, status: 'done', result: { itemId: 'b1' } });
-    // The reply's turn: its carry_out follows (already approved).
-    const e3 = await s.next('inbox', 4);
-    expect(e3.meta).toMatchObject({ reason: 'carry_out', step: '2 of 2' });
-    await pause(1500);
-    expect(inbox(s).filter((e) => e.meta.reason === 'item_done')).toHaveLength(1);
-  });
-
   it('at most maxInbox threads at a time; a reconnect or restart sends no duplicates', async () => {
     const { token } = await newAgent();
     const s = await session(token, 1, 2);
@@ -1003,78 +518,5 @@ d('hivenod mcp --channel inbox events (item 4PEHr)', () => {
     await s.call('inbox_add', msg());
     await pause(1500);
     expect(inbox(s)).toHaveLength(0);
-  });
-});
-
-d('hivenod mcp --channel status checks (item AzveC)', () => {
-  const statuses = (s: Awaited<ReturnType<typeof session>>) =>
-    s.events.filter((e) => e.meta.kind === 'status');
-
-  it('asks at the interval (a short minute), stores the answer, and not while parked', async () => {
-    const { uid, token } = await newAgent();
-    // statusEvery 15 "minutes" of 100 ms: a status event about 1.5 s after the handover.
-    await put({
-      [P('p1')]: projectDoc({}, { steps: LIB, stepIndex: buildStepIndex(LIB), statusEvery: 15 }),
-      [I('a')]: itemDoc({ stepId: 'build', title: 'Release checks' }),
-    });
-    const s = await session(token, 2, undefined, 100);
-    const w = await s.next('work');
-    const first = await s.next('status', 1, 6000);
-    expect(first.meta).toMatchObject({ item_id: 'a', run_id: w.meta.run_id, why: 'interval' });
-    expect(first.content).toContain('Status check on "Release checks" (item_id a)');
-    const out = await s.call('status', {
-      itemId: 'a',
-      text: 'Running e2e batch 2 of 3',
-      pct: 70,
-    });
-    expect(out).toEqual({ itemId: 'a', status: { text: 'Running e2e batch 2 of 3', pct: 70 } });
-    expect((await read(I('a'))).statusUpdate).toMatchObject({
-      runId: w.meta.run_id,
-      text: 'Running e2e batch 2 of 3',
-      pct: 70,
-      by: uid,
-    });
-    // Too soon after the last one: refused, the stored status stays.
-    await expect(s.call('status', { itemId: 'a', text: 'again' })).rejects.toThrow(
-      /less than 30 seconds ago/,
-    );
-    // Parked: no status events.
-    await s.call('park', { itemId: 'a', reason: 'release batch' });
-    const n = statuses(s).length;
-    await pause(2500);
-    expect(statuses(s).length).toBe(n);
-  });
-
-  it('off by default (no statusEvery): none; a person asking sends one at once', async () => {
-    const { token } = await newAgent();
-    await put({
-      [P('p1')]: projectDoc({}, { steps: LIB, stepIndex: buildStepIndex(LIB) }),
-      [I('a')]: itemDoc({ stepId: 'build', title: 'Docs' }),
-    });
-    const s = await session(token, 1, undefined, 100);
-    await s.next('work');
-    await pause(2000);
-    expect(statuses(s)).toHaveLength(0);
-    const alice = as('alice');
-    await alice.run(
-      askForStatus(alice.ctx, {
-        projectId: 'p1',
-        itemId: 'a',
-        item: (await read(I('a'))) as unknown as ItemState,
-        nowMs: Date.now(),
-      }),
-    );
-    const asked = await s.next('status');
-    expect(asked.meta).toMatchObject({ item_id: 'a', why: 'asked' });
-    expect(asked.content).toMatch(
-      /^Alice asked for a status on "Docs" \(item_id a\)\. Please answer/,
-    );
-    await s.call('status', { text: 'Writing the docs' });
-    expect((await read(I('a'))).statusUpdate).toMatchObject({
-      text: 'Writing the docs',
-      pct: null,
-    });
-    await pause(1000);
-    expect(statuses(s)).toHaveLength(1);
   });
 });
