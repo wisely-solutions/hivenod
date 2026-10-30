@@ -30,7 +30,8 @@ export interface OutcomeField {
   /** For the agent: what goes in it. */
   help: string;
 }
-export type WaitingOn = 'them' | 'thirdParty' | 'date' | 'item';
+/** 'agent': an approved outcome or plan step the agent has yet to carry out. */
+export type WaitingOn = 'them' | 'thirdParty' | 'date' | 'item' | 'agent';
 export interface OutcomeType {
   /** UI name. */
   label: string;

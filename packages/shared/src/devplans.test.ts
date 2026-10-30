@@ -242,8 +242,11 @@ describe('createMemberThread', () => {
       decision: null,
     });
     expect(at(p.ops, O('d2'))!.data).toMatchObject({ executor: null });
-    // Shape is at its turn and approved: the agent carries it out; the thread is not waiting.
-    expect(at(p.ops, T)!.data).toMatchObject({ state: 'yourCall', waiting: null });
+    // Shape is at its turn and approved: the agent carries it out; the thread waits on it.
+    expect(at(p.ops, T)!.data).toMatchObject({
+      state: 'waiting',
+      waiting: { on: 'agent', until: null },
+    });
     expect(p.ops.at(-1)!.data).toMatchObject({
       type: 'thread.created',
       data: { planId: 'p1', steps: IDS, templateId: 'dev' },
@@ -289,8 +292,8 @@ describe('a dev plan runs gate by gate', () => {
       decision: { summaryVersion: 4 },
     });
     expect(at(ap.ops, P)!.data).toMatchObject({ cursor: 2 });
-    // While Build runs, the thread waits on the work.
-    expect(at(ap.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'item' } });
+    // Build is approved and its turn: the thread waits on the agent (on the work once started).
+    expect(at(ap.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'agent' } });
     expect(ap.ops.at(-1)!.data).toMatchObject({ data: { summaryVersion: 4 } });
     expect(() =>
       approveOutcome(joao, {
@@ -330,7 +333,7 @@ describe('sendBackPlan', () => {
       state: 'active',
       sentBack: { n: 1, to: 'd3', reason: 'Make the button bigger', by: 'joao' },
     });
-    expect(at(p.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'item' } });
+    expect(at(p.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'agent' } });
     expect(p.ops.at(-1)!.data).toMatchObject({
       type: 'plan.sent_back',
       data: {

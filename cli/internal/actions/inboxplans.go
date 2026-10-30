@@ -116,11 +116,8 @@ func PlanThreadState(p PlanState, outcomes map[string]OutcomeState) (map[string]
 	if t := OutcomeTypeOf(o.Type); t != nil && t.Executor == "none" && t.After.WaitingOn == "date" {
 		return ThreadAfter(o.Type, o.Fields)
 	}
-	after, err := before(p.Cursor)
-	if after == nil && err == nil {
-		after = yourCall
-	}
-	return after, err
+	// Approved, its turn, not started yet: the agent picks it up; nothing waits for the person.
+	return map[string]any{"state": "waiting", "waiting": map[string]any{"on": "agent", "until": nil}}, nil
 }
 
 // PlanStepView is one step as planView shows it.

@@ -134,6 +134,8 @@ describe('threads', () => {
   it('waiting text', () => {
     expect(waitingText({ on: 'them', until: null })).toBe('Waiting on them');
     expect(waitingText({ on: 'thirdParty', until: null })).toBe('Waiting on someone else');
+    expect(waitingText({ on: 'agent', until: null }, 'Hivey')).toBe('Waiting on Hivey');
+    expect(waitingText({ on: 'agent', until: null })).toBe('Waiting on the agent');
     expect(waitingText({ on: 'date', until: ts(Date.UTC(2026, 10, 3, 9)) })).toMatch(/until/);
   });
 
@@ -355,6 +357,12 @@ describe('Inbox list groups (item kt3E7, design 2.4)', () => {
     expect(g.quiet.map((r) => r.id)).toEqual(['old']);
     expect(g.unfiled).toHaveLength(1);
     expect(subjectState(rows[1]!)).toBe('needs');
+  });
+  it('a thread waiting on its agent is the agent working, not waiting on others', () => {
+    const onAgent = T('a', { state: 'waiting', waiting: { on: 'agent', until: null } });
+    expect(subjectState(S('s', [onAgent]))).toBe('working');
+    const onThem = T('b', { state: 'waiting', waiting: { on: 'them', until: null } });
+    expect(subjectState(S('s', [onThem]))).toBe('waiting');
   });
   it('areas are a filter with counts, case-blind', () => {
     const rows = [S('a', [], 'Payments'), S('b', [], 'payments'), S('c', [], 'Admin'), S('d', [])];

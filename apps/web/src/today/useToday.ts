@@ -12,6 +12,7 @@ import { entryBand, type NeedsEntry } from '../needs/logic';
 import { orgColor } from '../orgs/color';
 import { useLatestNotes, useMessagesSince, useSubjectsById, useThreadMessages } from './data';
 import { dueShort } from './logic';
+import { agentsTurn } from '../threads/logic';
 
 const DAY = 86_400_000;
 
@@ -20,6 +21,7 @@ const WAITING_ON: Record<string, string> = {
   thirdParty: 'on someone else',
   item: 'on an item',
   date: 'snoozed',
+  agent: 'on the agent',
 };
 
 export function useToday(
@@ -52,7 +54,7 @@ export function useToday(
   const investigating = useMemo(
     () =>
       threadsAll
-        .filter((t) => t.data.memberUid === uid && t.data.state === 'investigating')
+        .filter((t) => t.data.memberUid === uid && agentsTurn(t.data))
         .sort((a, b) => b.data.updatedAt.toMillis() - a.data.updatedAt.toMillis())
         .slice(0, 5),
     [threadsAll, uid],
@@ -83,7 +85,9 @@ export function useToday(
   const waiting = useMemo(
     () =>
       threadsAll
-        .filter((t) => t.data.memberUid === uid && t.data.state === 'waiting')
+        .filter(
+          (t) => t.data.memberUid === uid && t.data.state === 'waiting' && !agentsTurn(t.data),
+        )
         .sort((a, b) => a.data.updatedAt.toMillis() - b.data.updatedAt.toMillis())
         .slice(0, 6)
         .map((t) => ({

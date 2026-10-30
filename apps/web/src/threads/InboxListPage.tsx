@@ -451,7 +451,7 @@ export function InboxListPage() {
                           ) : null}
                         </span>
                         <UrgentMark on={t.data.urgent} />
-                        <StateChip state={t.data.state} />
+                        <StateChip state={t.data.state} waiting={t.data.waiting} />
                         <span className="w-12 shrink-0 whitespace-nowrap text-right text-12 text-text-3 max-sm:hidden">
                           {age(t.data.lastMessageAt.toMillis(), now)}
                         </span>
