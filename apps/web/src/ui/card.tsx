@@ -46,7 +46,7 @@ export interface ItemCardData {
   parked?: { reason: string; since: string };
   /** The agent's last status line (item AzveC): "Running release checks · 70%". */
   status?: string;
-  /** No activity and no answer to a status request (items AzveC, KZ6O9): "Hive silent for 42 min". */
+  /** No activity and no answer to a status request (items AzveC, KZ6O9): "Scout silent for 42 min". */
   silence?: string;
   approvals?: { have: number; need: number };
   waitingForYou?: boolean;

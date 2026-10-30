@@ -862,7 +862,9 @@ describe('reach out end to end (item KZ6O9; Firestore emulator, fake clock)', ()
       expect(toAlice()).toHaveLength(1);
 
       // Ping again: a fresh status request by Alice (the clock moved 40 min; the emulator's not).
-      await db.doc(I('quiet')).update({ 'statusAsk.at': Timestamp.fromMillis(Date.now() - 12 * 60_000) });
+      await db
+        .doc(I('quiet'))
+        .update({ 'statusAsk.at': Timestamp.fromMillis(Date.now() - 12 * 60_000) });
       await press(bot, 43, buttonCode(calls, 'rp:')!);
       await until(async () => (await item('quiet')).statusAsk?.byUid === 'alice');
       // Release to queue: the claim goes, a note says why, the flag is cleared.

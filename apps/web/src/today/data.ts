@@ -32,7 +32,7 @@ const stepsInHandsQuery = (wid: string, uid: string) =>
 
 /**
  * Reach out (item KZ6O9): the member's threads whose step in agent hands went silent, by
- * `wid/threadId`, with the flag's text ("Hive silent for 41 min").
+ * `wid/threadId`, with the flag's text ("Scout silent for 41 min").
  */
 export function useSilentThreads(uid: string, wids: readonly string[], now: number) {
   const r = useAcross(

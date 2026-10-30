@@ -9,13 +9,7 @@ import {
 } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
 import { threadKeyboard } from './telegram';
-import {
-  Engine,
-  threadAction,
-  type InboxWaiting,
-  type Ports,
-  type WaitingItem,
-} from './engine';
+import { Engine, threadAction, type InboxWaiting, type Ports, type WaitingItem } from './engine';
 
 const H = 3_600_000;
 const ts = (ms: number) => ({ seconds: ms / 1000, nanoseconds: 0, toMillis: () => ms });

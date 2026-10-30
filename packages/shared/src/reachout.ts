@@ -7,7 +7,7 @@
  *    agent's channel delivers it as a kind="status" event (or answers it itself when it saw the
  *    agent work on the item since its last status: no model turn).
  *  - No answer (no activity) REACH_ANSWER_MS after a request (the system's or a person's) → the
- *    silence flag ("Hive silent for 41 min") and ONE message to the people who decide next, with
+ *    silence flag ("Scout silent for 41 min") and ONE message to the people who decide next, with
  *    Ping again · Release to queue · Stop · Open. At most one reminder per REACH_REMIND_MS. Any
  *    activity clears the flag.
  *  - A stale claim (no heartbeat for STALE_CLAIM_MINUTES) whose agent has no live session goes back
@@ -109,7 +109,7 @@ export function reachNext(i: ReachInput): ReachStep {
   return steps.reduce((a, b) => (b.at < a.at ? b : a));
 }
 
-/** "Hive silent for 41 min" (hours past two hours). */
+/** "Scout silent for 41 min" (hours past two hours). */
 export function silentText(agent: string | undefined, sinceMs: number, nowMs: number): string {
   const min = Math.max(1, Math.floor((nowMs - sinceMs) / 60_000));
   const span = min < 120 ? `${min} min` : `${Math.floor(min / 60)} h`;
@@ -122,7 +122,7 @@ const ago = (ms: number) => {
 };
 
 /**
- * The message about a silent item or step (design: "Hive is silent on …"). No clock times: the
+ * The message about a silent item or step (design: "Scout is silent on …"). No clock times: the
  * notifier does not know the reader's zone, so it says how long ago.
  */
 export function silentNotice(a: {
@@ -185,7 +185,7 @@ export function pingAgent(
 
 /**
  * The silent flag of a thread step in agent hands (an approved or running outcome), as the web
- * shows it ("Hive silent for 41 min"); null when it is not silent.
+ * shows it ("Scout silent for 41 min"); null when it is not silent.
  */
 export function stepSilentText(
   o: {

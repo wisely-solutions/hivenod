@@ -48,7 +48,7 @@ export function TodayRail({
     tid: string;
     title: string;
     note: string;
-    /** "Hive silent for 41 min" (item KZ6O9), or ''. */
+    /** "Scout silent for 41 min" (item KZ6O9), or ''. */
     silent?: string;
   }>;
   now: number;
