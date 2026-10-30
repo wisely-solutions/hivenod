@@ -166,7 +166,8 @@ test('one person, several organizations: create, switch, and keep them apart', a
   await page.waitForTimeout(8000);
   await expect(page.getByTestId('reconnecting')).toHaveCount(0);
 
-  // Switch back with the switcher: both are listed, the old data is back.
+  // Switch back with the switcher (from Today: Settings lists the organizations too).
+  await page.goto('/');
   await openSwitcher(page);
   const list = page.getByRole('list', { name: 'Your organizations' });
   await expect(list.getByRole('button')).toHaveCount(2);
