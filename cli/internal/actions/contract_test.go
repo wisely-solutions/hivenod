@@ -139,6 +139,7 @@ var runners = map[string]runner{
 	"wakeThread":   act(WakeThread),
 	"proposePlan":  act(ProposePlan),
 	"sendBackPlan": act(SendBackPlan),
+	"stepProgress": act(StepProgress),
 	"planThreadState": pure(func(in struct {
 		Plan     PlanState               `json:"plan"`
 		Outcomes map[string]OutcomeState `json:"outcomes"`

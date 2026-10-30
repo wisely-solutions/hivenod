@@ -78,6 +78,7 @@ import {
   wakeThread,
   proposePlan,
   sendBackPlan,
+  stepProgress,
   planThreadState,
   planView,
   type PlanInput,
@@ -2310,6 +2311,75 @@ function build(): ContractCase[] {
   });
   sb('third blocks', AGENT, {
     ...devPl(['done', 'done', 'done', 'done', 'approved', 'proposed'], 4, 'active', 2),
+  });
+  // ---------- long steps (slice 6b) ----------
+  finP('build started without an item', {
+    plan: devPl(['done', 'done', 'approved', 'proposed', 'approved', 'proposed'], 2),
+    status: 'started',
+  });
+  finP('shape started without an item', {
+    plan: devPl(['approved', 'proposed', 'approved', 'proposed', 'approved', 'proposed'], 0),
+    status: 'started',
+  });
+  finP('build done with usage', {
+    plan: devPl(['done', 'done', 'running', 'proposed', 'approved', 'proposed'], 2),
+    status: 'done',
+    result: { permalink: 'https://github.com/example/board/pull/86' },
+    usage: { tokens: 123456, costEur: 1.234567 },
+  });
+  finP('bad usage', {
+    plan: devPl(['done', 'done', 'running', 'proposed', 'approved', 'proposed'], 2),
+    status: 'done',
+    usage: { tokens: 1.5 },
+  });
+  finP('bad cost', {
+    plan: devPl(['done', 'done', 'running', 'proposed', 'approved', 'proposed'], 2),
+    status: 'done',
+    usage: { costEur: -1 },
+  });
+  const sprog = (
+    name: string,
+    actor: Actor,
+    input: Partial<Parameters<typeof stepProgress>[1]>,
+  ) => {
+    const pl =
+      input.plan ?? devPl(['done', 'done', 'running', 'proposed', 'approved', 'proposed'], 2);
+    const oid = input.outcomeId ?? 'o3';
+    act(
+      `stepProgress/${name}`,
+      'stepProgress',
+      actor,
+      {
+        outcomeId: oid,
+        outcome: pl.outcomes[oid]!,
+        thread: TH({ subjectId: 's1', state: 'waiting' }),
+        line: '  Tests   green, writing the PR ',
+        percent: 70,
+        plan: pl,
+        ...input,
+      },
+      stepProgress,
+    );
+  };
+  sprog('line and percent', AGENT, {});
+  sprog('no percent', AGENT, { percent: null });
+  sprog('empty line', AGENT, { line: '  ' });
+  sprog('line too long', AGENT, { line: 'x'.repeat(141) });
+  sprog('percent 101', AGENT, { percent: 101 });
+  sprog('percent 2.5', AGENT, { percent: 2.5 });
+  sprog('not its executor', OTHER, {});
+  sprog('not started', AGENT, {
+    plan: devPl(['done', 'done', 'approved', 'proposed', 'approved', 'proposed'], 2),
+  });
+  sprog('a short step', AGENT, {
+    plan: devPl(['running', 'proposed', 'approved', 'proposed', 'approved', 'proposed'], 0),
+    outcomeId: 'o1',
+  });
+  sprog('not its turn', AGENT, {
+    plan: devPl(['done', 'done', 'running', 'proposed', 'approved', 'proposed'], 3),
+  });
+  sprog('blocked plan', AGENT, {
+    plan: devPl(['done', 'done', 'running', 'proposed', 'approved', 'proposed'], 2, 'blocked'),
   });
   sb('to a gate', AGENT, { toStep: 3 });
   sb('to a later step', AGENT, { toStep: 5 });

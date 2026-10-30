@@ -11,6 +11,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -58,6 +59,8 @@ type OutcomeType struct {
 	// Plan: allowed as a plan step; PlanOnly: never proposed alone (outcome_propose).
 	Plan     bool `json:"plan"`
 	PlanOnly bool `json:"planOnly"`
+	// Long (slice 6b): a long step (Build, Release), started then reported done.
+	Long bool `json:"long"`
 	// Retired (bookings, item OE8FmrTaIxFVGcaeGG3N slice 5): old records only, never proposed.
 	Retired bool `json:"retired"`
 }
@@ -1270,6 +1273,38 @@ type FinishInput struct {
 	} `json:"result"`
 	// Plan: the outcome's plan, when it is a plan step.
 	Plan *PlanInput `json:"plan"`
+	// Usage (slice 6b): what carrying it out cost, recorded on the event.
+	Usage *struct {
+		Tokens  *float64 `json:"tokens"`
+		CostEur *float64 `json:"costEur"`
+	} `json:"usage"`
+}
+
+// cleanUsage is cleanUsage: whole tokens and euros (4 decimals), both optional; nil when empty.
+func cleanUsage(in FinishInput) (map[string]any, error) {
+	u := in.Usage
+	if u == nil {
+		return nil, nil
+	}
+	out := map[string]any{}
+	if u.Tokens != nil {
+		t := *u.Tokens
+		if t != math.Trunc(t) || t < 0 || t > 1e10 {
+			return nil, fail("usage.tokens is a whole number from 0.")
+		}
+		out["tokens"] = int64(t)
+	}
+	if u.CostEur != nil {
+		c := *u.CostEur
+		if math.IsNaN(c) || math.IsInf(c, 0) || c < 0 || c > 1e6 {
+			return nil, fail("usage.costEur is a number of euros from 0.")
+		}
+		out["costEur"] = math.Round(c*10000) / 10000
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
 }
 
 // FinishOutcome is finishOutcome: the executor reports an approved outcome done or failed. A plan
@@ -1281,6 +1316,10 @@ func FinishOutcome(ctx Ctx, in FinishInput) (plan.Plan, error) {
 	}
 	o := in.Outcome
 	planned := o.PlanID != nil
+	usage, err := cleanUsage(in)
+	if err != nil {
+		return plan.Plan{}, err
+	}
 	msg := "This outcome is " + o.State + " already."
 	if o.State == "proposed" || o.State == "revising" {
 		msg = "Not approved: nothing is carried out before the person approves it."
@@ -1335,12 +1374,14 @@ func FinishOutcome(ctx Ctx, in FinishInput) (plan.Plan, error) {
 		state, typ, force := "failed", "outcome.failed", "blocked"
 		switch in.Status {
 		case "started":
-			t := OutcomeTypeOf(o.Type)
-			if err := need(t != nil && t.After.WaitingOn == "item", "A "+o.Type+" step is reported done or failed, not started."); err != nil {
-				return plan.Plan{}, err
-			}
-			if err := need(itemID != nil, "Give the item you made (result.itemId)."); err != nil {
-				return plan.Plan{}, err
+			// A long step (Build, Release: slice 6b) starts with no item; Build it with its item.
+			if t := OutcomeTypeOf(o.Type); t == nil || !t.Long {
+				if err := need(t != nil && t.After.WaitingOn == "item", "A "+o.Type+" step is reported done or failed, not started."); err != nil {
+					return plan.Plan{}, err
+				}
+				if err := need(itemID != nil, "Give the item you made (result.itemId)."); err != nil {
+					return plan.Plan{}, err
+				}
 			}
 			state, typ, force = "running", "outcome.started", ""
 		case "done":
@@ -1350,6 +1391,9 @@ func FinishOutcome(ctx Ctx, in FinishInput) (plan.Plan, error) {
 		data := map[string]any{"outcomeId": in.OutcomeID, "type": o.Type, "planId": pl.PlanID, "permalink": strOrNil(permalink), "itemId": strOrNil(itemID)}
 		if errText != nil {
 			data["error"] = *errText
+		}
+		if usage != nil {
+			data["usage"] = usage
 		}
 		var werr error
 		p := InboxPlan(ctx, typ, o.MemberUID, sp(o.ThreadID), in.Thread.SubjectID, data, func(eventID string) []plan.Op {
@@ -1371,6 +1415,9 @@ func FinishOutcome(ctx Ctx, in FinishInput) (plan.Plan, error) {
 	data := map[string]any{"outcomeId": in.OutcomeID, "type": o.Type, "permalink": strOrNil(permalink), "itemId": strOrNil(itemID)}
 	if errText != nil {
 		data["error"] = *errText
+	}
+	if usage != nil {
+		data["usage"] = usage
 	}
 	return InboxPlan(ctx, typ, o.MemberUID, sp(o.ThreadID), in.Thread.SubjectID, data, func(eventID string) []plan.Op {
 		return []plan.Op{

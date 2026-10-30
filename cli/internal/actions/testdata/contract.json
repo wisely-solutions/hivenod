@@ -27117,6 +27117,1705 @@
       }
     },
     {
+      "name": "finishOutcome/plan/build started without an item",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "started",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "state": "running",
+              "result": {
+                "text": null,
+                "permalink": null,
+                "itemId": null,
+                "error": null,
+                "by": "agentA",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "waiting",
+              "waiting": { "on": "item", "until": null },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.started",
+              "data": {
+                "outcomeId": "o3",
+                "type": "build",
+                "planId": "pl1",
+                "permalink": null,
+                "itemId": null
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "finishOutcome/plan/shape started without an item",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "shape",
+          "fields": {},
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "started",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 0,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "Give the item you made (result.itemId)." }
+    },
+    {
+      "name": "finishOutcome/plan/build done with usage",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "done",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        },
+        "result": { "permalink": "https://github.com/example/board/pull/86" },
+        "usage": { "tokens": 123456, "costEur": 1.234567 }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "state": "done",
+              "result": {
+                "text": null,
+                "permalink": "https://github.com/example/board/pull/86",
+                "itemId": null,
+                "error": null,
+                "by": "agentA",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxPlans/pl1",
+            "data": { "cursor": 3, "updatedAt": { "__hive": "serverTime" }, "lastEventId": "id01" }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.done",
+              "data": {
+                "outcomeId": "o3",
+                "type": "build",
+                "planId": "pl1",
+                "permalink": "https://github.com/example/board/pull/86",
+                "itemId": null,
+                "usage": { "tokens": 123456, "costEur": 1.2346 }
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "finishOutcome/plan/bad usage",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "done",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        },
+        "usage": { "tokens": 1.5 }
+      },
+      "output": { "error": "usage.tokens is a whole number from 0." }
+    },
+    {
+      "name": "finishOutcome/plan/bad cost",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "done",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        },
+        "usage": { "costEur": -1 }
+      },
+      "output": { "error": "usage.costEur is a number of euros from 0." }
+    },
+    {
+      "name": "stepProgress/line and percent",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "  Tests   green, writing the PR ",
+        "percent": 70,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "progress": {
+                "line": "Tests green, writing the PR",
+                "percent": 70,
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "step.progress",
+              "data": {
+                "planId": "pl1",
+                "outcomeId": "o3",
+                "line": "Tests green, writing the PR",
+                "percent": 70
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "stepProgress/no percent",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "  Tests   green, writing the PR ",
+        "percent": null,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "progress": {
+                "line": "Tests green, writing the PR",
+                "percent": null,
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "step.progress",
+              "data": {
+                "planId": "pl1",
+                "outcomeId": "o3",
+                "line": "Tests green, writing the PR",
+                "percent": null
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "stepProgress/empty line",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "  ",
+        "percent": 70,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "Say where it stands (line)." }
+    },
+    {
+      "name": "stepProgress/line too long",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "percent": 70,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "The line is at most 140 characters." }
+    },
+    {
+      "name": "stepProgress/percent 101",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "  Tests   green, writing the PR ",
+        "percent": 101,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "The percent is a whole number from 0 to 100." }
+    },
+    {
+      "name": "stepProgress/percent 2.5",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "  Tests   green, writing the PR ",
+        "percent": 2.5,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "The percent is a whole number from 0 to 100." }
+    },
+    {
+      "name": "stepProgress/not its executor",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "  Tests   green, writing the PR ",
+        "percent": 70,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "Only the agent that carries this step out reports its progress." }
+    },
+    {
+      "name": "stepProgress/not started",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "  Tests   green, writing the PR ",
+        "percent": 70,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": {
+        "error": "Progress is for a long step you started (outcome_done status started first)."
+      }
+    },
+    {
+      "name": "stepProgress/a short step",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "shape",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "  Tests   green, writing the PR ",
+        "percent": 70,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 0,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": {
+        "error": "Progress is for a long step you started (outcome_done status started first)."
+      }
+    },
+    {
+      "name": "stepProgress/not its turn",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "  Tests   green, writing the PR ",
+        "percent": 70,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 3,
+            "state": "active",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "Not its turn: this step is not the one the plan runs now." }
+    },
+    {
+      "name": "stepProgress/blocked plan",
+      "action": "stepProgress",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o3",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "build",
+          "fields": {},
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "line": "  Tests   green, writing the PR ",
+        "percent": 70,
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+            "cursor": 2,
+            "state": "blocked",
+            "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "done",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "done",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o3": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o4": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            },
+            "o5": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o6": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "executor": null,
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "Not its turn: this step is not the one the plan runs now." }
+    },
+    {
       "name": "sendBackPlan/to a gate",
       "action": "sendBackPlan",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
