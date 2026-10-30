@@ -261,7 +261,11 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await expect(
       page.getByRole('heading', { name: /move the payments review/, level: 1 }),
     ).toBeVisible();
-    await expect(page.getByText('The team is out on Wednesday.')).toBeVisible();
+    // The conversation and the outcomes are under Everything (folded at first).
+    await page.getByRole('button', { name: /^Everything/ }).click();
+    await expect(
+      page.getByRole('region', { name: 'Conversation' }).getByText('The team is out on Wednesday.'),
+    ).toBeVisible();
     const msg = page.locator('[data-message]').first();
     await expect(msg.getByText('Sam Example', { exact: true })).toBeVisible();
     await expect(msg.getByText('teams', { exact: true })).toBeVisible();
@@ -288,13 +292,13 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await expect(out.getByText('Thursday 10:00 works for me.')).toBeVisible();
     await expect(out.locator('[data-confidence="high"]')).toHaveText('Sure');
     // The agent panel (item kt3E7): what it checked, and what happens on approval.
-    // On a phone the panel is a bottom sheet: its handle opens the rest.
-    if (info.project.name === 'iphone-se')
-      await page.getByRole('button', { name: 'Notes, outcomes and related' }).click();
+    // What it checked is under More detail (the decision page, item OE8FmrTaIxFVGcaeGG3N).
+    await page.getByRole('button', { name: /^More detail/ }).click();
     await expect(
       page.getByRole('list', { name: 'What the agent checked' }).getByRole('listitem'),
     ).toHaveText(['Your calendar: Thu 10:00-11:00 free', 'Your answer: 10:00']);
-    await expect(out.locator('[data-effects]')).toContainText(
+    // On a phone, what happens on approval sits under More detail (Approve stays in reach).
+    await expect(page.locator('[data-effects]')).toContainText(
       'When you approve, Payments agent will:',
     );
     await look(page, 'thread', info.project.name);
@@ -355,6 +359,7 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     ).toBeVisible();
     await agent.done(o4, 'https://teams.example.com/conv-1/invite');
     await page.goto(`/inbox/${wid}/t/${t1}`);
+    await page.getByRole('button', { name: /^Everything/ }).click();
     await expect(chip(page, 'waiting')).toBeVisible();
 
     // A second thread under its own subject; a nudge rejected (with Undo first).
@@ -368,6 +373,7 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     const s2 = await agent.file(t2, { newName: 'Review slot' });
     const o3 = await agent.propose(t2, 'nudge', { text: 'Any news on the room?' });
     await page.goto(`/inbox/${wid}/t/${t2}`);
+    await page.getByRole('button', { name: /^Everything/ }).click();
     const nudge = page.locator(`[data-outcome="${o3}"]`);
     const rejectIt = async () => {
       await nudge.getByRole('button', { name: 'Other actions' }).click();
@@ -431,6 +437,7 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await page.goto(`/inbox/${wid}/s/${room}`);
     await expect(linked.getByRole('link', { name: 'Payments review (Thursday)' })).toBeVisible();
     await page.locator(`[data-thread="${t2}"]`).click();
+    await page.getByRole('button', { name: /^Everything/ }).click();
     const threadMenu = async (item: string) => {
       await page.getByRole('button', { name: 'Thread actions' }).click();
       await page.getByRole('menuitem', { name: item }).click();

@@ -184,8 +184,8 @@ test.describe('desktop 1440', () => {
         'Desk agent recommends Approve · confidence high · rollback takes 1 min if needed',
       );
       await expect(t.locator('[data-updated]')).toHaveText(/^updated /);
-      await expect(t.locator('[data-versions]')).toContainText('v2');
-      await expect(t.locator('[data-stale]')).toHaveCount(0);
+      await expect(t.locator('[data-summary-versions]')).toContainText('v2');
+      await expect(t.locator('[data-summary-stale]')).toHaveCount(0);
       await expect(t.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
 
       // The layers, top to bottom.
@@ -226,7 +226,7 @@ test.describe('desktop 1440', () => {
       const rail = page.locator('[data-plan-rail]');
       await expect(rail).toContainText('Plan · Step 3 of 5');
       await expect(rail.locator('li[data-step]')).toHaveCount(5);
-      await expect(page.locator('[data-fold="plan"]')).toHaveCount(0);
+      await expect(page.locator('[data-fold="plan-fold"]')).toHaveCount(0);
       expect((await rail.boundingBox())!.x).toBeGreaterThan((await t.boundingBox())!.x + 400);
 
       // More detail and Everything start folded; D and E toggle them.
@@ -245,7 +245,7 @@ test.describe('desktop 1440', () => {
       await look(page, 'decision-1440');
 
       // The version history: v2 and v1; v1 read only, its bullets compared with v2.
-      await t.locator('[data-versions]').click();
+      await t.locator('[data-summary-versions]').click();
       const dialog = page.getByRole('dialog', { name: 'Summary versions' });
       await expect(dialog.locator('[data-version]')).toHaveCount(2);
       await dialog.locator('[data-version="1"]').click();
@@ -273,7 +273,9 @@ test.describe('desktop 1440', () => {
         )
         .toBe(3);
       await expect(t.locator('[data-kicker]')).toHaveText(/Desk agent is working · step 4 of 5/);
-      await expect(t.locator('[data-stale]')).toContainText('May be out of date: changed since');
+      await expect(t.locator('[data-summary-stale]')).toContainText(
+        'May be out of date: changed since',
+      );
       await expect(t.locator('[data-why]')).toHaveText('Desk agent has not been online yet');
     } finally {
       await s.stop();
@@ -453,11 +455,11 @@ test.describe('phone 390', () => {
       await expect(planFold).toContainText('2 next');
       // Folds in order: Plan, More detail, Everything.
       const y = async (id: string) => (await page.locator(`[data-fold="${id}"]`).boundingBox())!.y;
-      expect(await y('plan')).toBeLessThan(await y('detail'));
+      expect(await y('plan-fold')).toBeLessThan(await y('detail'));
       expect(await y('detail')).toBeLessThan(await y('everything'));
       await look(page, 'decision-390');
       await planFold.click();
-      await expect(page.locator('[data-fold="plan"] li[data-step]')).toHaveCount(5);
+      await expect(page.locator('[data-fold="plan-fold"] li[data-step]')).toHaveCount(5);
       await fold(page, 'Everything').click();
       await expect(page.getByRole('region', { name: 'Conversation' })).toBeVisible();
       // axe's target-size flags whatever the fixed tab bar covers at this scroll position.

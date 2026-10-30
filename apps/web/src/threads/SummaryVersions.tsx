@@ -54,7 +54,7 @@ export function SummaryVersions({
     <>
       <button
         type="button"
-        data-versions=""
+        data-summary-versions=""
         aria-haspopup="dialog"
         onClick={() => {
           setPicked(null);

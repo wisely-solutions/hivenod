@@ -362,6 +362,18 @@ and edge ends are `checkSummary`'s; the app reads summaries and versions through
 schema. `packages/shared/rules/headroom-summary.test.ts` keeps each at 20 pad units or more
 with the heaviest summary.
 
+**The decision page (slice 2).** `apps/web/src/threads/ThreadPage.tsx` opens every thread on
+its decision: the top card (`DecisionTop.tsx`: the state kicker, the summary's `ask` or
+`headline`, `answer`, recommendation and confidence, the person-step buttons, "updated N ago ·
+vN" with the version history and "May be out of date" plus why: agent offline or CLI below
+`summary`), the short version (bullets, then the visuals drawn by `apps/web/src/ui/visuals/`),
+then More detail and Everything folded (keys D and E; A approves, C asks for changes). A plan is
+a sticky right rail from 1024 px and a fold on a phone. Without a summary the top card uses the
+app's own line (the proposal, the gate, the question) and the short version says "No summary
+yet" with the first message. The page reads the summary with `looseSummarySchema`
+(`threads/decision.ts`): each visual is checked on its own, so an unknown kind shows as "not
+shown"; every label renders as plain text and only https links are followed.
+
 ## Areas and quiet subjects
 
 - **Area:** an optional tag on a subject (a client, a product, "admin"; at most 60 characters,

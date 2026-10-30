@@ -1,6 +1,6 @@
 /**
- * The thread page with the agent panel, the subject page and briefing mode (item
- * kt3E7u9EliL3q2veDDI0, slice 3): 1440 (two columns) and 390 (bottom sheet), light and dark.
+ * The thread page, the subject page and briefing mode (item kt3E7u9EliL3q2veDDI0, slice 3; the
+ * decision page since item OE8FmrTaIxFVGcaeGG3N): 1440 and 390, light and dark.
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
@@ -34,7 +34,9 @@ async function look(page: Page, name: string) {
   await page.emulateMedia({ colorScheme: 'light' });
 }
 
-const panel = (page: Page) => page.locator('[data-agent-panel]');
+const panel = (page: Page) => page.locator('[data-decision-page]');
+const fold = (page: Page, name: string) =>
+  page.getByRole('button', { name: new RegExp(`^${name}`) });
 const threadState = async (s: Seed, tid: string) =>
   (await adminDoc(`workspaces/${s.wid}/inboxThreads/${tid}`))?.fields.state?.stringValue;
 
@@ -47,7 +49,7 @@ async function open(page: Page) {
 test.describe('desktop 1440', () => {
   test.skip(({ isMobile }) => isMobile, 'desktop layout');
 
-  test('the agent panel: checks, the proposal with what happens next, related; axe-clean', async ({
+  test('the decision page: checks, the proposal with what happens next, related; axe-clean', async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -57,14 +59,19 @@ test.describe('desktop 1440', () => {
       await expect(
         page.getByRole('heading', { name: 'Move the payments review to Tuesday', level: 1 }),
       ).toBeVisible({ timeout: 20_000 });
-      // Left: the conversation, with the agent's note inline.
+      // The decision page (item OE8FmrTaIxFVGcaeGG3N): no summary yet, so the app's own top line.
+      const top = page.getByRole('region', { name: 'Decision' });
+      await expect(top.locator('[data-kicker]')).toHaveText('Your approval');
+      await expect(top.getByRole('heading', { level: 2 })).toHaveText(
+        'Desk agent proposes: Reply and book',
+      );
+      // Everything: the conversation, with the agent's note inline.
+      await fold(page, 'Everything').click();
       const talk = page.getByRole('region', { name: 'Conversation' });
       await expect(talk.locator('[data-message]')).toHaveCount(1);
       await expect(talk).toContainText('Desk agent noted');
-      // Right: the agent panel.
       const p = panel(page);
-      await expect(p).toContainText('Desk agent');
-      await expect(p).toContainText('worked on this · 1 source');
+      await fold(page, 'More detail').click();
       await expect(p.locator('[data-confidence="high"]').first()).toContainText('Sure');
       await expect(
         p.getByRole('list', { name: 'What the agent checked' }).getByRole('listitem'),
@@ -83,7 +90,7 @@ test.describe('desktop 1440', () => {
 
       // The question thread: two chips; one tap answers it.
       await page.goto(`/inbox/${s.wid}/t/${s.threads.room}`);
-      const asks = panel(page).getByRole('region', { name: 'Agent asks' });
+      const asks = page.getByRole('region', { name: 'Decision' });
       await expect(asks.getByRole('group', { name: 'Answers' }).getByRole('button')).toHaveText([
         'Small room',
         'Afternoon',
@@ -153,25 +160,20 @@ test.describe('phone 390', () => {
   test.skip(({ isMobile }) => !isMobile, 'phone layout');
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('the panel is a bottom sheet with Approve in reach; the handle opens the rest', async ({
-    page,
-  }) => {
+  test('the decision page stacked: Approve in reach, the rest in folds', async ({ page }) => {
     test.setTimeout(120_000);
     const s = await open(page);
     try {
       await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
-      const sheet = panel(page);
-      await expect(sheet).toHaveAttribute('data-sheet', 'collapsed', { timeout: 20_000 });
-      const approve = sheet.getByRole('button', { name: /Send and book/ });
-      await expect(approve).toBeInViewport();
-      await expect(sheet.locator('[data-reason]')).toHaveCount(0);
+      const approve = panel(page).getByRole('button', { name: /Send and book/ });
+      await expect(approve).toBeInViewport({ timeout: 20_000 });
       await look(page, 'thread-390');
-      await sheet.getByRole('button', { name: 'Notes, outcomes and related' }).click();
-      await expect(sheet).toHaveAttribute('data-sheet', 'open');
+      await fold(page, 'More detail').click();
       await expect(
-        sheet.getByRole('list', { name: 'What the agent checked' }).getByRole('listitem'),
+        page.getByRole('list', { name: 'What the agent checked' }).getByRole('listitem'),
       ).toHaveCount(2);
-      await expect(sheet.locator('[data-effects]')).toBeVisible();
+      await expect(panel(page).locator('[data-effects]')).toBeVisible();
+      await page.evaluate(() => window.scrollTo(0, 0));
       await look(page, 'thread-390-open');
       await page.goto(`/inbox/${s.wid}/s/${s.subjects.review}`);
       await expect(page.locator(`[data-thread="${s.threads.room}"]`)).toBeVisible();

@@ -32,8 +32,11 @@ export function Fold({
   open,
   onToggle,
   children,
+  anchor,
 }: {
   id: string;
+  /** An anchor other pages link to (#plan). */
+  anchor?: string;
   title: string;
   hint: ReactNode;
   open: boolean;
@@ -41,7 +44,12 @@ export function Fold({
   children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={`${id}-h`} data-fold={id} className={cn('mt-3', CARD)}>
+    <section
+      id={anchor}
+      aria-labelledby={`${id}-h`}
+      data-fold={id}
+      className={cn('mt-3 scroll-mt-20', CARD)}
+    >
       <h2 id={`${id}-h`} className="m-0">
         <button
           type="button"

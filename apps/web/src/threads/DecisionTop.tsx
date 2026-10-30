@@ -21,7 +21,6 @@ import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } fro
 import type { Row } from '../lib/live';
 import { effectLines } from '../lib/outcomes';
 import { ProposalPanel, QuestionPanel, type DecisionCardHandle } from '../today/DecisionCard';
-import { ConfidenceMeter } from '../today/parts';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
@@ -56,6 +55,41 @@ export interface DecisionTopProps {
   agentName: (id: string) => string;
   agent: AgentInfo;
   onDone: (label: string) => void;
+  /** A phone: the proposal without its reason and effects (they go to More detail), so the
+   * buttons stay in reach. */
+  compact?: boolean;
+}
+
+/** "When you approve, <agent> will: …" for a proposal. */
+export function ProposalEffects({
+  outcome: o,
+  agentName,
+  sender,
+}: {
+  outcome: Row<InboxOutcome>;
+  agentName: (id: string) => string;
+  sender: { name: string; source: string } | null;
+}) {
+  const e = effectLines(o.data.type, o.data.fields, {
+    agent: agentName(o.data.executor ?? o.data.proposedBy),
+    channel: sender?.source,
+    to: sender?.name.split(' ')[0],
+  });
+  return e.lines.length ? (
+    <div data-effects="" className="mt-3 rounded-card border border-line bg-surface-2 p-3.5">
+      <p className="font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3">
+        {e.lead}
+      </p>
+      <ul className="mt-2 flex flex-col gap-1.5">
+        {e.lines.map((l) => (
+          <li key={l} className="flex gap-2 text-14 text-ink">
+            <Icon icon={ChevronRight} size={14} className="mt-1 shrink-0 text-text-3" />
+            <span className="min-w-0">{l}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ) : null;
 }
 
 const CARD: Record<TopTone, string> = {
@@ -166,7 +200,9 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
     // Re-check and Ask the agent (items bmNoI, w6O2K): under the top card.
     const rc = useRecheck(wid, thread, now);
     const instructions = Object.keys(t.instructions ?? {}).length > 0;
-    const [askOpen, setAskOpen] = useState(instructions);
+    // Open by default when nothing waits for the member (asking is then the main action).
+    const [askToggle, setAskOpen] = useState<boolean | null>(null);
+    const askOpen = askToggle ?? (instructions || !asks);
     const staleStep =
       !!pl &&
       live &&
@@ -181,28 +217,9 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
     const sender = last
       ? { name: last.sender.name, source: last.source, at: last.receivedAt.toMillis() }
       : null;
-    const effect = (o: Row<InboxOutcome>) => {
-      const e = effectLines(o.data.type, o.data.fields, {
-        agent: agentName(o.data.executor ?? o.data.proposedBy),
-        channel: sender?.source,
-        to: sender?.name.split(' ')[0],
-      });
-      return e.lines.length ? (
-        <div data-effects="" className="mt-3 rounded-card border border-line bg-surface-2 p-3.5">
-          <p className="font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3">
-            {e.lead}
-          </p>
-          <ul className="mt-2 flex flex-col gap-1.5">
-            {e.lines.map((l) => (
-              <li key={l} className="flex gap-2 text-14 text-ink">
-                <Icon icon={ChevronRight} size={14} className="mt-1 shrink-0 text-text-3" />
-                <span className="min-w-0">{l}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null;
-    };
+    const effect = (o: Row<InboxOutcome>) => (
+      <ProposalEffects outcome={o} agentName={agentName} sender={sender} />
+    );
 
     let widget: ReactNode = null;
     if (top.kind === 'blocked' && pl && live) {
@@ -316,7 +333,8 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           busy={props.busy}
           agentName={agentName}
           onDone={props.onDone}
-          after={effect}
+          after={props.compact ? undefined : effect}
+          compact={props.compact}
           noEditKey
         />
       );
@@ -327,8 +345,14 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
     return (
       <section
         aria-label="Decision"
+        id={
+          top.kind === 'question' ? 'agent-asks' : top.kind === 'person' ? 'proposed' : 'decision'
+        }
         data-top={top.kind}
-        className={cn('mt-4 rounded-panel border-2 p-4 shadow-e1 sm:p-5', CARD[top.tone])}
+        className={cn(
+          'mt-4 scroll-mt-20 rounded-panel border-2 p-4 shadow-e1 sm:p-5',
+          CARD[top.tone],
+        )}
       >
         <p
           className={cn(
@@ -361,10 +385,6 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
             {conf ? `${rec ? ' · ' : ''}confidence ${conf}` : null}
             {rec ? ` · ${rec.why}` : null}
           </p>
-        ) : !summary && shownProposal?.data.confidence ? (
-          <p className="mt-2">
-            <ConfidenceMeter value={shownProposal.data.confidence} />
-          </p>
         ) : null}
         {widget ? <div className="mt-1">{widget}</div> : null}
         {acts.error && pl ? (
@@ -390,7 +410,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           )}
           {fresh.stale ? (
             <span
-              data-stale=""
+              data-summary-stale=""
               className="inline-flex items-center gap-1 font-medium text-gate-text"
             >
               <Icon icon={TriangleAlert} size={14} />
@@ -409,7 +429,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
             className="min-h-9 px-2 text-agent"
             aria-expanded={askOpen}
             aria-controls="ask-agent"
-            onClick={() => setAskOpen((v) => !v)}
+            onClick={() => setAskOpen(!askOpen)}
             leading={<Icon icon={MessageSquare} size={15} />}
           >
             Ask {agent}…

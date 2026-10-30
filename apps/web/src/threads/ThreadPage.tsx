@@ -66,7 +66,7 @@ import {
   MoreDetail,
   ShortVersion,
 } from './DecisionLayers';
-import { DecisionTop } from './DecisionTop';
+import { DecisionTop, ProposalEffects } from './DecisionTop';
 import { planInputOf, planLive, planMain } from './plan';
 import { PlanPanel } from './PlanPanel';
 import { LabelChip } from './labels';
@@ -383,9 +383,10 @@ export function ThreadPage() {
         <BackLink>Inbox</BackLink>
       )}
       <div
+        data-decision-page=""
         className={cn(rail && 'lg:grid lg:grid-cols-[minmax(0,1fr)_25rem] lg:items-start lg:gap-6')}
       >
-        <div className="min-w-0" data-decision-page="">
+        <div className="min-w-0">
           <header>
             <div className="flex items-start gap-2">
               <h1 className="min-w-0 flex-1 text-20 font-semibold leading-tight text-ink [overflow-wrap:anywhere] sm:text-24">
@@ -447,6 +448,7 @@ export function ThreadPage() {
             agentName={agentName}
             agent={agentInfo}
             onDone={() => (from ? goNext() : undefined)}
+            compact={!wide}
           />
           <ShortVersion
             summary={summary}
@@ -457,7 +459,8 @@ export function ThreadPage() {
           />
           {!rail && shownPlan && view ? (
             <Fold
-              id="plan"
+              id="plan-fold"
+              anchor="plan"
               title="Plan"
               hint={<HintPills parts={planFoldParts(view)} />}
               open={planOpen}
@@ -474,6 +477,9 @@ export function ThreadPage() {
             onToggle={() => setDetailOpen((v) => !v)}
           >
             <MoreDetail details={summary?.details ?? null} checks={checks} agent={agentInfo.name} />
+            {!wide && proposed[0] && !main ? (
+              <ProposalEffects outcome={proposed[0]} agentName={agentName} sender={sender} />
+            ) : null}
           </Fold>
           <Fold
             id="everything"
@@ -512,8 +518,9 @@ export function ThreadPage() {
         {rail ? (
           <aside
             aria-label="Plan rail"
+            id="plan"
             data-plan-rail=""
-            className="mt-6 overflow-hidden rounded-panel border border-line bg-surface shadow-e1 lg:sticky lg:top-4 lg:mt-0"
+            className="mt-6 overflow-hidden rounded-panel border border-line bg-surface shadow-e1 scroll-mt-20 lg:sticky lg:top-4 lg:mt-0"
           >
             {planPanel(shownPlan, true)}
           </aside>
