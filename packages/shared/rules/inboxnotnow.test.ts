@@ -95,9 +95,11 @@ describe('Not now', () => {
     const p = await plan();
     const far = new Date(Date.now() + 49 * H);
     const past = new Date(Date.now() - H);
+    const at = (p.ops[0]!.data!.notNow as { at: unknown }).at;
+    // A far or past time, also in its event (else the event check alone refuses it).
+    for (const until of [far, past])
+      await denied(alice.run(forge(p.ops, { notNow: { until, key: 'q1', at } }, { until })));
     for (const over of [
-      { notNow: { until: far, key: 'q1', at: (p.ops[0]!.data!.notNow as { at: unknown }).at } },
-      { notNow: { until: past, key: 'q1', at: (p.ops[0]!.data!.notNow as { at: unknown }).at } },
       { notNow: { ...(p.ops[0]!.data!.notNow as object), key: '' } },
       { notNow: { ...(p.ops[0]!.data!.notNow as object), extra: 1 } },
       { state: 'investigating' },
