@@ -12,7 +12,6 @@ import { createSign } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import {
   RULES_COMPILED_BUDGET,
-  RULES_COMPILED_LIMIT,
   measureCompiledSize,
   parseCompiledSize,
   isSourcesTooBig,
