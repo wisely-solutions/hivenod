@@ -206,6 +206,10 @@ func (c *Client) InboxAdd(ctx context.Context, in InboxAddIn) (map[string]any, e
 	if err != nil {
 		return nil, err
 	}
+	// Off (slice 7): nothing is brought in for a member who has this agent Off.
+	if err := c.refuseOff(ctx, member, nil); err != nil {
+		return nil, err
+	}
 	messageID := strconv.FormatInt(at.UnixMilli(), 10)
 	if in.MessageID != nil {
 		messageID = *in.MessageID
@@ -839,6 +843,9 @@ func (c *Client) OutcomePropose(ctx context.Context, id, typ string, fields map[
 	if err != nil {
 		return nil, err
 	}
+	if err := c.refuseOff(ctx, t.MemberUID, func(s int64) bool { return touchedSince(t, s) }); err != nil {
+		return nil, err
+	}
 	r, err := actions.ProposeOutcome(c.actx(), actions.ProposeInput{ThreadID: id, Thread: actions.ThreadStateFrom(t), Type: typ, Fields: fields, Note: note, Confidence: x.Confidence, Checks: x.Checks})
 	if err != nil {
 		return nil, wrap(err)
@@ -909,6 +916,17 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 		// Build it items went with projects (item OE8FmrTaIxFVGcaeGG3N, slice 11).
 		return nil, Errf(ProjectsRemovedMessage + " Report outcome_done without itemId.")
 	}
+	// Off (slice 7): a step approved before Off is not started (or done straight away) while Off;
+	// a running one still reports, and failed always goes through.
+	if o.State == "approved" && status != "failed" {
+		decided := o.CreatedAt.UnixMilli()
+		if o.Decision != nil && o.Decision.At != nil {
+			decided = o.Decision.At.UnixMilli()
+		}
+		if err := c.refuseOff(ctx, o.MemberUID, func(s int64) bool { return decided > s }); err != nil {
+			return nil, err
+		}
+	}
 	in := actions.FinishInput{OutcomeID: id, Outcome: actions.OutcomeStateFrom(o), Thread: actions.ThreadStateFrom(t), Status: status}
 	if o.PlanID != nil {
 		pl, _, err := c.planInput(ctx, *o.PlanID)
@@ -965,6 +983,11 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 
 // ThreadWake wakes a snoozed thread whose date has come (thread_wake).
 func (c *Client) ThreadWake(ctx context.Context, id string) (map[string]any, error) {
+	if t, err := c.thread(ctx, id); err != nil {
+		return nil, err
+	} else if err := c.refuseOff(ctx, t.MemberUID, nil); err != nil {
+		return nil, err // Off (slice 7): a snooze wakes once On
+	}
 	pl, err := c.livePlan(ctx, id)
 	if err != nil {
 		return nil, err
