@@ -147,7 +147,7 @@ export function InboxPage() {
   // Scheduled tasks (slice 6, design 9.3): runs that couldn't happen, Coming up, the banner.
   const wids = useMemo(() => all.orgs.map((o) => o.wid), [all.orgs]);
   const sched = useTodaySchedules(session.me.uid, wids);
-  const tz = useMemo(viewerTz, []);
+  const tz = useMemo(() => viewerTz(), []);
   const agentsAcross = useAgentsAcross(session.me.uid, sched.schedules.list.length ? wids : []);
   const runCards = useMemo(
     () => cantRunCards(sched.cant.list, sched.schedules.list, now, tz),

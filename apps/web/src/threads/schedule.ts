@@ -99,12 +99,13 @@ export function scheduleSteps(
 
 /** The card of a proposed schedule, at `now`. */
 export function scheduleCard(s: ScheduleOf, now: number): ScheduleCard {
-  let occ: ReturnType<typeof nextRuns> = [];
-  try {
-    occ = nextRuns(s.rule, now, 3);
-  } catch {
-    occ = [];
-  }
+  const occ: ReturnType<typeof nextRuns> = (() => {
+    try {
+      return nextRuns(s.rule, now, 3);
+    } catch {
+      return [];
+    }
+  })();
   const runs = occ.map((o) => runDayWords(o.local));
   const steps = scheduleSteps(s.steps, occ[0] ?? null);
   return {

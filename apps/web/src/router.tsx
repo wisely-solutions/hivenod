@@ -266,9 +266,7 @@ const inboxThreadRoute = createRoute({
 const schedulesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/schedules',
-  validateSearch: (
-    s: Record<string, unknown>,
-  ): { s?: string; view?: 'month'; at?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { s?: string; view?: 'month'; at?: string } => ({
     ...(typeof s.s === 'string' && s.s ? { s: s.s } : {}),
     ...(s.view === 'month' ? { view: 'month' as const } : {}),
     ...(typeof s.at === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.at) ? { at: s.at } : {}),

@@ -4,12 +4,7 @@
  * state pill of a run and the plan pills of a schedule.
  */
 import { Link } from '@tanstack/react-router';
-import {
-  decideRun,
-  laterChoices,
-  parseLaterTime,
-  type RunChoice,
-} from '@hive/shared';
+import { decideRun, laterChoices, parseLaterTime, type RunChoice } from '@hive/shared';
 import { AlertTriangle, CalendarClock, ChevronRight } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useReady } from '../auth/context';
@@ -181,7 +176,9 @@ export function CantRunCardView({
           choice === 'runNow'
             ? `Running now: ${card.scheduleTitle}`
             : choice === 'later'
-              ? `Tries again ${laterWords(laterMs!, Date.now(), tz).replace(/^Today/, 'today').replace(/^Tomorrow/, 'tomorrow')}`
+              ? `Tries again ${laterWords(laterMs!, Date.now(), tz)
+                  .replace(/^Today/, 'today')
+                  .replace(/^Tomorrow/, 'tomorrow')}`
               : `Skipped: ${r.title}`,
         duration: 4000,
       });

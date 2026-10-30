@@ -15,14 +15,7 @@ import {
   type Schedule,
   type ScheduleRun,
 } from '@hive/shared';
-import {
-  collection,
-  limit,
-  orderBy,
-  query,
-  Timestamp,
-  where,
-} from 'firebase/firestore';
+import { collection, limit, orderBy, query, Timestamp, where } from 'firebase/firestore';
 import { useMemo } from 'react';
 import { z } from 'zod';
 import { db } from '../lib/db';
@@ -181,10 +174,17 @@ export function useSchedulerBeat(enabled = true): number | null | undefined {
 
 /** The agents of every organization the member is in, by `wid/uid` (names and colours). */
 export function useAgentsAcross(uid: string, wids: readonly string[]) {
-  const r = useAcross('agents-across', wids, uid, (wid) => agentsQuery(wid), agentSchema, (wid, id, d) => ({
-    key: `${wid}/${id}`,
-    data: d,
-  }));
+  const r = useAcross(
+    'agents-across',
+    wids,
+    uid,
+    (wid) => agentsQuery(wid),
+    agentSchema,
+    (wid, id, d) => ({
+      key: `${wid}/${id}`,
+      data: d,
+    }),
+  );
   return useMemo(() => new Map(r.rows.map((a) => [a.key, a.data] as const)), [r.rows]);
 }
 

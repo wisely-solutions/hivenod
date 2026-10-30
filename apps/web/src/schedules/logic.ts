@@ -292,7 +292,8 @@ export function timeline(
       put(plannedChip(s, o, tz));
     }
   }
-  for (const list of out.values()) list.sort((a, b) => a.dueMs - b.dueMs || a.key.localeCompare(b.key));
+  for (const list of out.values())
+    list.sort((a, b) => a.dueMs - b.dueMs || a.key.localeCompare(b.key));
   return out;
 }
 
@@ -509,12 +510,13 @@ export function cantRunCards(
         ? when.replace(/^Today /, 'today at ').replace(/^Tomorrow /, 'tomorrow at ')
         : `on ${when.replace(/ (\d\d:\d\d)$/, ' at $1')}`;
       let skip: string;
-      if (!s || freq === 'once')
-        skip = 'It was a one-off: if skipped, it does not happen at all.';
+      if (!s || freq === 'once') skip = 'It was a one-off: if skipped, it does not happen at all.';
       else {
         const n = s.state === 'active' ? nextOf(s, Math.max(now, r.dueMs)) : null;
         skip = n
-          ? `If skipped, the next run is ${whenWords(n.local, now, tz).replace(/^Today/, 'today').replace(/^Tomorrow/, 'tomorrow')}.`
+          ? `If skipped, the next run is ${whenWords(n.local, now, tz)
+              .replace(/^Today/, 'today')
+              .replace(/^Tomorrow/, 'tomorrow')}.`
           : 'If skipped, no run is left.';
       }
       return {
@@ -569,7 +571,12 @@ export function schedulerBanner(
   }
   const parts = [`Scheduler offline${since ? ` ${since}` : ''}`];
   if (missed) parts.push(`${missed} ${missed === 1 ? 'run' : 'runs'} couldn’t fire`);
-  if (next) parts.push(`the run due ${whenWords(next.local, now, tz).replace(/^Today /, 'at ').replace(/^Tomorrow /, 'tomorrow at ')} can’t fire`);
+  if (next)
+    parts.push(
+      `the run due ${whenWords(next.local, now, tz)
+        .replace(/^Today /, 'at ')
+        .replace(/^Tomorrow /, 'tomorrow at ')} can’t fire`,
+    );
   else if (!missed) parts.push('scheduled runs can’t fire until it is back');
   return parts.join(' · ');
 }

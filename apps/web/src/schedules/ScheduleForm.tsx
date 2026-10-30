@@ -115,12 +115,13 @@ export function ScheduleEditDialog({
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((cur) => ({ ...cur, [k]: v }));
   const rule = ruleOf(d, schedule.rule);
   const problems = checkRule(rule);
-  let sentence = '';
-  try {
-    sentence = problems.length ? '' : ruleSentence(rule, { viewerTz: rule.tz });
-  } catch {
-    sentence = '';
-  }
+  const sentence = (() => {
+    try {
+      return problems.length ? '' : ruleSentence(rule, { viewerTz: rule.tz });
+    } catch {
+      return '';
+    }
+  })();
 
   async function save(e: FormEvent) {
     e.preventDefault();

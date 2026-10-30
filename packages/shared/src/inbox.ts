@@ -2037,7 +2037,9 @@ export function approveOutcome(
             eventId,
           )
         : []),
-      ...(immediate && !pl
+      // A schedule set up next to another open proposal (slice 6) leaves the thread on Your call
+      // for that one: setting up a schedule does not end the conversation.
+      ...(immediate && !pl && !(o.type === 'schedule' && input.othersPending === true)
         ? [
             upd(
               inboxPaths.thread(ctx.workspaceId, o.threadId),

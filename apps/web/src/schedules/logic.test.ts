@@ -259,7 +259,9 @@ describe("can't run", () => {
   it('orders the cards by level: the rarer, the louder', () => {
     expect(cards.map((c) => c.level)).toEqual(['high', 'normal']);
     expect(cards[0]!.kicker).toBe('High · Monthly run didn’t happen');
-    expect(cards[0]!.headline).toBe('Pay supplier retainer · Oct 2026 did not run on Wed 28 Oct at 10:00');
+    expect(cards[0]!.headline).toBe(
+      'Pay supplier retainer · Oct 2026 did not run on Wed 28 Oct at 10:00',
+    );
     expect(cards[0]!.why).toBe('Books could not do it: bank sign-in expired');
     expect(cards[0]!.skip).toBe('If skipped, the next run is Sat 28 Nov 10:00.');
     expect(cards[1]!.kicker).toBe('Normal · Weekly run didn’t happen');

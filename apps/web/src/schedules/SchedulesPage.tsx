@@ -127,7 +127,7 @@ export function SchedulesPage() {
   const all = useNeedsAll();
   const wids = useMemo(() => all.orgs.map((o) => o.wid), [all.orgs]);
   const now = useNow();
-  const tz = useMemo(viewerTz, []);
+  const tz = useMemo(() => viewerTz(), []);
   const phone = useIsPhone();
   const desktop = useIsDesktop();
   const today = localDate(now, tz);
@@ -152,10 +152,7 @@ export function SchedulesPage() {
   const cant = useCantRun(uid, wids);
   const beat = useSchedulerBeat();
   const agents = useAgentsAcross(uid, wids);
-  const off = useLiveDoc(
-    `workspaces/${session.workspaceId}/agentsOff/${uid}`,
-    agentsOffSchema,
-  );
+  const off = useLiveDoc(`workspaces/${session.workspaceId}/agentsOff/${uid}`, agentsOffSchema);
   const agentName = (wid: string, a: string) => agents.get(`${wid}/${a}`)?.name ?? 'Agent';
 
   const loading = schedules.state === 'loading';
@@ -172,16 +169,18 @@ export function SchedulesPage() {
     [cant.list, schedules.list, now, tz],
   );
   const banner = beat === undefined ? null : schedulerBanner(beat, schedules.list, now, tz);
-  const offNow =
-    off.state === 'ready' && off.data && (off.data.all || off.data.agents.length > 0);
+  const offNow = off.state === 'ready' && off.data && (off.data.all || off.data.agents.length > 0);
 
-  const selected = search.s ? (rows.find((r) => selKey(r.s.wid, r.s.id) === search.s) ?? null) : null;
+  const selected = search.s
+    ? (rows.find((r) => selKey(r.s.wid, r.s.id) === search.s) ?? null)
+    : null;
   const go = (patch: Partial<{ s: string | null; view: View; at: string | null }>) =>
     void navigate({
       to: '/schedules',
       search: (prev: Record<string, unknown>) => {
         const next: Record<string, unknown> = { ...prev, ...patch };
-        for (const k of Object.keys(next)) if (next[k] === null || next[k] === undefined) delete next[k];
+        for (const k of Object.keys(next))
+          if (next[k] === null || next[k] === undefined) delete next[k];
         if (next.view === 'week') delete next.view;
         return next as never;
       },
@@ -212,6 +211,7 @@ export function SchedulesPage() {
             tz={tz}
             agentName={agentName}
             onGone={() => go({ s: null })}
+            asPage
           />
         ) : loading ? (
           <Skeleton className="h-64 w-full" />
@@ -263,7 +263,11 @@ export function SchedulesPage() {
           ))}
         </div>
       ) : null}
-      <div className={cn(detailOpen && 'lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-5')}>
+      <div
+        className={cn(
+          detailOpen && 'lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-5',
+        )}
+      >
         <div className="flex min-w-0 flex-col gap-4">
           <Timeline
             view={view}
@@ -537,7 +541,9 @@ function Timeline(p: {
                   ))}
                 </ul>
                 {list.length > 3 ? (
-                  <span className="mt-0.5 block px-0.5 text-12 text-text-2">+{list.length - 3}</span>
+                  <span className="mt-0.5 block px-0.5 text-12 text-text-2">
+                    +{list.length - 3}
+                  </span>
                 ) : null}
               </section>
             );
@@ -564,7 +570,11 @@ function useScheduleActions(uid: string) {
   const toast = useToast();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
-  async function act(wid: string, build: (ctx: NonNullable<ReturnType<typeof actionContext>>) => ActionPlan, done: string) {
+  async function act(
+    wid: string,
+    build: (ctx: NonNullable<ReturnType<typeof actionContext>>) => ActionPlan,
+    done: string,
+  ) {
     const ctx = actionContext(wid);
     if (!ctx) return false;
     setError(null);
@@ -580,11 +590,23 @@ function useScheduleActions(uid: string) {
   return {
     error,
     pause: (s: SchedLite, doc: Schedule) =>
-      act(s.wid, (ctx) => pauseSchedule(ctx, { scheduleId: s.id, schedule: doc }), `Paused: ${s.title}`),
+      act(
+        s.wid,
+        (ctx) => pauseSchedule(ctx, { scheduleId: s.id, schedule: doc }),
+        `Paused: ${s.title}`,
+      ),
     resume: (s: SchedLite, doc: Schedule) =>
-      act(s.wid, (ctx) => resumeSchedule(ctx, { scheduleId: s.id, schedule: doc }), `Resumed: ${s.title}`),
+      act(
+        s.wid,
+        (ctx) => resumeSchedule(ctx, { scheduleId: s.id, schedule: doc }),
+        `Resumed: ${s.title}`,
+      ),
     remove: (s: SchedLite, doc: Schedule) =>
-      act(s.wid, (ctx) => deleteSchedule(ctx, { scheduleId: s.id, schedule: doc }), `Deleted: ${s.title}`),
+      act(
+        s.wid,
+        (ctx) => deleteSchedule(ctx, { scheduleId: s.id, schedule: doc }),
+        `Deleted: ${s.title}`,
+      ),
     /**
      * Run now, outside the schedule: a thread to its agent with what to do and the plan of each
      * run (the agent proposes it; nothing is sent before the member approves its steps).
@@ -602,7 +624,11 @@ function useScheduleActions(uid: string) {
         `Run now, outside its schedule: “${s.title}” (${ruleSentence(s.rule, { viewerTz: s.rule.tz })}).\n\n` +
         `${s.what}\n\nThe plan of each run: ${steps}. Propose it as a plan so I approve the steps that need me; the schedule itself does not change.`;
       try {
-        const p = createMemberThread(ctx, { title: `${title} · run now`, text, agentUid: s.agentUid });
+        const p = createMemberThread(ctx, {
+          title: `${title} · run now`,
+          text,
+          agentUid: s.agentUid,
+        });
         await run(p);
         toast.push({ message: `Asked ${agent} to run it now`, duration: 4000 });
         void navigate({ to: '/inbox/$wid/t/$tid', params: { wid: s.wid, tid: p.threadId } });
@@ -662,12 +688,17 @@ function ScheduleList({
   };
   const steps = (r: ListRow) => scheduleSteps(r.s.steps, r.next?.occ ?? null);
   const last = (r: ListRow) =>
-    r.last ? <RunPill state={r.last.run.state} label={r.last.day} /> : <span className="text-text-3">–</span>;
+    r.last ? (
+      <RunPill state={r.last.run.state} label={r.last.day} />
+    ) : (
+      <span className="text-text-3">–</span>
+    );
   return (
-    <section aria-label="All schedules" className="rounded-panel border border-line bg-surface shadow-e1">
-      <h2 className={cn(EYEBROW, 'px-4 pb-2 pt-3')}>
-        All schedules · {rows.length}
-      </h2>
+    <section
+      aria-label="All schedules"
+      className="rounded-panel border border-line bg-surface shadow-e1"
+    >
+      <h2 className={cn(EYEBROW, 'px-4 pb-2 pt-3')}>All schedules · {rows.length}</h2>
       {phone ? (
         <ul className="flex flex-col gap-2 px-3 pb-3">
           {rows.map((r) => (
@@ -698,11 +729,13 @@ function ScheduleList({
             role="row"
             className="grid grid-cols-[minmax(0,1.5fr)_7rem_minmax(0,1.1fr)_minmax(0,1.6fr)_7.5rem_6rem_2.75rem] gap-3 border-y border-line bg-canvas px-4 py-2"
           >
-            {['Schedule', 'Agent', 'When', 'Plan each run', 'Next run', 'Last run', ''].map((h, i) => (
-              <span key={i} role="columnheader" className={cn(EYEBROW, 'text-12')}>
-                {h}
-              </span>
-            ))}
+            {['Schedule', 'Agent', 'When', 'Plan each run', 'Next run', 'Last run', ''].map(
+              (h, i) => (
+                <span key={i} role="columnheader" className={cn(EYEBROW, 'text-12')}>
+                  {h || <span className="sr-only">Actions</span>}
+                </span>
+              ),
+            )}
           </div>
           {rows.map((r) => (
             <div
@@ -735,7 +768,11 @@ function ScheduleList({
                 <StepPills steps={steps(r)} />
               </span>
               <span role="cell" className="text-ink">
-                {r.s.state === 'paused' ? <Pill className="h-5 px-2 text-12">Paused</Pill> : (r.next?.words ?? '–')}
+                {r.s.state === 'paused' ? (
+                  <Pill className="h-5 px-2 text-12">Paused</Pill>
+                ) : (
+                  (r.next?.words ?? '–')
+                )}
               </span>
               <span role="cell">{last(r)}</span>
               <span role="cell" className="justify-self-end">
@@ -824,6 +861,7 @@ function Detail({
   tz,
   agentName,
   onGone,
+  asPage,
 }: {
   row: ListRow;
   doc: Schedule | null;
@@ -832,8 +870,12 @@ function Detail({
   tz: string;
   agentName: (wid: string, a: string) => string;
   onGone: () => void;
+  /** The detail is the page itself (phone): its title is the page's h1. */
+  asPage?: boolean;
 }) {
   const s = row.s;
+  const Title = asPage ? 'h1' : 'h2';
+  const Sub = asPage ? 'h2' : 'h3';
   const acts = useScheduleActions(uid);
   const history = useScheduleHistory(uid, s.wid, s.id);
   const subject = useLiveDoc(
@@ -847,7 +889,11 @@ function Detail({
   const steps = scheduleSteps(s.steps, next[0] ?? null);
   const stz = s.rule.tz ?? 'Europe/Lisbon';
   const weekend =
-    s.rule.weekend === 'before' ? 'weekend: Friday' : s.rule.weekend === 'after' ? 'weekend: Monday' : null;
+    s.rule.weekend === 'before'
+      ? 'weekend: Friday'
+      : s.rule.weekend === 'after'
+        ? 'weekend: Monday'
+        : null;
   const subjectName = subject.state === 'ready' ? subject.data?.name : null;
   const past = history.list.filter((r) => r.dueMs <= now + 60_000);
   const dt = 'text-14 text-text-2';
@@ -855,8 +901,12 @@ function Detail({
   return (
     <div data-schedule-detail={s.id}>
       <p className={EYEBROW}>Schedule</p>
-      <h2 className="mt-0.5 text-20 font-semibold text-ink [overflow-wrap:anywhere]">{s.title}</h2>
-      <p className="mt-1 whitespace-pre-wrap text-14 text-text-2 [overflow-wrap:anywhere]">{s.what}</p>
+      <Title className="mt-0.5 text-20 font-semibold text-ink [overflow-wrap:anywhere]">
+        {s.title}
+      </Title>
+      <p className="mt-1 whitespace-pre-wrap text-14 text-text-2 [overflow-wrap:anywhere]">
+        {s.what}
+      </p>
       {s.state === 'paused' ? (
         <p className="mt-2">
           <Pill>Paused: nothing runs until you resume it</Pill>
@@ -900,7 +950,7 @@ function Detail({
         <dd className="text-13 text-ink">{cantRunText(s.rule.freq)}</dd>
       </dl>
 
-      <h3 className={cn(EYEBROW, 'mt-5')}>Next runs</h3>
+      <Sub className={cn(EYEBROW, 'mt-5')}>Next runs</Sub>
       {next.length ? (
         <ul className="mt-1.5 flex flex-col divide-y divide-line" data-detail-next="">
           {next.map((o) => (
@@ -916,13 +966,16 @@ function Detail({
         </p>
       )}
 
-      <h3 className={cn(EYEBROW, 'mt-5')}>Past runs</h3>
+      <Sub className={cn(EYEBROW, 'mt-5')}>Past runs</Sub>
       {history.state === 'loading' ? (
         <Skeleton className="mt-2 h-16 w-full" />
       ) : past.length ? (
         <ul className="mt-1.5 flex flex-col divide-y divide-line" data-detail-past="">
           {past.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-14">
+            <li
+              key={r.id}
+              className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-14"
+            >
               <span className="min-w-0 text-ink">
                 {shortDay(r.dueMs, now, tz)}
                 {r.threadId ? (
@@ -938,7 +991,9 @@ function Detail({
                   </>
                 ) : null}
                 {r.why && r.state !== 'done' ? (
-                  <span className="block text-12 text-text-2 [overflow-wrap:anywhere]">{r.why.text}</span>
+                  <span className="block text-12 text-text-2 [overflow-wrap:anywhere]">
+                    {r.why.text}
+                  </span>
                 ) : null}
               </span>
               <RunPill
@@ -963,15 +1018,27 @@ function Detail({
           <Button variant="secondary" data-detail-edit="" onClick={() => setEditing(true)}>
             Edit
           </Button>
-          <Button variant="secondary" data-detail-run-now="" onClick={() => void acts.runNow(s, agent, now)}>
+          <Button
+            variant="secondary"
+            data-detail-run-now=""
+            onClick={() => void acts.runNow(s, agent, now)}
+          >
             Run now
           </Button>
           {s.state === 'active' ? (
-            <Button variant="secondary" data-detail-pause="" onClick={() => void acts.pause(s, doc)}>
+            <Button
+              variant="secondary"
+              data-detail-pause=""
+              onClick={() => void acts.pause(s, doc)}
+            >
               Pause
             </Button>
           ) : (
-            <Button variant="secondary" data-detail-resume="" onClick={() => void acts.resume(s, doc)}>
+            <Button
+              variant="secondary"
+              data-detail-resume=""
+              onClick={() => void acts.resume(s, doc)}
+            >
               Resume
             </Button>
           )}
@@ -1087,7 +1154,9 @@ function AskAgentDialog({
         {options.length ? (
           <Select label="Agent" value={picked} onValueChange={setAgent} options={options} />
         ) : (
-          <p className="text-14 text-text-2">No agent in this organization yet: connect one first.</p>
+          <p className="text-14 text-text-2">
+            No agent in this organization yet: connect one first.
+          </p>
         )}
         {error ? (
           <p role="alert" className="text-14 text-sendback">
@@ -1106,4 +1175,3 @@ function AskAgentDialog({
     </ResponsiveModal>
   );
 }
-

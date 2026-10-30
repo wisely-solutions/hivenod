@@ -10,13 +10,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 
 export type NavPath =
-  | '/'
-  | '/inbox'
-  | '/schedules'
-  | '/insights'
-  | '/activity'
-  | '/agents'
-  | '/account';
+  '/' | '/inbox' | '/schedules' | '/insights' | '/activity' | '/agents' | '/account';
 
 export interface NavEntry {
   to: NavPath;
