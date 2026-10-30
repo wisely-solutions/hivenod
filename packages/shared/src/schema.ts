@@ -517,8 +517,19 @@ export const statusUpdateSchema = z.object({
 export type StatusUpdate = z.infer<typeof statusUpdateSchema>;
 export const statusAskSchema = z.object({ runId: id, byUid: uid, at: timestamp });
 export type StatusAsk = z.infer<typeof statusAskSchema>;
-/** Written by the notifier only (admin SDK): no activity since `since` (ms) on this run. */
-export const silenceSchema = z.object({ runId: id, since: z.number(), at: z.number() });
+/**
+ * Written by the notifier only (admin SDK): no activity since `since` (ms) on this run. Reach out
+ * (item KZ6O9): `asked` is when the status request it did not answer went out, `agent` the
+ * holder's name ("Hive silent for 41 min"), `told` when the member was last messaged about it.
+ */
+export const silenceSchema = z.object({
+  runId: id,
+  since: z.number(),
+  at: z.number(),
+  asked: z.number().nullable().optional(),
+  agent: z.string().max(200).optional(),
+  told: z.number().nullable().optional(),
+});
 export type Silence = z.infer<typeof silenceSchema>;
 
 export const triageSchema = z.object({
