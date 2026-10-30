@@ -214,10 +214,13 @@ export function watchAll(
         } else if (plan) {
           since = Math.max(plan.updatedAt, plan.at);
         }
-        const fresh = !!t.summary && t.summary.at >= t.updatedAt;
+        // The thread and its plan come in on separate listeners: a plan step's turn may show
+        // before the thread's own update, so the plan's time counts too.
+        const changedAt = Math.max(t.updatedAt, plan?.updatedAt ?? 0);
+        const fresh = !!t.summary && t.summary.at >= changedAt;
         // An agent that writes summaries writes one right after each change: wait for it a
         // little. A thread that never had one is told at once.
-        const holdUntil = fresh || !t.summary ? 0 : t.updatedAt + SUMMARY_WAIT_MS;
+        const holdUntil = fresh || !t.summary ? 0 : changedAt + SUMMARY_WAIT_MS;
         const w: InboxWaiting = {
           wid,
           tid,

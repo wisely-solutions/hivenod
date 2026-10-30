@@ -988,6 +988,7 @@
         "confidence": "medium",
         "createdAt": "<ts>",
         "cursor": 3,
+        "cursorAt": "<ts>",
         "lastEventId": "<id>",
         "memberUid": "owner",
         "note": "Confirm, get your OK on the prices, update the site, then tell Sam.",

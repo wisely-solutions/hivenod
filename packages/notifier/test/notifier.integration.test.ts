@@ -7,7 +7,7 @@ import { bellId, bellPath, inboxPaths, notifyPath, paths } from '@hive/shared';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { now as harnessNow, put, useEmulator, W } from '../../shared/rules/harness';
+import { minutesAgo, now as harnessNow, put, useEmulator, W } from '../../shared/rules/harness';
 import { Engine } from '../src/engine';
 import { ReachOut } from '../src/reach';
 import { firestoreReachPorts } from '../src/reachStore';
@@ -590,7 +590,7 @@ describe('reach out end to end (item KZ6O9; Firestore emulator, fake clock)', ()
   }
 
   it('a thread step in agent hands: a status request on the outcome, then silent with Ping again · Open', async () => {
-    const old = Timestamp.fromMillis(Date.now() - 40 * 60_000);
+    const old = minutesAgo(40);
     await put({
       ...people(),
       [inboxPaths.thread(W, 'rt1')]: {
