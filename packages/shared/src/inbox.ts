@@ -2385,7 +2385,9 @@ export function sendBackPlan(
       target.state === 'done',
     'Send it back to an earlier agent step that is done.',
   );
-  const reset = p.steps.slice(to!, p.cursor + 1).filter((id) => pl.outcomes[id]?.state === 'done');
+  const reset = p.steps
+    .slice(to!, p.cursor + 1)
+    .filter((id) => ['done', 'running'].includes(pl.outcomes[id]?.state ?? ''));
   const n = (input.plan.sentBack?.n ?? 0) + 1;
   const blocked = n >= MAX_PLAN_SEND_BACKS;
   const back = (id: string) =>

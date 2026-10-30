@@ -235,6 +235,64 @@
     },
     "batchable": true
   },
+  "shape": {
+    "label": "Shape",
+    "approve": "Approve",
+    "description": "Development, step 1: research the idea, write the proposal into the summary (ask: build this?), attach drafts, give the size S/M/L.",
+    "fields": {
+      "idea": {
+        "kind": "text",
+        "label": "Idea",
+        "help": "What is to be built, as the member asked it"
+      }
+    },
+    "executor": "agent",
+    "after": {
+      "state": "waiting",
+      "waitingOn": "item"
+    },
+    "plan": true,
+    "planOnly": true
+  },
+  "build": {
+    "label": "Build",
+    "approve": "Approve",
+    "description": "Development: build what the approved idea says in a worktree; end with an open pull request, local checks green, NOT merged (Release merges it). Report the PR link and what changed.",
+    "fields": {
+      "brief": {
+        "kind": "text",
+        "label": "Brief",
+        "help": "What to build (default: what Approve idea approved)"
+      }
+    },
+    "executor": "agent",
+    "after": {
+      "state": "waiting",
+      "waitingOn": "item"
+    },
+    "plan": true,
+    "planOnly": true,
+    "long": true
+  },
+  "release": {
+    "label": "Release + live check",
+    "approve": "Approve",
+    "description": "Development: merge the approved pull request(s), run the release checks, release, check it live; report the merge sha, release number, live commit, production URL and screenshots.",
+    "fields": {
+      "notes": {
+        "kind": "text",
+        "label": "Notes",
+        "help": "Anything the release must know"
+      }
+    },
+    "executor": "agent",
+    "after": {
+      "state": "done"
+    },
+    "plan": true,
+    "planOnly": true,
+    "long": true
+  },
   "approval": {
     "label": "Your approval",
     "approve": "Approve",

@@ -416,12 +416,12 @@ const MUTATIONS = [
     'plans: agent decides a step',
     [
       [
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached']));",
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached', 'outcome.approved']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back', 'outcome.approved']));",
       ],
       [
-        'return (inboxOwner(r) && inboxPlanLive(p)',
-        'return ((inboxOwner(r) || isActiveAgent(wid)) && inboxPlanLive(p)',
+        '|| (inboxOwner(r) && inboxPlanLive(p)',
+        '|| ((inboxOwner(r) || isActiveAgent(wid)) && inboxPlanLive(p)',
       ],
       ['return (inboxOwner(r)\n', 'return ((inboxOwner(r) || isActiveAgent(wid))\n'],
     ],
@@ -450,8 +450,8 @@ const MUTATIONS = [
     'plans: agent edits steps',
     [
       [
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached']));",
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached', 'plan.edited']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back', 'plan.edited']));",
       ],
       ['return (inboxOwner(r)\n', 'return ((inboxOwner(r) || isActiveAgent(wid))\n'],
     ],
@@ -561,8 +561,8 @@ const MUTATIONS = [
     'inbox: people write agent events',
     [
       [
-        "'thread.recheck_requested',\n                  'thread.instructed'])",
-        "'thread.recheck_requested',\n                  'thread.instructed', 'outcome.done'])",
+        "'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back'])",
+        "'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back', 'outcome.done'])",
       ],
     ],
   ],
@@ -593,8 +593,8 @@ const MUTATIONS = [
     'inbox: agents decide relations',
     [
       [
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached']));",
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached', 'relation.accepted']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back', 'relation.accepted']));",
       ],
       [
         "return inboxOwner(r)\n          && touched(['state', 'note', 'decision'",
@@ -626,8 +626,8 @@ const MUTATIONS = [
     'inbox: any confidence',
     [
       [
-        "|| d.confidence in ['high', 'medium', 'low'])\n          && d.proposedBy == me()",
-        '|| true)\n          && d.proposedBy == me()',
+        "|| d.confidence in ['high', 'medium', 'low'])\n          && d.get('sendBackTo', {})",
+        "|| true)\n          && d.get('sendBackTo', {})",
       ],
       [
         "|| d.confidence in ['high', 'medium', 'low'])\n          && (!('checks' in d) || (d.checks is list && d.checks.size() <= 6))\n          // Alone",
@@ -1065,6 +1065,73 @@ const MUTATIONS = [
         'match /inboxAttachments/{aid} {\n        allow read: if signedIn();',
       ],
     ],
+  ],
+  // Development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6): New thread and send back.
+  [
+    'new thread: for any agent',
+    [
+      [
+        '(a || (inboxOwner(d) && activeAgentDoc(get(agentPath(wid, d.fetchedBy)))))',
+        '(a || inboxOwner(d))',
+      ],
+    ],
+  ],
+  [
+    'new thread: any state',
+    [
+      [
+        "(a || p == null ? d.state == 'investigating' && d.waiting == null",
+        '(a || p == null ? true',
+      ],
+    ],
+  ],
+  [
+    'new thread: agent other than its event',
+    [["\n          && inboxEvOf(d).data.get('agentUid', d.fetchedBy) == d.fetchedBy", '']],
+  ],
+  [
+    'new thread: steps approved at will',
+    [
+      [
+        "d.state == (e.type == 'thread.created' && !(d.type in outcomeHuman()) ? 'approved' : 'proposed')",
+        "d.state in ['approved', 'proposed']",
+      ],
+    ],
+  ],
+  [
+    'plans: agent plan starts active',
+    [
+      ["d.state == (a ? 'proposed' : 'active')", "d.state in ['proposed', 'active']"],
+      ["&& p.state == 'proposed' && p.proposedBy == me()", '&& p.proposedBy == me()'],
+    ],
+  ],
+  [
+    'new thread: step executor free',
+    [
+      [
+        "\n                && inboxProposalOk(d, getAfter(inboxDoc('inboxThreads', d.threadId)).data)",
+        '',
+      ],
+    ],
+  ],
+  [
+    'send back: an agent at a gate',
+    [["? inboxOwner(r) && c.state == 'proposed'", "? c.state == 'proposed'"]],
+  ],
+  ['send back: any count', [['&& d.sentBack.n == n', '']]],
+  ['send back: any target', [['\n            && d.sentBack.to == e.outcomeId', '\n           ']]],
+  [
+    'send back: never blocks',
+    [["d.state == (n >= 3 ? 'blocked' : 'active')", "d.state == 'active'"]],
+  ],
+  ['send back: any cursor', [['&& d.cursor == e.to && e.from', '&& e.from']]],
+  [
+    'send back: gate stays passed',
+    [["d.state == 'proposed' && d.decision == null\n", 'd.decision == null\n']],
+  ],
+  [
+    'gate: summary version of any type',
+    [["\n                      && d.decision.get('summaryVersion', 1) is int", '']],
   ],
   [
     'summary: deletes newer versions',
