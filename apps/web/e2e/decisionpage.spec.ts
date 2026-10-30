@@ -327,7 +327,7 @@ test.describe('desktop 1440', () => {
       ];
       await s.agent.summary(s.threads.price, {
         headline: 'Q4 price list: sign off by Wednesday',
-        ask: 'Create the review item for the Q4 price list?',
+        ask: 'Hand the Q4 price list review to Finance?',
         answer: '38 lines changed; 4 fall below margin.',
         recommendation: { action: 'Approve', why: 'a real review, not a reply' },
         confidence: 'high',

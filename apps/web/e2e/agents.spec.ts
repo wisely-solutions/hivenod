@@ -213,7 +213,8 @@ test('rotate: the old token stops, the new one works, the history link is kept',
   await saveToken(page);
   const row = page.getByRole('listitem', { name: 'Writer' }).first();
   const oldBot = await asAgent(oldToken);
-  expect((await oldBot.read(`workspaces/${wid}/projects/ops`)).exists()).toBe(true);
+  const oldOwn = `workspaces/${wid}/agents/${oldBot.who.uid}`;
+  expect((await oldBot.read(oldOwn)).exists()).toBe(true);
 
   await row.getByRole('button', { name: 'Actions for Writer' }).click();
 
@@ -227,7 +228,7 @@ test('rotate: the old token stops, the new one works, the history link is kept',
   expect(newToken).not.toBe(oldToken);
   await saveToken(page);
 
-  await oldBot.read(`workspaces/${wid}/projects/ops`).then(
+  await oldBot.read(oldOwn).then(
     () => {
       throw new Error('expected the old token to be denied');
     },
@@ -235,7 +236,7 @@ test('rotate: the old token stops, the new one works, the history link is kept',
   );
   await oldBot.done();
   const newBot = await asAgent(newToken);
-  expect((await newBot.read(`workspaces/${wid}/projects/ops`)).exists()).toBe(true);
+  expect((await newBot.read(`workspaces/${wid}/agents/${newBot.who.uid}`)).exists()).toBe(true);
   await newBot.done();
 
   const rows = page.getByRole('listitem', { name: 'Writer' });
