@@ -221,7 +221,7 @@ func SendBackPlan(ctx Ctx, in SendBackPlanInput) (SendBackPlanResult, error) {
 		return "approved"
 	}
 	for _, id := range p.Steps[to : p.Cursor+1] {
-		if x, ok := in.Outcomes[id]; ok && (x.State == "done" || x.State == "running") {
+		if x, ok := in.Outcomes[id]; ok && (x.State == "done" || x.State == "running" || x.State == "failed") {
 			reset = append(reset, id)
 			x.State = back(id)
 			next.Outcomes[id] = x

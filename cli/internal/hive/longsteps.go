@@ -11,8 +11,9 @@ import (
 	"github.com/wisely-solutions/hivenod/cli/internal/model"
 )
 
-// StepProgress is step_progress: where a running long step stands (line, percent?).
-func (c *Client) StepProgress(ctx context.Context, id, line string, percent *float64) (map[string]any, error) {
+// StepProgress is step_progress: where a running long step stands (line, percent?; check: Keep
+// green's re-check, also on its done step while Ship it? waits).
+func (c *Client) StepProgress(ctx context.Context, id, line string, percent *float64, check *string) (map[string]any, error) {
 	if id == "" {
 		return nil, Errf("Give the step (outcomeId).")
 	}
@@ -24,7 +25,7 @@ func (c *Client) StepProgress(ctx context.Context, id, line string, percent *flo
 	if err != nil {
 		return nil, err
 	}
-	in := actions.StepProgressInput{OutcomeID: id, Outcome: actions.OutcomeStateFrom(o), Thread: actions.ThreadStateFrom(t), Line: line, Percent: percent}
+	in := actions.StepProgressInput{OutcomeID: id, Outcome: actions.OutcomeStateFrom(o), Thread: actions.ThreadStateFrom(t), Line: line, Percent: percent, Check: check}
 	if o.PlanID != nil {
 		pl, _, err := c.planInput(ctx, *o.PlanID)
 		if err != nil {
@@ -39,7 +40,11 @@ func (c *Client) StepProgress(ctx context.Context, id, line string, percent *flo
 	if err := c.inboxWrite(ctx, p); err != nil {
 		return nil, err
 	}
-	return map[string]any{"outcomeId": id, "threadId": o.ThreadID, "note": "Progress noted: the person sees it on the thread. Report again at least every 10 minutes, then outcome_done."}, nil
+	note := "Progress noted: the person sees it on the thread. Report again at least every 10 minutes, then outcome_done."
+	if o.State == "done" {
+		note = "Re-check noted: the person sees it at Ship it?. Report check green once the pull request is green and current again (or blocked with the reason)."
+	}
+	return map[string]any{"outcomeId": id, "threadId": o.ThreadID, "note": note}, nil
 }
 
 // StepHeartbeat stamps a running long step with its last progress line (or "Working on it").
@@ -61,7 +66,7 @@ func (c *Client) StepHeartbeat(ctx context.Context, id string) error {
 			percent = &v
 		}
 	}
-	_, err := c.StepProgress(ctx, id, line, percent)
+	_, err := c.StepProgress(ctx, id, line, percent, nil)
 	if err != nil {
 		return fmt.Errorf("heartbeat %s: %w", id, err)
 	}

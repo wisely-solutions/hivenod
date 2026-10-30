@@ -358,6 +358,8 @@ func InboxText(e InboxEventInfo) string {
 			what += " (Shape: research the idea, write the proposal into the summary with ask \"Build this?\", attach drafts with thread_attach, give the size S/M/L; report done)"
 		case "build":
 			what += " (Build: build what Approve idea approved, in a worktree; end with an open pull request, local checks green, NOT merged; report done with the PR link as result.permalink and what changed and which checks ran as result.text; then write the summary with ask \"Ship it?\" and before/after screenshots)"
+		case "keepgreen":
+			what += " (Keep green: rebase the pull request onto main, rerun the local checks, fix failures, loop until it is green and current; report each loop with step_progress (e.g. \"rebased on main 4f2a1c0, 212/214 green, fixing lint\"), then done with the head commit as result.text: Ship it? is offered. While Ship it? waits, whenever main moves: step_progress on this step with check rechecking, re-green it, then check green; Keep green ends when Ship it? is decided. Not solvable (a rebase conflict that needs a product decision, the same check failing after 3 fixes, an infrastructure failure such as a 503 or an emulator that will not start): report failed with result.error giving the failing check, a log excerpt and what you tried; at Ship it?, step_progress check blocked with the reason)"
 		case "release":
 			what += " (Release + live check: merge the approved pull request(s), run the release checks, release, check it live; report done with the merge sha, release number, live commit and production URL; attach screenshots with thread_attach. A bug: plan_send_back to Build with the reason)"
 		}
