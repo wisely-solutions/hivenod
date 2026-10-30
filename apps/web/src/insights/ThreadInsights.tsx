@@ -190,7 +190,7 @@ export function ThreadInsightsView() {
             <Kpi label="Median wait" hint="Before you decided">
               <span data-testid="median-wait">{formatWait(kpis.medianWaitMs)}</span>
             </Kpi>
-            <Kpi label="Recommendation followed" hint={`${kpis.stopped} stopped`}>
+            <Kpi label="Recommendation followed" hint="When the summary recommended">
               <span data-testid="kpi-followed">
                 {kpis.followedPct === null ? 'n/a' : <CountUp to={kpis.followedPct} suffix="%" />}
               </span>
@@ -223,13 +223,13 @@ export function ThreadInsightsView() {
             <h2 id="steps-h" className="mb-3 text-20 font-semibold">
               By step
             </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[30rem] text-left text-14" data-testid="by-step">
+            <div>
+              <table className="hidden w-full text-left text-14 sm:table" data-testid="by-step">
                 <thead>
                   <tr className="border-b border-line">
                     {['Step', 'Decided', 'Approved', 'Sent back', 'Stopped', 'Median wait'].map(
                       (h) => (
-                        <th key={h} scope="col" className="py-2 pr-3">
+                        <th key={h} scope="col" className="py-2 pr-3 align-bottom">
                           <Eyebrow>{h}</Eyebrow>
                         </th>
                       ),
@@ -251,6 +251,17 @@ export function ThreadInsightsView() {
                   ))}
                 </tbody>
               </table>
+              <ul className="flex flex-col gap-2 sm:hidden" data-testid="by-step-cards">
+                {steps.map((s) => (
+                  <li key={s.step} className="rounded-card border border-line bg-surface p-3">
+                    <p className="font-medium text-ink">{s.step}</p>
+                    <p className="mt-0.5 text-13 text-text-2">
+                      {s.made} decided · {s.approved} approved · {s.sentBack} sent back ·{' '}
+                      {s.stopped + s.rejected} stopped · median wait {formatWait(s.medianWaitMs)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
             </div>
           </section>
 
