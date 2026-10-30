@@ -166,9 +166,12 @@ test.describe('desktop 1440', () => {
       await page.waitForTimeout(UNDO_WAIT);
       expect(await outcomeState(s, s.outcomes.price)).toBe('proposed');
       await approve.click();
-      await expect(stack(page).locator('[data-done-row]')).toContainText('Approved · Hand over', {
-        timeout: UNDO_WAIT + 5000,
-      });
+      await expect(stack(page).locator('[data-done-row]')).toContainText(
+        'Handed over · Hand over',
+        {
+          timeout: UNDO_WAIT + 5000,
+        },
+      );
       expect(await outcomeState(s, s.outcomes.price)).toBe('approved');
       await expect(page.locator('[data-toast-region] > *')).toHaveCount(0);
     } finally {
