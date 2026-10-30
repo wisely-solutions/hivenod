@@ -78,7 +78,7 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.no
         .filter(
           (p) =>
             p.data.threadId === t.id &&
-            (p.data.state === 'proposed' || p.data.state === 'revising'),
+            (p.data.state === 'proposed' || p.data.state === 'revising' || theirDraftWaits(p.data)),
         )
         .sort(
           (a, b) =>
@@ -158,8 +158,23 @@ export function askOf(
       planId: o.data.planId ?? null,
       createdAtMs: o.data.createdAt.toMillis(),
       fields: o.data.fields,
+      ...(theirDraftWaits(o.data)
+        ? { ext: { n: o.data.ext!.ask!.n, kind: o.data.ext!.ask!.kind } }
+        : {}),
     })),
   });
+}
+
+/**
+ * A Their reply step (running, after its turn) whose drafted message waits for the member's
+ * approval: it is a decision on Today like a proposal, though the step itself is not proposed.
+ */
+export function theirDraftWaits(o: Pick<InboxOutcome, 'type' | 'state' | 'ext'>): boolean {
+  return (
+    o.type === 'their_reply' &&
+    (o.state === 'approved' || o.state === 'running') &&
+    o.ext?.ask?.state === 'proposed'
+  );
 }
 
 const rank = (a: NeedsEntry, b: NeedsEntry) =>

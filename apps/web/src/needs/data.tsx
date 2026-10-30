@@ -33,7 +33,7 @@ import { useLiveCollection, useLiveDoc, useLiveQuery, type Live, type Row } from
 import { displayName } from '../members/data';
 import { useShellData } from '../shell/data';
 import { mySubjectsQuery, myThreadsQuery } from '../threads/data';
-import { buildNeeds, type Needs, type OrgInput } from './logic';
+import { buildNeeds, theirDraftWaits, type Needs, type OrgInput } from './logic';
 
 export interface NeedsAll {
   needs: Needs;
@@ -106,6 +106,20 @@ function useExtras(wid: string, uid: string) {
     ),
   );
   // Plans (item qwFAWxZM5xkcE7PPjAzi): a blocked plan waits for the member with nothing proposed.
+  // Their reply: a running step whose drafted message waits for approval is a decision too.
+  const drafts = usePart<InboxOutcome>(
+    useLiveQuery(
+      `needs-their-drafts:${wid}:${uid}`,
+      () =>
+        query(
+          collection(db, `workspaces/${wid}/inboxOutcomes`),
+          where('memberUid', '==', uid),
+          where('state', 'in', ['approved', 'running']),
+        ),
+      inboxOutcomeSchema,
+      { synced: true },
+    ),
+  );
   const plans = usePart<InboxPlan>(
     useLiveQuery(
       `needs-plans:${wid}:${uid}`,
@@ -134,7 +148,7 @@ function useExtras(wid: string, uid: string) {
     }
     return by;
   }, [subjects.rows]);
-  return { names, threads, proposals, plans, subjectLabels };
+  return { names, threads, proposals, drafts, plans, subjectLabels };
 }
 
 /** One organization the member is in: its name, member names and the member's Inbox. */
@@ -147,7 +161,11 @@ function Org({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgState) =>
   const workspace = current ? session.workspace : ws.state === 'ready' ? ws.data : null;
   const role = workspace?.memberRoles[uid];
   const known = current || ws.state !== 'loading';
-  const { names, threads, proposals, plans, subjectLabels } = useExtras(wid, uid);
+  const { names, threads, proposals, drafts, plans, subjectLabels } = useExtras(wid, uid);
+  const openRows = useMemo(
+    () => [...proposals.rows, ...drafts.rows.filter((r) => theirDraftWaits(r.data))],
+    [proposals.rows, drafts.rows],
+  );
   const input = useMemo<OrgInput | null>(
     () =>
       workspace && role
@@ -155,15 +173,15 @@ function Org({ wid, onOrg }: { wid: string; onOrg: (wid: string, s: OrgState) =>
             wid,
             name: workspace.name,
             threads: threads.rows,
-            openOutcomes: proposals.rows,
+            openOutcomes: openRows,
             livePlans: plans.rows,
             subjectLabels,
             names,
           }
         : null,
-    [wid, workspace, role, threads.rows, proposals.rows, plans.rows, subjectLabels, names],
+    [wid, workspace, role, threads.rows, openRows, plans.rows, subjectLabels, names],
   );
-  const settled = known && (!role || (threads.done && proposals.done));
+  const settled = known && (!role || (threads.done && proposals.done && drafts.done));
   useEffect(() => {
     // Removed from it (or it is gone): it simply drops out of the list.
     if (known && !input) onOrg(wid, { input: null, settled: true });

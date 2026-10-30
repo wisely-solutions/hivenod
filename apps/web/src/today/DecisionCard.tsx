@@ -90,6 +90,7 @@ import {
 } from '../threads/plan';
 import { GateAsk } from '../threads/GateAsk';
 import { SchedulePanel } from '../threads/SchedulePanel';
+import { TheirReplyCard } from './TheirReplyCard';
 import { usePlanActions } from '../threads/usePlanActions';
 import { askOf } from '../needs/logic';
 import { NotNowButton, useNotNow } from '../threads/NotNow';
@@ -597,6 +598,15 @@ const PlanDecision = forwardRef<
       </div>
       {!loaded ? (
         <p className="mt-3 text-14 text-text-2">Loading the plan…</p>
+      ) : main?.kind === 'step' && atRow?.data.type === 'their_reply' ? (
+        <TheirReplyCard
+          ref={inner}
+          props={props}
+          plan={plan}
+          pl={pl}
+          outcomeId={atRow.id}
+          extra={extra}
+        />
       ) : main?.kind === 'step' && !main.gate && atRow ? (
         <ProposalPanel
           ref={inner}
