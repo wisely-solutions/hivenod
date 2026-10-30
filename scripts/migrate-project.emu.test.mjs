@@ -66,6 +66,7 @@ const ITEMS = {
   iShape: item('Shaping thing', 'shape', 'queued'),
   iApprove: item('Approve me', 'approve', 'waiting'),
   iBuild: item('Building thing', 'build', 'working'),
+  iRelease: item('Releasing thing', 'release', 'working'),
   iAccept: item('Accept me', 'accept', 'waiting'),
   iDone: item('Old done', 'accept', 'done'),
   fNew: item('Flaky test found', 'shape', 'suggested', {
@@ -217,7 +218,7 @@ describe.skipIf(!host)('migrate-project-to-threads on the emulator', () => {
       attachments: '2/2',
     });
     expect(rowOf(r, 'fNew')).toMatchObject({ to: 'finding: dev plan proposed', action: 'create' });
-    for (const id of ['iShape', 'iBuild', 'iDone', 'fOld'])
+    for (const id of ['iShape', 'iBuild', 'iRelease', 'iDone', 'fOld'])
       expect(rowOf(r, id).action).toBe('skip');
     expect(rowOf(r, 'iBuild').to).toMatch(/agent step Build/);
     expect(r.writes).toBe(0);
@@ -329,5 +330,67 @@ describe.skipIf(!host)('migrate-project-to-threads on the emulator', () => {
     expect((await col('inboxAttachments')).length).toBe(atts.length);
     expect((await rest.get(I)).migratedTo.threadId).toBe(threadIdFor(W, PID, 'iAccept'));
     expect((await col('inboxThreads')).length).toBe(3);
+  });
+
+  const runIn = (dryRun) =>
+    migrateProject({
+      rest,
+      wid: W,
+      pid: PID,
+      memberUid: 'joao',
+      agentUid: 'hive',
+      dryRun,
+      inFlight: true,
+      now: NOW,
+    });
+  const planOfItem = async (id) =>
+    (await col('inboxPlans')).find((p) => p.data.threadId === threadIdFor(W, PID, id)).data;
+  const stateOf = async (planData) => {
+    const outs = await col('inboxOutcomes');
+    return planData.steps.map((sid) => outs.find((o) => o.id === sid).data.state);
+  };
+
+  it('--in-flight dry run lists the Build and Release items and writes nothing', async () => {
+    const before = (await col('inboxThreads')).length;
+    const r = await runIn(true);
+    expect(rowOf(r, 'iBuild')).toMatchObject({
+      to: 'in-flight → step 3 Build (of 6), running',
+      action: 'create',
+    });
+    expect(rowOf(r, 'iRelease')).toMatchObject({
+      to: 'in-flight → step 5 Release (of 6), running',
+      action: 'create',
+    });
+    expect(rowOf(r, 'iShape').to).toBe('in-flight → step 1 Shape (of 6)');
+    expect(r.writes).toBe(0);
+    expect((await col('inboxThreads')).length).toBe(before);
+    if (process.env.MIGRATE_TABLE_OUT) {
+      const { formatTable } = await import('./migrate-project-lib.mjs');
+      writeFileSync(`${process.env.MIGRATE_TABLE_OUT}.inflight`, formatTable(r.rows));
+    }
+  });
+
+  it('--in-flight run creates Build and Release threads at their steps; a rerun adds nothing', async () => {
+    await runIn(false);
+    const build = await planOfItem('iBuild');
+    expect(build).toMatchObject({ cursor: 2, state: 'active' });
+    expect((await stateOf(build)).slice(0, 4)).toEqual(['done', 'done', 'running', 'proposed']);
+    const rel = await planOfItem('iRelease');
+    expect(rel).toMatchObject({ cursor: 4, state: 'active' });
+    expect((await stateOf(rel)).slice(0, 5)).toEqual(['done', 'done', 'done', 'done', 'running']);
+    expect(
+      (await rest.get(`workspaces/${W}/projects/${PID}/items/iBuild`)).migratedTo.threadId,
+    ).toBe(threadIdFor(W, PID, 'iBuild'));
+    const counts = async () =>
+      Promise.all(
+        ['inboxThreads', 'inboxMessages', 'inboxPlans', 'inboxOutcomes', 'inboxEvents'].map(
+          async (c) => (await col(c)).length,
+        ),
+      );
+    const before = await counts();
+    const again = await runIn(false);
+    expect(again.writes).toBe(0);
+    expect(rowOf(again, 'iBuild').action).toBe('already migrated');
+    expect(await counts()).toEqual(before);
   });
 });
