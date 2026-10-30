@@ -284,7 +284,7 @@ describe('an agent proposes, the member decides', () => {
       ...o,
       state: 'revising',
       revise: { instruction: 'Make it 08:30', chips: [] },
-    } as OutcomeStateOf;
+    } as unknown as OutcomeStateOf;
     const input = {
       ...INPUT,
       rule: { ...INPUT.rule, at: '08:30' },

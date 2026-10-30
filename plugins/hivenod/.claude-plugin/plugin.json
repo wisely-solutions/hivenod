@@ -3,11 +3,6 @@
   "description": "Hivenod channel for Claude Code: this session works as a Hivenod agent. Inbox threads that need agent work, approved outcomes and plan steps arrive as channel events.",
   "version": "0.3.10",
   "license": "Apache-2.0",
-  "keywords": [
-    "hivenod",
-    "channel",
-    "mcp",
-    "agents"
-  ],
+  "keywords": ["hivenod", "channel", "mcp", "agents"],
   "skillHash": "2e5b4d12a9ab3768ed4686455309b4296209cc1d642586129ee763ce3d6bd7f3"
 }

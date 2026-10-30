@@ -264,7 +264,7 @@ func SendBackPlan(ctx Ctx, in SendBackPlanInput) (SendBackPlanResult, error) {
 	return SendBackPlanResult{Plan: pl, ToStep: to, Blocked: blocked}, nil
 }
 
-// FromTemplate is fromTemplate for the hive package (schedule_propose template).
+// FromTemplate is fromTemplate, exported for schedule_propose with a template.
 func FromTemplate(id string, over []PlanStepInput) ([]PlanStepInput, error) {
 	return fromTemplate(id, over)
 }

@@ -482,7 +482,7 @@ describe('Ask for changes: the agent revises its proposal (slice 5)', () => {
         ...o,
         state: 'revising',
         revise: { instruction: 'x', chips: [] },
-      } as OutcomeStateOf,
+      } as unknown as OutcomeStateOf,
       thread: await thread(tid),
       schedule: { id: 'sp1', data: await schedule('sp1') },
     });
