@@ -1833,15 +1833,18 @@ service cloud.firestore {
           && (d.subjectId == null || inboxSubjectOf(d.subjectId, d.memberUid))
           && d.version is int && d.updatedAt == request.time;
       }
-      // An agent's proposal: itself the home agent of the member's thread, the outcome naming it
-      // made in this batch; a change only of a schedule it runs for that member.
+      // An agent's proposal: itself the home agent of the member's thread, with the outcome of
+      // this batch's event (whose own rule checks that it names this schedule); a change only of
+      // a schedule it runs for that member. (A getAfter of that outcome's fields here runs out of
+      // the evaluation budget: existsAfter and the event suffice.)
       function schedProposalOk(d) {
         let t = get(inboxDoc('inboxThreads', d.proposal.threadId)).data;
         let x = d.replaces == null ? null : get(inboxDoc('schedules', d.replaces)).data;
         return d.state == 'proposed' && d.activeFrom == null && d.agentUid == me()
           && d.createdBy == me_('agent') && exactKeys(d.proposal, ['threadId', 'outcomeId', 'by'])
           && d.proposal.by == me() && t.fetchedBy == me() && t.memberUid == d.memberUid
-          && getAfter(inboxDoc('inboxOutcomes', d.proposal.outcomeId)).data.fields.scheduleId == sid
+          && existsAfter(inboxDoc('inboxOutcomes', d.proposal.outcomeId))
+          && schedEv(d).data.outcomeId == d.proposal.outcomeId
           && inboxDocTracked(d, ['outcome.proposed'], d.memberUid, d.proposal.threadId)
           && (x == null || (x.memberUid == d.memberUid && x.agentUid == me() && x.state in ['active', 'paused']));
       }
