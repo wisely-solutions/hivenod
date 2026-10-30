@@ -42,7 +42,12 @@ export function threadKeyboard(code: string, a: ThreadTelegram, open: string): B
  * data `rp:<code>`. Pure.
  */
 export function reachKeyboard(code: string, open: string): Button[][] {
-  return [[{ text: 'Ping again', callback_data: `rp:${code}` }, { text: 'Open', url: open }]];
+  return [
+    [
+      { text: 'Ping again', callback_data: `rp:${code}` },
+      { text: 'Open', url: open },
+    ],
+  ];
 }
 
 const isThread = (a: TelegramAction): a is ThreadTelegram =>

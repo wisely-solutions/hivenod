@@ -22,7 +22,7 @@ const card = 'rounded-card border border-line bg-surface p-4 shadow-e1 sm:p-5';
  */
 export function ConnectClaudeCode({ codeForm }: { codeForm: ReactNode }) {
   const { session } = useReady();
-  const { agents, runs } = useShellData();
+  const { agents } = useShellData();
   const [opened] = useState(() => Date.now());
   const now = useNow(15_000);
   const [os, setOs] = useState<'unix' | 'windows'>(() =>
@@ -32,7 +32,7 @@ export function ConnectClaudeCode({ codeForm }: { codeForm: ReactNode }) {
   const line = os === 'windows' ? cmds.installWindows : cmds.install;
 
   const agent = newlyConnected(agents, session.me.uid, opened);
-  const online = agent ? isOnline(agent.data, runs, agent.id, now) : false;
+  const online = agent ? isOnline(agent.data, now) : false;
 
   return (
     <section aria-labelledby="connect-title" className={card}>

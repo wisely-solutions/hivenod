@@ -5,9 +5,9 @@ import { dayLabel, filterRows, groupByDay, liveArrivals, unreadCount, type BellR
 const row = (id: string, over: Partial<BellEntry> = {}): BellRow => ({
   id,
   data: {
-    kind: 'gate',
+    kind: 'inboxCall',
     workspaceId: 'w',
-    projectId: 'p',
+    projectId: 'inbox',
     itemId: 'i',
     projectName: 'Hive',
     itemTitle: 'T',
@@ -27,8 +27,8 @@ describe('bell logic (item 3ENs)', () => {
     const rows = [
       row('a'),
       row('b', { readAt: 5 }),
-      row('c', { kind: 'sentBack' }),
-      row('d', { kind: 'question', readAt: 1 }),
+      row('c', { kind: 'silence' }),
+      row('d', { kind: 'inboxAsk', readAt: 1 }),
     ];
     expect(filterRows(rows, 'all').map((r) => r.id)).toEqual(['a', 'b', 'c', 'd']);
     expect(filterRows(rows, 'unread').map((r) => r.id)).toEqual(['a', 'c']);

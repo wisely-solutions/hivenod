@@ -1,4 +1,4 @@
-import type { Attachment } from '@hive/shared';
+import type { AttachmentKind } from '@hive/shared';
 import { ExternalLink, Minus, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Markdown } from '../ui/markdown';
@@ -136,7 +136,12 @@ function LinkCard({ url, name }: { url: string; name: string }) {
 }
 
 /** What a viewer needs of an attachment (an item's, or a thread's: slice 4). */
-export type ViewableAttachment = Pick<Attachment, 'kind' | 'name' | 'content' | 'url'>;
+export interface ViewableAttachment {
+  kind: AttachmentKind;
+  name: string;
+  content: string | null;
+  url: string | null;
+}
 
 /** The one place that decides how each kind of attachment is shown full page. */
 export function AttachmentViewer({ attachment: a }: { attachment: ViewableAttachment }) {

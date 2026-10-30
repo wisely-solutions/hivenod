@@ -1,24 +1,4 @@
-import { outcomeType, type Decision } from '@hive/shared';
-
-/**
- * One definition of "sent back" for every screen (Insights, agent profile, CSV):
- * only the sentBack outcome. A stop is counted separately, never as a send back.
- */
-export const isSentBack = (outcome: Decision['outcome']): boolean => outcome === 'sentBack';
-
-/** The app's label for a decision outcome (also used in the CSV Decision column). */
-export function outcomeName(outcome: Decision['outcome']): string {
-  switch (outcome) {
-    case 'approved':
-      return 'Approved';
-    case 'sentBack':
-      return 'Sent back';
-    case 'stopped':
-      return 'Stopped';
-    default:
-      return 'Answered';
-  }
-}
+import { outcomeType } from '@hive/shared';
 
 /**
  * "When you approve, <agent> will…" (item kt3E7u9EliL3q2veDDI0, design 3.8): 1-3 lines built

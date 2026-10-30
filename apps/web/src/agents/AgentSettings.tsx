@@ -5,12 +5,10 @@ import {
   resumeAgent,
   updateAgentSettings,
   type Agent,
-  type Project,
 } from '@hive/shared';
 import { Play, Save } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useReady } from '../auth/context';
-import type { Row } from '../lib/live';
 import { Eyebrow } from '../ui/badge';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
@@ -111,15 +109,7 @@ export function PausedBanner({
  * Agent settings (card zSzW3LXy, Draft 1): where it works and its guardrails. What it may do on
  * its machine is that machine's Claude Code config (card rifzGl8M). Admins edit; others read.
  */
-export function AgentSettings({
-  agentId,
-  agent,
-}: {
-  agentId: string;
-  agent: Agent;
-  /** Legacy (Projects were removed, item OE8FmrTaIxFVGcaeGG3N slice 10): not used. */
-  projects?: readonly Row<Project>[];
-}) {
+export function AgentSettings({ agentId, agent }: { agentId: string; agent: Agent }) {
   const { session, actionContext, run } = useReady();
   const toast = useToast();
   const canEdit =

@@ -10,7 +10,7 @@ import {
   bellEntrySchema,
   bellPath,
   bellPlain,
-  isInboxBell,
+  bellOfThread,
 } from '@hive/shared';
 import { useNavigate } from '@tanstack/react-router';
 import {
@@ -91,7 +91,10 @@ function BellFeed({
   useEffect(() => {
     onPart(wid, {
       state: live.state,
-      rows: live.state === 'ready' ? live.data.map((r) => ({ id: r.id, data: r.data })) : [],
+      rows:
+        live.state === 'ready'
+          ? live.data.filter((r) => bellOfThread(r.data)).map((r) => ({ id: r.id, data: r.data }))
+          : [],
     });
   }, [wid, live, onPart]);
   useEffect(() => () => onPart(wid, null), [wid, onPart]);
@@ -99,7 +102,7 @@ function BellFeed({
 }
 
 export function BellProvider({ children }: { children: ReactNode }) {
-  const { session, switchOrg } = useReady();
+  const { session } = useReady();
   const uid = session.me.uid;
   const wid = session.workspaceId;
   const toast = useToast();
@@ -155,28 +158,14 @@ export function BellProvider({ children }: { children: ReactNode }) {
   const open = useCallback(
     (row: BellRow) => {
       markRead(row.id);
-      // Inbox threads are per organization in their URL: no switch needed.
-      if (isInboxBell(row.data.kind)) {
-        void navigate({
-          to: '/inbox/$wid/t/$tid',
-          params: { wid: row.data.workspaceId, tid: row.data.itemId },
-        });
-        return;
-      }
-      const go = () =>
-        void navigate({
-          to: '/p/$pid',
-          params: { pid: row.data.projectId },
-          search: { item: row.data.itemId },
-        });
-      // Another organization's entry: switch to it first, then open the item there.
-      if (row.data.workspaceId !== wid)
-        switchOrg(row.data.workspaceId).then(go, () =>
-          toast.push({ message: 'Could not open it. Try again.' }),
-        );
-      else go();
+      // Every entry is about a thread (Projects are gone, slice 11); threads carry their
+      // organization in the URL: no switch needed.
+      void navigate({
+        to: '/inbox/$wid/t/$tid',
+        params: { wid: row.data.workspaceId, tid: row.data.itemId },
+      });
     },
-    [markRead, navigate, wid, switchOrg, toast],
+    [markRead, navigate],
   );
 
   // Live only: a toast for what arrives while the app is open, never for the first snapshot.

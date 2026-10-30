@@ -1,13 +1,4 @@
-import {
-  AGENT_ONLINE_MS,
-  parkOf,
-  STALE_CLAIM_MINUTES,
-  type Agent,
-  type Item,
-  type Project,
-  type Run,
-} from '@hive/shared';
-import type { Row } from '../lib/live';
+import { AGENT_ONLINE_MS, type Agent } from '@hive/shared';
 import { AGENT_COLORS } from '../ui/avatar';
 
 /** An agent is online when it was seen or sent a heartbeat in the last two minutes (SPEC 6). */
@@ -37,95 +28,36 @@ export const colorValue = (index: number) => `agent-${index}`;
 
 export type AgentStatus =
   | { kind: 'revoked' }
-  /** `items`: how many items it works on at once (card cGSENsRF: a channel session with max_items). */
-  | {
-      kind: 'online';
-      /** `waiting`: of those, how many it parked (item QjTTL). */
-      working: { title: string; items?: number; waiting?: number } | null;
-    }
-  /** Paused after too many failed runs (card zSzW3LXy); a run still going shows as online. */
+  | { kind: 'online' }
+  /** Paused after too many failed runs (card zSzW3LXy). */
   | { kind: 'paused'; reason: string | null }
   | { kind: 'idle'; lastSeen: Date | null };
 
-export function lastSeenOf(agent: Agent, runs: Row<Run>[], uid: string): Date | null {
-  let best = agent.lastSeenAt?.toMillis() ?? 0;
-  for (const r of runs) {
-    if (r.data.agentUid === uid) best = Math.max(best, r.data.heartbeatAt.toMillis());
-  }
+export function lastSeenOf(agent: Agent): Date | null {
+  const best = agent.lastSeenAt?.toMillis() ?? 0;
   return best ? new Date(best) : null;
 }
 
-/** Seen or heartbeating in the last two minutes, not signed out, and not paused (a paused agent takes no new work). */
-export function isOnline(agent: Agent, runs: Row<Run>[], uid: string, now: number): boolean {
+/** Seen in the last two minutes, not signed out, and not paused (a paused agent takes no new work). */
+export function isOnline(agent: Agent, now: number): boolean {
   if (agent.revokedAt || agent.pausedAt) return false;
-  const seen = lastSeenOf(agent, runs, uid);
+  const seen = lastSeenOf(agent);
   const out = agent.signedOutAt?.toMillis() ?? 0;
   return !!seen && seen.getTime() > out && now - seen.getTime() < ONLINE_MINUTES * 60_000;
 }
 
 /**
- * What an agent holds right now (item QjTTL): items it is working on and items it parked, waiting
- * on something outside it. Only claims with a recent heartbeat count.
+ * Where an agent stands (projects and their runs were removed in item OE8FmrTaIxFVGcaeGG3N, slice
+ * 11: presence alone says it). The session said it stopped (Ctrl+C, --once, exit): nothing before
+ * that counts as online.
  */
-export function heldCounts(
-  uid: string,
-  items: Iterable<Row<Item>>,
-  now: number,
-): { working: number; waiting: number } {
-  let working = 0;
-  let waiting = 0;
-  for (const { data } of items) {
-    const c = data.claim;
-    if (c?.agentUid !== uid || data.status !== 'working') continue;
-    if (now - c.heartbeatAt.toMillis() >= STALE_CLAIM_MINUTES * 60_000) continue;
-    if (parkOf(data)) waiting++;
-    else working++;
-  }
-  return { working, waiting };
-}
-
-/** "working 2 · waiting 1" (item QjTTL). */
-export function presenceText(c: { working: number; waiting: number }): string {
-  return `working ${c.working} · waiting ${c.waiting}`;
-}
-
-export function agentStatus(
-  uid: string,
-  agent: Agent,
-  runs: Row<Run>[],
-  items: Record<string, Row<Item>[]>,
-  now: number,
-): AgentStatus {
+export function agentStatus(agent: Agent, now: number): AgentStatus {
   if (agent.revokedAt) return { kind: 'revoked' };
-  // The session said it stopped (Ctrl+C, --once, exit): nothing before that counts as online.
-  const out = agent.signedOutAt?.toMillis() ?? 0;
-  const fresh = (ms: number) => ms > out && now - ms < ONLINE_MINUTES * 60_000;
-  const lives = runs
-    .filter(
-      (r) =>
-        r.data.agentUid === uid &&
-        r.data.status === 'running' &&
-        !r.data.endedAt &&
-        fresh(r.data.heartbeatAt.toMillis()),
-    )
-    .sort((a, b) => b.data.heartbeatAt.toMillis() - a.data.heartbeatAt.toMillis());
-  const live = lives[0];
-  if (live) {
-    const n = new Set(lives.map((r) => `${r.data.projectId}/${r.data.itemId}`)).size;
-    const item = (items[live.data.projectId] ?? []).find((i) => i.id === live.data.itemId);
-    // Parked items keep their run open: they are held, waiting (item QjTTL).
-    const { waiting } = heldCounts(uid, Object.values(items).flat(), now);
-    if (waiting > 0)
-      return {
-        kind: 'online',
-        working: { title: item?.data.title ?? '', items: Math.max(0, n - waiting), waiting },
-      };
-    if (n > 1) return { kind: 'online', working: { title: item?.data.title ?? '', items: n } };
-    return { kind: 'online', working: item ? { title: item.data.title } : null };
-  }
   if (agent.pausedAt) return { kind: 'paused', reason: agent.pausedReason ?? null };
-  const seen = lastSeenOf(agent, runs, uid);
-  if (seen && fresh(seen.getTime())) return { kind: 'online', working: null };
+  const seen = lastSeenOf(agent);
+  const out = agent.signedOutAt?.toMillis() ?? 0;
+  if (seen && seen.getTime() > out && now - seen.getTime() < ONLINE_MINUTES * 60_000)
+    return { kind: 'online' };
   return { kind: 'idle', lastSeen: seen };
 }
 
@@ -142,33 +74,8 @@ export function timeAgo(then: Date, now: number): string {
 export function statusText(s: AgentStatus, now: number): string {
   if (s.kind === 'revoked') return 'Revoked';
   if (s.kind === 'paused') return `Paused${s.reason ? ` · ${s.reason}` : ''} · takes no new work`;
-  if (s.kind === 'online') {
-    if (s.working?.waiting)
-      return `Online · ${presenceText({ working: s.working.items ?? 0, waiting: s.working.waiting })}`;
-    if (s.working?.items && s.working.items > 1) return `Online · working ${s.working.items} items`;
-    return s.working ? `Online · working on “${s.working.title}”` : 'Online · waiting for work';
-  }
+  if (s.kind === 'online') return 'Online · waiting for work';
   return s.lastSeen
     ? `Offline · last seen ${timeAgo(s.lastSeen, now)}`
     : 'Offline · not connected yet';
-}
-
-export function scopeText(agent: Agent, projects: Row<Project>[]): string {
-  if (agent.scope === 'inbox') return 'Inbox only';
-  if (agent.projectIds === '*') return 'All projects';
-  const names = agent.projectIds
-    .map((id) => projects.find((p) => p.id === id)?.data.name)
-    .filter((n): n is string => Boolean(n));
-  if (names.length === 0) return 'No projects';
-  return names.length <= 2
-    ? names.join(', ')
-    : `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
-}
-
-/** Runs started since local midnight, and what they cost. */
-export function todayStats(uid: string, runs: Row<Run>[], now: number) {
-  const d = new Date(now);
-  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const mine = runs.filter((r) => r.data.agentUid === uid && r.data.startedAt.toMillis() >= start);
-  return { runs: mine.length, cost: mine.reduce((sum, r) => sum + r.data.costEur, 0) };
 }

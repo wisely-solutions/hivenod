@@ -25,9 +25,7 @@ describe('reachNext', () => {
       at: T + 40 * M,
       askMs: T + 30 * M,
     });
-    expect(
-      reachNext({ activityMs: T + 31 * M, askMs: T + 30 * M, flag: null }),
-    ).toEqual({
+    expect(reachNext({ activityMs: T + 31 * M, askMs: T + 30 * M, flag: null })).toEqual({
       do: 'ask',
       at: T + 61 * M,
     });
@@ -77,7 +75,9 @@ describe('stepSilentText', () => {
     const silence = { since: T - 41 * M, agent: 'Hive' };
     expect(stepSilentText({ state: 'approved', silence }, T)).toBe('Hive silent for 41 min');
     expect(stepSilentText({ state: 'done', silence }, T)).toBeNull();
-    expect(stepSilentText({ state: 'running', silence, progress: { at: at(T - M) } }, T)).toBeNull();
+    expect(
+      stepSilentText({ state: 'running', silence, progress: { at: at(T - M) } }, T),
+    ).toBeNull();
     expect(stepSilentText({ state: 'running', silence: null }, T)).toBeNull();
   });
 });

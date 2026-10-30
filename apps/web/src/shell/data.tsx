@@ -1,4 +1,4 @@
-import { agentSchema, type Agent, type Project, type Run } from '@hive/shared';
+import { agentSchema, type Agent } from '@hive/shared';
 import {
   createContext,
   useCallback,
@@ -11,27 +11,17 @@ import {
 import { useReady } from '../auth/context';
 import { useRetry, useUnreachable } from './unreachable';
 import { useLiveQuery, type Live, type Row } from '../lib/live';
-import { agentActivity, type ItemsByProject } from './logic';
+import { agentActivity } from './logic';
 import { agentsQuery } from './queries';
 
 /**
- * Live data the shell itself needs: the organization's agents. Projects (with their items, agent
- * questions and runs) were removed in item OE8FmrTaIxFVGcaeGG3N, slice 10; `projects`, `items` and
- * `runs` stay empty for the screens slice 9 rebuilds on threads, and go with the shared schemas
- * in slice 11.
+ * Live data the shell itself needs: the organization's agents. (Projects, with their items, agent
+ * questions and runs, were removed in item OE8FmrTaIxFVGcaeGG3N, slices 10 and 11.)
  */
 export interface ShellData {
-  /** Always empty: Projects were removed (legacy field, see above). */
-  projects: Row<Project>[];
   agents: Row<Agent>[];
-  /** Always empty: runs belonged to project items (legacy field). */
-  runs: Row<Run>[];
-  /** Always empty (legacy field). */
-  items: ItemsByProject;
-  /** Agents working (none without runs) and connected but idle. */
+  /** Agents working (none without items) and connected but idle. */
   activity: { working: number; idle: number; items: number; waiting: number };
-  /** Nothing is spent through runs any more: always 0 and known (legacy field). */
-  spend: { spent: number; known: boolean };
   /** True once the server (not just the local cache) has answered the agents feed. */
   agentsKnown: boolean;
   /** True until the agents feed has a real answer. */
@@ -62,8 +52,6 @@ export function useShellData(): ShellData {
 }
 
 const EMPTY: never[] = [];
-const NO_ITEMS: ItemsByProject = {};
-const NO_SPEND = { spent: 0, known: true };
 
 export function ShellDataProvider({ children }: { children: ReactNode }) {
   const [attempt, setAttempt] = useState(0);
@@ -131,12 +119,8 @@ function ShellDataInner({
     (agentsLive.state === 'ready' && !agentsLive.fromCache) || agentsLive.state === 'error';
   const value = useMemo<ShellData>(
     () => ({
-      projects: EMPTY,
       agents,
-      runs: EMPTY,
-      items: NO_ITEMS,
-      activity: { ...agentActivity(agents, EMPTY, now), items: 0, waiting: 0 },
-      spend: NO_SPEND,
+      activity: { ...agentActivity(agents, now), items: 0, waiting: 0 },
       agentsKnown,
       loading: agentsLive.state === 'loading',
       settled: agentsKnown,

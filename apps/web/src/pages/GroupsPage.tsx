@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useReady } from '../auth/context';
 import { GroupEditor } from '../members/GroupEditor';
 import { displayName, useGroups, useProfiles } from '../members/data';
-import { deleteGroupFlow, PartialSyncError, saveGroupFlow } from '../members/groupFlow';
+import { deleteGroupFlow, saveGroupFlow } from '../members/groupFlow';
 import { AvatarStack } from '../ui/avatar';
 import { Button } from '../ui/button';
 import { EmptyState } from '../ui/feedback';
@@ -39,11 +39,8 @@ export function GroupsPage() {
     try {
       await saveGroupFlow({ run, ctx, groups: groups.data, groupId: editing?.id, ...v });
       setEditing(null);
-    } catch (e) {
-      toast.push({
-        message: e instanceof PartialSyncError ? e.message : 'Could not save the group. Try again.',
-      });
-      if (e instanceof PartialSyncError) setEditing(null);
+    } catch {
+      toast.push({ message: 'Could not save the group. Try again.' });
     } finally {
       setBusy(false);
     }
@@ -53,7 +50,7 @@ export function GroupsPage() {
     if (!ctx || groups.state !== 'ready' || !editing?.id) return;
     setBusy(true);
     try {
-      await deleteGroupFlow({ run, ctx, groups: groups.data, groupId: editing.id });
+      await deleteGroupFlow({ run, ctx, groupId: editing.id });
       setConfirmDelete(false);
       setEditing(null);
     } catch {
