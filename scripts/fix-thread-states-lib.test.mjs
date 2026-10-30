@@ -85,6 +85,10 @@ describe('fixThreadStates', () => {
         );
         return { ok: true, json: async () => rows.map((document) => ({ document })) };
       }
+      if (!init.method && url.includes('/inboxThreads/')) {
+        const d = docs.inboxThreads.find((x) => url.endsWith(x.name.split('/documents/')[1]));
+        return { ok: !!d, json: async () => d };
+      }
       if (init.method === 'PATCH') {
         patched.push({ url, body: JSON.parse(init.body) });
         return { ok: true, json: async () => ({}) };
@@ -96,10 +100,15 @@ describe('fixThreadStates', () => {
   it('dry run: lists, writes nothing', async () => {
     const f = fake();
     const r = await fixThreadStates({ project: 'p', token: 't', fetchFn: f.fn, base: 'http://x' });
-    expect(r).toEqual({ scanned: 2, repair: ['workspaces/w1/inboxThreads/t1'], repaired: 0 });
+    expect(r).toEqual({
+      scanned: 2,
+      repair: ['workspaces/w1/inboxThreads/t1'],
+      repaired: 0,
+      skipped: [],
+    });
     expect(f.patched).toHaveLength(0);
   });
-  it('apply: only state and waiting, with the read time as precondition', async () => {
+  it('apply: only state and waiting, of a thread still at Your call', async () => {
     const f = fake();
     const r = await fixThreadStates({
       project: 'p',
@@ -112,7 +121,7 @@ describe('fixThreadStates', () => {
     expect(f.patched[0].url).toContain(
       'inboxThreads/t1?updateMask.fieldPaths=state&updateMask.fieldPaths=waiting',
     );
-    expect(f.patched[0].url).toContain('currentDocument.updateTime=u1');
+    expect(f.patched[0].url).toContain('currentDocument.exists=true');
     expect(f.patched[0].body.fields.waiting.mapValue.fields.on).toEqual({ stringValue: 'agent' });
   });
 });

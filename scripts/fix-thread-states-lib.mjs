@@ -4,7 +4,7 @@
 // `waiting` on the agent; this script moves the threads written before that. DRY RUN BY DEFAULT:
 // nothing is written unless `apply: true`. Idempotent: a repaired thread is no longer at Your call.
 // It reads workspaces/*/inboxThreads (state yourCall), their plans and outcomes, and writes only
-// `state` and `waiting` of the threads it repairs (with the read's update time as precondition).
+// `state` and `waiting` of the threads it repairs (each read again first: still at Your call).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -67,7 +67,7 @@ const PAGE = 300;
 
 /**
  * @param {{ project: string, token: string, apply?: boolean, fetchFn?: typeof fetch, base?: string }} o
- * @returns {Promise<{ scanned: number, repair: string[], repaired: number }>}
+ * @returns {Promise<{ scanned: number, repair: string[], repaired: number, skipped: string[] }>}
  */
 export async function fixThreadStates({
   project,
@@ -121,7 +121,7 @@ export async function fixThreadStates({
 
   let scanned = 0;
   const repair = [];
-  const updateTimes = new Map();
+  const toWrite = new Set();
   for (const wid of wids) {
     const ws = `${root}/workspaces/${encodeURIComponent(wid)}`;
     for (const t of await query(ws, 'inboxThreads', 'state', 'yourCall')) {
@@ -136,17 +136,24 @@ export async function fixThreadStates({
       );
       if (needsRepair(fields(t.fields), plans, outcomes)) {
         repair.push(t.name.split('/documents/')[1]);
-        updateTimes.set(t.name, t.updateTime);
+        toWrite.add(t.name);
       }
     }
   }
 
   let repaired = 0;
+  const skipped = [];
   if (apply) {
-    for (const [name, updateTime] of updateTimes) {
+    for (const name of toWrite) {
+      // Read again right before the write: only a thread still at Your call is moved.
+      const now = await fetchFn(`${base}/v1/${name}`, { headers });
+      if (!now.ok || plain((await now.json()).fields?.state) !== 'yourCall') {
+        skipped.push(`${name.split('/documents/')[1]}: changed since the scan`);
+        continue;
+      }
       const url =
         `${base}/v1/${name}?updateMask.fieldPaths=state&updateMask.fieldPaths=waiting` +
-        `&currentDocument.updateTime=${encodeURIComponent(updateTime)}`;
+        `&currentDocument.exists=true`;
       const res = await fetchFn(url, {
         method: 'PATCH',
         headers,
@@ -161,9 +168,12 @@ export async function fixThreadStates({
           },
         }),
       });
-      // A thread changed since the read (precondition failed) is left for the next run.
       if (res.ok) repaired++;
+      else
+        skipped.push(
+          `${name.split('/documents/')[1]}: ${res.status} ${(await res.text()).slice(0, 200)}`,
+        );
     }
   }
-  return { scanned, repair, repaired };
+  return { scanned, repair, repaired, skipped };
 }

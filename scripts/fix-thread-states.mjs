@@ -48,3 +48,4 @@ console.log(
   `scanned ${r.scanned} threads at Your call, ${r.repair.length} to repair, repaired ${r.repaired}`,
 );
 for (const p of r.repair) console.log(`  ${p}`);
+for (const p of r.skipped) console.log(`  not written: ${p}`);

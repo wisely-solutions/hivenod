@@ -215,7 +215,7 @@
           }
         ],
         "question": null,
-        "state": "yourCall",
+        "state": "waiting",
         "subject": null,
         "summary": null,
         "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
@@ -223,7 +223,10 @@
         "timeline": [],
         "title": "Dark mode",
         "urgent": false,
-        "waiting": null
+        "waiting": {
+          "on": "agent",
+          "until": null
+        }
       }
     },
     {
@@ -486,7 +489,7 @@
         "title": "Dark mode",
         "urgent": false,
         "waiting": {
-          "on": "item",
+          "on": "agent",
           "until": null
         }
       }
