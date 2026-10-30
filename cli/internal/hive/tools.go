@@ -219,7 +219,7 @@ var ToolRuns = map[string]Run{
 		return c.OutcomeDone(ctx, a.S("outcomeId"), a.S("status"), OutcomeResult{Text: r.SP("text"), Permalink: r.SP("permalink"), ItemID: r.SP("itemId"), Error: r.SP("error"), Tokens: u.F("tokens"), CostEur: u.F("costEur")})
 	},
 	"step_progress": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.StepProgress(ctx, a.S("outcomeId"), a.S("line"), a.F("percent"))
+		return c.StepProgress(ctx, a.S("outcomeId"), a.S("line"), a.F("percent"), a.SP("check"))
 	},
 	"plan_propose": func(ctx context.Context, c *Client, a Args) (any, error) {
 		var steps []PlanStepArg

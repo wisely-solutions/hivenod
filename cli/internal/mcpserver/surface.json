@@ -1196,7 +1196,7 @@
       },
       {
         "name": "plan_propose",
-        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. Development work (code, a release): give template \"dev\" for the Development plan: shape (research it, write the proposal into the summary, size S/M/L) → approval Approve idea → build (in a worktree; end with an open pull request, local checks green, NOT merged) → approval Ship it? → release (merge the approved PR(s), release, check it live; report merge sha, release number, live URL, screenshots) → approval Accept on live. With a template, steps gives each step's fields in order and may be left out or shorter (e.g. [{\"type\": \"shape\", \"fields\": {\"idea\": \"...\"}}]). When the person asks for changes at a gate, the plan goes back to an earlier step and you get its carry_out again with why sent_back and the reason. From a step you carry out, plan_send_back sends the plan back yourself (Release finds a bug: back to Build). For one action alone, use outcome_propose. Step types: reply, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
+        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. Development work (code, a release): give template \"dev\" for the Development plan: shape (research it, write the proposal into the summary, size S/M/L) → approval Approve idea → build (in a worktree; end with an open pull request, local checks green, NOT merged) → keepgreen (Keep green: rebase the PR on main, rerun the local checks, fix failures until green and current; report done, then while Ship it? waits re-green it whenever main moves with step_progress check) → approval Ship it? → release (merge the approved PR(s), release, check it live; report merge sha, release number, live URL, screenshots) → approval Accept on live. With a template, steps gives each step's fields in order and may be left out or shorter (e.g. [{\"type\": \"shape\", \"fields\": {\"idea\": \"...\"}}]). When the person asks for changes at a gate, the plan goes back to an earlier step and you get its carry_out again with why sent_back and the reason. From a step you carry out, plan_send_back sends the plan back yourself (Release finds a bug: back to Build). For one action alone, use outcome_propose. Step types: reply, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1337,7 +1337,7 @@
       },
       {
         "name": "outcome_done",
-        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A make_it_work plan step (Build it): status started with result.itemId once the item is made; report it done when the item is Done. A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, release): report status started when you begin, step_progress as you go, then done.",
+        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A make_it_work plan step (Build it): status started with result.itemId once the item is made; report it done when the item is Done. A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, keepgreen, release): report status started when you begin, step_progress as you go, then done. Keep green: done once the PR is green and current with main (Ship it? is offered); failed with the evidence (failing check, log excerpt, what you tried) when it is not solvable: a rebase conflict that needs a product decision, the same check failing after 3 fixes, or an infrastructure failure.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1404,7 +1404,7 @@
       },
       {
         "name": "step_progress",
-        "description": "Report where a long plan step you started (Build, Release + live check) stands: one line for the person (at most 140 characters) and a percent if you know one. Report at least every 10 minutes while you work on it; this session also stamps it every 5 minutes (the heartbeat). Without one for an hour the person sees you as quiet and a new session resumes the step. Start the step first with outcome_done status started; end it with outcome_done status done.",
+        "description": "Report where a long plan step you started (Build, Keep green, Release + live check) stands: one line for the person (at most 140 characters) and a percent if you know one. Keep green, also after it is done while Ship it? waits: when main moves, check rechecking (the person sees \"re-checking after main moved\"), then green once rebased and green again, or blocked with the reason; it ends when Ship it? is decided. Report at least every 10 minutes while you work on it; this session also stamps it every 5 minutes (the heartbeat). Without one for an hour the person sees you as quiet and a new session resumes the step. Start the step first with outcome_done status started; end it with outcome_done status done.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1424,6 +1424,15 @@
               "minimum": 0,
               "maximum": 100,
               "description": "How far along, 0-100, if you know"
+            },
+            "check": {
+              "type": "string",
+              "enum": [
+                "rechecking",
+                "green",
+                "blocked"
+              ],
+              "description": "Keep green only: rechecking (main moved, rebasing and re-running the checks), green (green and current again) or blocked (not solvable: say why in line)"
             }
           },
           "required": [
@@ -3112,7 +3121,7 @@
       },
       {
         "name": "plan_propose",
-        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. Development work (code, a release): give template \"dev\" for the Development plan: shape (research it, write the proposal into the summary, size S/M/L) → approval Approve idea → build (in a worktree; end with an open pull request, local checks green, NOT merged) → approval Ship it? → release (merge the approved PR(s), release, check it live; report merge sha, release number, live URL, screenshots) → approval Accept on live. With a template, steps gives each step's fields in order and may be left out or shorter (e.g. [{\"type\": \"shape\", \"fields\": {\"idea\": \"...\"}}]). When the person asks for changes at a gate, the plan goes back to an earlier step and you get its carry_out again with why sent_back and the reason. From a step you carry out, plan_send_back sends the plan back yourself (Release finds a bug: back to Build). For one action alone, use outcome_propose. Step types: reply, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
+        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. Development work (code, a release): give template \"dev\" for the Development plan: shape (research it, write the proposal into the summary, size S/M/L) → approval Approve idea → build (in a worktree; end with an open pull request, local checks green, NOT merged) → keepgreen (Keep green: rebase the PR on main, rerun the local checks, fix failures until green and current; report done, then while Ship it? waits re-green it whenever main moves with step_progress check) → approval Ship it? → release (merge the approved PR(s), release, check it live; report merge sha, release number, live URL, screenshots) → approval Accept on live. With a template, steps gives each step's fields in order and may be left out or shorter (e.g. [{\"type\": \"shape\", \"fields\": {\"idea\": \"...\"}}]). When the person asks for changes at a gate, the plan goes back to an earlier step and you get its carry_out again with why sent_back and the reason. From a step you carry out, plan_send_back sends the plan back yourself (Release finds a bug: back to Build). For one action alone, use outcome_propose. Step types: reply, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -3253,7 +3262,7 @@
       },
       {
         "name": "outcome_done",
-        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A make_it_work plan step (Build it): status started with result.itemId once the item is made; report it done when the item is Done. A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, release): report status started when you begin, step_progress as you go, then done.",
+        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A make_it_work plan step (Build it): status started with result.itemId once the item is made; report it done when the item is Done. A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, keepgreen, release): report status started when you begin, step_progress as you go, then done. Keep green: done once the PR is green and current with main (Ship it? is offered); failed with the evidence (failing check, log excerpt, what you tried) when it is not solvable: a rebase conflict that needs a product decision, the same check failing after 3 fixes, or an infrastructure failure.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -3320,7 +3329,7 @@
       },
       {
         "name": "step_progress",
-        "description": "Report where a long plan step you started (Build, Release + live check) stands: one line for the person (at most 140 characters) and a percent if you know one. Report at least every 10 minutes while you work on it; this session also stamps it every 5 minutes (the heartbeat). Without one for an hour the person sees you as quiet and a new session resumes the step. Start the step first with outcome_done status started; end it with outcome_done status done.",
+        "description": "Report where a long plan step you started (Build, Keep green, Release + live check) stands: one line for the person (at most 140 characters) and a percent if you know one. Keep green, also after it is done while Ship it? waits: when main moves, check rechecking (the person sees \"re-checking after main moved\"), then green once rebased and green again, or blocked with the reason; it ends when Ship it? is decided. Report at least every 10 minutes while you work on it; this session also stamps it every 5 minutes (the heartbeat). Without one for an hour the person sees you as quiet and a new session resumes the step. Start the step first with outcome_done status started; end it with outcome_done status done.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -3340,6 +3349,15 @@
               "minimum": 0,
               "maximum": 100,
               "description": "How far along, 0-100, if you know"
+            },
+            "check": {
+              "type": "string",
+              "enum": [
+                "rechecking",
+                "green",
+                "blocked"
+              ],
+              "description": "Keep green only: rechecking (main moved, rebasing and re-running the checks), green (green and current again) or blocked (not solvable: say why in line)"
             }
           },
           "required": [

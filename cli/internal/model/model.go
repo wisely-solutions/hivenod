@@ -658,7 +658,9 @@ type InboxEvent struct {
 
 // InboxProgress is a running long step's last step_progress.
 type InboxProgress struct {
-	Line    string    `firestore:"line" json:"line"`
-	Percent *int64    `firestore:"percent" json:"percent"`
-	At      time.Time `firestore:"at" json:"at"`
+	Line    string `firestore:"line" json:"line"`
+	Percent *int64 `firestore:"percent" json:"percent"`
+	// Check (Keep green, slice 6c): rechecking, green or blocked; absent on a plain line.
+	Check *string   `firestore:"check,omitempty" json:"check,omitempty"`
+	At    time.Time `firestore:"at" json:"at"`
 }

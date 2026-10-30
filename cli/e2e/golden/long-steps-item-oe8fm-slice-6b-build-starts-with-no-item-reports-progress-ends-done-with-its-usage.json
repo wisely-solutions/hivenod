@@ -89,7 +89,7 @@
               "text": null
             },
             "state": "done",
-            "step": "1 of 6",
+            "step": "1 of 7",
             "type": "shape"
           },
           {
@@ -109,7 +109,7 @@
             "planId": "lp1",
             "result": null,
             "state": "done",
-            "step": "2 of 6",
+            "step": "2 of 7",
             "type": "approval"
           },
           {
@@ -129,8 +129,23 @@
               "text": null
             },
             "state": "running",
-            "step": "3 of 6",
+            "step": "3 of 7",
             "type": "build"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "l4",
+            "planId": "lp1",
+            "result": null,
+            "state": "approved",
+            "step": "4 of 7",
+            "type": "keepgreen"
           },
           {
             "checks": [],
@@ -142,11 +157,11 @@
               "what": "Ship it?"
             },
             "note": "",
-            "outcomeId": "l4",
+            "outcomeId": "l5",
             "planId": "lp1",
             "result": null,
             "state": "proposed",
-            "step": "4 of 6",
+            "step": "5 of 7",
             "type": "approval"
           },
           {
@@ -157,11 +172,11 @@
             "executorIsMe": true,
             "fields": {},
             "note": "",
-            "outcomeId": "l5",
+            "outcomeId": "l6",
             "planId": "lp1",
             "result": null,
             "state": "approved",
-            "step": "5 of 6",
+            "step": "6 of 7",
             "type": "release"
           },
           {
@@ -174,11 +189,11 @@
               "what": "Accept on live"
             },
             "note": "",
-            "outcomeId": "l6",
+            "outcomeId": "l7",
             "planId": "lp1",
             "result": null,
             "state": "proposed",
-            "step": "6 of 6",
+            "step": "7 of 7",
             "type": "approval"
           }
         ],
@@ -188,7 +203,7 @@
             "cursor": 2,
             "note": "",
             "planId": "lp1",
-            "progress": "Step 3 of 6",
+            "progress": "Step 3 of 7",
             "state": "active",
             "steps": [
               {
@@ -224,10 +239,19 @@
               },
               {
                 "atCursor": false,
-                "kind": "human",
-                "label": "Your approval",
+                "kind": "agent",
+                "label": "Keep green",
                 "outcomeId": "l4",
                 "step": 4,
+                "type": "keepgreen",
+                "ui": "approved"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "l5",
+                "step": 5,
                 "type": "approval",
                 "ui": "proposed"
               },
@@ -235,8 +259,8 @@
                 "atCursor": false,
                 "kind": "agent",
                 "label": "Release + live check",
-                "outcomeId": "l5",
-                "step": 5,
+                "outcomeId": "l6",
+                "step": 6,
                 "type": "release",
                 "ui": "approved"
               },
@@ -244,8 +268,8 @@
                 "atCursor": false,
                 "kind": "human",
                 "label": "Your approval",
-                "outcomeId": "l6",
-                "step": 6,
+                "outcomeId": "l7",
+                "step": 7,
                 "type": "approval",
                 "ui": "proposed"
               }
@@ -277,7 +301,552 @@
         "planId": "lp1",
         "state": "done",
         "threadId": "lt1",
+        "threadState": "waiting"
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Started: report step_progress as you go (at least every 10 min; this session also stamps it every 5 min), then outcome_done status done.",
+        "outcomeId": "l4",
+        "planId": "lp1",
+        "state": "running",
+        "threadId": "lt1",
+        "threadState": "waiting"
+      }
+    },
+    {
+      "tool": "step_progress",
+      "ok": true,
+      "out": {
+        "note": "Progress noted: the person sees it on the thread. Report again at least every 10 minutes, then outcome_done.",
+        "outcomeId": "l4",
+        "threadId": "lt1"
+      }
+    },
+    {
+      "tool": "step_progress",
+      "ok": false,
+      "out": "MCP error -32602: Input validation error: Invalid arguments for tool step_progress: check: must be one of \"rechecking\", \"green\", \"blocked\""
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as failed: the plan is blocked until the person retries, skips or stops it.",
+        "outcomeId": "l4",
+        "planId": "lp1",
+        "state": "failed",
+        "threadId": "lt1",
         "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "<id>",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": null,
+              "name": "Owner"
+            },
+            "source": "hivenod",
+            "text": "Add a dark mode to the board.",
+            "threadRef": "lt1"
+          }
+        ],
+        "next": "Waiting for the person to approve, edit or reject the proposed outcomes.",
+        "outcomes": [
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "idea": "Add a dark mode to the board."
+            },
+            "note": "",
+            "outcomeId": "l1",
+            "planId": "lp1",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": null,
+              "text": null
+            },
+            "state": "done",
+            "step": "1 of 7",
+            "type": "shape"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": {
+              "edited": false,
+              "reason": null
+            },
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Approve idea"
+            },
+            "note": "",
+            "outcomeId": "l2",
+            "planId": "lp1",
+            "result": null,
+            "state": "done",
+            "step": "2 of 7",
+            "type": "approval"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "l3",
+            "planId": "lp1",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": "https://github.com/example/board/pull/86",
+              "text": "PR #86 open"
+            },
+            "state": "done",
+            "step": "3 of 7",
+            "type": "build"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "l4",
+            "planId": "lp1",
+            "result": {
+              "error": "lint fails after 3 fixes: no-unused-vars in src/a.ts; tried 3 fixes",
+              "itemId": null,
+              "permalink": null,
+              "text": null
+            },
+            "state": "failed",
+            "step": "4 of 7",
+            "type": "keepgreen"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Ship it?"
+            },
+            "note": "",
+            "outcomeId": "l5",
+            "planId": "lp1",
+            "result": null,
+            "state": "proposed",
+            "step": "5 of 7",
+            "type": "approval"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "l6",
+            "planId": "lp1",
+            "result": null,
+            "state": "approved",
+            "step": "6 of 7",
+            "type": "release"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Accept on live"
+            },
+            "note": "",
+            "outcomeId": "l7",
+            "planId": "lp1",
+            "result": null,
+            "state": "proposed",
+            "step": "7 of 7",
+            "type": "approval"
+          }
+        ],
+        "plans": [
+          {
+            "confidence": null,
+            "cursor": 3,
+            "note": "",
+            "planId": "lp1",
+            "progress": "Step 4 of 7",
+            "state": "blocked",
+            "steps": [
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Shape",
+                "outcomeId": "l1",
+                "step": 1,
+                "type": "shape",
+                "ui": "done"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "l2",
+                "step": 2,
+                "type": "approval",
+                "ui": "done"
+              },
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Build",
+                "outcomeId": "l3",
+                "step": 3,
+                "type": "build",
+                "ui": "done"
+              },
+              {
+                "atCursor": true,
+                "kind": "agent",
+                "label": "Keep green",
+                "outcomeId": "l4",
+                "step": 4,
+                "type": "keepgreen",
+                "ui": "blocked"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "l5",
+                "step": 5,
+                "type": "approval",
+                "ui": "proposed"
+              },
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Release + live check",
+                "outcomeId": "l6",
+                "step": 6,
+                "type": "release",
+                "ui": "approved"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "l7",
+                "step": 7,
+                "type": "approval",
+                "ui": "proposed"
+              }
+            ],
+            "templateId": "dev"
+          }
+        ],
+        "question": null,
+        "state": "yourCall",
+        "subject": null,
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
+        "threadId": "lt1",
+        "timeline": [],
+        "title": "Dark mode",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "<id>",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": null,
+              "name": "Owner"
+            },
+            "source": "hivenod",
+            "text": "Add a dark mode to the board.",
+            "threadRef": "lt1"
+          }
+        ],
+        "next": "Carry out the approved outcome exactly as approved (its fields, as the person left them), then report it with outcome_done.",
+        "outcomes": [
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "idea": "Add a dark mode to the board."
+            },
+            "note": "",
+            "outcomeId": "l1",
+            "planId": "lp1",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": null,
+              "text": null
+            },
+            "state": "done",
+            "step": "1 of 7",
+            "type": "shape"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": {
+              "edited": false,
+              "reason": null
+            },
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Approve idea"
+            },
+            "note": "",
+            "outcomeId": "l2",
+            "planId": "lp1",
+            "result": null,
+            "state": "done",
+            "step": "2 of 7",
+            "type": "approval"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "l3",
+            "planId": "lp1",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": "https://github.com/example/board/pull/86",
+              "text": "PR #86 open"
+            },
+            "state": "approved",
+            "step": "3 of 7",
+            "type": "build"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "l4",
+            "planId": "lp1",
+            "result": {
+              "error": "lint fails after 3 fixes: no-unused-vars in src/a.ts; tried 3 fixes",
+              "itemId": null,
+              "permalink": null,
+              "text": null
+            },
+            "state": "approved",
+            "step": "4 of 7",
+            "type": "keepgreen"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Ship it?"
+            },
+            "note": "",
+            "outcomeId": "l5",
+            "planId": "lp1",
+            "result": null,
+            "state": "proposed",
+            "step": "5 of 7",
+            "type": "approval"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "l6",
+            "planId": "lp1",
+            "result": null,
+            "state": "approved",
+            "step": "6 of 7",
+            "type": "release"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Accept on live"
+            },
+            "note": "",
+            "outcomeId": "l7",
+            "planId": "lp1",
+            "result": null,
+            "state": "proposed",
+            "step": "7 of 7",
+            "type": "approval"
+          }
+        ],
+        "plans": [
+          {
+            "confidence": null,
+            "cursor": 2,
+            "note": "",
+            "planId": "lp1",
+            "progress": "Step 3 of 7",
+            "sentBack": {
+              "by": "owner",
+              "n": 1,
+              "reason": "Fix the lint in Build",
+              "toStep": "3 of 7"
+            },
+            "state": "active",
+            "steps": [
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Shape",
+                "outcomeId": "l1",
+                "step": 1,
+                "type": "shape",
+                "ui": "done"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "l2",
+                "step": 2,
+                "type": "approval",
+                "ui": "done"
+              },
+              {
+                "atCursor": true,
+                "kind": "agent",
+                "label": "Build",
+                "outcomeId": "l3",
+                "progress": {
+                  "line": "Tests green, writing the PR",
+                  "percent": 70
+                },
+                "step": 3,
+                "type": "build",
+                "ui": "running"
+              },
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Keep green",
+                "outcomeId": "l4",
+                "step": 4,
+                "type": "keepgreen",
+                "ui": "approved"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "l5",
+                "step": 5,
+                "type": "approval",
+                "ui": "proposed"
+              },
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Release + live check",
+                "outcomeId": "l6",
+                "step": 6,
+                "type": "release",
+                "ui": "approved"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "l7",
+                "step": 7,
+                "type": "approval",
+                "ui": "proposed"
+              }
+            ],
+            "templateId": "dev"
+          }
+        ],
+        "question": null,
+        "state": "waiting",
+        "subject": null,
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
+        "threadId": "lt1",
+        "timeline": [],
+        "title": "Dark mode",
+        "urgent": false,
+        "waiting": {
+          "on": "item",
+          "until": null
+        }
       }
     }
   ],
@@ -362,11 +931,14 @@
         "refs": [
           "lt1"
         ],
-        "state": "yourCall",
+        "state": "waiting",
         "subjectId": null,
         "title": "Dark mode",
         "updatedAt": "<ts>",
-        "waiting": null
+        "waiting": {
+          "on": "item",
+          "until": null
+        }
       }
     ],
     "workspaces/w1/inboxMessages": [
@@ -440,9 +1012,37 @@
           "permalink": "https://github.com/example/board/pull/86",
           "text": "PR #86 open"
         },
-        "state": "done",
+        "state": "approved",
         "threadId": "lt1",
         "type": "build",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {},
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "lp1",
+        "progress": {
+          "at": "<ts>",
+          "line": "rebased on main 4f2a1c0, 212/214 green, fixing lint",
+          "percent": 90
+        },
+        "proposedBy": "owner",
+        "result": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "error": "lint fails after 3 fixes: no-unused-vars in src/a.ts; tried 3 fixes",
+          "itemId": null,
+          "permalink": null,
+          "text": null
+        },
+        "state": "approved",
+        "threadId": "lt1",
+        "type": "keepgreen",
         "updatedAt": "<ts>"
       },
       {
@@ -530,6 +1130,26 @@
         },
         "at": "<ts>",
         "data": {
+          "error": "lint fails after 3 fixes: no-unused-vars in src/a.ts; tried 3 fixes",
+          "itemId": null,
+          "outcomeId": "l4",
+          "permalink": null,
+          "planId": "lp1",
+          "type": "keepgreen"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "lt1",
+        "type": "outcome.failed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
           "itemId": null,
           "outcomeId": "l1",
           "permalink": null,
@@ -591,9 +1211,46 @@
         },
         "at": "<ts>",
         "data": {
+          "itemId": null,
+          "outcomeId": "l4",
+          "permalink": null,
+          "planId": "lp1",
+          "type": "keepgreen"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "lt1",
+        "type": "outcome.started"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
           "line": "Tests green, writing the PR",
           "outcomeId": "l3",
           "percent": 70,
+          "planId": "lp1"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "lt1",
+        "type": "step.progress"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "line": "rebased on main 4f2a1c0, 212/214 green, fixing lint",
+          "outcomeId": "l4",
+          "percent": 90,
           "planId": "lp1"
         },
         "memberUid": "owner",
@@ -618,7 +1275,8 @@
             "l3",
             "l4",
             "l5",
-            "l6"
+            "l6",
+            "l7"
           ],
           "templateId": "dev"
         },
@@ -649,12 +1307,42 @@
         "subjectId": null,
         "threadId": "lt1",
         "type": "outcome.approved"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "from": 3,
+          "n": 1,
+          "outcomeId": "l3",
+          "planId": "lp1",
+          "reason": "Fix the lint in Build",
+          "recommended": null,
+          "reset": [
+            "l3",
+            "l4"
+          ],
+          "stepLabel": "Keep green",
+          "summaryVersion": null,
+          "templateId": "dev",
+          "to": 2,
+          "toLabel": "Build",
+          "waitedMs": "<ms>"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "lt1",
+        "type": "plan.sent_back"
       }
     ],
     "workspaces/w1/inboxPlans": [
       {
         "createdAt": "<ts>",
-        "cursor": 3,
+        "cursor": 2,
         "cursorAt": "<ts>",
         "lastEventId": "<id>",
         "memberUid": "owner",
@@ -662,8 +1350,15 @@
         "proposedBy": "owner",
         "sendBackTo": {
           "l2": "l1",
-          "l4": "l3",
-          "l6": "l3"
+          "l5": "l3",
+          "l7": "l3"
+        },
+        "sentBack": {
+          "at": "<ts>",
+          "by": "owner",
+          "n": 1,
+          "reason": "Fix the lint in Build",
+          "to": "l3"
         },
         "state": "active",
         "steps": [
@@ -672,7 +1367,8 @@
           "l3",
           "l4",
           "l5",
-          "l6"
+          "l6",
+          "l7"
         ],
         "templateId": "dev",
         "threadId": "lt1",

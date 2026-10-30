@@ -2,7 +2,7 @@
   "dev": {
     "id": "dev",
     "name": "Development",
-    "description": "Shape → Approve idea → Build (an open, green, unmerged PR) → Ship it? → Release + live check → Accept on live.",
+    "description": "Shape → Approve idea → Build (an open, green, unmerged PR) → Keep green (rebased on main, checks green) → Ship it? → Release + live check → Accept on live.",
     "steps": [
       {
         "type": "shape",
@@ -17,6 +17,10 @@
       },
       {
         "type": "build",
+        "fields": {}
+      },
+      {
+        "type": "keepgreen",
         "fields": {}
       },
       {

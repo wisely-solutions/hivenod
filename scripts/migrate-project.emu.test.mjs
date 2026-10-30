@@ -211,9 +211,9 @@ describe.skipIf(!host)('migrate-project-to-threads on the emulator', () => {
 
   it('a dry run prints the mapping and writes nothing', async () => {
     const r = await run(true);
-    expect(rowOf(r, 'iApprove')).toMatchObject({ to: '2 Approve idea (of 6)', action: 'create' });
+    expect(rowOf(r, 'iApprove')).toMatchObject({ to: '2 Approve idea (of 7)', action: 'create' });
     expect(rowOf(r, 'iAccept')).toMatchObject({
-      to: '6 Accept on live (of 6)',
+      to: '7 Accept on live (of 7)',
       action: 'create',
       attachments: '2/2',
     });
@@ -269,7 +269,7 @@ describe.skipIf(!host)('migrate-project-to-threads on the emulator', () => {
       state: 'active',
       templateId: 'dev',
     });
-    expect(planOf(threadIdFor(W, PID, 'iAccept'))).toMatchObject({ cursor: 5, state: 'active' });
+    expect(planOf(threadIdFor(W, PID, 'iAccept'))).toMatchObject({ cursor: 6, state: 'active' });
     expect(planOf(findingRefs('joao', 'fNew').threadId)).toMatchObject({
       cursor: 0,
       state: 'proposed',
@@ -354,14 +354,14 @@ describe.skipIf(!host)('migrate-project-to-threads on the emulator', () => {
     const before = (await col('inboxThreads')).length;
     const r = await runIn(true);
     expect(rowOf(r, 'iBuild')).toMatchObject({
-      to: 'in-flight → step 3 Build (of 6), running',
+      to: 'in-flight → step 3 Build (of 7), running',
       action: 'create',
     });
     expect(rowOf(r, 'iRelease')).toMatchObject({
-      to: 'in-flight → step 5 Release (of 6), running',
+      to: 'in-flight → step 6 Release (of 7), running',
       action: 'create',
     });
-    expect(rowOf(r, 'iShape').to).toBe('in-flight → step 1 Shape (of 6)');
+    expect(rowOf(r, 'iShape').to).toBe('in-flight → step 1 Shape (of 7)');
     expect(r.writes).toBe(0);
     expect((await col('inboxThreads')).length).toBe(before);
     if (process.env.MIGRATE_TABLE_OUT) {
@@ -374,10 +374,23 @@ describe.skipIf(!host)('migrate-project-to-threads on the emulator', () => {
     await runIn(false);
     const build = await planOfItem('iBuild');
     expect(build).toMatchObject({ cursor: 2, state: 'active' });
-    expect((await stateOf(build)).slice(0, 4)).toEqual(['done', 'done', 'running', 'proposed']);
+    expect((await stateOf(build)).slice(0, 5)).toEqual([
+      'done',
+      'done',
+      'running',
+      'approved',
+      'proposed',
+    ]);
     const rel = await planOfItem('iRelease');
-    expect(rel).toMatchObject({ cursor: 4, state: 'active' });
-    expect((await stateOf(rel)).slice(0, 5)).toEqual(['done', 'done', 'done', 'done', 'running']);
+    expect(rel).toMatchObject({ cursor: 5, state: 'active' });
+    expect((await stateOf(rel)).slice(0, 6)).toEqual([
+      'done',
+      'done',
+      'done',
+      'done',
+      'done',
+      'running',
+    ]);
     expect(
       (await rest.get(`workspaces/${W}/projects/${PID}/items/iBuild`)).migratedTo.threadId,
     ).toBe(threadIdFor(W, PID, 'iBuild'));

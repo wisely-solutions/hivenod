@@ -12,7 +12,7 @@
             "member": "owner",
             "outcomeId": "ds1",
             "planId": "dp1",
-            "step": "1 of 6",
+            "step": "1 of 7",
             "threadId": "dev1",
             "type": "shape"
           }
@@ -62,7 +62,7 @@
             "planId": "dp1",
             "result": null,
             "state": "approved",
-            "step": "1 of 6",
+            "step": "1 of 7",
             "type": "shape"
           },
           {
@@ -79,7 +79,7 @@
             "planId": "dp1",
             "result": null,
             "state": "proposed",
-            "step": "2 of 6",
+            "step": "2 of 7",
             "type": "approval"
           },
           {
@@ -94,8 +94,23 @@
             "planId": "dp1",
             "result": null,
             "state": "approved",
-            "step": "3 of 6",
+            "step": "3 of 7",
             "type": "build"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "ds4",
+            "planId": "dp1",
+            "result": null,
+            "state": "approved",
+            "step": "4 of 7",
+            "type": "keepgreen"
           },
           {
             "checks": [],
@@ -107,11 +122,11 @@
               "what": "Ship it?"
             },
             "note": "",
-            "outcomeId": "ds4",
+            "outcomeId": "ds5",
             "planId": "dp1",
             "result": null,
             "state": "proposed",
-            "step": "4 of 6",
+            "step": "5 of 7",
             "type": "approval"
           },
           {
@@ -122,11 +137,11 @@
             "executorIsMe": true,
             "fields": {},
             "note": "",
-            "outcomeId": "ds5",
+            "outcomeId": "ds6",
             "planId": "dp1",
             "result": null,
             "state": "approved",
-            "step": "5 of 6",
+            "step": "6 of 7",
             "type": "release"
           },
           {
@@ -139,11 +154,11 @@
               "what": "Accept on live"
             },
             "note": "",
-            "outcomeId": "ds6",
+            "outcomeId": "ds7",
             "planId": "dp1",
             "result": null,
             "state": "proposed",
-            "step": "6 of 6",
+            "step": "7 of 7",
             "type": "approval"
           }
         ],
@@ -153,7 +168,7 @@
             "cursor": 0,
             "note": "",
             "planId": "dp1",
-            "progress": "Step 1 of 6",
+            "progress": "Step 1 of 7",
             "state": "active",
             "steps": [
               {
@@ -185,10 +200,19 @@
               },
               {
                 "atCursor": false,
-                "kind": "human",
-                "label": "Your approval",
+                "kind": "agent",
+                "label": "Keep green",
                 "outcomeId": "ds4",
                 "step": 4,
+                "type": "keepgreen",
+                "ui": "approved"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds5",
+                "step": 5,
                 "type": "approval",
                 "ui": "proposed"
               },
@@ -196,8 +220,8 @@
                 "atCursor": false,
                 "kind": "agent",
                 "label": "Release + live check",
-                "outcomeId": "ds5",
-                "step": 5,
+                "outcomeId": "ds6",
+                "step": 6,
                 "type": "release",
                 "ui": "approved"
               },
@@ -205,8 +229,8 @@
                 "atCursor": false,
                 "kind": "human",
                 "label": "Your approval",
-                "outcomeId": "ds6",
-                "step": 6,
+                "outcomeId": "ds7",
+                "step": 7,
                 "type": "approval",
                 "ui": "proposed"
               }
@@ -261,7 +285,37 @@
         "planId": "dp1",
         "state": "done",
         "threadId": "dev1",
+        "threadState": "waiting"
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "ds4",
+        "planId": "dp1",
+        "state": "done",
+        "threadId": "dev1",
         "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "step_progress",
+      "ok": true,
+      "out": {
+        "note": "Re-check noted: the person sees it at Ship it?. Report check green once the pull request is green and current again (or blocked with the reason).",
+        "outcomeId": "ds4",
+        "threadId": "dev1"
+      }
+    },
+    {
+      "tool": "step_progress",
+      "ok": true,
+      "out": {
+        "note": "Re-check noted: the person sees it at Ship it?. Report check green once the pull request is green and current again (or blocked with the reason).",
+        "outcomeId": "ds4",
+        "threadId": "dev1"
       }
     },
     {
@@ -310,7 +364,7 @@
               "text": "Size M"
             },
             "state": "done",
-            "step": "1 of 6",
+            "step": "1 of 7",
             "type": "shape"
           },
           {
@@ -330,7 +384,7 @@
             "planId": "dp1",
             "result": null,
             "state": "done",
-            "step": "2 of 6",
+            "step": "2 of 7",
             "type": "approval"
           },
           {
@@ -350,8 +404,28 @@
               "text": "PR #86 open"
             },
             "state": "approved",
-            "step": "3 of 6",
+            "step": "3 of 7",
             "type": "build"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "ds4",
+            "planId": "dp1",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": null,
+              "text": "Green on 4f2a1c0"
+            },
+            "state": "approved",
+            "step": "4 of 7",
+            "type": "keepgreen"
           },
           {
             "checks": [],
@@ -363,11 +437,11 @@
               "what": "Ship it?"
             },
             "note": "",
-            "outcomeId": "ds4",
+            "outcomeId": "ds5",
             "planId": "dp1",
             "result": null,
             "state": "proposed",
-            "step": "4 of 6",
+            "step": "5 of 7",
             "type": "approval"
           },
           {
@@ -378,11 +452,11 @@
             "executorIsMe": true,
             "fields": {},
             "note": "",
-            "outcomeId": "ds5",
+            "outcomeId": "ds6",
             "planId": "dp1",
             "result": null,
             "state": "approved",
-            "step": "5 of 6",
+            "step": "6 of 7",
             "type": "release"
           },
           {
@@ -395,11 +469,11 @@
               "what": "Accept on live"
             },
             "note": "",
-            "outcomeId": "ds6",
+            "outcomeId": "ds7",
             "planId": "dp1",
             "result": null,
             "state": "proposed",
-            "step": "6 of 6",
+            "step": "7 of 7",
             "type": "approval"
           }
         ],
@@ -409,12 +483,12 @@
             "cursor": 2,
             "note": "",
             "planId": "dp1",
-            "progress": "Step 3 of 6",
+            "progress": "Step 3 of 7",
             "sentBack": {
               "by": "owner",
               "n": 1,
               "reason": "Bigger toggle",
-              "toStep": "3 of 6"
+              "toStep": "3 of 7"
             },
             "state": "active",
             "steps": [
@@ -447,10 +521,19 @@
               },
               {
                 "atCursor": false,
-                "kind": "human",
-                "label": "Your approval",
+                "kind": "agent",
+                "label": "Keep green",
                 "outcomeId": "ds4",
                 "step": 4,
+                "type": "keepgreen",
+                "ui": "approved"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds5",
+                "step": 5,
                 "type": "approval",
                 "ui": "proposed"
               },
@@ -458,8 +541,8 @@
                 "atCursor": false,
                 "kind": "agent",
                 "label": "Release + live check",
-                "outcomeId": "ds5",
-                "step": 5,
+                "outcomeId": "ds6",
+                "step": 6,
                 "type": "release",
                 "ui": "approved"
               },
@@ -467,8 +550,8 @@
                 "atCursor": false,
                 "kind": "human",
                 "label": "Your approval",
-                "outcomeId": "ds6",
-                "step": 6,
+                "outcomeId": "ds7",
+                "step": 7,
                 "type": "approval",
                 "ui": "proposed"
               }
@@ -501,7 +584,7 @@
             "member": "owner",
             "outcomeId": "ds3",
             "planId": "dp1",
-            "step": "3 of 6",
+            "step": "3 of 7",
             "threadId": "dev1",
             "type": "build"
           }
@@ -519,8 +602,25 @@
         "planId": "dp1",
         "state": "done",
         "threadId": "dev1",
+        "threadState": "waiting"
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "ds4",
+        "planId": "dp1",
+        "state": "done",
+        "threadId": "dev1",
         "threadState": "yourCall"
       }
+    },
+    {
+      "tool": "step_progress",
+      "ok": false,
+      "out": "Keep green ended: Ship it? was decided (or the plan moved on). Release rebases and re-checks."
     },
     {
       "tool": "plan_send_back",
@@ -537,7 +637,7 @@
       "ok": true,
       "out": {
         "blocked": false,
-        "note": "Sent back to step 3 of 6: you get carry_out for it again (why sent_back, with the reason).",
+        "note": "Sent back to step 3 of 7: you get carry_out for it again (why sent_back, with the reason).",
         "planId": "dp1",
         "threadId": "dev1",
         "toStep": 3
@@ -552,6 +652,18 @@
         "planId": "dp1",
         "state": "done",
         "threadId": "dev1",
+        "threadState": "waiting"
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "ds4",
+        "planId": "dp1",
+        "state": "done",
+        "threadId": "dev1",
         "threadState": "yourCall"
       }
     },
@@ -560,10 +672,10 @@
       "ok": true,
       "out": {
         "blocked": true,
-        "note": "Sent back to step 3 of 6, the third time: the plan is blocked until the person retries or stops it.",
+        "note": "Sent back to step 4 of 7, the third time: the plan is blocked until the person retries or stops it.",
         "planId": "dp1",
         "threadId": "dev1",
-        "toStep": 3
+        "toStep": 4
       }
     },
     {
@@ -617,7 +729,7 @@
               "text": "Size M"
             },
             "state": "done",
-            "step": "1 of 6",
+            "step": "1 of 7",
             "type": "shape"
           },
           {
@@ -637,7 +749,7 @@
             "planId": "dp1",
             "result": null,
             "state": "done",
-            "step": "2 of 6",
+            "step": "2 of 7",
             "type": "approval"
           },
           {
@@ -656,9 +768,29 @@
               "permalink": null,
               "text": "Fixed"
             },
-            "state": "approved",
-            "step": "3 of 6",
+            "state": "done",
+            "step": "3 of 7",
             "type": "build"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "ds4",
+            "planId": "dp1",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": null,
+              "text": null
+            },
+            "state": "approved",
+            "step": "4 of 7",
+            "type": "keepgreen"
           },
           {
             "checks": [],
@@ -670,11 +802,11 @@
               "what": "Ship it?"
             },
             "note": "",
-            "outcomeId": "ds4",
+            "outcomeId": "ds5",
             "planId": "dp1",
             "result": null,
             "state": "proposed",
-            "step": "4 of 6",
+            "step": "5 of 7",
             "type": "approval"
           },
           {
@@ -685,11 +817,11 @@
             "executorIsMe": true,
             "fields": {},
             "note": "",
-            "outcomeId": "ds5",
+            "outcomeId": "ds6",
             "planId": "dp1",
             "result": null,
             "state": "approved",
-            "step": "5 of 6",
+            "step": "6 of 7",
             "type": "release"
           },
           {
@@ -702,26 +834,26 @@
               "what": "Accept on live"
             },
             "note": "",
-            "outcomeId": "ds6",
+            "outcomeId": "ds7",
             "planId": "dp1",
             "result": null,
             "state": "proposed",
-            "step": "6 of 6",
+            "step": "7 of 7",
             "type": "approval"
           }
         ],
         "plans": [
           {
             "confidence": null,
-            "cursor": 2,
+            "cursor": 3,
             "note": "",
             "planId": "dp1",
-            "progress": "Step 3 of 6",
+            "progress": "Step 4 of 7",
             "sentBack": {
               "by": "<agent>",
               "n": 3,
               "reason": "Still failing",
-              "toStep": "3 of 6"
+              "toStep": "4 of 7"
             },
             "state": "blocked",
             "steps": [
@@ -744,20 +876,29 @@
                 "ui": "done"
               },
               {
-                "atCursor": true,
+                "atCursor": false,
                 "kind": "agent",
                 "label": "Build",
                 "outcomeId": "ds3",
                 "step": 3,
                 "type": "build",
+                "ui": "done"
+              },
+              {
+                "atCursor": true,
+                "kind": "agent",
+                "label": "Keep green",
+                "outcomeId": "ds4",
+                "step": 4,
+                "type": "keepgreen",
                 "ui": "blocked"
               },
               {
                 "atCursor": false,
                 "kind": "human",
                 "label": "Your approval",
-                "outcomeId": "ds4",
-                "step": 4,
+                "outcomeId": "ds5",
+                "step": 5,
                 "type": "approval",
                 "ui": "proposed"
               },
@@ -765,8 +906,8 @@
                 "atCursor": false,
                 "kind": "agent",
                 "label": "Release + live check",
-                "outcomeId": "ds5",
-                "step": 5,
+                "outcomeId": "ds6",
+                "step": 6,
                 "type": "release",
                 "ui": "approved"
               },
@@ -774,8 +915,8 @@
                 "atCursor": false,
                 "kind": "human",
                 "label": "Your approval",
-                "outcomeId": "ds6",
-                "step": 6,
+                "outcomeId": "ds7",
+                "step": 7,
                 "type": "approval",
                 "ui": "proposed"
               }
@@ -800,7 +941,7 @@
       "ok": true,
       "out": {
         "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
-        "outcomeId": "ds3",
+        "outcomeId": "ds4",
         "planId": "dp1",
         "state": "done",
         "threadId": "dev1",
@@ -815,6 +956,7 @@
         "planId": "<id>",
         "state": "proposed",
         "stepIds": [
+          "<id>",
           "<id>",
           "<id>",
           "<id>",
@@ -842,21 +984,27 @@
             "type": "build"
           },
           {
-            "kind": "human",
+            "kind": "agent",
             "outcomeId": "<id>",
             "step": 4,
+            "type": "keepgreen"
+          },
+          {
+            "kind": "human",
+            "outcomeId": "<id>",
+            "step": 5,
             "type": "approval"
           },
           {
             "kind": "agent",
             "outcomeId": "<id>",
-            "step": 5,
+            "step": 6,
             "type": "release"
           },
           {
             "kind": "human",
             "outcomeId": "<id>",
-            "step": 6,
+            "step": 7,
             "type": "approval"
           }
         ],
@@ -1047,7 +1195,52 @@
         "result": null,
         "state": "proposed",
         "threadId": "dev1",
+        "type": "keepgreen",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {},
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "<id>",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "proposed",
+        "threadId": "dev1",
         "type": "release",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {},
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dp1",
+        "progress": {
+          "at": "<ts>",
+          "check": "green",
+          "line": "green on 9b1e2d3",
+          "percent": null
+        },
+        "proposedBy": "owner",
+        "result": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "error": null,
+          "itemId": null,
+          "permalink": null,
+          "text": null
+        },
+        "state": "done",
+        "threadId": "dev1",
+        "type": "keepgreen",
         "updatedAt": "<ts>"
       },
       {
@@ -1082,7 +1275,7 @@
           "error": null,
           "itemId": null,
           "permalink": null,
-          "text": null
+          "text": "Fixed"
         },
         "state": "done",
         "threadId": "dev1",
@@ -1213,14 +1406,53 @@
         },
         "at": "<ts>",
         "data": {
-          "from": 4,
+          "check": "green",
+          "line": "green on 9b1e2d3",
+          "outcomeId": "ds4",
+          "percent": null,
+          "planId": "dp1"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "step.progress"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "check": "rechecking",
+          "line": "main moved to 9b1e2d3: rebasing",
+          "outcomeId": "ds4",
+          "percent": null,
+          "planId": "dp1"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "step.progress"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "from": 5,
           "n": 2,
           "outcomeId": "ds3",
           "planId": "dp1",
           "reason": "e2e fails on main",
           "reset": [
             "ds3",
-            "ds4"
+            "ds4",
+            "ds5"
           ],
           "to": 2
         },
@@ -1237,16 +1469,16 @@
         },
         "at": "<ts>",
         "data": {
-          "from": 4,
+          "from": 5,
           "n": 3,
-          "outcomeId": "ds3",
+          "outcomeId": "ds4",
           "planId": "dp1",
           "reason": "Still failing",
           "reset": [
-            "ds3",
-            "ds4"
+            "ds4",
+            "ds5"
           ],
-          "to": 2
+          "to": 3
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -1338,10 +1570,67 @@
         "at": "<ts>",
         "data": {
           "itemId": null,
-          "outcomeId": "ds3",
+          "outcomeId": "ds4",
           "permalink": null,
           "planId": "dp1",
-          "type": "build"
+          "type": "keepgreen"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "ds4",
+          "permalink": null,
+          "planId": "dp1",
+          "type": "keepgreen"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "ds4",
+          "permalink": null,
+          "planId": "dp1",
+          "type": "keepgreen"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "ds4",
+          "permalink": null,
+          "planId": "dp1",
+          "type": "keepgreen"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -1363,6 +1652,7 @@
             "<id>",
             "<id>",
             "<id>",
+            "<id>",
             "<id>"
           ],
           "templateId": "dev",
@@ -1370,6 +1660,7 @@
             "shape",
             "approval",
             "build",
+            "keepgreen",
             "approval",
             "release",
             "approval"
@@ -1397,7 +1688,8 @@
             "ds3",
             "ds4",
             "ds5",
-            "ds6"
+            "ds6",
+            "ds7"
           ],
           "templateId": "dev"
         },
@@ -1438,7 +1730,7 @@
         "at": "<ts>",
         "data": {
           "edited": false,
-          "outcomeId": "ds4",
+          "outcomeId": "ds5",
           "planId": "dp1",
           "recommended": null,
           "stepLabel": "Ship it?",
@@ -1461,7 +1753,7 @@
         "at": "<ts>",
         "data": {
           "edited": false,
-          "outcomeId": "ds4",
+          "outcomeId": "ds5",
           "planId": "dp1",
           "recommended": null,
           "stepLabel": "Ship it?",
@@ -1483,14 +1775,15 @@
         },
         "at": "<ts>",
         "data": {
-          "from": 3,
+          "from": 4,
           "n": 1,
           "outcomeId": "ds3",
           "planId": "dp1",
           "reason": "Bigger toggle",
           "recommended": null,
           "reset": [
-            "ds3"
+            "ds3",
+            "ds4"
           ],
           "stepLabel": "Ship it?",
           "summaryVersion": null,
@@ -1512,7 +1805,7 @@
         },
         "at": "<ts>",
         "data": {
-          "outcomeId": "ds3",
+          "outcomeId": "ds4",
           "planId": "dp1"
         },
         "memberUid": "owner",
@@ -1539,6 +1832,7 @@
           "<id>",
           "<id>",
           "<id>",
+          "<id>",
           "<id>"
         ],
         "templateId": "dev",
@@ -1547,7 +1841,7 @@
       },
       {
         "createdAt": "<ts>",
-        "cursor": 3,
+        "cursor": 4,
         "cursorAt": "<ts>",
         "lastEventId": "<id>",
         "memberUid": "owner",
@@ -1555,15 +1849,15 @@
         "proposedBy": "owner",
         "sendBackTo": {
           "ds2": "ds1",
-          "ds4": "ds3",
-          "ds6": "ds3"
+          "ds5": "ds3",
+          "ds7": "ds3"
         },
         "sentBack": {
           "at": "<ts>",
           "by": "<agent>",
           "n": 3,
           "reason": "Still failing",
-          "to": "ds3"
+          "to": "ds4"
         },
         "state": "active",
         "steps": [
@@ -1572,7 +1866,8 @@
           "ds3",
           "ds4",
           "ds5",
-          "ds6"
+          "ds6",
+          "ds7"
         ],
         "templateId": "dev",
         "threadId": "dev1",
