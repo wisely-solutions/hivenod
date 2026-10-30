@@ -1132,7 +1132,12 @@ const MUTATIONS = [
   ],
   [
     'send back: an agent at a gate',
-    [["? inboxOwner(r) && c.state == 'proposed'", "? c.state == 'proposed'"]],
+    [
+      [
+        "&& (c.type in outcomeHuman() || r.state == 'blocked' ? inboxOwner(r)\n",
+        "&& (c.type in outcomeHuman() ? inboxOwner(r) || isActiveAgent(wid) : r.state == 'blocked' ? inboxOwner(r)\n",
+      ],
+    ],
   ],
   ['send back: any count', [['&& d.sentBack.n == n', '']]],
   ['send back: any target', [['\n            && d.sentBack.to == e.outcomeId', '\n           ']]],
