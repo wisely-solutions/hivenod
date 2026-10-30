@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
-import { adminSet, person, projectFields, settle, signIn, uidOf, workspaceOf } from './helpers';
+import { adminSet, person, settle, signIn, uidOf, workspaceOf } from './helpers';
 
 // Card 2GAckUFf: every command in the palette does what it says; the sheet writes chords plainly.
 
@@ -27,23 +27,32 @@ async function runCommand(page: Page, query: string) {
   await page.keyboard.press('Enter');
 }
 
-test('New project and Connect an agent open their real screens', async ({ page }) => {
+test('New thread and Connect an agent open their real screens; no project commands', async ({
+  page,
+}) => {
   mkdirSync(SHOTS, { recursive: true });
   await enter(page);
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
-    await runCommand(page, 'new project');
-    await expect(page).toHaveURL(/\/projects/);
-    const dlg = page.getByRole('dialog', { name: /New project/ });
+    await page.goto('/inbox');
+    await expect(page.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+    await runCommand(page, 'new thread');
+    const dlg = page.getByRole('dialog', { name: 'New thread' });
     await expect(dlg).toBeVisible();
-    await expect(page.getByText(/arrives with Build/)).toHaveCount(0);
     await settle(page);
     await page.screenshot({
-      path: `${SHOTS}/palette-project-${test.info().project.name}-${theme}.png`,
+      path: `${SHOTS}/palette-thread-${test.info().project.name}-${theme}.png`,
     });
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(page).toHaveURL(/\/projects$/);
+    await expect(page).toHaveURL(/\/inbox$/);
+    // Projects were removed (OE8Fm slice 10): the palette offers nothing about them.
+    if (isPhone()) await page.getByRole('button', { name: 'Search' }).click();
+    else await page.keyboard.press('Control+K');
+    await page.getByPlaceholder(/Jump to/).fill('project');
+    await expect(page.getByRole('option')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toBeHidden();
     await settle(page);
 
     await runCommand(page, 'connect an agent');
@@ -57,7 +66,7 @@ test('New project and Connect an agent open their real screens', async ({ page }
       path: `${SHOTS}/palette-agent-${test.info().project.name}-${theme}.png`,
     });
     await page.goBack();
-    await expect(page).toHaveURL(/\/projects$/);
+    await expect(page).toHaveURL(/\/inbox$/);
     await settle(page);
   }
 });
@@ -73,7 +82,7 @@ test('the shortcut sheet lists C and writes the palette chord with a plus', asyn
     await expect(sheet).toBeVisible();
     await expect(sheet.getByText('⌘/Ctrl + K')).toBeVisible();
     await expect(sheet.getByText('then K')).toHaveCount(0);
-    await expect(sheet.getByRole('listitem').filter({ hasText: 'Add an item' })).toContainText('C');
+    await expect(sheet.getByRole('listitem').filter({ hasText: 'New thread' })).toContainText('C');
     await expect(sheet.getByRole('listitem').filter({ hasText: 'Next item' })).toContainText('J');
     await settle(page);
     await page.screenshot({ path: `${SHOTS}/palette-sheet-${theme}.png` });
@@ -83,9 +92,7 @@ test('the shortcut sheet lists C and writes the palette chord with a plus', asyn
 });
 
 // Card WGERdupU: palette follow-ups.
-test('an item row opens the item, an agent row highlights the agent, Back never reopens a dialog', async ({
-  page,
-}) => {
+test('an agent row highlights the agent, Back never reopens a dialog', async ({ page }) => {
   const owner = person('Pat Palette');
   await page.goto('/');
   await signIn(page, owner);
@@ -98,7 +105,6 @@ test('an item row opens the item, an agent row highlights the agent, Back never 
   const wid = await workspaceOf(owner.email);
   const uid = await uidOf(owner.email);
   const base = `workspaces/${wid}`;
-  await adminSet(`${base}/projects/blog`, projectFields('Blog', uid));
   await adminSet(`${base}/agents/scout`, {
     name: 'Scoutbot',
     color: 'agent-3',
@@ -111,32 +117,6 @@ test('an item row opens the item, an agent row highlights the agent, Back never 
     previousAgentUid: null,
     lastEventId: 'seed',
   });
-  await adminSet(`${base}/projects/blog/items/i1`, {
-    title: 'Palette target item',
-    type: 'task',
-    stepId: 'draft',
-    status: 'queued',
-    summary: 'Opened from the palette.',
-    source: { kind: 'manual', label: 'Test' },
-    createdBy: { type: 'human', id: uid },
-    parentItemId: null,
-    sourceRunId: null,
-    claim: null,
-    progress: null,
-    gate: null,
-    triage: null,
-    sendBackCount: 0,
-    costEur: 0,
-    order: 1,
-    updatedAt: new Date(),
-    lastEventId: 'seed',
-  });
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: /^Good \w+, Pat/ })).toBeVisible();
-
-  await runCommand(page, 'Palette target');
-  await expect(page).toHaveURL(/\/p\/blog\?item=i1/);
-  await expect(page.getByRole('article', { name: /Palette target item/ })).toBeVisible();
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /^Good \w+, Pat/ })).toBeVisible();
 
@@ -163,7 +143,7 @@ test('no uncaught transition error while navigating fast, and Esc reads the same
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await enter(page);
-  for (const k of ['p', 'a', 'p', 'a']) {
+  for (const k of ['e', 'a', 'e', 'a']) {
     await page.keyboard.press('g');
     await page.keyboard.press(k);
   }

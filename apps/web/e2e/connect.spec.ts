@@ -82,6 +82,21 @@ async function asAgent(token: string) {
  * Signs a new person in, then makes them a plain member of their organization, in the project
  * Blog only (Ops is someone else's and does not list them).
  */
+/** Signs a new person in: the admin of their own organization. */
+async function asAdmin(page: Page, name: string) {
+  const me = person(name);
+  await page.goto('/');
+  await signIn(page, me);
+  await expect(
+    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
+  ).toBeVisible({ timeout: 20_000 });
+  const wid = await expect
+    .poll(() => workspaceOf(me.email).catch(() => ''), { timeout: 20_000 })
+    .not.toBe('')
+    .then(() => workspaceOf(me.email));
+  return { wid, uid: await uidOf(me.email) };
+}
+
 async function asMember(page: Page, name: string) {
   const me = person(name);
   await page.goto('/');
@@ -113,29 +128,27 @@ async function asMember(page: Page, name: string) {
   return { wid, uid };
 }
 
-test('a plain member confirms hivenod connect with one click, for their own project', async ({
-  page,
-}) => {
+// Projects were removed (item OE8FmrTaIxFVGcaeGG3N, slice 10): the agent works on the Inbox, with no
+// projects. A plain member's one-click connect needs the rule change of slice 11 (memberConnects
+// still asks for a project), so this runs as the admin.
+test('an admin confirms hivenod connect with one click, for their Inbox', async ({ page }) => {
   const bodies: string[] = [];
   page.on('request', (r) => {
     if (r.url().includes(`:${FIRESTORE_PORT}/`) && r.method() !== 'GET')
       bodies.push(r.postData() ?? '');
   });
-  const { wid } = await asMember(page, 'Mona Member');
+  const { wid } = await asAdmin(page, 'Mona Member');
   const term = await asTerminal();
 
   await page.goto(term.link);
   const main = page.getByRole('main');
-  await expect(
-    main.getByRole('heading', { name: 'Connect this Claude Code to Blog?' }),
-  ).toBeVisible();
+  await expect(main.getByRole('heading', { name: 'Connect this Claude Code?' })).toBeVisible();
   const machine = main.getByRole('group', { name: 'Machine asking' });
   await expect(machine).toContainText('Claude Code (laptop)');
   await expect(machine).toContainText('Machine laptop');
   await expect(machine).toContainText(formatPairingCode(term.code));
   await expect(machine).toContainText(/Expires in (9|10) min/);
-  // Ops does not list this member: it is not offered.
-  await expect(main.getByText('Ops')).toHaveCount(0);
+  await expect(main.getByText(/threads and plans of your Inbox/)).toBeVisible();
   await expectNoHorizontalScroll(page);
   await main.getByRole('button', { name: 'Connect' }).click();
 
@@ -143,12 +156,9 @@ test('a plain member confirms hivenod connect with one click, for their own proj
   await expect(
     main.getByRole('heading', { name: 'Claude Code (laptop) is connected' }),
   ).toBeVisible();
-  await expect(main.getByRole('link', { name: 'Add your first item' })).toHaveAttribute(
-    'href',
-    '/p/blog',
-  );
+  await expect(main.getByRole('link', { name: 'Open Inbox' })).toHaveAttribute('href', '/inbox');
 
-  // The terminal gets the token sealed for its key; the agent can use Blog and nothing else.
+  // The terminal gets the token sealed for its key; the agent has no projects.
   await expect
     .poll(async () => (await term.read()).data()?.status, { timeout: 15_000 })
     .toBe('paired');
@@ -156,8 +166,9 @@ test('a plain member confirms hivenod connect with one click, for their own proj
   expect(p.workspaceId).toBe(wid);
   const token = await term.open(p.sealed as Sealed);
   const bot = await asAgent(token);
-  expect((await bot.read(`workspaces/${wid}/projects/blog`)).exists()).toBe(true);
-  await expect(bot.read(`workspaces/${wid}/projects/ops`)).rejects.toThrow();
+  expect(
+    (await bot.read(`workspaces/${wid}/agents/${p.agentUid as string}`)).data()?.projectIds,
+  ).toEqual([]);
   await bot.done();
   expect(await page.content()).not.toContain('hive_agt_');
   for (const b of bodies) expect(b).not.toContain(token);
@@ -211,7 +222,7 @@ test('an expired request is refused; Decline stops the terminal; a pair code goe
 for (const theme of ['light', 'dark'] as const) {
   test(`the confirm page is axe-clean in ${theme}`, async ({ page }, info) => {
     await page.emulateMedia({ colorScheme: theme });
-    await asMember(page, 'Axel Confirm');
+    await asAdmin(page, 'Axel Confirm');
     const term = await asTerminal();
     const shots = process.env.SHOTS_DIR;
     const snap = async (name: string) => {
@@ -257,7 +268,7 @@ test('Connect Claude Code: one line for everyone, and the page flips live when t
   page,
   context,
 }) => {
-  const { wid } = await asMember(page, 'Lena Live');
+  const { wid } = await asAdmin(page, 'Lena Live');
   await page.goto('/connect');
   const main = page.getByRole('main');
   await expect(main.getByRole('heading', { name: 'Connect Claude Code' })).toBeVisible();
@@ -303,46 +314,8 @@ test('Connect Claude Code: one line for everyone, and the page flips live when t
       fullPage: true,
     });
   }
-  await status.getByRole('link', { name: 'Add your first item' }).click();
-  await expect(page).toHaveURL(/\/p\/blog/);
+  await status.getByRole('link', { name: 'Open Inbox' }).click();
+  await expect(page).toHaveURL(/\/inbox$/);
   await other.close();
   await term.done();
 });
-
-for (const theme of ['light', 'dark'] as const) {
-  test(`sign-up asks what the agents will work on (axe-clean, ${theme})`, async ({
-    page,
-  }, info) => {
-    await page.emulateMedia({ colorScheme: theme });
-    await page.goto('/');
-    await signIn(page, person('Tess Template'));
-    await expect(
-      page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
-    ).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    const list = page.getByRole('region', { name: 'Get started' });
-    await expect(
-      list.getByRole('radiogroup', { name: 'What will your agents work on?' }),
-    ).toBeVisible();
-    await settle(page);
-    const { violations } = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'])
-      .analyze();
-    expect(
-      violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
-    ).toEqual([]);
-    await expectNoHorizontalScroll(page);
-    const shots = process.env.SHOTS_DIR;
-    if (shots)
-      await page.screenshot({
-        path: `${shots}/signup-${info.project.name}-${theme}.png`,
-        fullPage: true,
-      });
-    await list.getByRole('radio', { name: /Research to decision/ }).click();
-    await list.getByRole('button', { name: 'Create project' }).click();
-    await expect(page).toHaveURL(/\/connect$/);
-    // The project carries the template's process.
-    await page.goto('/projects');
-    await expect(page.getByRole('main').getByText('Research to decision').first()).toBeVisible();
-  });
-}

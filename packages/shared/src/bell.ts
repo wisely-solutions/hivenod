@@ -7,11 +7,13 @@
  * deterministic, so a restarted notifier never writes the same entry twice.
  *
  * What lands in it (the same events push and Telegram tell people about, plus their outcomes):
- * Since projects were removed (design 7) only the Inbox kinds are written; entries of the old
- * project kinds (gate, question, answer, sentBack, silence) no longer parse and are left out.
+ * Since projects were removed (design 7) only thread entries are written; entries of the old
+ * project kinds (gate, question, answer, sentBack) no longer parse, and old item silence entries
+ * (projectId not INBOX_BELL_PROJECT) are left out (bellOfThread).
  *  - inboxAsk:  an agent asked you about one of your Inbox threads (Needs you)
  *  - inboxCall: outcomes were proposed on one of your Inbox threads (Your call)
- *    For the inbox kinds, projectId is INBOX_BELL_PROJECT and itemId is the thread id;
+ *  - silence:   a step of one of your threads in agent hands went silent (reach out, item KZ6O9)
+ *    For every kind, projectId is INBOX_BELL_PROJECT and itemId is the thread id;
  *    projectName is the subject's name.
  */
 import { z } from 'zod';
@@ -22,7 +24,7 @@ export const BELL_KEEP_MS = BELL_KEEP_DAYS * 86_400_000;
 /** The bell and the full page show at most this many entries. */
 export const BELL_LIMIT = 100;
 
-export const bellKind = z.enum(['inboxAsk', 'inboxCall']);
+export const bellKind = z.enum(['inboxAsk', 'inboxCall', 'silence']);
 /** The projectId of the inbox bell entries (their itemId is the thread id). */
 export const INBOX_BELL_PROJECT = 'inbox';
 export const isInboxBell = (kind: BellKind) => kind === 'inboxAsk' || kind === 'inboxCall';
@@ -48,6 +50,9 @@ export const bellEntrySchema = z.object({
 });
 export type BellEntry = z.infer<typeof bellEntrySchema>;
 
+/** An entry about a thread (all new ones); false for an old item silence entry. */
+export const bellOfThread = (e: Pick<BellEntry, 'projectId'>) => e.projectId === INBOX_BELL_PROJECT;
+
 const safe = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 100);
 
 export const bellPath = {
@@ -58,6 +63,8 @@ export const bellPath = {
 export const bellId = {
   /** One arrival of a thread at Needs you or Your call (`arrival`: see inboxArrival). */
   inbox: (threadId: string, arrival: string) => `i-${safe(threadId)}-${safe(arrival)}`,
+  /** A thread step that went silent (`key`: the step and the flag's since). */
+  silence: (threadId: string, key: string) => `n-${safe(threadId)}-${safe(key)}`,
 } as const;
 
 /** The kinds that ask you to act (the "Needs you" filter). */
@@ -82,6 +89,12 @@ export function bellText(
       return { before: `${who} asks you about `, title: e.itemTitle, after: quote };
     case 'inboxCall':
       return { before: 'Your call on ', title: e.itemTitle, after: e.text ? `: ${e.text}` : '' };
+    case 'silence':
+      return {
+        before: 'No update on ',
+        title: e.itemTitle,
+        after: `${e.actorName ? ` from ${e.actorName}` : ''}${e.text ? `: ${e.text}` : ''}`,
+      };
   }
 }
 

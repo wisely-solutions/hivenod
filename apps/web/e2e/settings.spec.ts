@@ -1,15 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import {
-  adminDoc,
   adminSet,
   expectNoHorizontalScroll,
-  fastTimers,
   person,
   projectFields,
   settle,
   signIn,
-  UNDO_WAIT,
   uidOf,
   workspaceOf,
 } from './helpers';
@@ -54,6 +51,8 @@ test('old Me and Settings addresses forward to the matching Account or Organizat
     ['/settings/nonsense', '/account/profile', 'Profile'],
     ['/account', '/account/profile', 'Profile'],
     ['/account/members', '/settings/members', 'Members'],
+    // The Projects tab was removed (OE8Fm slice 10): its old address opens Organization.
+    ['/settings/projects', '/settings/organization', 'Rita’s organization'],
   ] as const) {
     await page.goto(from);
     await expect(page).toHaveURL(new RegExp(`${to}$`));
@@ -85,13 +84,13 @@ test('every tab opens, is axe clean and fits the screen', async ({ page }) => {
   const org = `${who.name.split(' ')[0]}’s organization`;
   await expect(page.locator('[data-org-scope]')).toContainText(org);
   const tabs = page.getByRole('tablist', { name: 'Organization settings' }).getByRole('tab');
-  await expect(tabs).toHaveCount(5);
+  await expect(tabs).toHaveCount(4);
+  await expect(tab(page, 'Projects')).toHaveCount(0);
   await expect(tabs.first()).toHaveText(org);
   for (const [label, path, heading] of [
     [org, 'organization', 'Organization'],
     ['Members', 'members', 'Members'],
     ['Groups', 'groups', 'Groups'],
-    ['Projects', 'projects', 'Projects'],
     ['Inbox labels', 'labels', 'Inbox labels'],
   ] as const) {
     await tab(page, label).click();
@@ -102,72 +101,6 @@ test('every tab opens, is axe clean and fits the screen', async ({ page }) => {
     await expectNoHorizontalScroll(page);
     await axe(page);
   }
-});
-
-test('Projects tab: edit, archive with Undo, restore; Open process; no delete', async ({
-  page,
-}) => {
-  test.setTimeout(90_000);
-  await fastTimers(page);
-  const { wid, uid } = await enter(page, 'Penny Projects');
-  await adminSet(`workspaces/${wid}/projects/a1`, projectFields('Alpha project', uid));
-  await adminSet(`workspaces/${wid}/projects/b1`, projectFields('Beta project', uid));
-  await page.goto('/settings/projects');
-  const list = page.getByRole('list', { name: 'Projects' });
-  await expect(list.getByRole('listitem')).toHaveCount(2);
-  await expect(page.getByRole('button', { name: /delete/i })).toHaveCount(0);
-
-  // Edit: name, emoji and description are saved.
-  await list.getByRole('button', { name: 'Edit Alpha project' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Edit Alpha project' });
-  await dialog.getByLabel('Name').fill('Alpha renamed');
-  await dialog.getByLabel('Description').fill('The first one');
-  await dialog.getByRole('radio', { name: 'Emoji 🚀' }).click();
-  await dialog.getByRole('button', { name: 'Save' }).click();
-  await expect(list.getByRole('listitem', { name: 'Alpha renamed' })).toContainText(
-    'The first one',
-  );
-  await expect
-    .poll(
-      async () =>
-        (await adminDoc(`workspaces/${wid}/projects/a1`))?.fields.description?.stringValue,
-    )
-    .toBe('The first one');
-  expect((await adminDoc(`workspaces/${wid}/projects/a1`))?.fields.emoji?.stringValue).toBe('🚀');
-
-  // Archive, Undo: nothing is written.
-  await list.getByRole('button', { name: 'Archive Beta project' }).click();
-  // The row stays and shows Archived at once (no blink), with Restore that cancels the archive.
-  await expect(list.getByRole('listitem', { name: 'Beta project' })).toContainText('Archived');
-  await list.getByRole('button', { name: 'Restore Beta project' }).click();
-  await expect(list.getByRole('listitem', { name: 'Beta project' })).not.toContainText('Archived');
-  await page.waitForTimeout(UNDO_WAIT);
-  expect(
-    (await adminDoc(`workspaces/${wid}/projects/b1`))?.fields.archivedAt?.nullValue,
-  ).toBeDefined();
-
-  // Archive for real: it stays listed, marked Archived, with Restore.
-  await list.getByRole('button', { name: 'Archive Beta project' }).click();
-  await expect(page.getByText('Beta project archived.')).toBeVisible();
-  await expect
-    .poll(
-      async () =>
-        (await adminDoc(`workspaces/${wid}/projects/b1`))?.fields.archivedAt?.timestampValue,
-    )
-    .toBeTruthy();
-  const beta = list.getByRole('listitem', { name: 'Beta project' });
-  await expect(beta).toContainText('Archived');
-  await beta.getByRole('button', { name: 'Restore Beta project' }).click();
-  await expect(beta).not.toContainText('Archived');
-  await expect
-    .poll(
-      async () => (await adminDoc(`workspaces/${wid}/projects/b1`))?.fields.archivedAt?.nullValue,
-    )
-    .toBeDefined();
-
-  // Open process goes to the editor.
-  await list.getByRole('link', { name: /Open process of Alpha renamed/ }).click();
-  await expect(page).toHaveURL(/\/p\/a1\/process$/);
 });
 
 test('phone and desktop: the avatar opens Account', async ({ page }) => {
@@ -183,26 +116,13 @@ test('screenshots', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop-1440', 'sizes are set here');
   test.setTimeout(180_000);
   const dir = process.env.SHOTS_DIR!;
-  const { wid, uid } = await enter(page, 'Shot Person');
-  await adminSet(`workspaces/${wid}/projects/a1`, projectFields('Alpha project', uid));
-  await adminSet(`workspaces/${wid}/projects/b1`, {
-    ...projectFields('Beta project', uid),
-    archivedAt: new Date(),
-    description: 'Finished last quarter',
-  });
+  await enter(page, 'Shot Person');
   const sizes = { '1440': { width: 1440, height: 900 }, '390': { width: 390, height: 844 } };
   for (const [name, vp] of Object.entries(sizes)) {
     await page.setViewportSize(vp);
     for (const theme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: theme });
-      for (const t of [
-        'profile',
-        'organization',
-        'members',
-        'groups',
-        'projects',
-        'notifications',
-      ]) {
+      for (const t of ['profile', 'organization', 'members', 'groups', 'notifications']) {
         await page.goto(`/settings/${t}`);
         await expect(page.getByRole('tab', { name: new RegExp(t, 'i') })).toHaveAttribute(
           'aria-selected',

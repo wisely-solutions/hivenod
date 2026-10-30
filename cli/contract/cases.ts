@@ -1062,7 +1062,7 @@ function build(): ContractCase[] {
   });
   pp('dev template, too many steps', AGENT, {
     template: 'dev',
-    steps: Array.from({ length: 7 }, () => ({ type: '', fields: {} })),
+    steps: Array.from({ length: 8 }, () => ({ type: '', fields: {} })),
   });
   pp('dev template, bad field', AGENT, {
     template: 'dev',
@@ -1188,6 +1188,77 @@ function build(): ContractCase[] {
   });
   sprog('blocked plan', AGENT, {
     plan: devPl(['done', 'done', 'running', 'proposed', 'approved', 'proposed'], 2, 'blocked'),
+  });
+  // ---------- Keep green (slice 6c) ----------
+  const DEV7: [string, Record<string, unknown>?][] = [
+    ['shape'],
+    ['approval', { what: 'Approve idea' }],
+    ['build'],
+    ['keepgreen'],
+    ['approval', { what: 'Ship it?' }],
+    ['release'],
+    ['approval', { what: 'Accept on live' }],
+  ];
+  const kgPl = (
+    states: OutcomeStateOf['state'][],
+    cursor: number,
+    state: PlanInput['plan']['state'] = 'active',
+  ) => {
+    const pl = PL(
+      DEV7.map(([t, f], i) => [t, states[i]!, f]),
+      cursor,
+      state,
+    );
+    return { ...pl, plan: { ...pl.plan, sendBackTo: { o2: 'o1', o5: 'o3', o7: 'o3' } } };
+  };
+  const RUN = kgPl(['done', 'done', 'done', 'running', 'proposed', 'approved', 'proposed'], 3);
+  const SHIP = kgPl(['done', 'done', 'done', 'done', 'proposed', 'approved', 'proposed'], 4);
+  sprog('keep green running', AGENT, {
+    plan: RUN,
+    outcomeId: 'o4',
+    line: 'rebased on main 4f2a1c0, 212/214 green, fixing lint',
+  });
+  sprog('keep green rechecking at Ship it?', AGENT, {
+    plan: SHIP,
+    outcomeId: 'o4',
+    line: 'main moved to 9b1e2d3: rebasing',
+    check: 'rechecking',
+    percent: null,
+  });
+  sprog('keep green green again', AGENT, { plan: SHIP, outcomeId: 'o4', check: 'green' });
+  sprog('keep green blocked', AGENT, { plan: SHIP, outcomeId: 'o4', check: 'blocked' });
+  sprog('keep green bad check', AGENT, { plan: SHIP, outcomeId: 'o4', check: 'red' as never });
+  sprog('keep green after Ship it?', AGENT, {
+    plan: kgPl(['done', 'done', 'done', 'done', 'done', 'approved', 'proposed'], 5),
+    outcomeId: 'o4',
+    check: 'rechecking',
+  });
+  sprog('check on build', AGENT, {
+    plan: kgPl(['done', 'done', 'running', 'approved', 'proposed', 'approved', 'proposed'], 2),
+    outcomeId: 'o3',
+    check: 'green',
+  });
+  sprog('done build before the cursor', AGENT, {
+    plan: kgPl(['done', 'done', 'done', 'running', 'proposed', 'approved', 'proposed'], 3),
+    outcomeId: 'o3',
+  });
+  sprog('keep green done, another agent', OTHER, { plan: SHIP, outcomeId: 'o4' });
+  finP('keep green started', {
+    plan: kgPl(['done', 'done', 'done', 'approved', 'proposed', 'approved', 'proposed'], 3),
+    outcomeId: 'o4',
+    status: 'started',
+  });
+  finP('keep green done offers Ship it?', {
+    plan: RUN,
+    outcomeId: 'o4',
+    status: 'done',
+    result: { text: 'Green on 4f2a1c0' },
+  });
+  finP('keep green failed blocks', {
+    plan: RUN,
+    outcomeId: 'o4',
+    status: 'failed',
+    result: { error: 'lint fails after 3 fixes: no-unused-vars in a.ts' },
   });
   sb('to a gate', AGENT, { toStep: 3 });
   sb('to a later step', AGENT, { toStep: 5 });

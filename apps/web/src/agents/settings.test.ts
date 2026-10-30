@@ -31,18 +31,16 @@ describe('agent settings form', () => {
     expect(parseCount('1e6')).toBeNull();
     const d = settingsDraft(agent);
     expect(settingsErrors(d)).toEqual({});
+    // Projects were removed (OE8Fm slice 10): no project to pick, only the guardrails.
     expect(settingsErrors({ ...d, projectIds: [], maxFailedRuns: '0' })).toEqual({
-      projects: 'Pick at least one project.',
       maxFailedRuns: 'A whole number from 1 to 20.',
     });
-    expect(settingsErrors({ ...d, allProjects: true, projectIds: [] })).toEqual({});
   });
   it('knows when something changed', () => {
     const d = settingsDraft(agent);
     expect(settingsChanged(d, { ...d, projectIds: ['p1'] })).toBe(false);
     expect(settingsChanged(d, { ...d, maxFailedRuns: '4' })).toBe(true);
-    expect(settingsChanged(d, { ...d, allProjects: true })).toBe(true);
-    expect(settingsChanged(d, { ...d, projectIds: ['p1', 'p2'] })).toBe(true);
+    expect(settingsChanged(d, { ...d, allProjects: true })).toBe(false);
   });
   it('a rotated agent takes over the steps limited to the old identity', () => {
     const projects: { id: string; data: { stepAgents: Record<string, string[]> } }[] = [

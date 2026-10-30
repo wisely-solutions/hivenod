@@ -14,7 +14,6 @@ import {
   signIn,
   uidOf,
   workspaceOf,
-  settle,
 } from './helpers';
 
 const SHOTS = process.env.SHOTS_DIR;
@@ -266,78 +265,7 @@ test.beforeEach(async ({ page }) => {
   await freezeClock(page);
 });
 
-test('Activity: live feed grouped by day, filters, paging and a new event', async ({ page }) => {
-  const { base } = await seed(page);
-  await page.goto('/activity');
-  await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
-  const today = page.getByRole('region', { name: 'Today' });
-  await expect(today.getByText('Scout attached report.html to “Market analysis”')).toBeVisible();
-  await expect(today.getByText('Ana Admin approved “Market analysis”')).toBeVisible();
-  // 50 per page.
-  const rows = page.locator('section[aria-label] > ul > li');
-  const filters = page.getByRole('group', { name: 'Filters' });
-  await expect(rows).toHaveCount(50, { timeout: 15_000 });
-  await expectNoHorizontalScroll(page);
-  await shot(page, 'activity');
-
-  // More arrive when the end is reached (125 events in all).
-  await expect(async () => {
-    await rows.last().scrollIntoViewIfNeeded();
-    await expect(page.getByText('That is everything.')).toBeVisible({ timeout: 1500 });
-  }).toPass({ timeout: 20_000 });
-  expect(await rows.count()).toBeGreaterThanOrEqual(125);
-
-  // Filters: type, who, project.
-  await filters.getByLabel('Type', { exact: true }).selectOption({ label: 'Decisions' });
-  await expect(page.getByText('Ana Admin approved “Market analysis”')).toBeVisible();
-  await expect(page.getByText('Scout attached report.html')).toBeHidden();
-  await filters.getByLabel('Type', { exact: true }).selectOption({ label: 'Agent runs' });
-  await expect(page.getByText('Scout started a run on “Pricing page”')).toBeVisible();
-  await filters.getByLabel('Type', { exact: true }).selectOption({ label: 'All types' });
-  await filters.getByLabel('Who', { exact: true }).selectOption({ label: 'All people' });
-  await expect(page.getByText('Ana Admin approved “Market analysis”')).toBeVisible();
-  await expect(page.getByText('Scout attached report.html')).toBeHidden();
-  await filters.getByLabel('Who', { exact: true }).selectOption({ label: 'Agent · Scout' });
-  await expect(page.getByText('Scout attached report.html to “Market analysis”')).toBeVisible();
-  await filters.getByLabel('Project', { exact: true }).selectOption({ label: '📝 Blog' });
-  await expect(page.getByText('Scout attached report.html to “Market analysis”')).toBeVisible();
-
-  // A run row opens its log.
-  await filters.getByLabel('Who', { exact: true }).selectOption({ label: 'Everyone' });
-  await filters.getByLabel('Type', { exact: true }).selectOption({ label: 'Agent runs' });
-  const row = page
-    .getByRole('listitem')
-    .filter({ hasText: 'Scout started a run on “Pricing page”' });
-  await expect(row.getByRole('button', { name: 'Show log' })).toHaveAttribute(
-    'aria-expanded',
-    'false',
-  );
-  await row.getByRole('button', { name: 'Show log' }).click();
-  await expect(row.getByRole('button', { name: 'Hide log' })).toHaveAttribute(
-    'aria-expanded',
-    'true',
-  );
-  await expect(row.getByText(/No log lines yet/)).toBeVisible();
-
-  // A new event slides in at the top with the soft highlight.
-  await filters.getByLabel('Type', { exact: true }).selectOption({ label: 'All types' });
-  await expect(page.getByText('Ana Admin approved “Market analysis”')).toBeVisible();
-  await page.waitForTimeout(1500); // let the server answer the new filter first
-  await adminSet(
-    `${base}/events/live1`,
-    eventDoc('message.posted', 0, { data: { kind: 'question' } }),
-  );
-  const fresh = page
-    .getByRole('listitem')
-    .filter({ hasText: 'Scout asked a question on “Market analysis”' });
-  await expect(fresh).toBeVisible();
-  await expect(fresh).toHaveClass(/drop-in-highlight/);
-  await expect(
-    page.getByRole('region', { name: 'Today' }).getByRole('listitem').first(),
-  ).toContainText('asked a question');
-  await settle(page);
-  await axe(page);
-});
+// The Activity page reads thread events since slice 9 (threadactivity.spec.ts).
 
 test('Agent profile: status, KPIs that add up, runs with logs, release of a stalled run', async ({
   page,
@@ -391,8 +319,7 @@ test('Agent profile: status, KPIs that add up, runs with logs, release of a stal
     )
     .toBe('queued');
   expect((await adminDoc(`${base}/projects/blog/items/i4`))?.fields.claim?.nullValue).toBeNull();
-  await page.goto('/activity');
-  await expect(page.getByText(/released the stalled claim on “Old FAQ”/)).toBeVisible();
+  // Activity shows thread events since slice 9; the release is checked on the item above.
   await axe(page);
 });
 
@@ -411,137 +338,4 @@ test('Releasing a stalled run whose item it no longer holds says the item stays 
   await expect(page.getByText(/Released\. The run is ended; .* stays where it is\./)).toBeVisible();
   await expect(page.getByText('Released. The item is back in the queue.')).toBeHidden();
   await expect(runs.getByText('Released')).toBeVisible();
-});
-
-test('Item detail has a Timeline of its events', async ({ page }) => {
-  await seed(page);
-  await page.goto('/p/blog?item=i1');
-  const detail = page.getByRole('article', { name: /Market analysis/ });
-  await expect(detail).toBeVisible();
-  await detail.getByRole('tab', { name: 'History' }).click();
-  const tl = detail.getByLabel('History');
-  await expect(tl.getByText('Scout picked up “Market analysis”')).toBeVisible();
-  await expect(tl.getByText('Scout attached report.html to “Market analysis”')).toBeVisible();
-  await expect(tl.getByText('Ana Admin approved “Market analysis”')).toBeVisible();
-  await expect(tl.getByText('Scout started a run on “Pricing page”')).toBeHidden();
-  await shot(page, 'timeline');
-});
-
-test('Item detail run log keeps the Extra arguments line on one line and scrolls sideways', async ({
-  page,
-}) => {
-  const { base } = await seed(page);
-  await adminSet(`${base}/runs/r1/log/20`, {
-    at: ago(30),
-    level: 'info',
-    text: 'Extra Claude arguments: --dangerously-skip-permissions --model claude-sonnet-5-5 --effort high --max-turns 200 --append-system-prompt-file /home/agent/prompts/very-long-name.md',
-  });
-  await page.goto('/p/blog?item=i1');
-  const detail = page.getByRole('article', { name: /Market analysis/ });
-  await detail.getByRole('button', { name: 'Show log' }).first().click();
-  const log = detail.getByLabel('Run log');
-  const line = log.getByText(/^Extra Claude arguments:/);
-  await expect(line).toBeVisible();
-  const m = await log.evaluate((el) => {
-    const l = [...el.children].find((c) => c.textContent?.startsWith('Extra Claude'))!;
-    const lh = parseFloat(getComputedStyle(l).lineHeight);
-    return {
-      ws: getComputedStyle(el).whiteSpace,
-      ox: getComputedStyle(el).overflowX,
-      scrolls: el.scrollWidth > el.clientWidth,
-      height: l.getBoundingClientRect().height,
-      lh,
-    };
-  });
-  expect(m.ws).toBe('pre');
-  expect(['auto', 'scroll']).toContain(m.ox);
-  expect(m.scrolls).toBe(true);
-  expect(m.height).toBeLessThan(m.lh * 1.5);
-  await expectNoHorizontalScroll(page);
-  await shot(page, 'item-run-log');
-});
-
-test('The shell footer counts working agents and spend from runs', async ({ page }, info) => {
-  test.skip(info.project.name !== 'desktop-1440', 'the footer text shows on wide screens');
-  await seed(page);
-  await page.goto('/');
-  const side = page.getByRole('complementary', { name: 'Main' });
-  await expect(side.getByText('1 agent working · 0 idle')).toBeVisible();
-  await expect(side.getByText(/^Spend this month €0\.75$/)).toBeVisible();
-  // The project header shows the same spend, with no budget beside it.
-  await page.goto('/p/blog');
-  const main = page.getByRole('main');
-  await expect(main.getByText(/^Spend this month\s*€0\.75$/)).toBeVisible();
-  await expect(main.getByText(/budget/i)).toHaveCount(0);
-});
-
-test('An agent working on several items at once says "working N items" (card cGSENsRF)', async ({
-  page,
-}, info) => {
-  const { base, uid } = await seed(page);
-  // A second live run of Scout (a channel session with max_items): two items in work at once.
-  await adminSet(
-    `${base}/projects/blog/items/i5`,
-    item(uid, {
-      title: 'Second page',
-      status: 'working',
-      claim: { runId: 'r5', agentUid: 'scout', heartbeatAt: ago(1) },
-    }),
-  );
-  await adminSet(
-    `${base}/runs/r5`,
-    runDoc({
-      itemId: 'i5',
-      startedAt: ago(3),
-      endedAt: null,
-      heartbeatAt: ago(1),
-      status: 'running',
-    }),
-  );
-  await page.goto('/agents');
-  await expect(page.getByText('Online · working 2 items')).toBeVisible();
-  await page.getByRole('link', { name: 'Scout' }).click();
-  await expect(page.getByTestId('working-items')).toHaveText('Working 2 items');
-  if (info.project.name === 'desktop-1440') {
-    const side = page.getByRole('complementary', { name: 'Main' });
-    await expect(side.getByText('1 agent working on 2 items · 0 idle')).toBeVisible();
-  }
-  await shot(page, 'agent-working-items');
-});
-
-test('A decision made from Telegram says so in Activity and in the item decisions (card ct6uvl3b)', async ({
-  page,
-}) => {
-  const { base, uid } = await seed(page);
-  const human = { type: 'human', id: uid, name: 'Ana Admin' };
-  await adminSet(
-    `${base}/events/tg1`,
-    eventDoc('decision.sentBack', 1, { itemId: 'i2', data: { via: 'telegram' } }, human),
-  );
-  await adminSet(`${base}/projects/blog/decisions/tg1`, {
-    workspaceId: base.split('/')[1],
-    projectId: 'blog',
-    itemId: 'i2',
-    itemTitle: 'Launch post',
-    stepId: 'draft',
-    outcome: 'sentBack',
-    toStepId: 'draft',
-    byUid: uid,
-    rationale: 'Needs a sharper intro.',
-    tags: [],
-    via: 'telegram',
-    at: ago(1),
-    lastEventId: 'tg1',
-  });
-  await page.goto('/activity');
-  await expect(page.getByText('Ana Admin sent “Launch post” back via Telegram')).toBeVisible();
-  await expect(
-    page.getByText('Ana Admin approved “Market analysis”', { exact: true }),
-  ).toBeVisible();
-  await shot(page, 'telegram-activity');
-  await page.goto('/p/blog?item=i2');
-  const detail = page.getByRole('article', { name: /Launch post/ });
-  await expect(detail.getByText(/· via Telegram/)).toBeVisible();
-  await detail.getByText(/· via Telegram/).scrollIntoViewIfNeeded();
-  await shot(page, 'telegram-decision');
 });

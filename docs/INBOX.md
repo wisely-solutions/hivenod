@@ -598,6 +598,29 @@ confidence}`. Use it when the answer has more than one action or needs the perso
 - An older CLI sends `carry_out` for every approved step at once: `EVENT_MIN_VERSION.plan`
   (`cliversion.ts`) is the first CLI that handles plans, for the web app's hint.
 
+### Keep green (item OE8FmrTaIxFVGcaeGG3N, slice 6c)
+
+The Development template (`packages/shared/src/planTemplates.ts`) has a long agent step
+**Keep green** (`keepgreen`) between Build and Ship it?: Shape → Approve idea → Build → Keep green
+→ Ship it? → Release + live check → Accept on live. Plans made before keep their six steps.
+
+- The agent rebases the pull request onto main, reruns the local checks (GitHub Actions is off:
+  the local checks are the pipeline), fixes failures and loops until the PR is green and current,
+  reporting each loop with `step_progress`; then `outcome_done done`: the plan moves to Ship it?.
+- While Ship it? waits, the done Keep green step still takes `step_progress` from its executor
+  (only while it is the step right before the cursor), with `check`: `rechecking` (main moved),
+  `green`, or `blocked` (not solvable). The gate then shows "Re-checking after main moved" (or
+  "Keep green is stuck") and its Approve reads **Approve anyway**: the member may still approve,
+  since Release rebases and re-checks before it merges. Once Ship it? is decided, Keep green ends
+  (`stepProgress` refuses: "Keep green ended").
+- Not solvable before Ship it? (a rebase conflict that needs a product decision, the same check
+  failing after 3 fixes, an infrastructure failure): `outcome_done failed` with the evidence; the
+  plan is blocked and the member retries, skips, or **sends it back** (a plan blocked by a failed
+  step at its turn may be sent back by the member, to Build by default), or stops it.
+- Rules: `step.progress` on a done `keepgreen` step, `progress.check` in the known values; a member
+  `plan.sent_back` from a blocked plan whose cursor step failed (it is reset to approved). CLI:
+  `EVENT_MIN_VERSION.keepgreen`.
+
 ## Channel events (part 2)
 
 A channel session (`hivenod mcp --channel`, `cli/internal/hive/inboxfeed.go`) pushes `<channel source="hivenod" kind="inbox">` events for

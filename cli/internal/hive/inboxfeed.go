@@ -55,6 +55,8 @@ type FeedOutcome struct {
 	CreatedAtMs                   int64
 	// PlanID: a plan step (item qwFAWxZM5xkcE7PPjAzi), carried out only at its plan's cursor.
 	PlanID string
+	// AskAtMs: Hivenod's (or the person's Ping again) status request on it (item KZ6O9); 0: none.
+	AskAtMs int64
 }
 
 // FeedRunning is a running plan step this agent carries out: a Build it step waiting for its
@@ -66,6 +68,8 @@ type FeedRunning struct {
 	// Long (slice 6b): a long step; BeatAtMs is its last heartbeat (progress, or the start).
 	Long     bool
 	BeatAtMs int64
+	// AskAtMs: a status request on the running step (item KZ6O9); 0: none.
+	AskAtMs int64
 }
 
 // FeedPlan is a live plan (proposed, active or blocked): its steps and whose turn it is.
@@ -357,6 +361,8 @@ func InboxText(e InboxEventInfo) string {
 			what += " (Shape: research the idea, write the proposal into the summary with ask \"Build this?\", attach drafts with thread_attach, give the size S/M/L; report done)"
 		case "build":
 			what += " (Build: build what Approve idea approved, in a worktree; end with an open pull request, local checks green, NOT merged; report done with the PR link as result.permalink and what changed and which checks ran as result.text; then write the summary with ask \"Ship it?\" and before/after screenshots)"
+		case "keepgreen":
+			what += " (Keep green: rebase the pull request onto main, rerun the local checks, fix failures, loop until it is green and current; report each loop with step_progress (e.g. \"rebased on main 4f2a1c0, 212/214 green, fixing lint\"), then done with the head commit as result.text: Ship it? is offered. While Ship it? waits, whenever main moves: step_progress on this step with check rechecking, re-green it, then check green; Keep green ends when Ship it? is decided. Not solvable (a rebase conflict that needs a product decision, the same check failing after 3 fixes, an infrastructure failure such as a 503 or an emulator that will not start): report failed with result.error giving the failing check, a log excerpt and what you tried; at Ship it?, step_progress check blocked with the reason)"
 		case "release":
 			what += " (Release + live check: merge the approved pull request(s), run the release checks, release, check it live; report done with the merge sha, release number, live commit and production URL; attach screenshots with thread_attach. A bug: plan_send_back to Build with the reason)"
 		}
@@ -465,6 +471,8 @@ type InboxFeed struct {
 	due      map[string]*feedDue
 	nudged   map[string]int64
 	carried  map[string]bool
+	// asked: the newest status request seen per outcome (item KZ6O9).
+	asked    map[string]int64
 	inflight map[string]*feedFlight
 	sent     []int64
 	types    map[string]*FeedEvent
@@ -507,7 +515,7 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 	return &InboxFeed{src: src, push: push, now: now, MaxInbox: o.MaxInbox, maxSteps: o.MaxSteps, mine: map[string]bool{}, beating: map[string]bool{}, handed: map[string]int64{}, perMinute: o.PerMinute,
 		nudgeMs: o.NudgeAfter.Milliseconds(), leaseMs: o.Lease.Milliseconds(), tickMs: o.Tick.Milliseconds(),
 		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, rechecks: map[string]FeedRecheck{}, recheckd: map[string]int64{}, instructs: map[string]FeedInstruct{}, instructd: map[string]string{}, summaries: map[string]FeedSummary{}, summarized: map[string]int64{}, summarizeMs: InboxSummarizeAfter.Milliseconds(), plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, handled: map[string]string{},
-		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{},
+		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{}, asked: map[string]int64{},
 		inflight: map[string]*feedFlight{}, types: map[string]*FeedEvent{}, fetching: map[string]bool{},
 		wakes: map[string]string{}, ctx: ctx, cancel: cancel}
 }
@@ -565,11 +573,16 @@ func (f *InboxFeed) OnRunning(rows []FeedRunning) {
 	f.mu.Lock()
 	f.running = map[string]FeedRunning{}
 	f.norder = f.norder[:0]
+	var events []Event
 	for _, r := range rows {
 		f.running[r.ID] = r
 		f.norder = append(f.norder, r.ID)
+		if r.Long && f.newAsk(r.ID, r.AskAtMs) && f.mine[r.ID] {
+			events = append(events, f.stepStatus(r.ID, r.ThreadID, r.Type, r.PlanID, true))
+		}
 	}
 	f.mu.Unlock()
+	f.send(events)
 	f.Evaluate()
 }
 
@@ -642,12 +655,46 @@ func (f *InboxFeed) OnOutcomes(rows []FeedOutcome) {
 	f.mu.Lock()
 	f.outcomes = map[string]FeedOutcome{}
 	f.oorder = f.oorder[:0]
+	var events []Event
 	for _, r := range rows {
 		f.outcomes[r.ID] = r
 		f.oorder = append(f.oorder, r.ID)
+		// A status request on a step this session already got the carry_out for (item KZ6O9).
+		if f.newAsk(r.ID, r.AskAtMs) && f.carried[f.round(r)] {
+			events = append(events, f.stepStatus(r.ID, r.ThreadID, r.Type, r.PlanID, false))
+		}
 	}
 	f.mu.Unlock()
+	f.send(events)
 	f.Evaluate()
+}
+
+// newAsk records a status request on an outcome; true when it is newer than the last one seen
+// (the first sight of an outcome only records it). Call with f.mu held.
+func (f *InboxFeed) newAsk(id string, askMs int64) bool {
+	prev, seen := f.asked[id]
+	if askMs > prev {
+		f.asked[id] = askMs
+	} else if !seen {
+		f.asked[id] = prev
+	}
+	return seen && askMs > prev
+}
+
+// stepStatus is the status event of a step in this agent's hands (item KZ6O9). Call with f.mu held.
+func (f *InboxFeed) stepStatus(id, threadID, typ, planID string, long bool) Event {
+	step := ""
+	if planID != "" {
+		step = fmt.Sprintf("step %s of plan %s, ", or(f.plans[planID].stepOf(id), "?"), planID)
+	}
+	how := `if it waits on something, say what with inbox_note; if it is done, report it with outcome_done`
+	if long {
+		how = `say where it stands with step_progress (a line and a percent); when it is done, report it with outcome_done`
+	}
+	return Event{
+		Content: fmt.Sprintf(`Hivenod asks for a status on %sa %s (outcome %s) on thread %s: nothing was heard from you on it for a while. Carry on with it: %s.`, step, or(typ, "?"), id, threadID, how),
+		Meta:    map[string]string{"kind": "inbox", "reason": "status", "thread_id": threadID, "outcome_id": id, "outcome_type": typ},
+	}
 }
 
 // OnRevising takes a snapshot of the outcomes this agent is asked to revise.
@@ -1290,7 +1337,11 @@ func (s firestoreInbox) WatchOutcomes(ctx context.Context, on func([]FeedOutcome
 		for _, d := range docs {
 			m := d.Data()
 			str := func(k string) string { v, _ := m[k].(string); return v }
-			rows = append(rows, FeedOutcome{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), CreatedAtMs: feedMs(m["createdAt"]), PlanID: str("planId")})
+			o := FeedOutcome{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), CreatedAtMs: feedMs(m["createdAt"]), PlanID: str("planId")}
+			if sa, ok := m["statusAsk"].(map[string]any); ok {
+				o.AskAtMs = feedMs(sa["at"])
+			}
+			rows = append(rows, o)
 		}
 		on(rows)
 	}, nil)
@@ -1428,6 +1479,9 @@ func (s firestoreInbox) WatchRunning(ctx context.Context, on func([]FeedRunning)
 			m := d.Data()
 			str := func(k string) string { v, _ := m[k].(string); return v }
 			r := FeedRunning{ID: d.Ref.ID, ThreadID: str("threadId"), MemberUID: str("memberUid"), Type: str("type"), PlanID: str("planId")}
+			if sa, ok := m["statusAsk"].(map[string]any); ok {
+				r.AskAtMs = feedMs(sa["at"])
+			}
 			if res, ok := m["result"].(map[string]any); ok {
 				r.ItemID, _ = res["itemId"].(string)
 				if link, ok := res["permalink"].(string); ok {

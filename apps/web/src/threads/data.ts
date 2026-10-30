@@ -29,8 +29,8 @@ import { countWaitingThreads, subjectRows, type ThreadRow } from './logic';
 
 export const mySubjectsQuery = (wid: string, uid: string) =>
   query(collection(db, `workspaces/${wid}/inboxSubjects`), where('memberUid', '==', uid));
-export const myThreadsQuery = (wid: string, uid: string) =>
-  query(collection(db, `workspaces/${wid}/inboxThreads`), where('memberUid', '==', uid));
+import { myThreadsQuery } from '../shell/queries';
+export { myThreadsQuery };
 export const myMessagesQuery = (wid: string, uid: string) =>
   query(collection(db, `workspaces/${wid}/inboxMessages`), where('memberUid', '==', uid));
 export const myRelationsQuery = (wid: string, uid: string) =>

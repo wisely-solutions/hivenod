@@ -11,6 +11,8 @@
  *  - Quiet hours hold a message back; it goes out once they end (several held become one summary).
  *  - The bell (item 3ENs): every new arrival is written to the member's history, whatever their
  *    channels, quiet hours or its age. Pop-ups stay live only; the bell is where the rest waits.
+ *  - Silence (item KZ6O9): thread steps in agent hands are watched by ReachOut (reach.ts) with one
+ *    timer each, not by the sweep. It uses `deliver` and `addBells`.
  */
 import {
   askApproves,
@@ -32,6 +34,7 @@ import {
 } from '@hive/shared';
 import type { PushOutcome } from './push.js';
 import type { ThreadAction } from './threadDecide.js';
+import type { ReachRef } from './reach.js';
 
 export const FRESH_MS = 30 * 60_000;
 /** More than this many messages for one person in one pass become one summary. */
@@ -47,7 +50,7 @@ export interface Ports {
   setNotified(wid: string, key: string, value: Notified): Promise<void>;
   /** 'gone' = the endpoint is dead and should be forgotten. */
   sendPush(sub: PushSub, notice: Notice): Promise<PushOutcome>;
-  sendTelegram(chatId: number, notice: Notice, action?: ThreadTelegram): Promise<boolean>;
+  sendTelegram(chatId: number, notice: Notice, action?: TelegramAction): Promise<boolean>;
   /** Writes a bell entry unless one with this id exists (users/{uid}/notifications/{id}). */
   addBell(uid: string, id: string, entry: BellEntry): Promise<void>;
   log(line: string): void;
@@ -57,6 +60,14 @@ export interface Ports {
 export type Delivery = 'sent' | 'held' | 'none' | 'retry';
 /** After this many sweeps of failing pushes we stop retrying one message. */
 export const MAX_RETRY_SWEEPS = 5;
+
+/** The buttons of a silent message (item KZ6O9): Ping again · Open on a thread step. */
+export interface ReachTelegram {
+  kind: 'reach';
+  uid: string;
+  ref: ReachRef;
+}
+export type TelegramAction = ThreadTelegram | ReachTelegram;
 
 /**
  * The quick actions of a thread message (slice 3): what the buttons decide, and which ones the
@@ -159,6 +170,11 @@ export class Engine {
 
   constructor(private p: Ports) {}
 
+  /** Bell entries for these people (one each; an existing one is kept). */
+  async addBells(uids: readonly string[], id: string, entry: BellEntry): Promise<void> {
+    return this.bell(uids, id, entry);
+  }
+
   private async bell(uids: readonly string[], id: string, entry: BellEntry): Promise<void> {
     for (const uid of uids) {
       try {
@@ -189,7 +205,7 @@ export class Engine {
   async deliver(
     uid: string,
     notice: Notice,
-    action?: ThreadTelegram,
+    action?: TelegramAction,
     key = '',
     urgent = false,
   ): Promise<Delivery> {
@@ -340,7 +356,7 @@ export class Engine {
 interface Candidate {
   uid: string;
   notice: Notice;
-  action?: ThreadTelegram;
+  action?: TelegramAction;
   key: string;
   urgent?: boolean;
   done: () => void;

@@ -1,7 +1,8 @@
 /** Telegram Bot API over fetch: sending, long polling, linking a chat and the thread quick actions. */
 import { randomId, notifyPath, type Notice } from '@hive/shared';
 import type { Firestore } from 'firebase-admin/firestore';
-import type { ThreadTelegram } from './engine';
+import type { ReachTelegram, TelegramAction, ThreadTelegram } from './engine';
+import { decideReach } from './reachDecide';
 import { decideThread, threadCheck, type ThreadAction, type ThreadDecision } from './threadDecide';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -35,6 +36,19 @@ export function threadKeyboard(code: string, a: ThreadTelegram, open: string): B
     [{ text: 'Ask for changes', callback_data: `tc:${code}` }, openB],
   ];
 }
+
+/**
+ * The keyboard of a silent message (item KZ6O9): Ping again · Open on a thread step. Callback
+ * data `rp:<code>`. Pure.
+ */
+export function reachKeyboard(code: string, open: string): Button[][] {
+  return [[{ text: 'Ping again', callback_data: `rp:${code}` }, { text: 'Open', url: open }]];
+}
+
+const isThread = (a: TelegramAction): a is ThreadTelegram =>
+  (a as { kind?: string }).kind === 'thread';
+const isReach = (a: TelegramAction): a is ReachTelegram =>
+  (a as { kind?: string }).kind === 'reach';
 
 /** The message text: the bold one-liner, then the second line. */
 export function noticeText(notice: Notice): string {
@@ -92,11 +106,17 @@ export class TelegramBot {
   }
 
   /** The Ports.sendTelegram implementation. */
-  async send(chatId: number, notice: Notice, action?: ThreadTelegram): Promise<boolean> {
+  async send(chatId: number, notice: Notice, action?: TelegramAction): Promise<boolean> {
     const text = noticeText(notice);
     const row1 = [{ text: 'Open', url: `${this.appUrl}${notice.url}` }];
     let rows: unknown[][] = [row1];
-    if (action) {
+    if (action && isReach(action)) {
+      const code = randomId(12);
+      await this.db
+        .doc(`telegramActions/${code}`)
+        .set({ ...action, chatId, createdAt: this.now() });
+      rows = reachKeyboard(code, `${this.appUrl}${notice.url}`);
+    } else if (action && isThread(action)) {
       const code = randomId(12);
       const doc: ThreadAction = {
         kind: 'thread',
@@ -286,10 +306,42 @@ export class TelegramBot {
     if (r.ok) await this.say(chatId, r.text);
   }
 
+  /** The button of a silent message (item KZ6O9): Ping again. */
+  private async onReachButton(
+    q: NonNullable<Update['callback_query']>,
+    chatId: number,
+    kind: string,
+    code: string,
+  ) {
+    const d = (await this.db.doc(`telegramActions/${code}`).get()).data() as
+      (ReachTelegram & { chatId: number }) | undefined;
+    const link =
+      d?.kind === 'reach'
+        ? ((await this.db.doc(notifyPath.telegram(d.uid)).get()).data() as
+            { chatId?: number } | undefined)
+        : undefined;
+    // rp: Ping again (rr/rs: Release and Stop of old item messages, gone with projects).
+    if (!d || d.kind !== 'reach' || d.chatId !== chatId || link?.chatId !== chatId || kind !== 'rp')
+      return void (await this.api.call('answerCallbackQuery', {
+        callback_query_id: q.id,
+        text: 'This button has expired.',
+        show_alert: true,
+      }));
+    const r = await decideReach(this.db, d, this.now());
+    await this.api.call('answerCallbackQuery', {
+      callback_query_id: q.id,
+      text: r.text.slice(0, 190),
+      ...(r.ok ? {} : { show_alert: true }),
+    });
+    // Ping again keeps the buttons (it may be pressed again later).
+    if (r.ok) await this.say(chatId, r.text);
+  }
+
   private async onButton(q: NonNullable<Update['callback_query']>) {
     const chatId = q.message?.chat.id;
     const [kind, code] = (q.data ?? '').split(':');
     if (chatId && code && kind?.startsWith('t')) return this.onThreadButton(q, chatId, kind, code);
+    if (chatId && code && kind?.startsWith('r')) return this.onReachButton(q, chatId, kind, code);
     // Old Approve / Send back buttons of project items (gone, design 7) answer nothing.
     if (chatId && code && (kind === 'a' || kind === 's'))
       return void (await this.api.call('answerCallbackQuery', {

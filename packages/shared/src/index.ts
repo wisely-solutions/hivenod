@@ -15,6 +15,7 @@ export * from './outcomes';
 export * from './plans';
 export * from './planTemplates';
 export * from './personalOrg';
+export * from './reachout';
 export * from './cliversion';
 export * from './stale';
 export * from './chips';

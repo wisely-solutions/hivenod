@@ -221,7 +221,7 @@ func SendBackPlan(ctx Ctx, in SendBackPlanInput) (SendBackPlanResult, error) {
 		return "approved"
 	}
 	for _, id := range p.Steps[to : p.Cursor+1] {
-		if x, ok := in.Outcomes[id]; ok && (x.State == "done" || x.State == "running") {
+		if x, ok := in.Outcomes[id]; ok && (x.State == "done" || x.State == "running" || x.State == "failed") {
 			reset = append(reset, id)
 			x.State = back(id)
 			next.Outcomes[id] = x
@@ -255,7 +255,7 @@ func SendBackPlan(ctx Ctx, in SendBackPlanInput) (SendBackPlanResult, error) {
 		}
 		return append(ops,
 			upd(model.Paths.InboxPlan(ctx.WorkspaceID, in.PlanID), map[string]any{
-				"cursor": to, "state": next.Plan.State,
+				"cursor": to, "cursorAt": ServerTime(), "state": next.Plan.State,
 				"sentBack": map[string]any{"n": n, "to": target, "reason": reason, "by": ctx.Actor.ID, "at": ServerTime()},
 			}, eventID),
 			upd(model.Paths.InboxThread(ctx.WorkspaceID, p.ThreadID), th, eventID),

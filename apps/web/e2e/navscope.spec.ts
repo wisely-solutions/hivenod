@@ -1,7 +1,8 @@
 /**
  * Item icVly (model A): the sidebar has two zones. "You · all organizations" (Today, Inbox; no
  * Calendar since OE8Fm slice 5) spans every organization; below a divider, the organization picked in the switcher
- * (its projects, Projects, Agents, Activity, Decision insights, Organization settings). Switching
+ * (Agents, Activity, Decision insights, Organization settings; Projects removed in OE8Fm slice
+ * 10). Switching
  * changes only the second zone, and each badge counts one named scope.
  *
  * The member is in three organizations: Brightline Studio (admin), Northwind (member) and Personal.
@@ -20,35 +21,11 @@ import {
   fastTimers,
   freezeClock,
   NOW,
-  projectFields,
   settle,
 } from './helpers';
 import { agentOf, seedInbox } from './inboxSeed';
 
 const isPhone = () => test.info().project.name !== 'desktop-1440';
-
-function waitingItem(uid: string, title: string, hoursAgo: number, order = 1) {
-  return {
-    title,
-    type: 'idea',
-    stepId: 'review',
-    status: 'waiting',
-    summary: `${title}: ready for a decision.`,
-    source: { kind: 'manual', label: 'Test' },
-    createdBy: { type: 'human', id: uid },
-    parentItemId: null,
-    sourceRunId: null,
-    claim: null,
-    progress: null,
-    gate: { stepId: 'review', approvals: {}, rejections: {} },
-    triage: null,
-    sendBackCount: 0,
-    costEur: 0,
-    order,
-    updatedAt: new Date(NOW - hoursAgo * 3_600_000),
-    lastEventId: 'seed',
-  };
-}
 
 const card = (name: string, color = 'c2') => ({
   name,
@@ -64,24 +41,6 @@ export async function seedThreeOrgs(page: Page) {
   await adminPatch(`workspaces/${wid}`, { name: 'Brightline Studio' });
   await adminSet(`workspaces/${client}/members/${uid}`, card('Cara Lindqvist', 'c1'));
   await adminSet(`workspaces/${client}/members/zoe`, card('Zoe Park'));
-
-  const p1 = `pw${Date.now().toString(36)}`;
-  const proj = (name: string, emoji: string) => ({ ...projectFields(name, uid), emoji });
-  await adminSet(`workspaces/${wid}/projects/${p1}`, proj('Website relaunch', '🌐'));
-  await adminSet(
-    `workspaces/${wid}/projects/${p1}/items/i1`,
-    waitingItem(uid, 'Approve the new pricing page', 3),
-  );
-  await adminSet(
-    `workspaces/${wid}/projects/${p1}/items/i2`,
-    waitingItem(uid, 'Pick the hero photo', 6, 2),
-  );
-  await adminSet(`workspaces/${wid}/projects/o${p1}`, proj('Operations', '🧰'));
-  await adminSet(`workspaces/${client}/projects/c${p1}`, proj('Client portal', '🧭'));
-  await adminSet(
-    `workspaces/${client}/projects/c${p1}/items/c1`,
-    waitingItem(uid, 'Sign off the portal login flow', 2),
-  );
 
   // The Personal organization (the operator command's batch), with its own agent and a thread.
   const pid = `personal${Date.now().toString(36)}`;
@@ -115,7 +74,6 @@ export async function seedThreeOrgs(page: Page) {
   return {
     ...s,
     personal: pid,
-    project: p1,
     stop: async () => {
       await s.stop();
       await mine.stop();
@@ -178,17 +136,10 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(you.getByText('all organizations')).toBeVisible();
       for (const name of [/^Today/, /^Inbox/])
         await expect(you.getByRole('link', { name })).toBeVisible();
-      await expect(org.getByRole('link', { name: /^Website relaunch/ })).toBeVisible();
-      for (const name of [
-        'Operations',
-        'Projects',
-        'Agents',
-        'Activity',
-        'Decision insights',
-        'Organization settings',
-      ])
+      for (const name of ['Agents', 'Activity', 'Decision insights', 'Organization settings'])
         await expect(org.getByRole('link', { name, exact: true })).toBeVisible();
-      await expect(side.getByRole('link', { name: 'All projects' })).toHaveCount(0);
+      // Projects were removed (OE8Fm slice 10): no entry, no project links.
+      await expect(side.getByRole('link', { name: /projects/i })).toHaveCount(0);
       // The switcher sits in the Organization zone, with the role and size under the name.
       await expect(org.getByRole('button', { name: /switch organization$/ })).toContainText(
         'Brightline Studio',
@@ -203,10 +154,6 @@ for (const theme of ['light', 'dark'] as const) {
         .poll(async () => countIn(await today.getAttribute('aria-label')))
         .toBe(Number((await pageCount.textContent())!.split(' ')[0]));
       await expect(page.locator('[data-brief]').getByText('all organizations')).toBeVisible();
-      // A project's badge counts that project in this organization (two waiting items).
-      await expect(org.getByRole('link', { name: /^Website relaunch/ })).toHaveAccessibleName(
-        'Website relaunch Needs you: 2',
-      );
       await expectNoHorizontalScroll(page);
       await shot(page, `A-today-1440-${theme}`);
       await axe(page);
@@ -238,18 +185,14 @@ for (const theme of ['light', 'dark'] as const) {
       );
       await shot(page, `A-switcher-1440-${theme}`);
       await page.keyboard.press('Escape');
-      for (const [name, project] of [
-        [/Northwind/, 'Client portal'],
-        [/Personal/, null],
-      ] as const) {
+      for (const name of [/Northwind/, /Personal/]) {
         await switchTo(page, name);
         const zone = side.getByRole('navigation', {
           name: new RegExp(`^Organization, ${name.source}`),
         });
         await expect(zone).toBeVisible();
-        if (project) await expect(zone.getByRole('link', { name: project })).toBeVisible();
-        await expect(zone.getByRole('link', { name: 'Website relaunch' })).toHaveCount(0);
-        await expect(zone.getByRole('link', { name: 'Projects', exact: true })).toBeVisible();
+        await expect(zone.getByRole('link', { name: 'Agents', exact: true })).toBeVisible();
+        await expect(zone.getByRole('link', { name: 'Projects', exact: true })).toHaveCount(0);
         await expect.poll(() => today.getAttribute('aria-label')).toBe(todayBefore);
         await expect.poll(() => you.innerText()).toBe(youBefore);
       }
@@ -290,15 +233,13 @@ for (const theme of ['light', 'dark'] as const) {
       await shot(page, `A-today-390-${theme}`);
       await axe(page);
       await expect(tabs.getByRole('link', { name: /^Calendar/ })).toHaveCount(0);
-      // The organization hub: its projects, agents, settings and the switcher.
+      // The organization hub: its agents, settings and the switcher (no Projects, OE8Fm slice 10).
       await orgTab.click();
       await expect(page).toHaveURL(/\/org$/);
       await expect(orgTab).toHaveAttribute('data-status', 'active');
       await expect(page.getByRole('heading', { name: 'Organization', level: 1 })).toBeVisible();
       const hub = page.locator('main');
-      await expect(hub.getByRole('link', { name: /^Website relaunch/ })).toContainText(
-        '2 need you',
-      );
+      await expect(hub.getByText('Projects', { exact: true })).toHaveCount(0);
       for (const name of ['Agents', 'Activity', 'Decision insights', 'Organization settings'])
         await expect(hub.getByRole('link', { name, exact: true })).toBeVisible();
       await expect(hub.getByRole('button', { name: /switch organization$/ })).toContainText(
@@ -307,12 +248,9 @@ for (const theme of ['light', 'dark'] as const) {
       await expectNoHorizontalScroll(page);
       await shot(page, `A-orghub-390-${theme}`);
       await axe(page);
-      await hub.getByRole('link', { name: 'Projects', exact: true }).click();
-      await expect(page.getByRole('heading', { name: 'Projects', level: 1 })).toBeVisible();
+      await hub.getByRole('link', { name: 'Agents', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible();
       await expect(orgTab).toHaveAttribute('data-status', 'active');
-      await expect(page.getByText(/^Brightline Studio · 2 projects$/)).toBeVisible();
-      await expectNoHorizontalScroll(page);
-      await axe(page);
     } finally {
       await s.stop();
     }
@@ -359,13 +297,7 @@ for (const theme of ['light', 'dark'] as const) {
       ).toBeVisible();
       await expect(page.locator('[data-org-scope]')).toContainText('Brightline Studio · Admin');
       const tabs = page.getByRole('tablist', { name: 'Organization settings' }).getByRole('tab');
-      await expect(tabs).toHaveText([
-        'Brightline Studio',
-        'Members',
-        'Groups',
-        'Projects',
-        'Inbox labels',
-      ]);
+      await expect(tabs).toHaveText(['Brightline Studio', 'Members', 'Groups', 'Inbox labels']);
       await expectNoHorizontalScroll(page);
       await shot(page, `A-orgsettings-${vw}-${theme}`);
       await axe(page);
@@ -440,7 +372,7 @@ for (const theme of ['light', 'dark'] as const) {
         'aria-pressed',
         'true',
       );
-      await expect(page.getByRole('heading', { name: 'Needs you · 2', level: 2 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Needs you · 1', level: 2 })).toBeVisible();
       // Reloaded (rows leaving animate out on the frozen test clock): the URL keeps the filter.
       await page.reload();
       await expect(chips.locator(`[data-org-chip="${s.client}"]`)).toHaveAttribute(
@@ -448,8 +380,8 @@ for (const theme of ['light', 'dark'] as const) {
         'true',
         { timeout: 20_000 },
       );
-      await expect(page.getByText('Sign off the portal login flow').first()).toBeVisible();
-      await expect(page.getByText('Pick the hero photo')).toHaveCount(0);
+      await expect(page.getByText('Northwind steering').first()).toBeVisible();
+      await expect(page.getByText('Q4 price list')).toHaveCount(0);
       await expectNoHorizontalScroll(page);
       await shot(page, `A-today-chips-${vw}-${theme}`);
       await axe(page);
@@ -460,7 +392,7 @@ for (const theme of ['light', 'dark'] as const) {
       await page.goto('/');
       await chips.getByRole('button', { name: /^All/ }).click();
       await expect(page).not.toHaveURL(/org=/);
-      await expect(page.getByText('Pick the hero photo').first()).toBeVisible();
+      await expect(page.getByText('Q4 price list').first()).toBeVisible();
 
       // Inbox: the same chips.
       await page.goto('/inbox');

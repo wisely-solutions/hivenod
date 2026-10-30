@@ -183,6 +183,15 @@ Once an organization's export is checked, its removed Projects and Calendar data
 - **Tested against the emulator only** (`scripts/delete-projects.emu.test.mjs`, in `pnpm test:rules`). Try it
   with `--emulator host:port` (project `demo-hive`, token `owner`) first.
 
+## Skipping unchanged rules
+
+Google's rules API is slow and flaky for our big ruleset (503s), so `pnpm release` first reads the live
+`releases/cloud.firestore` ruleset and compares its source with `firestore.rules` byte for byte. Equal:
+it prints `Deploy step 1/2: rules unchanged (live = local), skipped` and runs no probes and no rules
+deploy. Indexes are deployed (`--only firestore:indexes`) only when `firestore.indexes.json` changed since
+the latest `release-<n>` tag. If the live read fails (5xx), it deploys the rules as before, with a warning.
+`pnpm release --force-rules` deploys them anyway. Rollbacks always deploy as before.
+
 ## Rules size and compile time
 
 Google refuses to **release** Firestore rules whose compiled executables are 256000 bytes or more

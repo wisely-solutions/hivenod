@@ -215,7 +215,14 @@ function mask(v: unknown, uid: string): unknown {
     if (typeof (v as { toMillis?: unknown }).toMillis === 'function') return '<ts>';
     return Object.fromEntries(
       Object.entries(v)
-        .map(([k, x]) => [mask(k, uid) as string, mask(x, uid)] as const)
+        // A decision's wait (slice 9) is a duration measured at run time.
+        .map(
+          ([k, x]) =>
+            [
+              mask(k, uid) as string,
+              k === 'waitedMs' && typeof x === 'number' ? '<ms>' : mask(x, uid),
+            ] as const,
+        )
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
     );
   }
@@ -1287,7 +1294,7 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
         template: 'dev',
         threadId: 'dev1',
         planId: 'dp1',
-        stepIds: ['ds1', 'ds2', 'ds3', 'ds4', 'ds5', 'ds6'],
+        stepIds: ['ds1', 'ds2', 'ds3', 'ds4', 'ds5', 'ds6', 'ds7'],
       });
       await owner.run(made);
       await call('inbox_list', {});
@@ -1303,6 +1310,19 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
         status: 'done',
         result: { permalink: 'https://github.com/example/board/pull/86', text: 'PR #86 open' },
       });
+      // Keep green (slice 6c): green and current, so Ship it? is offered; main moves while it
+      // waits: re-checking on the done step, then green again.
+      await call('outcome_done', {
+        outcomeId: 'ds4',
+        status: 'done',
+        result: { text: 'Green on 4f2a1c0' },
+      });
+      await call('step_progress', {
+        outcomeId: 'ds4',
+        line: 'main moved to 9b1e2d3: rebasing',
+        check: 'rechecking',
+      });
+      await call('step_progress', { outcomeId: 'ds4', line: 'green on 9b1e2d3', check: 'green' });
       // Ship it? → Build, from the person.
       await owner.run(
         sendBackPlan(owner.ctx, {
@@ -1318,21 +1338,26 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
         status: 'done',
         result: { text: 'PR #86 updated' },
       });
+      await call('outcome_done', { outcomeId: 'ds4', status: 'done' });
       await gate('dp1');
+      // Ship it? decided: Keep green has ended.
+      await call('step_progress', { outcomeId: 'ds4', line: 'main moved', check: 'rechecking' });
       // Release finds a bug: the agent sends the plan back to Build (refused: to a gate, no reason).
-      await call('plan_send_back', { threadId: 'dev1', reason: 'x', toStep: 4 });
+      await call('plan_send_back', { threadId: 'dev1', reason: 'x', toStep: 5 });
       await call('plan_send_back', { threadId: 'dev1', reason: ' ' });
       await call('plan_send_back', { threadId: 'dev1', reason: 'e2e fails on main', toStep: 3 });
       await call('outcome_done', { outcomeId: 'ds3', status: 'done', result: { text: 'Fixed' } });
+      await call('outcome_done', { outcomeId: 'ds4', status: 'done' });
       await gate('dp1');
-      // The third send back blocks the plan for the person.
+      // The third send back blocks the plan for the person; by default it goes back to the
+      // nearest agent step, Keep green (slice 6c).
       await call('plan_send_back', { threadId: 'dev1', reason: 'Still failing' });
-      await call('outcome_done', { outcomeId: 'ds3', status: 'done' });
+      await call('outcome_done', { outcomeId: 'ds4', status: 'done' });
       await call('thread_read', { threadId: 'dev1' });
       await owner.run(
         retryPlanStep(owner.ctx, { ...(await planOf('dp1')), thread: await thread('dev1') }),
       );
-      await call('outcome_done', { outcomeId: 'ds3', status: 'done' });
+      await call('outcome_done', { outcomeId: 'ds4', status: 'done' });
       // The agent's own Development plan on a thread: proposed, nothing approved.
       await call('plan_propose', {
         threadId: 'dev1',
@@ -1351,8 +1376,14 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       true,
       true,
       true,
+      true,
+      true,
+      true,
+      true,
       false,
       false,
+      false,
+      true,
       true,
       true,
       true,
@@ -1361,25 +1392,28 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       true,
       true,
     ]);
-    expect(r.calls[0]).toMatchObject({ out: { toCarryOut: [{ step: '1 of 6', type: 'shape' }] } });
-    expect(r.calls[6]).toMatchObject({
+    expect(r.calls[0]).toMatchObject({ out: { toCarryOut: [{ step: '1 of 7', type: 'shape' }] } });
+    expect(r.calls[9]).toMatchObject({
       out: {
         plans: [
-          { templateId: 'dev', sentBack: { n: 1, toStep: '3 of 6', reason: 'Bigger toggle' } },
+          { templateId: 'dev', sentBack: { n: 1, toStep: '3 of 7', reason: 'Bigger toggle' } },
         ],
       },
     });
-    expect(r.calls[11]).toMatchObject({ out: { toStep: 3, blocked: false } });
-    expect(r.calls[13]).toMatchObject({ out: { toStep: 3, blocked: true } });
-    expect(r.calls[15]).toMatchObject({
+    expect(r.calls[13]).toMatchObject({ ok: false });
+    expect(JSON.stringify(r.calls[13])).toContain('Keep green ended');
+    expect(r.calls[16]).toMatchObject({ out: { toStep: 3, blocked: false } });
+    expect(r.calls[19]).toMatchObject({ out: { toStep: 4, blocked: true } });
+    expect(r.calls[21]).toMatchObject({
       out: { state: 'yourCall', plans: [{ state: 'blocked' }] },
     });
-    expect(r.calls[17]).toMatchObject({ out: { state: 'proposed' } });
-    const steps = (r.calls[17] as { out: { steps: { type: string }[] } }).out.steps;
+    expect(r.calls[23]).toMatchObject({ out: { state: 'proposed' } });
+    const steps = (r.calls[23] as { out: { steps: { type: string }[] } }).out.steps;
     expect(steps.map((x) => x.type)).toEqual([
       'shape',
       'approval',
       'build',
+      'keepgreen',
       'approval',
       'release',
       'approval',
@@ -1407,7 +1441,7 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
           template: 'dev',
           threadId: 'lt1',
           planId: 'lp1',
-          stepIds: ['l1', 'l2', 'l3', 'l4', 'l5', 'l6'],
+          stepIds: ['l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'l7'],
         }),
       );
       await call('outcome_done', { outcomeId: 'l1', status: 'done' });
@@ -1436,9 +1470,50 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
         result: { permalink: 'https://github.com/example/board/pull/86', text: 'PR #86 open' },
         usage: { tokens: 123456, costEur: 1.23 },
       });
+      // Keep green (slice 6c): a long step too; not solvable: failed with the evidence blocks the
+      // plan, and the person sends it back to Build.
+      await call('outcome_done', { outcomeId: 'l4', status: 'started' });
+      await call('step_progress', {
+        outcomeId: 'l4',
+        line: 'rebased on main 4f2a1c0, 212/214 green, fixing lint',
+        percent: 90,
+      });
+      await call('step_progress', { outcomeId: 'l4', line: 'x', check: 'red' });
+      await call('outcome_done', {
+        outcomeId: 'l4',
+        status: 'failed',
+        result: { error: 'lint fails after 3 fixes: no-unused-vars in src/a.ts; tried 3 fixes' },
+      });
+      await call('thread_read', { threadId: 'lt1' });
+      await owner.run(
+        sendBackPlan(owner.ctx, {
+          ...((await planOf('lp1')) as PlanInput & { plan: SendBackOf }),
+          thread: await thread('lt1'),
+          reason: 'Fix the lint in Build',
+        }),
+      );
+      await call('thread_read', { threadId: 'lt1' });
     });
     const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
-    expect(oks).toEqual([true, false, true, true, false, true, true]);
+    expect(oks).toEqual([
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+    ]);
+    expect(r.calls[11]).toMatchObject({ out: { plans: [{ state: 'blocked' }] } });
+    expect(r.calls[12]).toMatchObject({
+      out: { plans: [{ state: 'active', sentBack: { n: 1, toStep: '3 of 7' } }] },
+    });
     expect(r.calls[2]).toMatchObject({ out: { state: 'running' } });
     expect(r.calls[5]).toMatchObject({ out: { state: 'waiting', waiting: { on: 'item' } } });
     matchesGolden(r);

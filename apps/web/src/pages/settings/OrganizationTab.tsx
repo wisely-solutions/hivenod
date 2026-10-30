@@ -132,7 +132,7 @@ export function OrganizationTab() {
         open={leaving}
         onOpenChange={(o) => !o && setLeaving(false)}
         title={`Leave ${workspace.name}?`}
-        description="You lose access to this organization, its projects and groups. Your past decisions stay in the log. An admin can invite you back."
+        description="You lose access to this organization and its groups. Your past decisions stay in the log. An admin can invite you back."
         footer={
           <>
             <Button variant="ghost" onClick={() => setLeaving(false)}>

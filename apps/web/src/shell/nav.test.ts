@@ -10,14 +10,10 @@ describe('phone tabs', () => {
   it('light the organization tab on every organization page', () => {
     for (const p of [
       '/org',
-      '/projects',
-      '/p/x',
-      '/p/x/process',
       '/agents',
       '/agents/a1',
       '/activity',
       '/insights',
-      '/items',
       '/settings/members',
     ])
       expect(isOrgPath(p), p).toBe(true);
@@ -30,14 +26,9 @@ describe('sidebar zones (item icVly, model A)', () => {
   it('puts Today and Inbox under You, across every organization', () => {
     expect(YOU_NAV.map((n) => n.label)).toEqual(['Today', 'Inbox']);
   });
-  it('puts the organization pages under the switcher, with Projects renamed', () => {
-    expect(ORG_NAV.map((n) => n.label)).toEqual([
-      'Projects',
-      'Agents',
-      'Activity',
-      'Decision insights',
-    ]);
-    expect(NAV.some((n) => n.label === 'All projects')).toBe(false);
+  it('puts the organization pages under the switcher; Projects is gone (OE8Fm slice 10)', () => {
+    expect(ORG_NAV.map((n) => n.label)).toEqual(['Agents', 'Activity', 'Decision insights']);
+    expect(NAV.some((n) => /projects/i.test(n.label))).toBe(false);
   });
   it('keeps every go-to key unique', () => {
     const keys = NAV.map((n) => n.key);

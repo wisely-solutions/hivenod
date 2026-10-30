@@ -49,6 +49,12 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * resumed by a new session. An older CLI never starts them and never sends a heartbeat.
    */
   longstep: '0.2.209',
+  /**
+   * Keep green (item OE8FmrTaIxFVGcaeGG3N, slice 6c): the keepgreen step of the Development
+   * template and step_progress check (re-checks while Ship it? waits). An older CLI refuses the
+   * step type and the check.
+   */
+  keepgreen: '0.2.222',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */

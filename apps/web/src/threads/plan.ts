@@ -206,3 +206,30 @@ export function itemLinkParts(
     return null;
   }
 }
+
+/** Keep green re-checking while a gate waits (slice 6c): what the gate shows. */
+export interface KeepGreenRecheck {
+  check: 'rechecking' | 'blocked';
+  line: string;
+  outcomeId: string;
+}
+
+/**
+ * The Keep green step right before the gate at `index` (Ship it?), when it is done (green and
+ * current) but has reported a re-check since: main moved (rechecking) or it cannot re-green
+ * (blocked). Null while it is green, or when the step before the gate is not Keep green.
+ */
+export function keepGreenRecheck(
+  steps: readonly string[],
+  outcomes: readonly Row<InboxOutcome>[],
+  index: number,
+): KeepGreenRecheck | null {
+  const id = steps[index - 1];
+  const o = id !== undefined ? outcomes.find((r) => r.id === id)?.data : undefined;
+  const p = o?.progress;
+  if (!o || o.type !== 'keepgreen' || o.state !== 'done' || !p) return null;
+  if (p.check !== 'rechecking' && p.check !== 'blocked') return null;
+  // A line from before it was done (an earlier round) is not a re-check.
+  if (o.result?.at && p.at.toMillis() <= o.result.at.toMillis()) return null;
+  return { check: p.check, line: p.line, outcomeId: id! };
+}

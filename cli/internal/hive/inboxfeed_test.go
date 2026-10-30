@@ -777,3 +777,47 @@ func TestInboxFeedLongStepResumedByANewSession(t *testing.T) {
 	r.runningSteps([]FeedRunning{{ID: "b1", ThreadID: "t1", MemberUID: "joao", Type: "release", PlanID: "p1", Long: true}})
 	r.want("t1:carry_out")
 }
+
+// Keep green (slice 6c): a long step after Build; its carry_out says how to keep the pull
+// request green and current, how to re-check while Ship it? waits, and when to give up.
+func TestInboxFeedKeepGreenCarryOut(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 3})
+	r.feed.Start()
+	k := FeedOutcome{ID: "o4", ThreadID: "t1", MemberUID: "joao", Type: "keepgreen", CreatedAtMs: r.now.UnixMilli(), PlanID: "p1"}
+	r.plans([]FeedPlan{{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"o1", "o2", "o3", "o4", "o5"}, Cursor: 3}})
+	r.set(nil, []FeedOutcome{k})
+	r.want("t1:carry_out")
+	r.mu.Lock()
+	c := r.pushed[0].Content
+	r.mu.Unlock()
+	for _, w := range []string{"long step", "status started", "Keep green: rebase", "check rechecking", "after 3 fixes", "report failed"} {
+		if !strings.Contains(c, w) {
+			t.Fatalf("missing %q in %s", w, c)
+		}
+	}
+	if m := r.meta(0); m["long"] != "true" || m["step"] != "4 of 5" {
+		t.Fatal(m)
+	}
+}
+
+// Reach out (item KZ6O9): a status request on an approved step this session got the carry_out for
+// is pushed once as reason "status"; one on a step it never carried (or seen on first sight) is not.
+func TestInboxFeedStepStatusRequest(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 1})
+	r.feed.Start()
+	o := FeedOutcome{ID: "o1", ThreadID: "t9", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli()}
+	other := FeedOutcome{ID: "o2", ThreadID: "t8", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli(), AskAtMs: r.now.UnixMilli() - 1}
+	r.set(nil, []FeedOutcome{o, other})
+	r.want("t9:carry_out")
+	asked := o
+	asked.AskAtMs = r.now.UnixMilli() + 30*60_000
+	r.set(nil, []FeedOutcome{asked, other})
+	r.set(nil, []FeedOutcome{asked, other})
+	r.want("t9:carry_out", "t9:status")
+	r.mu.Lock()
+	e := r.pushed[1]
+	r.mu.Unlock()
+	if e.Meta["outcome_id"] != "o1" || !strings.Contains(e.Content, "Hivenod asks for a status on a reply (outcome o1) on thread t9") {
+		t.Fatal(e)
+	}
+}

@@ -18,6 +18,7 @@ import {
   planView,
   recheckable,
   staleReason,
+  stepSilentText,
   type InboxOutcome,
   type InboxPlan,
   type InboxThread,
@@ -27,6 +28,7 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  Clock,
   GripVertical,
   MoreHorizontal,
   Plus,
@@ -48,13 +50,13 @@ import { Icon } from '../ui/icon';
 import { ActionMenu, type MenuAction } from '../ui/menu';
 import { Dialog } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
-import { BuildItCard } from './BuildItCard';
 import { GateAsk } from './GateAsk';
 import { FieldView } from './OutcomeCard';
 import { usePlanActions } from './usePlanActions';
 import { RecheckButton, RecheckLine, StaleChip, useRecheck } from './Recheck';
 import {
   firstFree,
+  keepGreenRecheck,
   planInputOf,
   planLive,
   planMain,
@@ -125,6 +127,8 @@ export function PlanPanel(props: PlanPanelProps) {
       : []),
     // Build and Release need the CLI that starts, stamps and resumes long steps (slice 6b).
     ...(view.steps.some((s) => s.type === 'build' || s.type === 'release') ? ['longstep'] : []),
+    // Keep green needs the CLI that knows the step and its re-checks (slice 6c).
+    ...(view.steps.some((s) => s.type === 'keepgreen') ? ['keepgreen'] : []),
   ];
   const oldKinds = kinds.filter(
     (k) => home.state === 'ready' && !!home.data && cliSupports(k, have) === 'old',
@@ -243,6 +247,9 @@ export function PlanPanel(props: PlanPanelProps) {
       )
     ) : null;
 
+  // Keep green re-checking while the gate at `i` waits (slice 6c), only at the cursor.
+  const recheckAt = (i: number) =>
+    live && i === plan.data.cursor ? keepGreenRecheck(plan.data.steps, outcomes, i) : null;
   const body = (s: PlanStepView) => {
     const row = outcomes.find((o) => o.id === s.outcomeId);
     if (!row) return null;
@@ -293,20 +300,24 @@ export function PlanPanel(props: PlanPanelProps) {
             {o.progress.percent !== null ? ` · ${o.progress.percent}%` : ''}
           </p>
         ) : null}
+        {recheckAt(s.index + 1) ? (
+          <p
+            data-step-recheck={recheckAt(s.index + 1)!.check}
+            className={cn(
+              'mt-3 text-14 [overflow-wrap:anywhere]',
+              recheckAt(s.index + 1)!.check === 'blocked' ? 'text-sendback' : 'text-agent',
+            )}
+          >
+            {recheckAt(s.index + 1)!.check === 'blocked'
+              ? 'Stuck re-greening: '
+              : 'Re-checking after main moved: '}
+            {recheckAt(s.index + 1)!.line}
+          </p>
+        ) : null}
         {o.state === 'failed' ? (
           <p className="mt-3 text-14 text-sendback">
             Failed{o.result?.error ? `: ${o.result.error}` : ''}
           </p>
-        ) : null}
-        {o.type === 'make_it_work' && o.result?.itemId ? (
-          <>
-            <BuildItCard wid={wid} outcome={o} />
-            {o.state === 'running' ? (
-              <p data-running-item="" className="mt-2 text-13 text-text-2">
-                The plan goes on when this item is Done.
-              </p>
-            ) : null}
-          </>
         ) : null}
         {o.state === 'done' && o.result?.permalink ? (
           <a
@@ -332,7 +343,7 @@ export function PlanPanel(props: PlanPanelProps) {
                       onClick={() => gate(s, true, summaryVersion)}
                       leading={<Icon icon={Check} size={16} />}
                     >
-                      Approve
+                      {recheckAt(s.index) ? 'Approve anyway' : 'Approve'}
                     </Button>
                     {sendBackChoices(pl, s.index).target !== null ? (
                       <Button
@@ -567,9 +578,19 @@ export function PlanPanel(props: PlanPanelProps) {
                 >
                   {title}
                 </button>
-                <Pill tone={PILL[s.ui]}>
-                  {s.ui === 'waitingForYou' && sheet ? 'You' : STEP_UI_TEXT[s.ui]}
-                </Pill>
+                {recheckAt(s.index + 1) ? (
+                  // Keep green re-greening while Ship it? waits (slice 6c).
+                  <Pill
+                    tone={recheckAt(s.index + 1)!.check === 'blocked' ? 'sendback' : 'agent'}
+                    data-testid="pill-recheck"
+                  >
+                    {recheckAt(s.index + 1)!.check === 'blocked' ? 'Stuck' : 'Re-checking'}
+                  </Pill>
+                ) : (
+                  <Pill tone={PILL[s.ui]}>
+                    {s.ui === 'waitingForYou' && sheet ? 'You' : STEP_UI_TEXT[s.ui]}
+                  </Pill>
+                )}
                 {menu.length ? (
                   <ActionMenu
                     label={`Step ${s.number} actions`}
@@ -589,6 +610,15 @@ export function PlanPanel(props: PlanPanelProps) {
                   <span className="w-9" aria-hidden />
                 )}
               </div>
+              {row && stepSilentText(row.data, props.now) ? (
+                // Reach out (item KZ6O9): the agent did not answer Hivenod's status request.
+                <div className="mt-1 pl-9 sm:pl-14">
+                  <Pill tone="sendback" data-testid="silence-flag">
+                    <Icon icon={Clock} size={12} />
+                    {stepSilentText(row.data, props.now)}
+                  </Pill>
+                </div>
+              ) : null}
               {open ? <div className="pl-9 sm:pl-14">{body(s)}</div> : null}
             </li>
           );

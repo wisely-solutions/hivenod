@@ -246,12 +246,49 @@ export async function liveRulesMatch({ project, localSource, getJson }) {
   }
 }
 
+/**
+ * Is the live ruleset the local one? 'same' | 'changed' | 'unknown' (any GET failure, e.g. a 5xx:
+ * the caller then deploys as before). Unlike liveRulesMatch, a failure is not "changed".
+ */
+export async function liveRulesState({ project, localSource, getJson }) {
+  try {
+    const base = 'https://firebaserules.googleapis.com/v1';
+    const rel = await getJson(`${base}/projects/${project}/releases/cloud.firestore`);
+    if (!rel?.rulesetName) return 'unknown';
+    const set = await getJson(`${base}/${rel.rulesetName}`);
+    const content = set?.source?.files?.[0]?.content;
+    if (typeof content !== 'string') return 'unknown';
+    return content === localSource ? 'same' : 'changed';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
+ * What deploy step 1 does. rulesState: 'same' | 'changed' | 'unknown'; indexesChanged: did
+ * firestore.indexes.json change since the last release tag (true when unknown).
+ * Returns { rules, indexes, only } where `only` is the firebase `--only` target (null = skip step).
+ */
+export function stepOneDecision({ rulesState, indexesChanged, forceRules = false }) {
+  const rules = forceRules || rulesState !== 'same';
+  const indexes = indexesChanged !== false;
+  const only =
+    rules && indexes
+      ? 'firestore'
+      : rules
+        ? 'firestore:rules'
+        : indexes
+          ? 'firestore:indexes'
+          : null;
+  return { rules, indexes, only };
+}
+
 /** The ordered steps of a production deploy, for logs and DEPLOY_DRY_RUN=1. */
 export function deployPlan(project, commit = 'HEAD') {
   const msg = `commit ${String(commit).slice(0, 7)}`;
   return [
     'build (pnpm build) and stamp version.json',
-    `step 1/2 rules+indexes: firebase deploy --only firestore --project ${project} (first the rules compile-time probe, scripts/rules-compile-time.mjs: no try compiles within Google's ~6 s = stop, nothing deployed; then the rules size probe, scripts/rules-size.mjs: 256000 compiled bytes or more = stop, nothing deployed; 503: retry after 60 s, up to 2x; 409 already exists: compare live ruleset with firestore.rules, match = success, too big = stop, else retry once after 60 s)`,
+    `step 1/2 rules+indexes (skipped when the live ruleset equals firestore.rules, and the indexes when unchanged since the last release tag; --force-rules deploys anyway): firebase deploy --only firestore --project ${project} (first the rules compile-time probe, scripts/rules-compile-time.mjs: no try compiles within Google's ~6 s = stop, nothing deployed; then the rules size probe, scripts/rules-size.mjs: 256000 compiled bytes or more = stop, nothing deployed; 503: retry after 60 s, up to 2x; 409 already exists: compare live ruleset with firestore.rules, match = success, too big = stop, else retry once after 60 s)`,
     `step 2/2 hosting: firebase deploy --only hosting --message "${msg}" --project ${project}`,
   ];
 }

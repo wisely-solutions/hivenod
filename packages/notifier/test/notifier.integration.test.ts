@@ -9,6 +9,8 @@ import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestor
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { now as harnessNow, put, useEmulator, W } from '../../shared/rules/harness';
 import { Engine } from '../src/engine';
+import { ReachOut } from '../src/reach';
+import { firestoreReachPorts } from '../src/reachStore';
 import { firestorePorts, watchAll } from '../src/store';
 import { TelegramApi, TelegramBot } from '../src/telegram';
 
@@ -525,6 +527,127 @@ describe('decision points on threads end to end (slice 3, design 9b)', () => {
       expect((await db.doc(inboxPaths.thread(W, 'dt1')).get()).data()).toMatchObject({
         state: 'investigating',
         question: { answer: 'Friday' },
+      });
+    } finally {
+      stop();
+    }
+  });
+});
+
+describe('reach out end to end (item KZ6O9; Firestore emulator, fake clock)', () => {
+  const people = () => ({
+    [notifyPath.telegram('alice')]: { chatId: 43, username: null, linkedAt: 1 },
+    [notifyPath.prefs('alice')]: {
+      push: false,
+      telegram: true,
+      digest: false,
+      quiet: { enabled: false, from: '22:00', to: '08:00', tz: 'UTC' },
+    },
+    [paths.member(W, 'alice')]: { name: 'Alice', email: 'a@x.test', photoURL: null, color: 'c1' },
+  });
+
+  /** The notifier with reach out on real Firestore, its clock and timers under the test's control. */
+  function start() {
+    const { calls, bot } = fakeTelegram();
+    const engine = new Engine(
+      firestorePorts(db, {
+        sendPush: async () => ({ result: 'error' as const, attempts: 0 }),
+        sendTelegram: (c, n, a) => bot.send(c, n, a),
+        log: () => undefined,
+      }),
+    );
+    const skew = { ms: 0 };
+    const timers = new Map<number, { at: number; fn: () => void }>();
+    let id = 0;
+    const real = firestoreReachPorts(db, engine, () => undefined);
+    const reach = new ReachOut({
+      ...real,
+      now: () => Date.now() + skew.ms,
+      setTimer: (fn, ms) => {
+        timers.set(++id, { at: Date.now() + skew.ms + ms, fn });
+        return id;
+      },
+      clearTimer: (h) => void timers.delete(h as number),
+    });
+    /** Runs the timers due now (after moving the clock by `ms`). */
+    const advance = (ms = 0) => {
+      skew.ms += ms;
+      const now = Date.now() + skew.ms;
+      for (const [k, t] of [...timers]) {
+        if (t.at > now) continue;
+        timers.delete(k);
+        t.fn();
+      }
+    };
+    const stop = watchAll(
+      db,
+      engine,
+      () => undefined,
+      () => undefined,
+      reach,
+    );
+    return { calls, bot, reach, advance, stop: () => (stop(), reach.stop()) };
+  }
+
+  it('a thread step in agent hands: a status request on the outcome, then silent with Ping again · Open', async () => {
+    const old = Timestamp.fromMillis(Date.now() - 40 * 60_000);
+    await put({
+      ...people(),
+      [inboxPaths.thread(W, 'rt1')]: {
+        memberUid: 'alice',
+        subjectId: null,
+        state: 'investigating',
+        waiting: null,
+        question: null,
+        title: 'Invoice from the printer',
+        refs: ['r1'],
+        lastMessageAt: old,
+        fetchedBy: 'agentA',
+        createdAt: old,
+        updatedAt: old,
+        lastEventId: 'e1',
+      },
+      [inboxPaths.outcome(W, 'ro1')]: {
+        memberUid: 'alice',
+        threadId: 'rt1',
+        type: 'reply',
+        fields: { text: 'Paid, thanks.' },
+        state: 'approved',
+        note: '',
+        proposedBy: 'agentA',
+        executor: 'agentA',
+        decision: { byUid: 'alice', at: old, edited: false, reason: null },
+        result: null,
+        createdAt: old,
+        updatedAt: old,
+        lastEventId: 'e1',
+      },
+    });
+    const { calls, advance, stop } = start();
+    const o = async () => (await db.doc(inboxPaths.outcome(W, 'ro1')).get()).data()!;
+    try {
+      await until(async () => {
+        advance();
+        return !!(await o()).statusAsk;
+      });
+      expect((await o()).statusAsk).toMatchObject({ byUid: 'hivenod' });
+      await until(async () => {
+        advance(11 * 60_000);
+        return calls.some(
+          (c) => c.method === 'sendMessage' && /is silent on/.test(c.body.text ?? ''),
+        );
+      });
+      const msg = calls.find((c) => /is silent on/.test(c.body.text ?? ''))!.body;
+      expect(msg.text).toContain('Agent is silent on "Invoice from the printer"');
+      const kb = JSON.stringify(msg.reply_markup);
+      expect(kb).toContain('Ping again');
+      expect(kb).not.toContain('Release to queue');
+      await until(async () => !!(await o()).silence);
+      // The thread moving (a note by the agent) clears the flag at the next check.
+      await db.doc(inboxPaths.outcome(W, 'ro1')).update({ updatedAt: Timestamp.now() });
+      await until(async () => {
+        advance();
+        return (await o()).silence === null;
       });
     } finally {
       stop();

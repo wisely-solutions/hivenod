@@ -27,7 +27,7 @@ const LAST: ConnectStep = 3;
  * Connect an agent (item 85RBnmoc): a four-step page, Install, Pair, Plugin, Start, with Back and
  * Next and a live status. The Pair step takes the code `hivenod pair` prints (the link it prints
  * opens this page with the code filled in), shows which terminal is waiting, asks for the agent's
- * name and projects, and pairs. The token is handed to the terminal directly; it is never shown.
+ * name and what it works on, and pairs. The token is handed to the terminal directly; it is never shown.
  */
 export function ConnectPage() {
   const { session, actionContext, run } = useReady();
@@ -43,8 +43,8 @@ export function ConnectPage() {
   const [fields, setFields] = useState<AgentFieldsValue>({
     name: '',
     color: 1,
-    // A terminal gets only the projects the admin ticks, unless they choose all.
-    scope: 'some',
+    // Projects were removed (item OE8FmrTaIxFVGcaeGG3N, slice 10): Inbox and development plans.
+    scope: 'all',
     chosen: [],
   });
   const [errors, setErrors] = useState<AgentFieldErrors>({});
@@ -88,7 +88,7 @@ export function ConnectPage() {
           <Link to="/connect" className="font-medium text-ink underline underline-offset-4">
             connect Claude Code in one line
           </Link>{' '}
-          yourself, for your projects.
+          yourself, for your Inbox.
         </p>
       </>
     );

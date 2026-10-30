@@ -1,4 +1,4 @@
-import type { ItemCardData } from '../ui/card';
+import type { ItemCardData } from './ItemCard';
 import type { StepperStep } from '../ui/feedback';
 
 export const STEPS: StepperStep[] = [

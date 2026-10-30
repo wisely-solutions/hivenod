@@ -10,7 +10,13 @@ import type { NeedsAll } from '../needs/data';
 import { briefOf, type Brief, type Segment } from '../needs/brief';
 import { entryBand, type NeedsEntry } from '../needs/logic';
 import { orgColor } from '../orgs/color';
-import { useLatestNotes, useMessagesSince, useSubjectsById, useThreadMessages } from './data';
+import {
+  useLatestNotes,
+  useMessagesSince,
+  useSilentThreads,
+  useSubjectsById,
+  useThreadMessages,
+} from './data';
 import { dueShort } from './logic';
 
 const DAY = 86_400_000;
@@ -96,29 +102,41 @@ export function useToday(
         })),
     [threadsAll, uid],
   );
+  const silent = useSilentThreads(uid, wids, now);
   const working = investigating.map((t) => ({
     key: `${t.wid}/${t.id}`,
     wid: t.wid,
     tid: t.id,
     title: t.data.title || 'Untitled thread',
     note: notes.get(`${t.wid}/${t.id}`)?.text ?? '',
+    silent: silent.get(`${t.wid}/${t.id}`) ?? '',
   }));
+  // A silent step on a thread not being investigated still shows (item KZ6O9).
+  for (const [key, text] of silent) {
+    if (working.some((w) => w.key === key)) continue;
+    const t = threadsAll.find((x) => `${x.wid}/${x.id}` === key);
+    if (t)
+      working.unshift({
+        key,
+        wid: t.wid,
+        tid: t.id,
+        title: t.data.title || 'Untitled thread',
+        note: '',
+        silent: text,
+      });
+  }
 
   const brief = useMemo<Brief | null>(() => {
     if (recent.state === 'loading') return null;
     const inMsgs = recent.rows.filter((m) => m.data.direction === 'in');
-    const threads = stack.filter((e) => e.thread);
-    const proposals = threads.filter((e) => e.thread!.data.state === 'yourCall').length;
-    const questions =
-      threads.filter((e) => e.thread!.data.state === 'needsYou').length +
-      stack.filter((e) => !e.thread && e.kind === 'question').length;
-    const projectEntries = stack.filter((e) => !e.thread && e.kind !== 'question').length;
+    const proposals = stack.filter((e) => e.thread.data.state === 'yourCall').length;
+    const questions = stack.filter((e) => e.thread.data.state === 'needsYou').length;
     const top = stack[0];
     const segments: Segment[] = [
       ...Array.from({ length: doneCount }, () => 'green' as const),
       ...stack.map((e): Segment => {
         const b = entryBand(e, now);
-        return b === 1 || (b === null && e.urgent) ? 'red' : b === 2 ? 'amber' : 'grey';
+        return b === 1 ? 'red' : b === 2 ? 'amber' : 'grey';
       }),
     ];
     return briefOf({
@@ -126,16 +144,14 @@ export function useToday(
       sources: new Set(inMsgs.map((m) => m.data.source)).size,
       proposals,
       questions,
-      projectEntries,
+      projectEntries: 0,
       tidyUps: tidy.length,
       working: investigating.length,
       top: top
         ? {
-            title: top.thread
-              ? top.thread.data.title || 'Untitled thread'
-              : (top.entry?.item.title ?? 'Untitled'),
-            due: top.thread?.data.due ? dueShort(top.thread.data.due.toMillis(), now) : null,
-            urgent: top.thread ? top.thread.data.urgent === true : top.urgent,
+            title: top.thread.data.title || 'Untitled thread',
+            due: top.thread.data.due ? dueShort(top.thread.data.due.toMillis(), now) : null,
+            urgent: top.thread.data.urgent === true,
           }
         : null,
       segments,
