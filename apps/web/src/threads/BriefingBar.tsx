@@ -9,8 +9,7 @@ import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
 import type { BriefingFrom } from '../today/briefing';
 
-const titleOf = (e: NeedsEntry) =>
-  e.thread ? e.thread.data.title || 'Untitled thread' : (e.entry?.item.title ?? 'Untitled');
+const titleOf = (e: NeedsEntry) => e.thread.data.title || 'Untitled thread';
 
 export function BriefingBar({
   from,

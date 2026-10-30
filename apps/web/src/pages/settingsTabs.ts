@@ -5,7 +5,7 @@
 export const ACCOUNT_TABS = ['profile', 'notifications'] as const;
 export type AccountTab = (typeof ACCOUNT_TABS)[number];
 
-export const ORG_TABS = ['organization', 'members', 'groups', 'projects', 'labels'] as const;
+export const ORG_TABS = ['organization', 'members', 'groups', 'labels'] as const;
 export type OrgTab = (typeof ORG_TABS)[number];
 
 export const SETTINGS_TABS = [...ACCOUNT_TABS, ...ORG_TABS] as const;
@@ -16,7 +16,6 @@ export const SETTINGS_LABELS: Record<SettingsTab, string> = {
   organization: 'Organization',
   members: 'Members',
   groups: 'Groups',
-  projects: 'Projects',
   labels: 'Inbox labels',
   notifications: 'Notifications',
 };
@@ -39,5 +38,7 @@ export function settingsTarget(
   tab: string | undefined,
 ): { to: '/account/$tab'; tab: AccountTab } | { to: '/settings/$tab'; tab: OrgTab } {
   if (tab && isOrgTab(tab)) return { to: '/settings/$tab', tab };
+  // The Projects tab was removed (item OE8FmrTaIxFVGcaeGG3N, slice 10); its export lives on Organization.
+  if (tab === 'projects') return { to: '/settings/$tab', tab: 'organization' };
   return { to: '/account/$tab', tab: tab && isAccountTab(tab) ? tab : 'profile' };
 }

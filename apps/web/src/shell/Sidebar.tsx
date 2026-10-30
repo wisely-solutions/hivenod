@@ -8,7 +8,7 @@ import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
 import { Tooltip } from '../ui/overlay';
 import { useShellData } from './data';
-import { activityText, spendText } from './logic';
+import { activityText } from './logic';
 import { ME, ORG_NAV, YOU_NAV } from './nav';
 import { useWaitingThreads } from '../threads/data';
 import { OrgSwitcher } from '../orgs/OrgSwitcher';
@@ -21,7 +21,7 @@ const zoneHead =
   'px-3 pb-1.5 font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3 max-xl:hidden';
 
 /** The organization tabs of Settings (item icVly): the sidebar's Organization settings entry. */
-const ORG_SETTINGS = /^\/settings\/(organization|members|groups|projects|labels)\/?$/;
+const ORG_SETTINGS = /^\/settings\/(organization|members|groups|labels)\/?$/;
 
 /** What each You entry spans, for its tooltip. */
 function scopeTitle(to: string): string {
@@ -38,17 +38,14 @@ const item =
 /** Left sidebar for tablet and desktop. Full labels from 1280 px, icons only below. */
 export function Sidebar({ onSearch }: { onSearch: () => void }) {
   const { session } = useReady();
-  const { projects, needs: liveNeeds, needsReady, activity, spend } = useShellData();
-  // Hidden until the count is final, so the badge never climbs.
-  const needs = needsReady ? liveNeeds : { total: 0, byProject: {} as Record<string, number> };
-  // The badge counts every organization (item 2YZRd); per-project counts stay this one's.
+  const { activity } = useShellData();
+  // The badge counts every organization (item 2YZRd), once its count is final.
   const all = useNeedsAll();
   const count = all.ready ? all.counts : { total: 0, onlyYou: 0 };
   const path = useRouterState({ select: (s) => s.location.pathname });
   const waiting = useWaitingThreads() ?? 0;
   const orgName = session.workspace.name;
   const orgSettings = ORG_SETTINGS.test(path);
-  const live = projects.filter((p) => !p.data.archivedAt);
   const total = activity.working + activity.idle;
   // An agent may work on several items at once (card cGSENsRF) and park some (item QjTTL).
   const line = activityText(activity);
@@ -167,42 +164,7 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
           <OrgSwitcher detailed />
         </div>
         <div className="mt-2 min-h-0 flex-1 overflow-y-auto [@media(max-height:560px)]:overflow-visible">
-          {live.length ? (
-            <ul className="flex flex-col gap-0.5">
-              {live.map((p) => {
-                const n = needs.byProject[p.id] ?? 0;
-                return (
-                  <li key={p.id}>
-                    <Link
-                      to="/p/$pid"
-                      params={{ pid: p.id }}
-                      title={
-                        n > 0
-                          ? `${p.data.name}: ${n} ${n === 1 ? 'needs' : 'need'} you in ${orgName}`
-                          : p.data.name
-                      }
-                      className={cn(
-                        item,
-                        path === `/p/${p.id}` && 'bg-canvas font-medium text-ink',
-                      )}
-                    >
-                      <span aria-hidden className="w-[18px] text-center text-16 leading-none">
-                        {p.data.emoji || p.data.name.charAt(0).toUpperCase()}
-                      </span>
-                      <span className="flex-1 truncate max-xl:sr-only">{p.data.name}</span>
-                      {n > 0 ? (
-                        <Badge tone="gate" className="max-xl:absolute max-xl:right-1 max-xl:top-1">
-                          <span className="sr-only">Needs you: </span>
-                          {n}
-                        </Badge>
-                      ) : null}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-          <div className={cn('flex flex-col gap-0.5', live.length > 0 && 'mt-1')}>
+          <div className="flex flex-col gap-0.5">
             {ORG_NAV.map((n) => (
               <Link key={n.to} to={n.to} aria-label={n.label} title={n.label} className={item}>
                 <Icon icon={n.icon} size={18} />
@@ -243,15 +205,12 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
             </span>
             {line}
           </p>
-          <p className="mt-0.5 tabular-nums">
-            Spend this month {spendText(spend.spent, spend.known, 'org')}
-          </p>
         </div>
         <div className="mb-1 hidden justify-center xl:hidden sm:flex">
-          <Tooltip content={`${line}. Spend ${spendText(spend.spent, spend.known, 'org')}`}>
+          <Tooltip content={line}>
             <button
               type="button"
-              aria-label={`${activity.working} of ${total} ${total === 1 ? 'agent' : 'agents'} working. Spend this month ${spendText(spend.spent, spend.known, 'org')}`}
+              aria-label={`${activity.working} of ${total} ${total === 1 ? 'agent' : 'agents'} working`}
               className="relative grid size-11 place-items-center text-text-2"
             >
               <Icon icon={Bot} size={18} />

@@ -107,18 +107,14 @@ export function useToday(
   const brief = useMemo<Brief | null>(() => {
     if (recent.state === 'loading') return null;
     const inMsgs = recent.rows.filter((m) => m.data.direction === 'in');
-    const threads = stack.filter((e) => e.thread);
-    const proposals = threads.filter((e) => e.thread!.data.state === 'yourCall').length;
-    const questions =
-      threads.filter((e) => e.thread!.data.state === 'needsYou').length +
-      stack.filter((e) => !e.thread && e.kind === 'question').length;
-    const projectEntries = stack.filter((e) => !e.thread && e.kind !== 'question').length;
+    const proposals = stack.filter((e) => e.thread.data.state === 'yourCall').length;
+    const questions = stack.filter((e) => e.thread.data.state === 'needsYou').length;
     const top = stack[0];
     const segments: Segment[] = [
       ...Array.from({ length: doneCount }, () => 'green' as const),
       ...stack.map((e): Segment => {
         const b = entryBand(e, now);
-        return b === 1 || (b === null && e.urgent) ? 'red' : b === 2 ? 'amber' : 'grey';
+        return b === 1 ? 'red' : b === 2 ? 'amber' : 'grey';
       }),
     ];
     return briefOf({
@@ -126,16 +122,14 @@ export function useToday(
       sources: new Set(inMsgs.map((m) => m.data.source)).size,
       proposals,
       questions,
-      projectEntries,
+      projectEntries: 0,
       tidyUps: tidy.length,
       working: investigating.length,
       top: top
         ? {
-            title: top.thread
-              ? top.thread.data.title || 'Untitled thread'
-              : (top.entry?.item.title ?? 'Untitled'),
-            due: top.thread?.data.due ? dueShort(top.thread.data.due.toMillis(), now) : null,
-            urgent: top.thread ? top.thread.data.urgent === true : top.urgent,
+            title: top.thread.data.title || 'Untitled thread',
+            due: top.thread.data.due ? dueShort(top.thread.data.due.toMillis(), now) : null,
+            urgent: top.thread.data.urgent === true,
           }
         : null,
       segments,

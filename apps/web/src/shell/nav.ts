@@ -1,16 +1,7 @@
-import {
-  Activity,
-  Bot,
-  ChartNoAxesColumn,
-  FolderKanban,
-  Mails,
-  Sun,
-  UserRound,
-} from 'lucide-react';
+import { Activity, Bot, ChartNoAxesColumn, Mails, Sun, UserRound } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-export type NavPath =
-  '/' | '/inbox' | '/projects' | '/insights' | '/activity' | '/agents' | '/account';
+export type NavPath = '/' | '/inbox' | '/insights' | '/activity' | '/agents' | '/account';
 
 export interface NavEntry {
   to: NavPath;
@@ -33,8 +24,7 @@ export const NAV: NavEntry[] = [
   // Today (item kt3E7) replaced Needs you: same route, badge and `g n`.
   { to: '/', label: 'Today', icon: Sun, badge: true, key: 'n', zone: 'you' },
   { to: '/inbox', label: 'Inbox', icon: Mails, key: 'm', zone: 'you' },
-  // "All projects" listed only the selected organization's: now plainly "Projects" (item icVly).
-  { to: '/projects', label: 'Projects', icon: FolderKanban, key: 'p', zone: 'org' },
+  // Projects was removed (item OE8FmrTaIxFVGcaeGG3N, slice 10).
   { to: '/agents', label: 'Agents', icon: Bot, key: 'e', zone: 'org' },
   { to: '/activity', label: 'Activity', icon: Activity, key: 'a', zone: 'org' },
   { to: '/insights', label: 'Decision insights', icon: ChartNoAxesColumn, key: 'i', zone: 'org' },
@@ -63,11 +53,7 @@ export const TABS: NavEntry[] = [NAV[0]!, NAV[1]!];
 
 /** Paths that belong to the organization tab: the hub and every organization page. */
 export function isOrgPath(path: string): boolean {
-  return (
-    /^\/(org|projects|items|agents|activity|insights)(\/|$)/.test(path) ||
-    /^\/p\//.test(path) ||
-    /^\/settings\//.test(path)
-  );
+  return /^\/(org|agents|activity|insights)(\/|$)/.test(path) || /^\/settings\//.test(path);
 }
 
 export function isActivePath(current: string, to: NavPath): boolean {
