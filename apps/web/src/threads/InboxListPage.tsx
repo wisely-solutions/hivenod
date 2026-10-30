@@ -7,7 +7,7 @@
  * Find searches names, people, channels and the text of the threads.
  */
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { Clock, Mails, SlidersHorizontal } from 'lucide-react';
+import { Clock, Mails, Plus, SlidersHorizontal } from 'lucide-react';
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useReady } from '../auth/context';
 import { orgColor } from '../orgs/color';
@@ -42,6 +42,7 @@ import {
 import { summaryLine } from './decision';
 import { LabelChip } from './labels';
 import { StateChip, UrgentMark } from './parts';
+import { NewThreadDialog } from './NewThread';
 
 const DAYS = [
   { value: '0', label: 'Any time' },
@@ -122,6 +123,7 @@ export function InboxListPage() {
   const [labelKeys, setLabelKeys] = useState<ReadonlySet<string>>(() => new Set());
   const [areaKeys, setAreaKeys] = useState<ReadonlySet<string>>(() => new Set());
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
   const finding = q.trim().length > 0 || waitingForMe || hasOpen || days > 0;
   const messages = useMyMessages(uid, wids, finding);
   const relations = useMyRelations(uid, wids, finding);
@@ -323,8 +325,19 @@ export function InboxListPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl">
+      <NewThreadDialog open={newOpen} onClose={() => setNewOpen(false)} />
       <PageHeader
         title="Inbox"
+        action={
+          <Button
+            variant="primary"
+            data-new-thread-open=""
+            onClick={() => setNewOpen(true)}
+            leading={<Icon icon={Plus} size={16} />}
+          >
+            New thread
+          </Button>
+        }
         allOrgs={!scope && orgs.length > 1}
         subtitle={
           inbox.state === 'ready'
