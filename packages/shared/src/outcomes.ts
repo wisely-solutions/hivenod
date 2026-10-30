@@ -255,6 +255,22 @@ export const OUTCOMES = {
     planOnly: true,
     long: true,
   },
+  // Keep green (slice 6c): after Build, the agent keeps the open pull request green and current
+  // with main (rebase, local checks, fixes) until Ship it? is approved. It reports done once green
+  // and current (Ship it? is offered), and while Ship it? waits it reports re-checks on the done
+  // step (step_progress check: rechecking, green, blocked).
+  keepgreen: {
+    label: 'Keep green',
+    approve: 'Approve',
+    description:
+      'Development: keep the open pull request green and current with main: rebase it when main moves, rerun the local checks, fix failures, until it is green and up to date (report done: Ship it? is offered). While Ship it? waits, re-green it whenever main moves (step_progress check rechecking, then green). Unsolvable (a conflict that needs a product decision, the same check failing after 3 fixes, an infrastructure failure): report failed with the evidence.',
+    fields: {},
+    executor: 'agent',
+    after: { state: 'waiting', waitingOn: 'item' },
+    plan: true,
+    planOnly: true,
+    long: true,
+  },
   release: {
     label: 'Release + live check',
     approve: 'Approve',

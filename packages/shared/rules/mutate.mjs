@@ -1138,8 +1138,8 @@ const MUTATIONS = [
     'step progress: any agent',
     [
       [
-        "e.type == 'step.progress' && isActiveAgent(wid) && r.executor == me() && turn",
-        "e.type == 'step.progress' && isActiveAgent(wid) && turn",
+        "e.type == 'step.progress' && isActiveAgent(wid) && r.executor == me()\n",
+        "e.type == 'step.progress' && isActiveAgent(wid)\n",
       ],
     ],
   ],
@@ -1154,11 +1154,44 @@ const MUTATIONS = [
   ],
   [
     'step progress: other fields too',
-    [["&& touched(['progress']) && exactKeys(d.progress", '&& exactKeys(d.progress']],
+    [["&& touched(['progress']) && d.progress.keys()", '&& d.progress.keys()']],
   ],
   [
     'step progress: not running',
-    [["\n              && r.state == 'running' && r.type in outcomeLong()", '\n             ']],
+    [
+      [
+        "(turn ? r.state == 'running' : r.type == 'keepgreen' && r.state == 'done')\n              && r.type in outcomeLong()",
+        'turn',
+      ],
+    ],
+  ],
+  // Keep green (slice 6c): re-checks on its done step only, with a known check; a plan blocked
+  // by a failed step goes back by the member only, the failed step reset.
+  [
+    'keep green: progress on any done step',
+    [["r.type == 'keepgreen' && r.state == 'done'", "r.state == 'done'"]],
+  ],
+  [
+    'keep green: any check',
+    [
+      [
+        "\n              && d.progress.get('check', null) in [null, 'green', 'rechecking', 'blocked']",
+        '',
+      ],
+    ],
+  ],
+  [
+    'send back: a blocked plan by the agent',
+    [["|| r.state == 'blocked' ? inboxOwner(r)", '? inboxOwner(r)']],
+  ],
+  [
+    'send back: a failed step stays failed',
+    [
+      [
+        "r.state in ['done', 'running', 'failed'] && pa.cursor",
+        "r.state in ['done', 'running'] && pa.cursor",
+      ],
+    ],
   ],
   [
     'summary: deletes newer versions',

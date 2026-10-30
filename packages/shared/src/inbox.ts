@@ -503,7 +503,13 @@ export const inboxOutcomeSchema = z.object({
    * when (the heartbeat). Absent until the first one.
    */
   progress: z
-    .object({ line: z.string(), percent: z.number().int().nullable(), at: timestamp })
+    .object({
+      line: z.string(),
+      percent: z.number().int().nullable(),
+      /** Keep green (slice 6c): where its re-check stands (absent: a plain progress line). */
+      check: z.enum(['green', 'rechecking', 'blocked']).nullable().optional(),
+      at: timestamp,
+    })
     .optional(),
   /** When the home agent last re-checked it and found it still good (absent: never). */
   checkedAt: timestamp.optional(),
@@ -1496,6 +1502,10 @@ function cleanUsage(
   return Object.keys(out).length ? out : null;
 }
 
+/** Keep green's re-check states (slice 6c, step_progress check). */
+export const KEEP_GREEN_CHECKS = ['green', 'rechecking', 'blocked'] as const;
+export type KeepGreenCheck = (typeof KEEP_GREEN_CHECKS)[number];
+
 /** How often the CLI stamps a running long step it holds, and when the web calls it quiet. */
 export const STEP_HEARTBEAT_MS = 5 * 60_000;
 export const STEP_QUIET_MS = 60 * 60_000;
@@ -1515,6 +1525,8 @@ export function stepProgress(
     thread: ThreadStateOf;
     line: string;
     percent?: number | null;
+    /** Keep green only (slice 6c): rechecking (main moved), green again, or blocked. */
+    check?: KeepGreenCheck | null;
     plan: PlanInput;
   },
 ): ActionPlan {
@@ -1524,15 +1536,29 @@ export function stepProgress(
     o.executor === ctx.actor.id,
     'Only the agent that carries this step out reports its progress.',
   );
+  // Keep green (slice 6c) is done once green and current, and re-checks while Ship it? waits.
+  const kg = o.type === 'keepgreen';
   need(
-    o.state === 'running' && outcomeType(o.type)?.long === true,
+    (o.state === 'running' || (kg && o.state === 'done')) && outcomeType(o.type)?.long === true,
     'Progress is for a long step you started (outcome_done status started first).',
   );
   const pl = planFor(input.plan, o, input.outcomeId);
+  const live = pl.plan.state === 'active' || pl.plan.state === 'proposed';
+  if (o.state === 'done')
+    need(
+      live && pl.plan.steps[pl.plan.cursor - 1] === input.outcomeId,
+      'Keep green ended: Ship it? was decided (or the plan moved on). Release rebases and re-checks.',
+    );
+  else
+    need(
+      live && pl.plan.steps[pl.plan.cursor] === input.outcomeId,
+      'Not its turn: this step is not the one the plan runs now.',
+    );
+  const check = input.check ?? null;
+  need(check === null || kg, 'A check is for a Keep green step only.');
   need(
-    (pl.plan.state === 'active' || pl.plan.state === 'proposed') &&
-      pl.plan.steps[pl.plan.cursor] === input.outcomeId,
-    'Not its turn: this step is not the one the plan runs now.',
+    check === null || (KEEP_GREEN_CHECKS as readonly string[]).includes(check),
+    `The check is one of ${KEEP_GREEN_CHECKS.join(', ')}.`,
   );
   const line = (input.line ?? '').trim().replace(/\s+/g, ' ');
   need(line.length > 0, 'Say where it stands (line).');
@@ -1546,11 +1572,11 @@ export function stepProgress(
     ctx,
     'step.progress',
     { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
-    { planId: pl.planId, outcomeId: input.outcomeId, line, percent },
+    { planId: pl.planId, outcomeId: input.outcomeId, line, percent, ...(check ? { check } : {}) },
     (eventId) => [
       upd(
         inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
-        { progress: { line, percent, at: SERVER_TIME } },
+        { progress: { line, percent, ...(check ? { check } : {}), at: SERVER_TIME } },
         eventId,
       ),
     ],
@@ -2453,8 +2479,12 @@ export function sendBackPlan(
   const agent = ctx.actor.type === 'agent';
   if (agent) requireAgent(ctx);
   else owner(ctx, p.memberUid);
+  const cur = p.steps[p.cursor];
+  const o = cur !== undefined ? pl.outcomes[cur] : undefined;
+  // Blocked by a failed step (slice 6c: Keep green gave up): the member may send it back too.
+  const failed = !agent && p.state === 'blocked' && o?.state === 'failed';
   need(
-    p.state === 'active' || p.state === 'proposed',
+    p.state === 'active' || p.state === 'proposed' || failed,
     p.state === 'blocked'
       ? 'This plan is blocked: retry or stop it first.'
       : `This plan is ${p.state}.`,
@@ -2462,8 +2492,6 @@ export function sendBackPlan(
   const reason = (input.reason ?? '').trim();
   need(reason.length > 0, 'Say what should change.');
   need(reason.length <= INBOX_LIMITS.reason, tooLong('The reason', INBOX_LIMITS.reason));
-  const cur = p.steps[p.cursor];
-  const o = cur !== undefined ? pl.outcomes[cur] : undefined;
   need(o !== undefined, 'No step is at its turn.');
   const human = outcomeKind(o!.type) === 'human';
   if (agent) {
@@ -2476,7 +2504,10 @@ export function sendBackPlan(
       `This step is ${o!.state}: nothing to send back.`,
     );
   } else {
-    need(human && o!.state === 'proposed', 'Only an approval at its turn sends the plan back.');
+    need(
+      failed || (human && o!.state === 'proposed'),
+      'Only an approval at its turn sends the plan back.',
+    );
   }
   const types = Object.fromEntries(p.steps.map((id) => [id, pl.outcomes[id]?.type]));
   const to =
@@ -2494,7 +2525,7 @@ export function sendBackPlan(
   );
   const reset = p.steps
     .slice(to!, p.cursor + 1)
-    .filter((id) => ['done', 'running'].includes(pl.outcomes[id]?.state ?? ''));
+    .filter((id) => ['done', 'running', 'failed'].includes(pl.outcomes[id]?.state ?? ''));
   const n = (input.plan.sentBack?.n ?? 0) + 1;
   const blocked = n >= MAX_PLAN_SEND_BACKS;
   const back = (id: string) =>

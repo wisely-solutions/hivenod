@@ -1138,16 +1138,16 @@ service cloud.firestore {
 
       // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by
       // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)
-      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'release', 'approval']; }
+      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'keepgreen', 'release', 'approval']; }
       function outcomeSingle() { return ['reply', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore']; }
-      function outcomePlanTypes() { return ['reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'shape', 'build', 'release', 'approval']; }
+      function outcomePlanTypes() { return ['reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'shape', 'build', 'keepgreen', 'release', 'approval']; }
       function outcomeHuman() { return ['approval']; }
       function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval']; }
-      function outcomeLong() { return ['build', 'release']; }
-      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'release': 'done', 'approval': 'done'}; }
-      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'release': null, 'approval': null}; }
-      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'release': ['notes'], 'approval': ['what', 'detail', 'link']}; }
-      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'release': [], 'approval': ['what']}; }
+      function outcomeLong() { return ['build', 'keepgreen', 'release']; }
+      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'keepgreen': 'waiting', 'release': 'done', 'approval': 'done'}; }
+      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'keepgreen': 'item', 'release': null, 'approval': null}; }
+      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'keepgreen': [], 'release': ['notes'], 'approval': ['what', 'detail', 'link']}; }
+      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'keepgreen': [], 'release': [], 'approval': ['what']}; }
       // END outcome registry
 
       // ---------- summaries (item OE8FmrTaIxFVGcaeGG3N, packages/shared/src/summary.ts) ----------
@@ -1402,12 +1402,13 @@ service cloud.firestore {
         // Send back (slice 6): from the gate at its turn (the member) or the agent step at its turn
         // (its executor) back to an earlier agent step that is done; the steps from there to the
         // cursor are listed as reset (each resets itself: inboxStepUpdate); counted, and from the
-        // third on the plan is blocked for the member.
+        // third on the plan is blocked for the member. A plan blocked by a failed step at its turn
+        // the member may send back too (slice 6c).
         function inboxPlanSentBack(d, r, e) {
           let c = getAfter(inboxDoc('inboxOutcomes', r.steps[r.cursor])).data;
           let t = getAfter(inboxDoc('inboxOutcomes', e.outcomeId)).data;
           let n = r.get('sentBack', {'n': 0}).n + 1;
-          return r.state in ['proposed', 'active'] && d.steps == r.steps
+          return inboxPlanLive(r) && d.steps == r.steps
             && e.to is int && e.to < r.cursor && d.cursor == e.to && e.from == r.cursor
             && r.steps[e.to] == e.outcomeId && e.n == n && r.steps[e.to:r.cursor + 1].hasAll(e.reset)
             && !(t.type in outcomeHuman()) && t.state == 'approved'
@@ -1415,9 +1416,9 @@ service cloud.firestore {
             && exactKeys(d.sentBack, ['n', 'to', 'reason', 'by', 'at']) && d.sentBack.n == n
             && d.sentBack.to == e.outcomeId && d.sentBack.reason == e.reason && str(e.reason, 1, 1000)
             && d.sentBack.by == me() && d.sentBack.at == request.time
-            && (c.type in outcomeHuman()
-              ? inboxOwner(r) && c.state == 'proposed'
-              : isActiveAgent(wid) && c.executor == me() && c.state == 'approved');
+            && c.state == (c.type in outcomeHuman() ? 'proposed' : 'approved')
+            && (c.type in outcomeHuman() || r.state == 'blocked' ? inboxOwner(r)
+              : isActiveAgent(wid) && c.executor == me());
         }
         // Edit plan: move, remove or add one step, never before `first`; the steps before it
         // stay as they are.
@@ -1966,15 +1967,18 @@ service cloud.firestore {
           let turn = inboxAtCursor(p, oid);
           // Send back (slice 6): a step the plan goes back over starts again (the plan's rule says
           // who may); a person step is decided again.
-          // Long steps (slice 6b): the executor's progress line and heartbeat on its running step.
-          return (e.type == 'step.progress' && isActiveAgent(wid) && r.executor == me() && turn
-              && r.state == 'running' && r.type in outcomeLong() && p.state in ['proposed', 'active']
-              && touched(['progress']) && exactKeys(d.progress, ['line', 'percent', 'at'])
+          // Long steps (slice 6b): the executor's progress line and heartbeat on its running step;
+          // Keep green (slice 6c) also re-checks when done (while Ship it? waits), with a check.
+          return (e.type == 'step.progress' && isActiveAgent(wid) && r.executor == me()
+              && (turn ? r.state == 'running' : r.type == 'keepgreen' && r.state == 'done')
+              && r.type in outcomeLong() && p.state in ['proposed', 'active']
+              && touched(['progress']) && d.progress.keys().hasOnly(['line', 'percent', 'at', 'check'])
+              && d.progress.get('check', null) in [null, 'green', 'rechecking', 'blocked']
               && str(d.progress.line, 1, 140) && d.progress.at == request.time
               && (d.progress.percent == null
                 || (d.progress.percent is int && d.progress.percent >= 0 && d.progress.percent <= 100))
               && e.data.line == d.progress.line)
-            || (e.type == 'plan.sent_back' && r.state in ['done', 'running'] && pa.cursor < p.cursor
+            || (e.type == 'plan.sent_back' && r.state in ['done', 'running', 'failed'] && pa.cursor < p.cursor
               && (human ? touched(['state', 'decision']) && d.state == 'proposed' && d.decision == null
                 : touched(['state']) && d.state == 'approved'))
             || (inboxOwner(r) && inboxPlanLive(p)

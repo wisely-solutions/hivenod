@@ -32,11 +32,12 @@ export const PLAN_TEMPLATES = {
     id: 'dev',
     name: 'Development',
     description:
-      'Shape → Approve idea → Build (an open, green, unmerged PR) → Ship it? → Release + live check → Accept on live.',
+      'Shape → Approve idea → Build (an open, green, unmerged PR) → Keep green (rebased on main, checks green) → Ship it? → Release + live check → Accept on live.',
     steps: [
       { type: 'shape', fields: {} },
       { type: 'approval', fields: { what: 'Approve idea' }, sendBackTo: 0 },
       { type: 'build', fields: {} },
+      { type: 'keepgreen', fields: {} },
       { type: 'approval', fields: { what: 'Ship it?' }, sendBackTo: 2 },
       { type: 'release', fields: {} },
       { type: 'approval', fields: { what: 'Accept on live' }, sendBackTo: 2 },
