@@ -8,15 +8,25 @@ import {
   notifiedSchema,
   notifyPath,
   notifyPrefsSchema,
+  askFallback,
   outcomeType,
   projectSchema,
+  threadAsk,
+  type PlanStateOf,
   pushSubSchema,
   telegramLinkSchema,
   type Notified,
   type Project,
 } from '@hive/shared';
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
-import { FRESH_MS, type Engine, type InboxWaiting, type Ports } from './engine';
+import {
+  FRESH_MS,
+  SUMMARY_WAIT_MS,
+  type Engine,
+  type InboxWaiting,
+  type Ports,
+  type SummaryTop,
+} from './engine';
 
 /** Old bell entries are pruned when a person gets a new one, at most once an hour per person. */
 const PRUNE_EVERY_MS = 3_600_000;
@@ -185,22 +195,37 @@ export function watchAll(
   };
 
   /**
-   * Inbox (item 4PEHr): threads waiting for their member, and the proposals that put them at
-   * Your call. A thread's arrival is its question's time (Needs you) or the oldest open proposal
-   * (Your call), so a new question or a new round is told again.
+   * Inbox (item 4PEHr): threads waiting for their member, the proposals that put them at Your
+   * call and their live plans. What waits is `threadAsk` (slice 3: the same answer the web
+   * gives), and its key is the arrival: a new question, a new round of proposals, a plan, or a
+   * plan step reaching its turn is told again. The summary mirror gives the one-liner.
    */
   const watchInbox = (wid: string) => {
+    type Q = { text: string; by: string; at: number; answer: string | null; options: string[] };
     type T = {
       memberUid: string;
       subjectId: string | null;
       state: 'needsYou' | 'yourCall';
       title: string;
       urgent: boolean;
-      question: { text: string; by: string; at: number } | null;
+      question: Q | null;
+      fetchedBy: string;
+      summary: (SummaryTop & { at: number }) | null;
       updatedAt: number;
     };
+    type O = {
+      id: string;
+      type: string;
+      state: string;
+      planId: string | null;
+      by: string;
+      at: number;
+      fields: Record<string, unknown>;
+    };
+    type P = { id: string; threadId: string; plan: PlanStateOf; at: number; updatedAt: number };
     let threads = new Map<string, T>();
-    let proposals = new Map<string, { label: string; by: string; at: number }[]>();
+    let proposals = new Map<string, O[]>();
+    let plans = new Map<string, P>();
     const keys = new Set<string>();
     const subjects = new Map<string, string>();
     const subjectName = async (sid: string | null) => {
@@ -213,44 +238,76 @@ export function watchAll(
       return name;
     };
     let gen = 0;
+    let holdTimer: ReturnType<typeof setTimeout> | undefined;
     const publish = async () => {
       const mine = ++gen;
       const now = new Map<string, InboxWaiting>();
+      let wake = Infinity;
       for (const [tid, t] of threads) {
-        let w: InboxWaiting | null = null;
-        if (t.state === 'needsYou' && t.question) {
-          w = {
-            wid,
-            tid,
-            memberUid: t.memberUid,
-            state: 'needsYou',
-            title: t.title,
-            subjectName: '',
-            text: t.question.text,
-            byName: await nameOf(wid, t.question.by),
-            arrival: `q${t.question.at}`,
-            sinceMs: t.question.at,
-            urgent: t.urgent,
-          };
-        } else if (t.state === 'yourCall') {
-          const ps = (proposals.get(tid) ?? []).sort((a, b) => a.at - b.at);
-          const first = ps[0];
-          w = {
-            wid,
-            tid,
-            memberUid: t.memberUid,
-            state: 'yourCall',
-            title: t.title,
-            subjectName: '',
-            text: [...new Set(ps.map((p) => p.label))].join(', ') || 'Outcomes proposed',
-            byName: first ? await nameOf(wid, first.by) : '',
-            arrival: `c${first?.at ?? t.updatedAt}`,
-            sinceMs: first?.at ?? t.updatedAt,
-            urgent: t.urgent,
-          };
+        const open = proposals.get(tid) ?? [];
+        const plan = plans.get(tid) ?? null;
+        const ask = threadAsk({
+          thread: {
+            state: t.state,
+            question: t.question
+              ? {
+                  text: t.question.text,
+                  atMs: t.question.at,
+                  answer: t.question.answer,
+                  options: t.question.options,
+                }
+              : null,
+          },
+          plan: plan ? { id: plan.id, plan: plan.plan } : null,
+          open: open.map((o) => ({
+            id: o.id,
+            type: o.type,
+            state: o.state,
+            planId: o.planId,
+            createdAtMs: o.at,
+            fields: o.fields,
+          })),
+        });
+        // Nothing to decide (an approved plan step about to run): nobody is told.
+        if (!ask) continue;
+        const singles = open.filter((o) => !o.planId).sort((a, b) => a.at - b.at);
+        let text = askFallback(ask, t.title);
+        let by = t.fetchedBy;
+        let since = t.updatedAt;
+        if (ask.kind === 'question' && t.question) {
+          text = t.question.text;
+          by = t.question.by;
+          since = t.question.at;
+        } else if (ask.kind === 'proposal') {
+          text = [...new Set(singles.map((p) => outcomeType(p.type)?.label ?? p.type))].join(', ');
+          by = singles[0]?.by ?? by;
+          since = singles[0]?.at ?? since;
+        } else if (plan) {
+          since = Math.max(plan.updatedAt, plan.at);
         }
-        if (!w) continue;
-        w.subjectName = await subjectName(t.subjectId);
+        const fresh = !!t.summary && t.summary.at >= t.updatedAt;
+        // An agent that writes summaries writes one right after each change: wait for it a
+        // little. A thread that never had one is told at once.
+        const holdUntil = fresh || !t.summary ? 0 : t.updatedAt + SUMMARY_WAIT_MS;
+        const w: InboxWaiting = {
+          wid,
+          tid,
+          memberUid: t.memberUid,
+          state: t.state,
+          title: t.title,
+          subjectName: await subjectName(t.subjectId),
+          text: text || 'Outcomes proposed',
+          byName: by ? await nameOf(wid, by) : '',
+          arrival: ask.key,
+          sinceMs: since,
+          urgent: t.urgent,
+          ask,
+          summary: t.summary,
+          summaryFresh: fresh,
+          holdUntil,
+          agentName: t.fetchedBy ? await nameOf(wid, t.fetchedBy) : '',
+        };
+        if (holdUntil > Date.now()) wake = Math.min(wake, holdUntil);
         now.set(`${wid}/${tid}`, w);
       }
       if (mine !== gen) return;
@@ -261,8 +318,12 @@ export function watchAll(
         engine.setInbox(w, k);
       }
       kick();
+      // A sweep right after the longest hold ends, so a thread without a summary is not late.
+      clearTimeout(holdTimer);
+      if (wake < Infinity) holdTimer = setTimeout(kick, Math.max(0, wake - Date.now()) + 250);
     };
     const ms = (v: unknown) => (v as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
+    const str = (v: unknown) => (typeof v === 'string' ? v : null);
     const stopThreads = db
       .collection(`workspaces/${wid}/inboxThreads`)
       .where('state', 'in', ['needsYou', 'yourCall'])
@@ -272,7 +333,14 @@ export function watchAll(
           for (const d of snap.docs) {
             const x = d.data();
             if (typeof x.memberUid !== 'string') continue;
-            const q = x.question as { text?: string; by?: string; at?: unknown } | null;
+            const q = x.question as {
+              text?: string;
+              by?: string;
+              at?: unknown;
+              answer?: unknown;
+              options?: unknown;
+            } | null;
+            const sm = x.summary as Record<string, unknown> | undefined;
             next.set(d.id, {
               memberUid: x.memberUid,
               subjectId: typeof x.subjectId === 'string' ? x.subjectId : null,
@@ -282,7 +350,27 @@ export function watchAll(
               urgent: x.urgent === true,
               question:
                 q && typeof q.text === 'string'
-                  ? { text: q.text, by: q.by ?? '', at: ms(q.at) }
+                  ? {
+                      text: q.text,
+                      by: q.by ?? '',
+                      at: ms(q.at),
+                      answer: str(q.answer),
+                      options: Array.isArray(q.options)
+                        ? q.options.filter((o): o is string => typeof o === 'string')
+                        : [],
+                    }
+                  : null,
+              fetchedBy: typeof x.fetchedBy === 'string' ? x.fetchedBy : '',
+              summary:
+                sm && typeof sm.headline === 'string'
+                  ? {
+                      headline: sm.headline,
+                      ask: str(sm.ask),
+                      answer: str(sm.answer),
+                      recAction: str(sm.recAction),
+                      confidence: str(sm.confidence),
+                      at: ms(sm.at),
+                    }
                   : null,
               updatedAt: ms(x.updatedAt),
             });
@@ -297,16 +385,20 @@ export function watchAll(
       .where('state', '==', 'proposed')
       .onSnapshot(
         (snap) => {
-          const next = new Map<string, { label: string; by: string; at: number }[]>();
+          const next = new Map<string, O[]>();
           for (const d of snap.docs) {
             const x = d.data();
             if (typeof x.threadId !== 'string') continue;
             next.set(x.threadId, [
               ...(next.get(x.threadId) ?? []),
               {
-                label: outcomeType(String(x.type))?.label ?? String(x.type),
+                id: d.id,
+                type: String(x.type),
+                state: 'proposed',
+                planId: typeof x.planId === 'string' ? x.planId : null,
                 by: String(x.proposedBy ?? ''),
                 at: ms(x.createdAt),
+                fields: (x.fields as Record<string, unknown> | undefined) ?? {},
               },
             ]);
           }
@@ -315,9 +407,36 @@ export function watchAll(
         },
         (e) => log(`inbox outcomes ${wid}: ${String(e)}`),
       );
+    const stopPlans = db
+      .collection(`workspaces/${wid}/inboxPlans`)
+      .where('state', 'in', ['proposed', 'active', 'blocked'])
+      .onSnapshot(
+        (snap) => {
+          const next = new Map<string, P>();
+          for (const d of snap.docs) {
+            const x = d.data();
+            if (typeof x.threadId !== 'string' || !Array.isArray(x.steps)) continue;
+            const p: P = {
+              id: d.id,
+              threadId: x.threadId,
+              plan: { steps: x.steps as string[], cursor: Number(x.cursor ?? 0), state: x.state },
+              at: ms(x.createdAt),
+              updatedAt: ms(x.updatedAt),
+            };
+            // The newest live plan of a thread is the one on show (as on the web).
+            const cur = next.get(x.threadId);
+            if (!cur || cur.at < p.at) next.set(x.threadId, p);
+          }
+          plans = next;
+          void publish().catch((e) => log(`inbox ${wid}: ${String(e)}`));
+        },
+        (e) => log(`inbox plans ${wid}: ${String(e)}`),
+      );
     return () => {
       stopThreads();
       stopOutcomes();
+      stopPlans();
+      clearTimeout(holdTimer);
       keys.forEach((k) => engine.setInbox(null, k));
     };
   };

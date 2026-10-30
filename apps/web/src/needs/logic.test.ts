@@ -348,6 +348,23 @@ describe('Today (item kt3E7): proposals, tidy-ups and the stack order', () => {
     expect(by['t:w:two']!.proposals!.map((p) => p.id)).toEqual(['o3', 'o2']);
   });
 
+  it('Not now (slice 3): out of Today until its time, only for the decision it was about', () => {
+    const nn = (key: string, until: number) =>
+      ({ notNow: { key, until: ts(until), at: ts(NOW) } }) as Partial<InboxThread>;
+    const q = { text: 'Thursday?', by: 'agent', at: ts(500), answer: null, answeredAt: null };
+    const o = org('w', {
+      threads: [
+        row('hidden', thread(nn('c100', NOW + H))),
+        row('expired', thread(nn('c100', NOW - 1))),
+        row('newer', thread(nn('c1', NOW + H))),
+        row('asked', thread({ state: 'needsYou', question: q, ...nn('q500', NOW + H) } as never)),
+      ],
+      openOutcomes: ['hidden', 'expired', 'newer'].map((t) => row(`o-${t}`, outcome(t, 'reply'))),
+    });
+    const n = buildNeeds([o], 'me', NOW);
+    expect(n.todo.map((e) => e.key).sort()).toEqual(['t:w:expired', 't:w:newer']);
+  });
+
   it('plans (item qwFAW): a blocked plan waits; a gate not reached yet does not', () => {
     const plan = (threadId: string, state: string, steps: string[], cursor: number) =>
       ({

@@ -1524,7 +1524,7 @@ service cloud.firestore {
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged', 'thread.due', 'plan.approved', 'plan.rejected', 'plan.edited',
                   'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
-                  'thread.instructed'])
+                  'thread.instructed', 'thread.not_now'])
                 && (d.type != 'thread.itemMade' || inboxItemMade(d))
             || (d.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(d.memberUid)
@@ -1626,9 +1626,20 @@ service cloud.firestore {
             // and suggests chips.
             || (inboxOwner(r) && inboxInstructed(d, r))
             || (isActiveAgent(wid) && inboxInstructionAnswered(d, r))
-            || (isActiveAgent(wid) && inboxChipsSuggested(d, r)));
+            || (isActiveAgent(wid) && inboxChipsSuggested(d, r)))
+            || (inboxOwner(r) && inboxNotNow(d, r));
         }
         allow delete: if false;
+
+        // Not now: updatedAt kept; last, for the expression budget.
+        function inboxNotNow(d, r) {
+          let n = d.notNow;
+          let e = inboxEv(d.lastEventId).data.data;
+          return changed(['notNow', 'lastEventId']) && r.state in ['needsYou', 'yourCall']
+            && exactKeys(n, ['until', 'key', 'at']) && n.until > request.time
+            && n.until <= request.time + duration.value(48, 'h') && str(n.key, 1, 200) && n.at == request.time
+            && inboxDocTracked(d, ['thread.not_now'], me(), tid) && e.key == n.key && e.until == n.until;
+        }
 
         // The mirror equals the summary written in this batch (its event is this write's). The
         // summary's visuals are checked here: each document of a batch has its own expression

@@ -39,6 +39,7 @@ import {
   type SubjectRow,
   type ThreadRow,
 } from './logic';
+import { summaryLine } from './decision';
 import { LabelChip } from './labels';
 import { StateChip, UrgentMark } from './parts';
 
@@ -194,9 +195,15 @@ export function InboxListPage() {
     [leads],
   );
   const lastMessages = useThreadMessages(uid, leadRefs);
-  const askOf = (r: SubjectRow) => {
+  const askOf = (r: SubjectRow): { text: string; summary: boolean } => {
     const t = leads.get(`${r.wid}/${r.id}`) ?? leadThread(r, now);
-    if (!t) return '';
+    if (!t) return { text: '', summary: false };
+    // The summary's top line (slice 3), else the last message.
+    const line = summaryLine(t.data);
+    if (line) return { text: line, summary: true };
+    return { text: lastLine(t), summary: false };
+  };
+  const lastLine = (t: NonNullable<ReturnType<typeof leadThread>>) => {
     const ms = lastMessages.get(`${t.wid}/${t.id}`) ?? [];
     const last = [...ms].reverse().find((m) => m.direction === 'in');
     if (!last) return t.data.title || 'Untitled thread';
@@ -417,8 +424,18 @@ export function InboxListPage() {
                             style={{ background: orgColor(t.wid, colorOrgs) }}
                           />
                         )}
-                        <span className="min-w-0 flex-1 truncate text-14 text-ink">
-                          {t.data.title || 'Untitled thread'}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-14 text-ink">
+                            {t.data.title || 'Untitled thread'}
+                          </span>
+                          {summaryLine(t.data) ? (
+                            <span
+                              data-summary-line=""
+                              className="block truncate text-13 text-text-2"
+                            >
+                              {summaryLine(t.data)}
+                            </span>
+                          ) : null}
                         </span>
                         <UrgentMark on={t.data.urgent} />
                         <StateChip state={t.data.state} />
@@ -491,7 +508,7 @@ function SubjectItem({
   row: SubjectRow;
   org: { name: string; color: string } | null;
   uid: string;
-  ask: string;
+  ask: { text: string; summary: boolean };
   now: number;
 }) {
   const working = row.threads.some((t) => t.data.state === 'investigating');
@@ -552,7 +569,14 @@ function SubjectItem({
           )}
           {org ? <span className="sr-only"> · {org.name}</span> : null}
         </h2>
-        {ask ? <p className="truncate text-13 text-text-2">{ask}</p> : null}
+        {ask.text ? (
+          <p
+            data-summary-line={ask.summary ? '' : undefined}
+            className={cn('truncate text-13', ask.summary ? 'text-ink' : 'text-text-2')}
+          >
+            {ask.text}
+          </p>
+        ) : null}
       </div>
       <div className="relative z-[1] flex shrink-0 items-center gap-1.5 empty:hidden max-sm:order-last max-sm:basis-full max-sm:flex-wrap">
         {row.area ? (

@@ -31,6 +31,8 @@ import { firstFree, planInputOf, planLive, planMain, stepTitle } from './plan';
 import { RecheckButton, useRecheck } from './Recheck';
 import { SummaryVersions } from './SummaryVersions';
 import { usePlanActions } from './usePlanActions';
+import { askOf } from '../needs/logic';
+import { NotNowButton, useNotNow } from './NotNow';
 
 export interface AgentInfo {
   name: string;
@@ -184,6 +186,11 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
 
     // Plan actions at the top (the rail has the same, on the same countdown).
     const acts = usePlanActions(wid, thread, pl ?? EMPTY_PLAN);
+    // Not now (slice 3): what waits now, as Today and the notifier see it.
+    const open = outcomes.filter((o) => o.data.state === 'proposed' || o.data.state === 'revising');
+    const ask = asks ? askOf(thread, live ? plan : null, open) : null;
+    const nn = useNotNow(wid, thread, ask);
+    const notNow = <NotNowButton nn={nn} className="max-sm:w-full" />;
     const panelRef = useRef<DecisionCardHandle>(null);
     useImperativeHandle(ref, () => ({
       approve: () => {
@@ -195,6 +202,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
       edit: () => panelRef.current?.edit(),
       reject: () => panelRef.current?.reject(),
       ask: () => panelRef.current?.ask?.() ?? false,
+      notNow: () => void nn.notNow(),
     }));
 
     // Re-check and Ask the agent (items bmNoI, w6O2K): under the top card.
@@ -246,6 +254,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
             onDone={props.onDone}
             bare={headline === t.question?.text}
           />
+          <div className="mt-2 flex">{notNow}</div>
         </div>
       );
     } else if (main?.kind === 'approvePlan') {
@@ -260,6 +269,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           >
             Approve plan
           </Button>
+          {notNow}
           <Button variant="secondary" className="max-sm:w-full" onClick={acts.rejectAll}>
             Reject plan
           </Button>
@@ -285,6 +295,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
             >
               Approve
             </Button>
+            {notNow}
             <Button
               variant="sendback"
               data-gate-reject=""
@@ -313,6 +324,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           plan={pl}
           recheckUi={false}
           noEditKey
+          extra={notNow}
           onRemove={
             main?.kind === 'step' && main.index >= free && view.total > 1
               ? () => acts.edit({ op: 'remove', index: main.index }, 'Step removed')
@@ -336,6 +348,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           after={props.compact ? undefined : effect}
           compact={props.compact}
           noEditKey
+          extra={notNow}
         />
       );
     }
@@ -387,6 +400,11 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           </p>
         ) : null}
         {widget ? <div className="mt-1">{widget}</div> : null}
+        {nn.error ? (
+          <p role="alert" className="mt-3 text-14 text-sendback">
+            {nn.error}
+          </p>
+        ) : null}
         {acts.error && pl ? (
           <p role="alert" className="mt-3 text-14 text-sendback">
             {acts.error}

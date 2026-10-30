@@ -821,6 +821,13 @@ const MUTATIONS = [
       ],
     ],
   ],
+  // Not now (item OE8FmrTaIxFVGcaeGG3N, slice 3).
+  ['not now: another member', [['(inboxOwner(r) && inboxNotNow(', '(inboxNotNow(']]],
+  ['not now: any time', [["n.until <= request.time + duration.value(48, 'h') && ", '']]],
+  ['not now: past time', [['&& n.until > request.time', '']]],
+  ['not now: other fields too', [["return changed(['notNow', 'lastEventId']) && ", 'return ']]],
+  ['not now: nothing waits', [[" && r.state in ['needsYou', 'yourCall']", '']]],
+  ["not now: key not the event's", [['&& e.key == n.key && e.until == n.until;', ';']]],
   // Ask the agent (item w6O2KOw4ys70TQv9I1xD).
   ['instruct: another member asks', [['(inboxOwner(r) && inboxInstructed(', '(inboxInstructed(']]],
   [

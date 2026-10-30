@@ -8,8 +8,11 @@
  * several people (or a group, shown by its name) can.
  */
 import {
+  notNowHides,
   outcomeKind,
   splitDeciders,
+  threadAsk,
+  type ThreadAsk,
   type Group,
   type InboxOutcome,
   type InboxPlan,
@@ -218,6 +221,9 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.no
         !planAsksNow(plan.data, proposals)
       )
         continue;
+      // Not now (item OE8FmrTaIxFVGcaeGG3N, slice 3): out of Today until 09:00 the next day,
+      // while the same decision waits.
+      if (t.data.notNow && notNowHides(t.data.notNow, askOf(t, plan, proposals), now)) continue;
       const tidy =
         t.data.state === 'yourCall' &&
         proposals.length === 1 &&
@@ -249,6 +255,35 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.no
     suggestions: orderNeeds(suggestions, order),
     waiting: orderNeeds(waiting, order),
   };
+}
+
+/** What a thread asks its member now (shared with the notifier's quick actions). */
+export function askOf(
+  t: Row<InboxThread>,
+  plan: Row<InboxPlan> | undefined | null,
+  open: readonly Row<InboxOutcome>[],
+): ThreadAsk | null {
+  const q = t.data.question;
+  return threadAsk({
+    thread: {
+      state: t.data.state,
+      question: q
+        ? { text: q.text, atMs: q.at.toMillis(), answer: q.answer, options: q.options }
+        : null,
+    },
+    plan:
+      plan && ['proposed', 'active', 'blocked'].includes(plan.data.state)
+        ? { id: plan.id, plan: plan.data }
+        : null,
+    open: open.map((o) => ({
+      id: o.id,
+      type: o.data.type,
+      state: o.data.state,
+      planId: o.data.planId ?? null,
+      createdAtMs: o.data.createdAt.toMillis(),
+      fields: o.data.fields,
+    })),
+  });
 }
 
 const rank = (a: NeedsEntry, b: NeedsEntry) =>

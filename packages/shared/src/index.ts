@@ -29,3 +29,4 @@ export * from './cliversion';
 export * from './stale';
 export * from './chips';
 export * from './summary';
+export * from './threadask';

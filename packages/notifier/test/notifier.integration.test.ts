@@ -389,6 +389,260 @@ describe('notifier end to end', () => {
   });
 });
 
+describe('decision points on threads end to end (slice 3, design 9b)', () => {
+  const prefs = {
+    push: false,
+    telegram: true,
+    digest: false,
+    quiet: { enabled: false, from: '22:00', to: '08:00', tz: 'Europe/Lisbon' },
+  };
+  const outcome = (over: Record<string, unknown>) => {
+    const now = harnessNow();
+    return {
+      memberUid: 'alice',
+      threadId: 'dt1',
+      type: 'reply',
+      fields: { text: 'Thursday works.' },
+      state: 'proposed',
+      note: '',
+      proposedBy: 'agentA',
+      executor: 'agentA',
+      decision: null,
+      result: null,
+      createdAt: now,
+      updatedAt: now,
+      lastEventId: 'e1',
+      ...over,
+    };
+  };
+  const thread = (over: Record<string, unknown> = {}) => {
+    const now = harnessNow();
+    return {
+      memberUid: 'alice',
+      subjectId: null,
+      state: 'yourCall',
+      waiting: null,
+      question: null,
+      title: 'Release 175',
+      refs: ['r1'],
+      lastMessageAt: now,
+      fetchedBy: 'agentA',
+      createdAt: now,
+      updatedAt: now,
+      lastEventId: 'e1',
+      summary: {
+        version: 3,
+        at: now,
+        headline: 'Release 175 is ready',
+        ask: 'Ship release 175 to hivenod.com?',
+        answer: 'Everything passed: 612 of 612 checks',
+        recAction: 'Approve',
+        confidence: 'high',
+      },
+      ...over,
+    } as Record<string, unknown>;
+  };
+  const bare = (over: Record<string, unknown>) => {
+    const t = thread(over);
+    delete t.summary;
+    return t;
+  };
+  async function start() {
+    const { calls, bot } = fakeTelegram();
+    const engine = new Engine(
+      firestorePorts(db, {
+        sendPush: async () => ({ result: 'error' as const, attempts: 0 }),
+        sendTelegram: (c, n, a) => bot.send(c, n, a),
+        log: () => undefined,
+      }),
+    );
+    let chain = Promise.resolve();
+    const stop = watchAll(
+      db,
+      engine,
+      () => {
+        chain = chain.then(() => engine.sweep());
+      },
+      () => undefined,
+    );
+    return { calls, bot, stop };
+  }
+  const people = () => ({
+    [notifyPath.telegram('alice')]: { chatId: 42, username: null, linkedAt: 1 },
+    [notifyPath.prefs('alice')]: prefs,
+    [paths.member(W, 'alice')]: { name: 'Alice', email: 'a@x.test', photoURL: null, color: 'c1' },
+  });
+  const sent = (calls: Call[], has: string) =>
+    calls.filter((c) => c.method === 'sendMessage' && String(c.body.text).includes(has));
+  const answers = (calls: Call[]) =>
+    calls.filter((c) => c.method === 'answerCallbackQuery').map((c) => String(c.body.text ?? ''));
+
+  it('a plan gate: the one-liner, Approve passes it as on the web, a second tap is already decided', async () => {
+    const now = harnessNow();
+    await put({
+      ...people(),
+      [inboxPaths.thread(W, 'dt1')]: thread(),
+      [inboxPaths.plan(W, 'pl1')]: {
+        memberUid: 'alice',
+        threadId: 'dt1',
+        proposedBy: 'agentA',
+        steps: ['g1', 'g2'],
+        cursor: 0,
+        state: 'active',
+        note: 'Ship then check',
+        createdAt: now,
+        updatedAt: now,
+        lastEventId: 'e1',
+      },
+      [inboxPaths.outcome(W, 'g1')]: outcome({
+        type: 'approval',
+        fields: { what: 'Ship it?' },
+        executor: null,
+        planId: 'pl1',
+      }),
+      [inboxPaths.outcome(W, 'g2')]: outcome({
+        type: 'approval',
+        fields: { what: 'Accept on live?' },
+        executor: null,
+        planId: 'pl1',
+      }),
+    });
+    const { calls, bot, stop } = await start();
+    try {
+      await until(() => sent(calls, 'Ship release 175').length > 0);
+      const msg = sent(calls, 'Ship release 175')[0]!.body;
+      expect(msg.chat_id).toBe(42);
+      expect(msg.text).toBe(
+        '<b>Ship release 175 to hivenod.com?</b>\nAgent recommends Approve · confidence high',
+      );
+      const flat = (msg.reply_markup?.inline_keyboard ?? []).flat();
+      expect(flat.map((b) => (b as { text?: string }).text)).toEqual([
+        'Approve',
+        'Not now',
+        'Ask for changes',
+        'Open',
+      ]);
+      const code = buttonCode(calls, 'ta:')!;
+      await press(bot, 99, code);
+      expect((await db.doc(inboxPaths.outcome(W, 'g1')).get()).data()!.state).toBe('proposed');
+      await press(bot, 42, code);
+      expect((await db.doc(inboxPaths.outcome(W, 'g1')).get()).data()).toMatchObject({
+        state: 'done',
+        decision: { byUid: 'alice' },
+      });
+      expect((await db.doc(inboxPaths.plan(W, 'pl1')).get()).data()!.cursor).toBe(1);
+      const ev = await db
+        .collection(`workspaces/${W}/inboxEvents`)
+        .where('type', '==', 'outcome.approved')
+        .get();
+      expect(ev.docs[0]!.data().actor).toMatchObject({ type: 'human', id: 'alice', name: 'Alice' });
+      // The second tap: already decided, at the decision's time in Alice's zone.
+      await press(bot, 42, code);
+      expect(answers(calls).pop()).toMatch(/^Already decided at \d\d:\d\d\.$/);
+      expect((await db.doc(inboxPaths.plan(W, 'pl1')).get()).data()!.cursor).toBe(1);
+      // The next gate at its turn is a new arrival: held until the agent's new summary comes,
+      // then told with it.
+      const at = Timestamp.now();
+      await db.doc(inboxPaths.thread(W, 'dt1')).update({
+        updatedAt: at,
+        summary: {
+          version: 4,
+          at,
+          headline: 'Release 175 is live',
+          ask: 'Accept release 175 on live?',
+          answer: null,
+          recAction: 'Approve',
+          confidence: 'high',
+        },
+      });
+      await until(() => sent(calls, 'Accept release 175 on live?').length > 0);
+      await until(
+        () =>
+          calls.filter((c) => c.method === 'sendMessage' && /ta:/.test(JSON.stringify(c.body)))
+            .length > 1,
+      );
+    } finally {
+      stop();
+    }
+  });
+
+  it('Not now puts it out of Today; Ask for changes asks the agent to revise', async () => {
+    await put({
+      ...people(),
+      [inboxPaths.thread(W, 'dt1')]: thread({
+        title: 'Move the review',
+        summary: {
+          version: 1,
+          at: harnessNow(),
+          headline: 'Sam asks to move the review',
+          ask: 'Reply to Sam that Thursday works?',
+          answer: null,
+          recAction: 'Approve',
+          confidence: 'medium',
+        },
+      }),
+      [inboxPaths.outcome(W, 'o1')]: outcome({}),
+    });
+    const { calls, bot, stop } = await start();
+    try {
+      await until(() => sent(calls, 'Thursday works?').length > 0);
+      await press(bot, 42, buttonCode(calls, 'tn:')!);
+      const t = (await db.doc(inboxPaths.thread(W, 'dt1')).get()).data()!;
+      expect(t.notNow.key).toMatch(/^c\d+$/);
+      expect(t.notNow.until.toDate().getUTCHours()).toBeGreaterThanOrEqual(8);
+      expect(t.state).toBe('yourCall');
+      await press(bot, 42, buttonCode(calls, 'tc:')!);
+      const prompt = calls.filter((c) => c.body.reply_markup?.force_reply).pop()!;
+      expect(prompt.body.text).toContain('What should change?');
+      await bot.handle({
+        update_id: 2,
+        message: {
+          message_id: 77,
+          chat: { id: 42, type: 'private' },
+          text: 'Say Friday instead',
+          reply_to_message: { message_id: 100 + calls.indexOf(prompt) },
+        },
+      });
+      expect((await db.doc(inboxPaths.outcome(W, 'o1')).get()).data()).toMatchObject({
+        state: 'revising',
+        revise: { instruction: 'Say Friday instead' },
+      });
+    } finally {
+      stop();
+    }
+  });
+
+  it("an agent's question: its options are the buttons", async () => {
+    const now = harnessNow();
+    await put({
+      ...people(),
+      [inboxPaths.thread(W, 'dt1')]: bare({
+        state: 'needsYou',
+        title: 'Review date',
+        question: {
+          text: 'Which day suits you?',
+          by: 'agentA',
+          at: now,
+          answer: null,
+          answeredAt: null,
+          options: ['Thursday', 'Friday'],
+        },
+      }),
+    });
+    const { calls, bot, stop } = await start();
+    try {
+      await until(() => sent(calls, 'Review date').length > 0);
+      await press(bot, 42, buttonCode(calls, 'to1:')!);
+      expect((await db.doc(inboxPaths.thread(W, 'dt1')).get()).data()).toMatchObject({
+        state: 'investigating',
+        question: { answer: 'Friday' },
+      });
+    } finally {
+      stop();
+    }
+  });
+});
+
 describe('silence end to end (item AzveC)', () => {
   const run = (itemId: string, startedAt: ReturnType<typeof minutesAgo>) => ({
     agentUid: 'agentA',

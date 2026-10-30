@@ -278,3 +278,16 @@ export function excerpt(text: string, n: number): string {
   const sp = cut.lastIndexOf(' ');
   return `${(sp > n / 2 ? cut.slice(0, sp) : cut).trimEnd()}…`;
 }
+
+// ---------- the top line on Today and the Inbox list (slice 3) ----------
+
+/**
+ * The thread's summary top line (design 3.4): its ask while something waits for the member,
+ * else its headline; null without a summary (the callers keep their own line then).
+ */
+export function summaryLine(t: Pick<InboxThread, 'state' | 'summary'>): string | null {
+  const s = t.summary;
+  if (!s) return null;
+  const waits = t.state === 'needsYou' || t.state === 'yourCall';
+  return (waits && s.ask) || s.headline;
+}

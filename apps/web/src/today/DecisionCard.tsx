@@ -83,6 +83,10 @@ import { FieldView } from '../threads/OutcomeCard';
 import { useThreadOutcomes } from '../threads/data';
 import { BAR as PLAN_BAR, planInputOf, planMain, stepTitle } from '../threads/plan';
 import { usePlanActions } from '../threads/usePlanActions';
+import { askOf } from '../needs/logic';
+import { NotNowButton, useNotNow } from '../threads/NotNow';
+import { summaryLine } from '../threads/decision';
+import { timeAgo } from '../agents/logic';
 import { errorText } from '../threads/parts';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
@@ -113,6 +117,8 @@ export interface DecisionCardHandle {
   ask?(): boolean;
   /** The version before or after the one on show (keys [ and ]). */
   version?(step: -1 | 1): void;
+  /** Not now (key N on the decision page): out of Today until 09:00 tomorrow. */
+  notNow?(): void;
 }
 
 export interface DecisionCardProps {
@@ -170,6 +176,18 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
       ask: () => inner.current?.ask?.() ?? false,
       version: (step) => inner.current?.version?.(step),
     }));
+    // Not now (slice 3): out of Today until 09:00 tomorrow, while this decision waits.
+    const nn = useNotNow(
+      entry.wid,
+      entry.thread!,
+      askOf(entry.thread!, entry.plan, entry.proposals ?? []),
+    );
+    const notNow = <NotNowButton nn={nn} />;
+    const nnError = nn.error ? (
+      <p role="alert" className="mt-3 text-14 text-sendback">
+        {nn.error}
+      </p>
+    ) : null;
     // A plan (item qwFAWxZM5xkcE7PPjAzi): the card shows the step that waits for the member.
     const planStep = (entry.proposals ?? []).find((p) => p.data.planId);
     const card = entry.plan
@@ -177,7 +195,8 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
           band,
           <>
             <CardHead props={props} />
-            <PlanDecision ref={inner} props={props} plan={entry.plan} />
+            <PlanDecision ref={inner} props={props} plan={entry.plan} extra={notNow} />
+            {nnError}
           </>,
           t.title,
         )
@@ -194,7 +213,7 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
                   {props.agentName(planStep.data.proposedBy)} proposes a plan: steps that run in
                   order, each after your approval.
                 </p>
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Button
                     variant="approve"
                     onClick={props.onOpen}
@@ -202,8 +221,10 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
                   >
                     Open plan
                   </Button>
+                  {notNow}
                 </div>
               </div>
+              {nnError}
             </>,
             t.title,
           )
@@ -218,7 +239,9 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
                   agentName={props.agentName}
                   onDone={props.onDone}
                   onSkip={props.onSkip}
+                  extra={notNow}
                 />
+                {nnError}
               </>,
               t.title,
             )
@@ -238,7 +261,9 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
                   onDone={props.onDone}
                   onOpen={props.onOpen}
                   onSkip={props.onSkip}
+                  extra={notNow}
                 />
+                {nnError}
               </>,
               t.title,
             );
@@ -341,6 +366,7 @@ function CardHead({ props, label }: { props: DecisionCardProps; label?: string }
   const band = bandOf(t, now);
   const rank = rankText(t, band, now);
   const age = waitLabel(sender?.at ?? entry.since, now);
+  const line = summaryLine(t);
   return (
     <>
       <div className="flex items-start gap-3 max-sm:flex-wrap max-sm:gap-y-2">
@@ -368,17 +394,76 @@ function CardHead({ props, label }: { props: DecisionCardProps; label?: string }
           </span>
         ) : null}
       </div>
-      <h2 className="mt-3 text-16 font-semibold leading-snug text-ink sm:text-[17px]">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="text-left [overflow-wrap:anywhere] hov:underline foc:outline-2 foc:outline-offset-2 foc:outline-focus"
-          aria-label={label ? `${t.title || 'Untitled thread'}, ${label}` : undefined}
-        >
-          {t.title || 'Untitled thread'}
-        </button>
-      </h2>
+      {line ? (
+        <>
+          {/* With a summary (slice 3): the thread's title is the small line, the ask the big one. */}
+          <p className="mt-3 text-13 text-text-2 [overflow-wrap:anywhere]">
+            {t.title || 'Untitled thread'}
+          </p>
+          <h2 className="mt-0.5 text-18 font-semibold leading-snug text-ink sm:text-20">
+            <button
+              type="button"
+              data-headline=""
+              onClick={onOpen}
+              className="text-left [overflow-wrap:anywhere] hov:underline foc:outline-2 foc:outline-offset-2 foc:outline-focus"
+            >
+              {line}
+            </button>
+          </h2>
+          <SummaryTop props={props} />
+        </>
+      ) : (
+        <h2 className="mt-3 text-16 font-semibold leading-snug text-ink sm:text-[17px]">
+          <button
+            type="button"
+            onClick={onOpen}
+            className="text-left [overflow-wrap:anywhere] hov:underline foc:outline-2 foc:outline-offset-2 foc:outline-focus"
+            aria-label={label ? `${t.title || 'Untitled thread'}, ${label}` : undefined}
+          >
+            {t.title || 'Untitled thread'}
+          </button>
+        </h2>
+      )}
     </>
+  );
+}
+
+/**
+ * Under the summary's top line on the card (slice 3, design 3.4): the one-line answer and
+ * "<agent> recommends Approve · confidence high · updated 3 min ago". Nothing without a summary:
+ * the card's own proposal line stays the fallback.
+ */
+function SummaryTop({ props }: { props: DecisionCardProps }) {
+  const t = props.entry.thread!.data;
+  const s = t.summary;
+  const line = summaryLine(t);
+  if (!s || !line) return null;
+  const stale = s.at.toMillis() < t.updatedAt.toMillis();
+  const agent = props.agentName(t.fetchedBy);
+  return (
+    <div data-summary-top="" className="mt-1">
+      {s.answer ? (
+        <p data-answer="" className="text-14 text-ink [overflow-wrap:anywhere]">
+          {s.answer}
+        </p>
+      ) : null}
+      <p data-recommends="" className="mt-1 text-13 text-text-2 [overflow-wrap:anywhere]">
+        {s.recAction ? (
+          <>
+            {agent} recommends{' '}
+            <strong className="font-semibold text-approve-text">{s.recAction}</strong>
+            {' · '}
+          </>
+        ) : null}
+        {s.confidence ? `confidence ${s.confidence} · ` : null}
+        <span data-updated="">updated {timeAgo(new Date(s.at.toMillis()), props.now)}</span>
+        {stale ? (
+          <span data-summary-stale="" className="font-medium text-gate-text">
+            {' · may be out of date'}
+          </span>
+        ) : null}
+      </p>
+    </div>
   );
 }
 
@@ -406,8 +491,8 @@ function shell(band: number | null, children: React.ReactNode, title: string) {
  */
 const PlanDecision = forwardRef<
   DecisionCardHandle,
-  { props: DecisionCardProps; plan: Row<InboxPlan> }
->(function PlanDecision({ props, plan }, ref) {
+  { props: DecisionCardProps; plan: Row<InboxPlan>; extra?: ReactNode }
+>(function PlanDecision({ props, plan, extra }, ref) {
   const { entry, agentName } = props;
   const thread = entry.thread!;
   const { session } = useReady();
@@ -497,6 +582,7 @@ const PlanDecision = forwardRef<
           onOpen={props.onOpen}
           onSkip={props.onSkip}
           plan={pl}
+          extra={extra}
         />
       ) : (
         <div className="mt-3 rounded-card border border-agent/25 bg-agent-soft p-3.5 sm:p-4">
@@ -609,6 +695,7 @@ const PlanDecision = forwardRef<
               </Button>
             </>
           ) : null}
+          {acts.counting ? null : extra}
           {open}
           {skip}
         </div>
@@ -652,6 +739,8 @@ export interface ProposalPanelProps {
   recheckUi?: boolean;
   /** The thread page: E toggles Everything there, so Edit shows no key hint. */
   noEditKey?: boolean;
+  /** One more button in the row, before Other (Not now, slice 3). */
+  extra?: ReactNode;
 }
 
 /**
@@ -1235,6 +1324,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
               <Key>C</Key>
             </Button>
           ) : null}
+          {pending ? null : props.extra}
           {rc.counting?.tag === 'menu' ? (
             <UndoButton countdown={rc.counting} variant="secondary" />
           ) : menu.length ? (
@@ -1441,12 +1531,15 @@ export function QuestionPanel({
   onDone,
   onSkip,
   bare,
+  extra,
 }: {
   wid: string;
   thread: Row<InboxThread>;
   agentName: (id: string) => string;
   onDone: (label: string) => void;
   onSkip?: () => void;
+  /** Not now (slice 3), beside Skip. */
+  extra?: ReactNode;
   /** The decision page's top card already shows who asks and the question. */
   bare?: boolean;
 }) {
@@ -1528,12 +1621,15 @@ export function QuestionPanel({
           {error}
         </p>
       ) : null}
-      {onSkip ? (
-        <div className="mt-3 flex justify-end">
-          <Button variant="ghost" onClick={onSkip}>
-            Skip
-            <Key>S</Key>
-          </Button>
+      {onSkip || extra ? (
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+          {extra ? <span className="mr-auto">{extra}</span> : null}
+          {onSkip ? (
+            <Button variant="ghost" onClick={onSkip}>
+              Skip
+              <Key>S</Key>
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </>

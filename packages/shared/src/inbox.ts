@@ -128,6 +128,8 @@ export const INBOX_EVENT_TYPES = [
   'outcome.revise_requested',
   'thread.recheck_requested',
   'thread.instructed',
+  // Not now (item OE8FmrTaIxFVGcaeGG3N, slice 3): out of Today until 09:00 the next day
+  'thread.not_now',
   'plan.approved',
   'plan.rejected',
   'plan.edited',
@@ -388,6 +390,11 @@ export const inboxThreadSchema = z.object({
       confidence: z.enum(OUTCOME_CONFIDENCE).nullable(),
     })
     .optional(),
+  /**
+   * Not now (item OE8FmrTaIxFVGcaeGG3N, slice 3, ./threadask.ts): the member put the decision
+   * `key` (threadAsk) out of Today until `until`; absent until the first one.
+   */
+  notNow: z.object({ until: timestamp, key: z.string(), at: timestamp }).nullable().optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
@@ -2495,6 +2502,42 @@ function setThreadState(
     ],
   );
 }
+/** Not now lasts at most this long (09:00 the next day, in any time zone). */
+export const NOT_NOW_MAX_MS = 48 * 3_600_000;
+
+/**
+ * Not now (item OE8FmrTaIxFVGcaeGG3N, slice 3): the member puts what waits (`key`, from
+ * threadAsk) out of Today until `until` (09:00 the next day, notNowUntil). Nothing else changes:
+ * the thread keeps its state, and its summary stays fresh (`updatedAt` is not touched). A new
+ * arrival has a new key, so it shows again.
+ */
+export function notNowThread(
+  ctx: ActionContext,
+  input: { threadId: string; thread: ThreadStateOf; key: string; until: Date; nowMs?: number },
+): ActionPlan {
+  const t = input.thread;
+  owner(ctx, t.memberUid);
+  need(t.state === 'needsYou' || t.state === 'yourCall', 'Nothing on this thread waits for you.');
+  const key = input.key.trim();
+  need(key.length > 0 && key.length <= 200, 'Not now needs the decision it is about.');
+  const until = input.until.getTime();
+  const now = input.nowMs ?? Date.now();
+  need(until > now && until <= now + NOT_NOW_MAX_MS, 'Not now lasts until tomorrow morning.');
+  return inboxPlan(
+    ctx,
+    'thread.not_now',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { key, until: input.until },
+    (eventId) => [
+      {
+        kind: 'update',
+        path: inboxPaths.thread(ctx.workspaceId, input.threadId),
+        data: { notNow: { until: input.until, key, at: SERVER_TIME }, lastEventId: eventId },
+      },
+    ],
+  );
+}
+
 /** The member ignores a thread themselves. */
 export function ignoreThread(
   ctx: ActionContext,
