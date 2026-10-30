@@ -39,6 +39,7 @@ import { sweepPairings } from './pairing-sweep-lib.mjs';
 import { fetchStars, starsJson } from './stars-lib.mjs';
 import { RULES_COMPILED_LIMIT, parseCompiledSize, rulesSizeVerdict } from './rules-size-lib.mjs';
 import { measureRulesSize } from './rules-size.mjs';
+import { measureCompileTime } from './rules-compile-time.mjs';
 
 const [mode, name] = process.argv.slice(2);
 // Self-hosting: HIVENOD_FIREBASE_PROJECT is your Firebase project id (docs/SELF-HOST.md).
@@ -80,7 +81,10 @@ function cliProtocolOf(cwd) {
 }
 
 /** Build, stamp dist/version.json with the commit, deploy hosting + firestore rules/indexes. */
-async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
+async function deployProd(
+  cwd = process.cwd(),
+  { guardVersions = false, compileGuard = true } = {},
+) {
   const commit = out('git', ['rev-parse', 'HEAD'], cwd);
   run('pnpm', ['build'], cwd);
   // The npm tarball of the TypeScript CLI (card rifzGl8M) is no longer built (item
@@ -159,6 +163,26 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
   // Step 1: rules + indexes alone, so a Google rules hiccup never blocks (or half-ships) the site.
   console.log('Deploy step 1/2: Firestore rules and indexes');
   const rulesSource = readFileSync(join(cwd, 'firestore.rules'), 'utf8');
+  // Google compiles rules within a ~6 s backend deadline and answers 503 when it runs out, which
+  // firebase-tools retries in vain. Time the compile first (read-only `:test` calls; a tiny
+  // ruleset tells an outage apart) and stop with the real reason (docs/DEPLOY.md "Rules size and
+  // compile time").
+  const compile = await measureCompileTime({
+    project,
+    source: rulesSource,
+    getToken: accessToken,
+  }).catch((e) => {
+    console.warn(`Deploy step 1/2: rules compile probe failed (${e.message}); deploying anyway`);
+    return null;
+  });
+  if (compile) {
+    if (compile.verdict === 'borderline')
+      console.warn(`Deploy step 1/2: WARNING ${compile.message}`);
+    else console.log(`Deploy step 1/2: ${compile.message}`);
+    // A rollback goes on regardless: its rules may be live already (a 409 "already current").
+    if (!['ok', 'borderline'].includes(compile.verdict) && compileGuard)
+      die(`Deploy step 1/2 FAILED: ${compile.message}. Nothing was deployed.`);
+  }
   // Google refuses to release rules of 256000 compiled bytes or more, and firebase-tools then
   // reports a misleading 409 "already exists". Measure first (scripts/rules-size.mjs; a throwaway
   // ruleset and release, deleted again) and stop with the real reason.
@@ -510,7 +534,7 @@ async function deployRef(ref) {
   try {
     run('git', ['worktree', 'add', '--detach', dir, ref]);
     run('pnpm', ['install', '--frozen-lockfile'], dir);
-    const commit = await deployProd(dir);
+    const commit = await deployProd(dir, { compileGuard: false });
     if (!(await smoke(commit, false, dir))) die(`Smoke test FAILED after deploying ${ref}`);
     return commit;
   } finally {
