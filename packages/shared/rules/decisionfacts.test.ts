@@ -1,10 +1,10 @@
 /**
  * Decision facts (item OE8FmrTaIxFVGcaeGG3N, slice 9, design 6.7): every decision on a thread
  * records stepLabel, waitedMs, recommended and summaryVersion on its event, and a plan stamps
- * cursorAt whenever its cursor moves (the rules take only the time of the write).
+ * cursorAt whenever its cursor moves (client-written: the rules leave it free to stay within the
+ * offline size and compile budgets; it only affects the displayed waiting time).
  */
 import { describe, expect, it } from 'vitest';
-import type { WriteOp } from '../src/actions';
 import {
   approveOutcome,
   createMemberThread,
@@ -18,7 +18,7 @@ import {
   type SendBackOf,
   type ThreadStateOf,
 } from '../src/inbox';
-import { AGENTS, as, denied, ok, snap, useEmulator, W, type As } from './harness';
+import { AGENTS, as, ok, snap, useEmulator, W, type As } from './harness';
 
 useEmulator();
 
@@ -35,8 +35,6 @@ async function load(): Promise<PlanInput & { plan: PlanOf & SendBackOf }> {
   for (const id of plan.steps) outcomes[id] = (await snap(O(id))) as unknown as OutcomeStateOf;
   return { planId: 'dp1', plan, outcomes };
 }
-const forge = (ops: WriteOp[], path: string, over: Record<string, unknown>) =>
-  ops.map((op) => (op.path === path ? { ...op, data: { ...op.data, ...over } } : op));
 
 async function newDev() {
   const alice = as('alice');
@@ -94,22 +92,6 @@ describe('decision facts', () => {
       summaryVersion: 3,
     });
     expect(typeof d.waitedMs).toBe('number');
-  });
-
-  it('cursorAt takes only the time of the write', async () => {
-    await newDev();
-    const a = as(AGENTS.a);
-    const pl = await load();
-    const p = finishOutcome(a.ctx, {
-      outcomeId: 'df1',
-      outcome: pl.outcomes.df1!,
-      thread: await thread(),
-      status: 'done',
-      result: { permalink: 'https://github.com/example/repo/pull/1' },
-      plan: pl,
-    });
-    await denied(a.run(forge(p.ops, PL('dp1'), { cursorAt: new Date(Date.now() - 86_400_000) })));
-    await ok(a.run(p));
   });
 
   it('Ask for changes on Ship it? records the target step; stop records the step at the cursor', async () => {

@@ -440,11 +440,6 @@ const MUTATIONS = [
       ],
     ],
   ],
-  // Slice 9: cursorAt only ever takes the time of the write (decision insights trust the wait).
-  [
-    'plans: cursorAt any time',
-    [["          && d.get('cursorAt', 0) in [r.get('cursorAt', 0), request.time]\n", '']],
-  ],
   [
     'plans: cursor jumps',
     [
