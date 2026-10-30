@@ -198,7 +198,7 @@ export function isRules409(output) {
  *   (`remoteMatches === true`); otherwise retry `max409` time(s), then fail.
  * - rules too big (Google's 400 "compiled executables must be smaller than 256000 bytes", which
  *   firebase-tools reports as a 409 "already exists"; `compiledSize` is the probe's measure):
- *   'too-big', never retried (scripts/rules-size.mjs, docs/DEPLOY.md "Rules size").
+ *   'too-big', never retried (scripts/rules-size.mjs, docs/DEPLOY.md "Rules size and compile time").
  * - anything else: fail.
  * @param {{output: string, retries503: number, retries409: number, remoteMatches?: boolean,
  *   compiledSize?: number, max503?: number, max409?: number}} s

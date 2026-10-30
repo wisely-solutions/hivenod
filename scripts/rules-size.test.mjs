@@ -58,14 +58,14 @@ describe('rules compiled size', () => {
     expect(estimateCompiledSize('x // more comment')).toBe(estimateCompiledSize('x'));
   });
 
-  // The offline guard (docs/DEPLOY.md "Rules size"): the estimate tracks Google's compiled size
+  // The offline guard (docs/DEPLOY.md "Rules size and compile time"): the estimate tracks Google's compiled size
   // within about 1500 bytes. Over the budget, trim the rules before merging; the release refuses
   // anything at or over 256000 bytes.
   it(`firestore.rules stays within the budget of ${RULES_COMPILED_BUDGET} bytes`, () => {
     const est = estimateCompiledSize(RULES);
     expect(
       est,
-      `estimated compiled size ${est} bytes is over the budget ${RULES_COMPILED_BUDGET}: trim the rules (docs/DEPLOY.md "Rules size")`,
+      `estimated compiled size ${est} bytes is over the budget ${RULES_COMPILED_BUDGET}: trim the rules (docs/DEPLOY.md "Rules size and compile time")`,
     ).toBeLessThanOrEqual(RULES_COMPILED_BUDGET);
   });
 });
