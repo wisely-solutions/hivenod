@@ -46,7 +46,9 @@ export const FINDING_SOURCE = 'finding';
 export const MIGRATED_BY = 'scripts/migrate-project-to-threads';
 /** The Development template's step labels, in order. */
 export const DEV_LABELS = PLAN_TEMPLATES.dev.steps.map(
-  (s) => s.fields.what ?? (s.type === 'keepgreen' ? 'Keep green' : s.type[0].toUpperCase() + s.type.slice(1)),
+  (s) =>
+    s.fields.what ??
+    (s.type === 'keepgreen' ? 'Keep green' : s.type[0].toUpperCase() + s.type.slice(1)),
 );
 /** Where Approve idea and Accept on live sit in the template (Keep green, slice 6c, moved the latter). */
 const DEV_APPROVE = DEV_LABELS.indexOf('Approve idea');
