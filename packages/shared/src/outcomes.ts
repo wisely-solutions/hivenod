@@ -306,7 +306,7 @@ export const OUTCOMES = {
     plan: true,
     planOnly: true,
   },
-  // Scheduled tasks (design ~/drafts/schedules, slice 2, ./scheduleData.ts): the agent proposes a
+  // Scheduled tasks (design ~/drafts/schedules, slice 2, ./scheduleDocs.ts): the agent proposes a
   // schedule (a `proposed` schedules/{sid} doc); the member's approval activates it in the same
   // batch (approveOutcome). Nothing to carry out.
   schedule: {

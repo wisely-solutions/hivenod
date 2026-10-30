@@ -163,7 +163,7 @@ export const INBOX_EVENT_TYPES = [
   'relation.accepted',
   'relation.rejected',
   'relation.removed',
-  // Scheduled tasks (./scheduleData.ts): the member's schedules and decisions, the Off switch;
+  // Scheduled tasks (./scheduleDocs.ts): the member's schedules and decisions, the Off switch;
   // the scheduler (notifier, Admin SDK) writes the run.* events. A proposal and its approval are
   // the outcome.proposed / outcome.approved events of the `schedule` outcome (data.scheduleId).
   'schedule.created',
@@ -434,7 +434,7 @@ export const inboxThreadSchema = z.object({
    * `key` (threadAsk) out of Today until `until`; absent until the first one.
    */
   notNow: z.object({ until: timestamp, key: z.string(), at: timestamp }).nullable().optional(),
-  /** A scheduled run's thread (./scheduleData.ts): its schedule and run key. Absent otherwise. */
+  /** A scheduled run's thread (./scheduleDocs.ts): its schedule and run key. Absent otherwise. */
   schedule: z.object({ scheduleId: z.string(), runKey: z.string() }).optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
