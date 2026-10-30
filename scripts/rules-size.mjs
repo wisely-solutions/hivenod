@@ -103,10 +103,57 @@ async function tryRelease(project, token, source) {
   }
 }
 
+/**
+ * A 503 on the ruleset upload can still create the ruleset (seen in practice), and its name
+ * never reaches us; an interrupted probe leaves its padded rulesets too. Afterwards, delete the
+ * rulesets of the last 24 hours that no release uses and whose source is one this probe uploaded
+ * or carries the probe's pad functions.
+ */
+async function sweepProbeRulesets(project, token, since, uploaded) {
+  const H = { authorization: `Bearer ${token}` };
+  const get = async (url) => {
+    const r = await fetch(url, { headers: H });
+    if (!r.ok) throw new Error(`GET ${url}: ${r.status}`);
+    return r.json();
+  };
+  const base = `${API}/projects/${project}`;
+  const inUse = new Set();
+  let recent = [];
+  for (let page = ''; ;) {
+    const j = await get(`${base}/releases?pageSize=100${page ? `&pageToken=${page}` : ''}`);
+    for (const r of j.releases ?? []) inUse.add(r.rulesetName);
+    if (!(page = j.nextPageToken)) break;
+  }
+  for (let page = ''; ;) {
+    const j = await get(`${base}/rulesets?pageSize=100${page ? `&pageToken=${page}` : ''}`);
+    recent = recent.concat((j.rulesets ?? []).filter((r) => r.createTime >= since));
+    if (!(page = j.nextPageToken)) break;
+  }
+  for (const r of recent) {
+    if (inUse.has(r.name)) continue;
+    const content = (await get(`${API}/${r.name}`)).source?.files?.[0]?.content;
+    if (!uploaded.has(content) && !String(content).includes('function zzSizePad')) continue;
+    const d = await fetch(`${API}/${r.name}`, { method: 'DELETE', headers: H });
+    if (!d.ok && d.status !== 404)
+      console.warn(`rules size probe: could not delete ${r.name} (${d.status}); delete it by hand`);
+  }
+}
+
 /** The compiled size of `source` as Google counts it (see rules-size-lib.mjs). */
 export async function measureRulesSize({ project, source, getToken = accessToken }) {
   const token = await getToken();
-  return measureCompiledSize(source, (s) => tryRelease(project, token, s));
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const uploaded = new Set();
+  try {
+    return await measureCompiledSize(source, (s) => {
+      uploaded.add(s);
+      return tryRelease(project, token, s);
+    });
+  } finally {
+    await sweepProbeRulesets(project, token, since, uploaded).catch((e) =>
+      console.warn(`rules size probe: cleanup check failed (${e.message})`),
+    );
+  }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
