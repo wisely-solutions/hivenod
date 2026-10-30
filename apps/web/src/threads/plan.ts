@@ -117,32 +117,9 @@ export function planSummary(pl: PlanInput): string {
   return parts.join(' · ');
 }
 
-export type PlanMain =
-  | { kind: 'approvePlan' }
-  | { kind: 'step'; index: number; outcomeId: string; gate: boolean }
-  | { kind: 'retry'; index: number }
-  | null;
-
-/**
- * The plan's main action: Retry a blocked step; Approve plan while the plan is proposed and
- * agent steps wait; the step at its turn that waits for the member (a gate, or an agent step not
- * approved yet); else Approve plan while agent steps still wait.
- */
-export function planMain(pl: PlanInput): PlanMain {
-  const v = planView(pl.plan, pl.outcomes);
-  if (v.state === 'blocked' && v.current) return { kind: 'retry', index: v.current.index };
-  const agentWaits = v.steps.some((s) => s.kind === 'agent' && s.outcome?.state === 'proposed');
-  if (v.state === 'proposed' && agentWaits) return { kind: 'approvePlan' };
-  if (v.waitingForYou && v.waitingForYou.outcome?.state === 'proposed')
-    return {
-      kind: 'step',
-      index: v.waitingForYou.index,
-      outcomeId: v.waitingForYou.outcomeId,
-      gate: v.waitingForYou.kind === 'human',
-    };
-  if (planLive(v.state) && agentWaits) return { kind: 'approvePlan' };
-  return null;
-}
+// The plan's main action moved to the shared package (slice 3: the notifier uses it too).
+export { planMain, type PlanMain } from '@hive/shared';
+import { planMain } from '@hive/shared';
 
 /** Whether the member has something to decide on the plan (it then needs the panel open). */
 export function planWaits(pl: PlanInput): boolean {

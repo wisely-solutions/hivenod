@@ -145,6 +145,13 @@ export function ThreadPage() {
     run: () => topRef.current?.approve(),
   });
   useShortcut({
+    id: 'thread-not-now',
+    keys: ['n'],
+    label: 'Not now',
+    group: 'Thread',
+    run: () => topRef.current?.notNow?.(),
+  });
+  useShortcut({
     id: 'thread-ask',
     keys: ['c'],
     label: 'Ask for changes',

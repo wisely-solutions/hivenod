@@ -1406,7 +1406,7 @@ service cloud.firestore {
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged', 'thread.due', 'plan.approved', 'plan.rejected', 'plan.edited',
                   'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
-                  'thread.instructed'])
+                  'thread.instructed', 'thread.not_now'])
                 && (request.resource.data.type != 'thread.itemMade' || inboxItemMade(wid, request.resource.data))
             || (request.resource.data.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(wid, request.resource.data.memberUid)
@@ -1468,7 +1468,10 @@ service cloud.firestore {
           && inboxTrackedThread(wid, request.resource.data.lastEventId, ['inbox.added'],
                request.resource.data.memberUid, tid)
           && inboxMessageIn(wid, request.resource.data.lastEventId, tid);
-        allow update: if request.resource.data.updatedAt == request.time
+        // Not now (item OE8FmrTaIxFVGcaeGG3N, slice 3): the member only; `updatedAt` stays (the
+        // summary stays fresh).
+        allow update: if (inboxOwner(wid, resource.data) && inboxNotNow(wid, tid, request.resource.data, resource.data))
+          || (request.resource.data.updatedAt == request.time
           // Summaries (item OE8FmrTaIxFVGcaeGG3N): the home agent's mirror of the summary it wrote.
           && ((changed(['summary', 'updatedAt', 'lastEventId']) && isActiveAgent(wid)
               && inboxSummaryMirrored(wid, tid, request.resource.data, resource.data))
@@ -1495,8 +1498,22 @@ service cloud.firestore {
             // and suggests chips.
             || (inboxOwner(wid, resource.data) && inboxInstructed(wid, tid, request.resource.data, resource.data))
             || (isActiveAgent(wid) && inboxInstructionAnswered(wid, tid, request.resource.data, resource.data))
-            || (isActiveAgent(wid) && inboxChipsSuggested(wid, tid, request.resource.data, resource.data)));
+            || (isActiveAgent(wid) && inboxChipsSuggested(wid, tid, request.resource.data, resource.data))));
         allow delete: if false;
+
+        // Out of Today until a time within 48 hours, about the decision its event names, only
+        // while something waits for the member.
+        function inboxNotNow(wid, tid, d, r) {
+          let e = inboxEv(wid, d.lastEventId).data.data;
+          return changed(['notNow', 'lastEventId'])
+            && r.state in ['needsYou', 'yourCall']
+            && exactKeys(d.notNow, ['until', 'key', 'at'])
+            && d.notNow.until is timestamp && d.notNow.until > request.time
+            && d.notNow.until <= request.time + duration.value(48, 'h')
+            && str(d.notNow.key, 1, 200) && d.notNow.at == request.time
+            && inboxTrackedThread(wid, d.lastEventId, ['thread.not_now'], me(), tid)
+            && e.key == d.notNow.key && e.until == d.notNow.until;
+        }
 
         // The mirror equals the summary written in this batch (its event is this write's). The
         // summary's visuals are checked here: each document of a batch has its own expression
