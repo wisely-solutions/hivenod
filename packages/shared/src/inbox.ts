@@ -50,6 +50,7 @@ import {
   type PlanState,
   type PlanStateOf,
 } from './plans';
+import { planTemplate, sendBackTarget, templateSendBack, templateSteps } from './planTemplates';
 import { timestamp } from './schema';
 
 // ---------- shapes ----------
@@ -138,6 +139,10 @@ export const INBOX_EVENT_TYPES = [
   'plan.retried',
   'plan.skipped',
   'plan.stopped',
+  // Development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6): New thread, and a send back by the
+  // member (Ask for changes on a gate) or by the agent (plan_send_back)
+  'thread.created',
+  'plan.sent_back',
   'subject.created',
   'subject.renamed',
   'subject.merged',
@@ -466,6 +471,8 @@ export const inboxOutcomeSchema = z.object({
       reason: z.string().nullable(),
       /** The version approved (absent or null: the outcome was never revised). */
       version: z.number().int().nullable().optional(),
+      /** A gate's approval: the summary version on screen (slice 6). */
+      summaryVersion: z.number().int().optional(),
     })
     .nullable(),
   /**
@@ -1156,50 +1163,29 @@ export function proposeOutcome(
   return { ...p, outcomeId };
 }
 
-/** One step of a proposed plan: an outcome of a plan type. */
-export interface PlanStepInput {
-  type: string;
-  fields: Readonly<Record<string, unknown>>;
-  note?: string;
-  confidence?: string | null;
-  checks?: readonly string[] | null;
+/** A template's steps with the caller's steps (fields, note, …) over them, in order. */
+function fromTemplate(id: string, over: readonly PlanStepInput[]): PlanStepInput[] {
+  const base = templateSteps(
+    id,
+    over.map((o) => o.fields ?? {}),
+  );
+  return base.map((b, i) => {
+    const o = over[i];
+    need(
+      !o || !o.type || o.type === b.type,
+      `Step ${i + 1} of the ${planTemplate(id)!.name} template is ${b.type}, not ${o?.type}.`,
+    );
+    return { ...(o ?? {}), type: b.type, fields: b.fields };
+  });
 }
 
-/**
- * An agent proposes a plan (plan_propose, item qwFAWxZM5xkcE7PPjAzi): 1-8 ordered steps, each an
- * outcome of a plan type, all in one batch with the plan and one plan.proposed event, so the
- * member never sees half a plan. The steps run in order once approved; an `approval` step is a
- * gate the member decides at its turn. Like a single proposal, the thread goes to Your call.
- */
-export function proposePlan(
-  ctx: ActionContext,
-  input: {
-    threadId: string;
-    thread: ThreadStateOf;
-    note?: string;
-    confidence?: string | null;
-    steps: readonly PlanStepInput[];
-    planId?: string;
-    stepIds?: readonly string[];
-  },
-): ActionPlan & { planId: string; stepIds: string[] } {
-  requireAgent(ctx);
-  const t = input.thread;
-  liveThread(t);
+/** Plan steps checked and cleaned: plan types, fields, note, confidence, checks. */
+function cleanPlanSteps(input: readonly PlanStepInput[]) {
   need(
-    Array.isArray(input.steps) &&
-      input.steps.length >= 1 &&
-      input.steps.length <= PLAN_LIMITS.steps,
+    input.length >= 1 && input.length <= PLAN_LIMITS.steps,
     `A plan has 1 to ${PLAN_LIMITS.steps} steps.`,
   );
-  const note = (input.note ?? '').trim();
-  need(note.length <= PLAN_LIMITS.note, tooLong('The note', PLAN_LIMITS.note));
-  const conf = input.confidence ?? null;
-  need(
-    conf === null || (OUTCOME_CONFIDENCE as readonly string[]).includes(conf),
-    'The confidence is high, medium or low.',
-  );
-  const steps = input.steps.map((st, i) => {
+  return input.map((st, i) => {
     const n = `Step ${i + 1}`;
     need(
       (PLAN_TYPES as readonly string[]).includes(st.type),
@@ -1225,6 +1211,58 @@ export function proposePlan(
     const checks = cleanLines('checks', st.checks, INBOX_LIMITS.checks, INBOX_LIMITS.check);
     return { type: st.type, fields, note: sn, conf: sc, checks };
   });
+}
+
+/** One step of a proposed plan: an outcome of a plan type. */
+export interface PlanStepInput {
+  type: string;
+  fields: Readonly<Record<string, unknown>>;
+  note?: string;
+  confidence?: string | null;
+  checks?: readonly string[] | null;
+}
+
+/**
+ * An agent proposes a plan (plan_propose, item qwFAWxZM5xkcE7PPjAzi): 1-8 ordered steps, each an
+ * outcome of a plan type, all in one batch with the plan and one plan.proposed event, so the
+ * member never sees half a plan. The steps run in order once approved; an `approval` step is a
+ * gate the member decides at its turn. Like a single proposal, the thread goes to Your call.
+ */
+export function proposePlan(
+  ctx: ActionContext,
+  input: {
+    threadId: string;
+    thread: ThreadStateOf;
+    note?: string;
+    confidence?: string | null;
+    steps: readonly PlanStepInput[];
+    planId?: string;
+    stepIds?: readonly string[];
+    /**
+     * A plan template (./planTemplates.ts, slice 6): the plan is the template's steps; `steps`
+     * then gives each step's fields (and note, confidence, checks) over the defaults, in order.
+     */
+    template?: string | null;
+  },
+): ActionPlan & { planId: string; stepIds: string[] } {
+  requireAgent(ctx);
+  const t = input.thread;
+  liveThread(t);
+  need(
+    Array.isArray(input.steps) &&
+      (input.template ? input.steps.length >= 0 : input.steps.length >= 1) &&
+      input.steps.length <= PLAN_LIMITS.steps,
+    `A plan has 1 to ${PLAN_LIMITS.steps} steps.`,
+  );
+  const note = (input.note ?? '').trim();
+  need(note.length <= PLAN_LIMITS.note, tooLong('The note', PLAN_LIMITS.note));
+  const conf = input.confidence ?? null;
+  need(
+    conf === null || (OUTCOME_CONFIDENCE as readonly string[]).includes(conf),
+    'The confidence is high, medium or low.',
+  );
+  const tpl = input.template ?? null;
+  const steps = cleanPlanSteps(tpl ? fromTemplate(tpl, input.steps) : input.steps);
   const planId = input.planId ?? nid(ctx);
   const stepIds = input.stepIds ? [...input.stepIds] : steps.map(() => nid(ctx));
   need(
@@ -1235,7 +1273,12 @@ export function proposePlan(
     ctx,
     'plan.proposed',
     { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
-    { planId, steps: stepIds, types: steps.map((st) => st.type) },
+    {
+      planId,
+      steps: stepIds,
+      types: steps.map((st) => st.type),
+      ...(tpl ? { templateId: tpl } : {}),
+    },
     (eventId) => [
       ...steps.map((st, i): WriteOp => ({
         kind: 'set',
@@ -1271,6 +1314,7 @@ export function proposePlan(
           state: 'proposed',
           note,
           ...(conf !== null ? { confidence: conf } : {}),
+          ...(tpl ? { templateId: tpl, sendBackTo: templateSendBack(tpl, stepIds) } : {}),
           createdAt: SERVER_TIME,
           updatedAt: SERVER_TIME,
           lastEventId: eventId,
@@ -1606,6 +1650,11 @@ export function approveOutcome(
     version?: number;
     /** The plan, when the outcome is a plan step (item qwFAWxZM5xkcE7PPjAzi). */
     plan?: PlanInput;
+    /**
+     * The summary version on screen (slice 6, design 6.4): a gate's approval records it, and the
+     * next steps follow that version.
+     */
+    summaryVersion?: number | null;
   },
 ): ActionPlan {
   const o = input.outcome;
@@ -1613,6 +1662,11 @@ export function approveOutcome(
   need(
     o.state === 'proposed' || o.state === 'revising',
     'Only a proposed outcome can be approved.',
+  );
+  const sv = input.summaryVersion ?? null;
+  need(
+    sv === null || (Number.isInteger(sv) && sv >= 1),
+    'The summary version is a whole number from 1.',
   );
   need(!isRetiredOutcome(o.type), RETIRED_MESSAGE(o.type));
   // A plan step: an agent step may be approved any time before it runs (it still runs only at
@@ -1661,6 +1715,7 @@ export function approveOutcome(
       ...(edited ? { fields } : {}),
       ...(version !== null ? { version } : {}),
       ...(pl ? { planId: pl.planId } : {}),
+      ...(gate && sv !== null ? { summaryVersion: sv } : {}),
     },
     (eventId) => [
       upd(
@@ -1674,6 +1729,7 @@ export function approveOutcome(
             edited,
             reason: null,
             ...(version !== null ? { version } : {}),
+            ...(gate && sv !== null ? { summaryVersion: sv } : {}),
           },
           ...(o.state === 'revising' ? { revise: null } : {}),
         },
@@ -2024,14 +2080,21 @@ function failedStep(pl: PlanInput): string {
   return id!;
 }
 
-/** Retry a failed step: it is approved again and carried out again; the plan goes on. */
+/**
+ * Retry a failed step: it is approved again and carried out again; the plan goes on. A plan
+ * blocked by its third send back (slice 6) goes on too: its step at the cursor is approved
+ * already and is carried out again.
+ */
 export function retryPlanStep(
   ctx: ActionContext,
   input: PlanInput & { thread: ThreadStateOf },
 ): ActionPlan {
   const pl = input;
   owner(ctx, pl.plan.memberUid);
-  const id = failedStep(pl);
+  const at = pl.plan.steps[pl.plan.cursor];
+  const sent =
+    pl.plan.state === 'blocked' && at !== undefined && pl.outcomes[at]?.state === 'approved';
+  const id = sent ? at! : failedStep(pl);
   const next = nextPlan(pl, { outcomes: { [id]: { state: 'approved' } }, state: 'active' });
   return inboxPlan(
     ctx,
@@ -2039,7 +2102,15 @@ export function retryPlanStep(
     planScope(pl, input.thread),
     { planId: pl.planId, outcomeId: id },
     (eventId) => [
-      upd(inboxPaths.outcome(ctx.workspaceId, id), { state: 'approved', result: null }, eventId),
+      ...(sent
+        ? []
+        : [
+            upd(
+              inboxPaths.outcome(ctx.workspaceId, id),
+              { state: 'approved', result: null },
+              eventId,
+            ),
+          ]),
       ...planWrites(ctx, pl, next, null, eventId),
     ],
   );
@@ -2086,6 +2157,275 @@ export function stopPlan(
     { planId: pl.planId },
     (eventId) => planWrites(ctx, pl, nextPlan(pl, {}), 'stopped', eventId),
   );
+}
+
+// ---------- Development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6) ----------
+
+/** Send backs a plan takes before it stops at the member (design 6.5). */
+export const MAX_PLAN_SEND_BACKS = 3;
+export const NEW_THREAD_SOURCE = 'hivenod';
+
+/**
+ * New thread (design 6.2): the member writes to one of the organization's agents (its home
+ * agent from then on): the thread, its first message (source hivenod, from the member) and, with
+ * a template, the plan, in one batch with one thread.created event. A plan the member makes from
+ * a template is theirs: its agent steps start approved (the creation is the approval), its person
+ * steps stay gates. Without a plan the thread starts investigating, as one an agent brings in.
+ */
+export function createMemberThread(
+  ctx: ActionContext,
+  input: {
+    title: string;
+    text: string;
+    /** The home agent (an active agent of the organization; the rules check it). */
+    agentUid: string;
+    template?: string | null;
+    threadId?: string;
+    planId?: string;
+    stepIds?: readonly string[];
+  },
+): ActionPlan & { threadId: string; planId: string | null } {
+  requireHuman(ctx);
+  const me = ctx.actor.id;
+  const text = cleanText('The message', input.text, INBOX_LIMITS.text);
+  const title = cleanText('The title', input.title.replace(/\s+/g, ' '), INBOX_LIMITS.title);
+  const agentUid = input.agentUid?.trim() ?? '';
+  need(agentUid.length > 0 && agentUid.length <= 128, 'Pick the agent it is for.');
+  const tpl = input.template || null;
+  const steps = tpl
+    ? cleanPlanSteps(
+        fromTemplate(tpl, [
+          { type: '', fields: tpl === 'dev' ? { idea: text.slice(0, 20_000) } : {} },
+        ]),
+      )
+    : null;
+  const threadId = input.threadId ?? nid(ctx);
+  const planId = steps ? (input.planId ?? nid(ctx)) : null;
+  const stepIds = steps ? (input.stepIds ? [...input.stepIds] : steps.map(() => nid(ctx))) : [];
+  need(
+    !steps || (stepIds.length === steps.length && new Set(stepIds).size === stepIds.length),
+    'One distinct id per step.',
+  );
+  const messageDocId = nid(ctx);
+  const w = ctx.workspaceId;
+  const outs: Record<string, OutcomeStateOf> = {};
+  steps?.forEach((st, i) => {
+    outs[stepIds[i]!] = {
+      memberUid: me,
+      threadId,
+      type: st.type,
+      fields: st.fields,
+      state: outcomeKind(st.type) === 'human' ? 'proposed' : 'approved',
+      executor: outcomeType(st.type)!.executor === 'agent' ? agentUid : null,
+    };
+  });
+  const state = planId
+    ? planThreadState({ steps: stepIds, cursor: 0, state: 'active' }, outs)
+    : { state: 'investigating' as const, waiting: null };
+  const p = inboxPlan(
+    ctx,
+    'thread.created',
+    { memberUid: me, threadId, subjectId: null },
+    {
+      messageDocId,
+      agentUid,
+      ...(planId ? { planId, steps: stepIds, templateId: tpl } : {}),
+    },
+    (eventId) => [
+      {
+        kind: 'set',
+        path: inboxPaths.message(w, messageDocId),
+        data: {
+          memberUid: me,
+          threadId,
+          direction: 'in',
+          source: NEW_THREAD_SOURCE,
+          sender: {
+            name: ctx.actor.name.trim().slice(0, INBOX_LIMITS.senderName) || 'Me',
+            handle: null,
+          },
+          text,
+          threadRef: threadId,
+          messageId: messageDocId,
+          permalink: null,
+          replyRef: null,
+          receivedAt: SERVER_TIME,
+          attachments: [],
+          fetchedBy: me,
+          createdAt: SERVER_TIME,
+          lastEventId: eventId,
+        },
+      },
+      {
+        kind: 'set',
+        path: inboxPaths.thread(w, threadId),
+        data: {
+          memberUid: me,
+          subjectId: null,
+          ...state,
+          question: null,
+          title,
+          refs: [threadId],
+          lastMessageAt: SERVER_TIME,
+          fetchedBy: agentUid,
+          createdAt: SERVER_TIME,
+          updatedAt: SERVER_TIME,
+          lastEventId: eventId,
+        },
+      },
+      ...(planId && steps
+        ? [
+            ...steps.map((st, i): WriteOp => ({
+              kind: 'set',
+              path: inboxPaths.outcome(w, stepIds[i]!),
+              data: {
+                ...outs[stepIds[i]!],
+                note: st.note,
+                proposedBy: me,
+                decision: null,
+                result: null,
+                planId,
+                createdAt: SERVER_TIME,
+                updatedAt: SERVER_TIME,
+                lastEventId: eventId,
+              },
+            })),
+            {
+              kind: 'set',
+              path: inboxPaths.plan(w, planId),
+              data: {
+                memberUid: me,
+                threadId,
+                proposedBy: me,
+                steps: stepIds,
+                cursor: 0,
+                state: 'active',
+                note: '',
+                templateId: tpl,
+                sendBackTo: templateSendBack(tpl!, stepIds),
+                createdAt: SERVER_TIME,
+                updatedAt: SERVER_TIME,
+                lastEventId: eventId,
+              },
+            } satisfies WriteOp,
+          ]
+        : []),
+    ],
+  );
+  return { ...p, threadId, planId };
+}
+
+/** What a send back needs of the plan doc beyond its state (listener data). */
+export interface SendBackOf {
+  sendBackTo?: Readonly<Record<string, string>> | null;
+  sentBack?: { n: number } | null;
+}
+
+/**
+ * Send back (design 6.5): Ask for changes on the person step at the cursor (the member), or
+ * plan_send_back from the agent step at the cursor (its executor), moves the cursor back to an
+ * earlier agent step that is done (default: the plan's `sendBackTo` for that gate, else the
+ * nearest earlier agent step). The steps from there to the cursor that were through start again:
+ * agent steps approved (they were), person steps proposed (decided again). The plan counts it in
+ * `sentBack` (n, the target, the reason); the third send back, and each after it, leaves the plan
+ * blocked for the member (Retry goes on, Stop plan ends it). The agent gets carry_out again
+ * (why sent_back, with the reason).
+ */
+export function sendBackPlan(
+  ctx: ActionContext,
+  input: PlanInput & {
+    thread: ThreadStateOf;
+    reason: string;
+    /** The target step's index; absent: the default. */
+    toStep?: number | null;
+    plan: PlanOf & SendBackOf;
+  },
+): ActionPlan & { toStep: number; blocked: boolean } {
+  const pl = input;
+  const p = pl.plan;
+  const agent = ctx.actor.type === 'agent';
+  if (agent) requireAgent(ctx);
+  else owner(ctx, p.memberUid);
+  need(
+    p.state === 'active' || p.state === 'proposed',
+    p.state === 'blocked'
+      ? 'This plan is blocked: retry or stop it first.'
+      : `This plan is ${p.state}.`,
+  );
+  const reason = (input.reason ?? '').trim();
+  need(reason.length > 0, 'Say what should change.');
+  need(reason.length <= INBOX_LIMITS.reason, tooLong('The reason', INBOX_LIMITS.reason));
+  const cur = p.steps[p.cursor];
+  const o = cur !== undefined ? pl.outcomes[cur] : undefined;
+  need(o !== undefined, 'No step is at its turn.');
+  const human = outcomeKind(o!.type) === 'human';
+  if (agent) {
+    need(
+      !human && o!.executor === ctx.actor.id,
+      'Only the agent carrying out the step at its turn sends the plan back.',
+    );
+    need(
+      o!.state === 'approved' || o!.state === 'running',
+      `This step is ${o!.state}: nothing to send back.`,
+    );
+  } else {
+    need(human && o!.state === 'proposed', 'Only an approval at its turn sends the plan back.');
+  }
+  const types = Object.fromEntries(p.steps.map((id) => [id, pl.outcomes[id]?.type]));
+  const to =
+    input.toStep ?? sendBackTarget(p.steps, types, p.cursor, input.plan.sendBackTo ?? null);
+  need(to !== null, 'No earlier agent step to send it back to.');
+  const target = pl.outcomes[p.steps[to!]!];
+  need(
+    Number.isInteger(to) &&
+      to! >= 0 &&
+      to! < p.cursor &&
+      target !== undefined &&
+      outcomeKind(target.type) === 'agent' &&
+      target.state === 'done',
+    'Send it back to an earlier agent step that is done.',
+  );
+  const reset = p.steps.slice(to!, p.cursor + 1).filter((id) => pl.outcomes[id]?.state === 'done');
+  const n = (input.plan.sentBack?.n ?? 0) + 1;
+  const blocked = n >= MAX_PLAN_SEND_BACKS;
+  const back = (id: string) =>
+    outcomeKind(pl.outcomes[id]!.type) === 'human' ? 'proposed' : 'approved';
+  const next = nextPlan(pl, {
+    outcomes: Object.fromEntries(reset.map((id) => [id, { state: back(id) }])),
+    cursor: to!,
+    state: blocked ? 'blocked' : 'active',
+  });
+  const tid = p.steps[to!]!;
+  const plan = inboxPlan(
+    ctx,
+    'plan.sent_back',
+    planScope(pl, input.thread),
+    { planId: pl.planId, outcomeId: tid, from: p.cursor, to, reset, reason, n },
+    (eventId) => [
+      ...reset.map((id) =>
+        upd(
+          inboxPaths.outcome(ctx.workspaceId, id),
+          back(id) === 'proposed' ? { state: 'proposed', decision: null } : { state: 'approved' },
+          eventId,
+        ),
+      ),
+      upd(
+        inboxPaths.plan(ctx.workspaceId, pl.planId),
+        {
+          cursor: to,
+          state: next.plan.state,
+          sentBack: { n, to: tid, reason, by: ctx.actor.id, at: SERVER_TIME },
+        },
+        eventId,
+      ),
+      upd(
+        inboxPaths.thread(ctx.workspaceId, p.threadId),
+        { ...planThreadState(next.plan, next.outcomes) },
+        eventId,
+      ),
+    ],
+  );
+  return { ...plan, toStep: to!, blocked };
 }
 
 // ---------- Ask for changes (item L7OzWKMYZ1O2dX33Xkrj) ----------

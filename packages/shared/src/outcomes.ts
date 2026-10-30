@@ -65,6 +65,11 @@ export interface OutcomeType {
    * never approved.
    */
   retired?: boolean;
+  /**
+   * A long step (item OE8FmrTaIxFVGcaeGG3N, slice 6: development plans): hours of agent work
+   * (Build, Release), reported started, with progress, then done.
+   */
+  long?: boolean;
 }
 export type OutcomeKind = 'agent' | 'human';
 
@@ -224,6 +229,43 @@ export const OUTCOMES = {
     executor: 'none',
     after: { state: 'ignored' },
     batchable: true,
+  },
+  // Development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6, ./planTemplates.ts): the agent steps
+  // of the Development template. While one runs after another, the thread waits on the work.
+  shape: {
+    label: 'Shape',
+    approve: 'Approve',
+    description:
+      'Development, step 1: research the idea, write the proposal into the summary (ask: build this?), attach drafts, give the size S/M/L.',
+    fields: { idea: text('Idea', 'What is to be built, as the member asked it', false) },
+    executor: 'agent',
+    after: { state: 'waiting', waitingOn: 'item' },
+    plan: true,
+    planOnly: true,
+  },
+  build: {
+    label: 'Build',
+    approve: 'Approve',
+    description:
+      'Development: build what the approved idea says in a worktree; end with an open pull request, local checks green, NOT merged (Release merges it). Report the PR link and what changed.',
+    fields: { brief: text('Brief', 'What to build (default: what Approve idea approved)', false) },
+    executor: 'agent',
+    after: { state: 'waiting', waitingOn: 'item' },
+    plan: true,
+    planOnly: true,
+    long: true,
+  },
+  release: {
+    label: 'Release + live check',
+    approve: 'Approve',
+    description:
+      'Development: merge the approved pull request(s), run the release checks, release, check it live; report the merge sha, release number, live commit, production URL and screenshots.',
+    fields: { notes: text('Notes', 'Anything the release must know', false) },
+    executor: 'agent',
+    after: { state: 'done' },
+    plan: true,
+    planOnly: true,
+    long: true,
   },
   approval: {
     label: 'Your approval',

@@ -21,6 +21,7 @@ export * from './discovery';
 export * from './inbox';
 export * from './outcomes';
 export * from './plans';
+export * from './planTemplates';
 export * from './personalOrg';
 export * from './status';
 export * from './cliversion';

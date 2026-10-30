@@ -48,6 +48,20 @@ export const inboxPlanSchema = z.object({
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
+  /** The template it was made from (./planTemplates.ts, slice 6); absent: none. */
+  templateId: z.string().nullable().optional(),
+  /** Per person step (outcome id): the step Ask for changes sends the plan back to. */
+  sendBackTo: z.record(z.string(), z.string()).optional(),
+  /** The last send back (slice 6): how many so far, to which step, why, by whom. */
+  sentBack: z
+    .object({
+      n: z.number().int().min(1),
+      to: z.string(),
+      reason: z.string(),
+      by: z.string(),
+      at: timestamp,
+    })
+    .optional(),
 });
 export type InboxPlan = z.infer<typeof inboxPlanSchema>;
 
@@ -219,6 +233,8 @@ export function planThreadState(
   outcomes: Readonly<Record<string, PlanOutcomeOf | null | undefined>>,
 ): ThreadStateAfter {
   if (plan.state === 'stopped') return { state: 'investigating', waiting: null };
+  // Blocked (a failed step, or the third send back): the member decides.
+  if (plan.state === 'blocked') return YOUR_CALL;
   const at = (i: number) => outcomes[plan.steps[i]!] ?? null;
   const before = (end: number): ThreadStateAfter | null => {
     for (let i = Math.min(end, plan.steps.length) - 1; i >= 0; i--) {
