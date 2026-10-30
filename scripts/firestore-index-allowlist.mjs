@@ -27,6 +27,17 @@ export const ALLOWLIST = [
       'Org delete walks every subcollection in batches: a plain collection read with only limit(), no where/orderBy, so it needs no composite index.',
   },
   {
+    file: 'apps/web/src/orgs/exportOrg.ts',
+    text: 'query(base, orderBy(documentId()), startAfter(afterId), limit(max))',
+    reason:
+      'Org export pages one collection at a time by document id: a single orderBy on __name__ with startAfter and limit, no where, so the automatic index serves it.',
+  },
+  {
+    file: 'apps/web/src/orgs/exportOrg.ts',
+    text: 'query(base, orderBy(documentId()), limit(max))',
+    reason: 'First page of the org export, see the entry above.',
+  },
+  {
     file: 'apps/web/src/board/eraseItem.ts',
     text: 'query(collection(db, col), limit(max))',
     reason:
