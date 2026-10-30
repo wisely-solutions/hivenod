@@ -147,22 +147,41 @@ number, and existing tags are never moved or deleted.
 ## Exporting an organization's data (JSON)
 
 Before the old Projects and Calendar data is deleted (Inbox item OE8Fm, slices 10-11), each organization's
-data is exported to one JSON file. Two ways, same format (`"format": "hivenod-org-export"`, `"version": 1`,
-`workspace`, `members`, `groups`, `agents`, `events`, `runs` (each with its `log`), `projects` (each with
-`items` > `attachments`, `messages`, plus `decisions` and `stepProposals`), `calendar`, `busy`, `agentHomes`,
-and a trailing `counts` object with the number of documents per collection, for checking against a deletion):
+data is exported to one JSON file (`"format": "hivenod-org-export"`, `"version": 1`, `workspace`, `members`,
+`groups`, `agents`, `events`, `runs` (each with its `log`), `projects` (each with `items` > `attachments`,
+`messages`, plus `decisions` and `stepProposals`), `calendar`, `busy`, `agentHomes`, and a trailing `counts`
+object with the number of documents per collection, for checking against a deletion):
 
-- **In the app:** an admin opens Settings > Organization > "Export organization data (JSON)". The browser
-  reads what the rules let an admin read, page by page, shows progress and saves the file. `busy` and
-  `agentHomes` are `null` there: no browser may read them (the rules deny it; they were not widened).
 - **Operator script (complete):** `node scripts/export-org.mjs --org <workspaceId> --out <file>`. Admin access
   through the REST API with the service account (`GOOGLE_APPLICATION_CREDENTIALS`), read-only; it also exports the
   busy blocks in the members' stores and `agentHomes`. Production runs need the owner's OK at run time. Test it
   against the emulator with `--emulator host:port` (project `demo-hive`, token `owner`), e.g.
   `node scripts/emu-exec.mjs "node scripts/export-org.mjs --org <id> --out /tmp/x.json --emulator \$FIRESTORE_EMULATOR_HOST"`.
-  Timestamps are written as `{"$timestamp": "<ISO>"}`.
+  Timestamps are written as `{"$timestamp": "<ISO>"}`. Only this export can be used for the deletion below.
+- **In the app:** an admin opens Settings > Organization > "Export organization data (JSON)". Since Projects
+  were removed from the rules (slice 11) no browser may read projects, runs, the calendar, busy blocks or
+  `agentHomes`, so the in-app file holds only `members`, `groups`, `agents` and `events` (`busy` and
+  `agentHomes` are `null`).
 
-Check the file before deleting anything: `counts` per collection must match what the console shows.
+## Deleting the Projects data
+
+Once an organization's export is checked, its removed Projects and Calendar data is deleted with
+`node scripts/delete-projects-data.mjs --org <workspaceId> --export <file> [--dry-run] [--yes]`
+(REST API with the service account, like the export; **production only with the owner's OK at run time**).
+
+- **What goes:** projects with their items, attachments, messages, decisions and step proposals; runs and
+  their log lines; calendar events; the busy blocks of this organization in the members' stores; its
+  `agentHomes`; and its project events (workspace events naming a project, item or run). The Inbox, members,
+  groups, agents and the other workspace events stay.
+- **Refusals:** the file must be the operator export of that organization (`source: "script"`, with `busy` and
+  `agentHomes`), and its `counts` must match the database now, collection by collection (project events are
+  counted from the file's `events`). Anything written since the export is a mismatch: export again.
+- **Dry run:** without `--yes` (or with `--dry-run`) it prints the exported and live counts and how many
+  documents would go, and deletes nothing.
+- **Deleting:** with `--yes` it deletes in commits of 400 documents, children before parents. A stopped run is
+  resumed by exporting again and running it again.
+- **Tested against the emulator only** (`scripts/delete-projects.emu.test.mjs`, in `pnpm test:rules`). Try it
+  with `--emulator host:port` (project `demo-hive`, token `owner`) first.
 
 ## Rules size and compile time
 
@@ -175,7 +194,8 @@ misleading 409 "release already exists". This is a size limit for the whole file
 - **Measure:** `node scripts/rules-size.mjs [file]` prints the compiled size Google computes, e.g.
   `rules compiled size: 232566 of 256000 bytes (9% headroom)`, and exits 1 over the budget. Nothing
   reports the size of rules that fit, so it uploads a throwaway ruleset and tries a throwaway release
-  `size-probe` (never `cloud.firestore`), padded with identical unused functions until Google refuses it,
+  `size-probe` (never `cloud.firestore`), padded with identical unused functions (one long string each,
+  cheap to compile) until Google refuses it,
   and reads the size from the 400 (two pad sizes give the cost per pad, which is subtracted). It deletes
   every ruleset and release it creates (Google keeps at most 2500 rulesets). It needs the deploy service
   account (`GOOGLE_APPLICATION_CREDENTIALS`) and takes about a minute.
@@ -183,8 +203,9 @@ misleading 409 "release already exists". This is a size limit for the whole file
   "rules too big: N of 256000 bytes" (nothing deployed). A 409 behind which the 400 hides is reported the same
   way and never retried.
 - **Offline budget (before merging):** `pnpm test:scripts` (`scripts/rules-size.test.mjs`) fails when the
-  _estimated_ compiled size of `firestore.rules` is over **235000 bytes** (`RULES_COMPILED_BUDGET`, about 8%
-  under the limit). The estimate (`estimateCompiledSize` in `scripts/rules-size-lib.mjs`) is
+  _estimated_ compiled size of `firestore.rules` is over **145000 bytes** (`RULES_COMPILED_BUDGET`). It was
+  235000 until Projects were removed (slice 11) took the rules from 234448 to 126660 measured bytes; the
+  budget now keeps about 15% above them. The estimate (`estimateCompiledSize` in `scripts/rules-size-lib.mjs`) is
   4.4727 x tokens + 0.9526 x characters of names, strings and numbers - 10837, comments and whitespace
   excluded, fitted on eight measured rulesets, within about 1500 bytes. Every token costs about 4.5 bytes and every
   character of a name about 1, so what grows the size is repeated code, not comments.
