@@ -63,20 +63,31 @@ dispatch, route and give back; the sub-agents do the work.
    `itemId`; the channel sends `item_done` when the item is Done (report the step done) or
    `item_stopped` when it was stopped or deleted (report it failed with the reason). A `rejected` event with `plan_id` means
    the plan stopped: re-plan or ask.
-   **Summaries.** The person decides from each thread's summary, so the thread's sub-agent
-   writes it (`thread_summary`, with the `baseVersion` that `thread_read` shows; 0 when none) as
-   its last call after every inbox event that changed a thread you brought in (a message, a
-   proposal or plan, a step done or failed, an answer, a revise, a re-check, a request).
-   `headline` is the thing, not the process; `ask` is a yes/no question, set only while a
-   proposal or person step waits; `answer` is the one-line state; `recommendation` and
-   `confidence`; 1-5 `bullets` of facts with numbers; `details` (markdown) for the rest.
-   At every person step (an approval or a verification) include at least one visual when there
-   is data (a chart: bar, line, stacked_bar, number), a UI change (before/after screenshots:
-   `thread_attach` both, then an `image_pair`) or a flow or sequence (a diagram: before_after,
-   flow, timeline); if none fits, set `noVisualWhy` in one line. Visuals are data or images you
-   attached with `thread_attach` (PNG, JPEG or WebP; an `image` or `image_pair` names their
-   `attachmentId`), never SVG, HTML or Mermaid. `reason="summarize"` means the thread
-   changed since its summary: re-read it and write the summary, nothing else.
+
+- Development work runs as a plan from the template `dev` (`plan_propose` with
+  `template: "dev"`, or the person's New thread with it): Shape (research it, write the proposal
+  into the summary, size S/M/L) → Approve idea → Build (in a worktree; end with an open pull
+  request, local checks green, not merged) → Ship it? → Release + live check (merge the approved
+  PR, release, check it live) → Accept on live. When the person asks for changes at a gate, the
+  plan goes back to an earlier step and its `carry_out` comes again with `why="sent_back"` and
+  the reason: redo it with that change. From a step you carry out, `plan_send_back` sends the plan
+  back yourself (Release finds a bug: back to Build). The third send back of a plan blocks it
+  until the person goes on.
+  **Summaries.** The person decides from each thread's summary, so the thread's sub-agent
+  writes it (`thread_summary`, with the `baseVersion` that `thread_read` shows; 0 when none) as
+  its last call after every inbox event that changed a thread you brought in (a message, a
+  proposal or plan, a step done or failed, an answer, a revise, a re-check, a request).
+  `headline` is the thing, not the process; `ask` is a yes/no question, set only while a
+  proposal or person step waits; `answer` is the one-line state; `recommendation` and
+  `confidence`; 1-5 `bullets` of facts with numbers; `details` (markdown) for the rest.
+  At every person step (an approval or a verification) include at least one visual when there
+  is data (a chart: bar, line, stacked_bar, number), a UI change (before/after screenshots:
+  `thread_attach` both, then an `image_pair`) or a flow or sequence (a diagram: before_after,
+  flow, timeline); if none fits, set `noVisualWhy` in one line. Visuals are data or images you
+  attached with `thread_attach` (PNG, JPEG or WebP; an `image` or `image_pair` names their
+  `attachmentId`), never SVG, HTML or Mermaid. `reason="summarize"` means the thread
+  changed since its summary: re-read it and write the summary, nothing else.
+
 6. **Keep the main context small.** Sub-agents report in one line and report their own run cost
    with complete, send_back or end_run. Keep a short table item_id -> sub-agent in your head or
    notes, nothing more.

@@ -119,6 +119,10 @@ export function PlanPanel(props: PlanPanelProps) {
   const kinds = [
     'plan',
     ...(view.steps.some((s) => s.type === 'make_it_work') ? ['item_done'] : []),
+    // Development steps need the CLI that carries them out again after a send back (slice 6).
+    ...(view.steps.some((s) => s.type === 'shape' || s.type === 'build' || s.type === 'release')
+      ? ['devplan']
+      : []),
   ];
   const oldKinds = kinds.filter(
     (k) => home.state === 'ready' && !!home.data && cliSupports(k, have) === 'old',

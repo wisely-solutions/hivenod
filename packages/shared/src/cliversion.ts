@@ -38,6 +38,11 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * with image and image_pair visuals. An older CLI cannot attach screenshots.
    */
   attach: '0.2.194',
+  /**
+   * Development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6): plan_propose template, plan_send_back,
+   * and carry_out again (why sent_back) after a send back. An older CLI never redoes a step.
+   */
+  devplan: '0.2.204',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */

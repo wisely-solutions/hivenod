@@ -11,6 +11,8 @@ import {
   sendBackPlan,
   type OutcomeStateOf,
   type PlanInput,
+  type PlanOf,
+  type SendBackOf,
   type ThreadStateOf,
 } from './inbox';
 import { OUTCOMES, outcomeKind, PLAN_TYPES, SINGLE_TYPES } from './outcomes';
@@ -56,7 +58,7 @@ function dev(
   cursor: number,
   state: PlanInput['plan']['state'] = 'active',
   sent = 0,
-) {
+): PlanInput & { plan: PlanOf & SendBackOf } {
   return {
     planId: 'p1',
     plan: {
@@ -75,7 +77,7 @@ function dev(
           memberUid: 'joao',
           threadId: 't1',
           type: TYPES[i]!,
-          fields: TYPES[i] === 'approval' ? { what: 'x' } : {},
+          fields: (TYPES[i] === 'approval' ? { what: 'x' } : {}) as Record<string, string>,
           state: states[i]!,
           executor: TYPES[i] === 'approval' ? null : 'agentA',
           planId: 'p1',
@@ -159,7 +161,7 @@ describe('plan_propose with a template', () => {
       fields: { what: 'Ship it?' },
     });
     // Agents never make approved steps.
-    for (const id of IDS) expect(at(p.ops, O(id))!.data.state).toBe('proposed');
+    for (const id of IDS) expect(at(p.ops, O(id))!.data!.state).toBe('proposed');
     expect(p.ops.at(-1)!.data).toMatchObject({
       type: 'plan.proposed',
       data: { templateId: 'dev' },
@@ -231,7 +233,7 @@ describe('createMemberThread', () => {
       templateId: 'dev',
       sendBackTo: { d2: 'd1', d4: 'd3', d6: 'd3' },
     });
-    expect(IDS.map((id) => at(p.ops, O(id))!.data.state)).toEqual([A, Pr, A, Pr, A, Pr]);
+    expect(IDS.map((id) => at(p.ops, O(id))!.data!.state)).toEqual([A, Pr, A, Pr, A, Pr]);
     expect(at(p.ops, O('d1'))!.data).toMatchObject({
       fields: { idea: 'Add a dark mode' },
       executor: 'agentA',

@@ -272,7 +272,7 @@ describe('send back', () => {
                   ...op,
                   data: {
                     ...op.data,
-                    sentBack: { ...(op.data.sentBack as object), by: AGENTS.a },
+                    sentBack: { ...(op.data?.sentBack as object), by: AGENTS.a },
                   },
                 }
               : op,

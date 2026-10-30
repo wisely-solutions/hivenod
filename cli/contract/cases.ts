@@ -2226,7 +2226,17 @@ function build(): ContractCase[] {
     plan: { ...PL([['reply', 'done']], 1).plan, steps: ['o1', 'oX'] },
   });
   // ---------- development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6) ----------
-  pts('blocked by send backs', PL([['reply', 'done'], ['build', 'approved']], 1, 'blocked'));
+  pts(
+    'blocked by send backs',
+    PL(
+      [
+        ['reply', 'done'],
+        ['build', 'approved'],
+      ],
+      1,
+      'blocked',
+    ),
+  );
   pp('dev template', AGENT, {
     template: 'dev',
     steps: [{ type: 'shape', fields: { idea: ' Dark mode ' }, note: ' Size M ' }],
@@ -2342,7 +2352,17 @@ function build(): ContractCase[] {
         })),
       };
     });
-  pv('blocked by send backs', PL([['reply', 'done'], ['build', 'approved']], 1, 'blocked'));
+  pv(
+    'blocked by send backs',
+    PL(
+      [
+        ['reply', 'done'],
+        ['build', 'approved'],
+      ],
+      1,
+      'blocked',
+    ),
+  );
   pv(
     'mixed',
     PL(
