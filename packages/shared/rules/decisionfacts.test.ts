@@ -108,9 +108,7 @@ describe('decision facts', () => {
       result: { permalink: 'https://github.com/example/repo/pull/1' },
       plan: pl,
     });
-    await denied(
-      a.run(forge(p.ops, PL('dp1'), { cursorAt: new Date(Date.now() - 86_400_000) })),
-    );
+    await denied(a.run(forge(p.ops, PL('dp1'), { cursorAt: new Date(Date.now() - 86_400_000) })));
     await ok(a.run(p));
   });
 

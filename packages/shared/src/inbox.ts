@@ -1743,7 +1743,8 @@ export interface DecisionFacts {
 /** A step's label: an approval's own words, else the outcome type's name. */
 export function stepLabelOf(o: Pick<OutcomeStateOf, 'type' | 'fields'> | undefined): string | null {
   if (!o) return null;
-  const what = o.type === 'approval' && typeof o.fields?.what === 'string' ? o.fields.what.trim() : '';
+  const what =
+    o.type === 'approval' && typeof o.fields?.what === 'string' ? o.fields.what.trim() : '';
   return (what || outcomeType(o.type)?.label || o.type).slice(0, 80);
 }
 
