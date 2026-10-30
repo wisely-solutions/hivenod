@@ -81,7 +81,10 @@ function cliProtocolOf(cwd) {
 }
 
 /** Build, stamp dist/version.json with the commit, deploy hosting + firestore rules/indexes. */
-async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
+async function deployProd(
+  cwd = process.cwd(),
+  { guardVersions = false, compileGuard = true } = {},
+) {
   const commit = out('git', ['rev-parse', 'HEAD'], cwd);
   run('pnpm', ['build'], cwd);
   // The npm tarball of the TypeScript CLI (card rifzGl8M) is no longer built (item
@@ -176,7 +179,8 @@ async function deployProd(cwd = process.cwd(), { guardVersions = false } = {}) {
     if (compile.verdict === 'borderline')
       console.warn(`Deploy step 1/2: WARNING ${compile.message}`);
     else console.log(`Deploy step 1/2: ${compile.message}`);
-    if (!['ok', 'borderline'].includes(compile.verdict))
+    // A rollback goes on regardless: its rules may be live already (a 409 "already current").
+    if (!['ok', 'borderline'].includes(compile.verdict) && compileGuard)
       die(`Deploy step 1/2 FAILED: ${compile.message}. Nothing was deployed.`);
   }
   // Google refuses to release rules of 256000 compiled bytes or more, and firebase-tools then
@@ -530,7 +534,7 @@ async function deployRef(ref) {
   try {
     run('git', ['worktree', 'add', '--detach', dir, ref]);
     run('pnpm', ['install', '--frozen-lockfile'], dir);
-    const commit = await deployProd(dir);
+    const commit = await deployProd(dir, { compileGuard: false });
     if (!(await smoke(commit, false, dir))) die(`Smoke test FAILED after deploying ${ref}`);
     return commit;
   } finally {
