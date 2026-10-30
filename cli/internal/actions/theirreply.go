@@ -38,7 +38,7 @@ func timeOrNil(t *time.Time) any {
 	if t == nil {
 		return nil
 	}
-	return *t
+	return map[string]any{"__hive": "timestamp", "ms": t.UnixMilli()}
 }
 
 func extAskDoc(a *model.InboxExtAsk, state string, at any) map[string]any {

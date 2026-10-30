@@ -187,7 +187,7 @@ describe('their reply: the ask', () => {
     await ok(a.run(await ask(a)));
     const ap = approveStepAsk(alice.ctx, await step());
     const o = ap.ops.find((op) => op.path === O('tr1'))!;
-    const ext = o.data.ext as Record<string, unknown>;
+    const ext = o.data!.ext as Record<string, unknown>;
     await denied(
       alice.run(
         forge(ap.ops, O('tr1'), {

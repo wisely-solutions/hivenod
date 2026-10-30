@@ -70,6 +70,10 @@ type FeedRunning struct {
 	BeatAtMs int64
 	// AskAtMs: a status request on the running step (item KZ6O9); 0: none.
 	AskAtMs int64
+	// Their reply (theirreply.ts): the message in hand (its number and state: proposed,
+	// approved, sent) and the number its reminder fired for (0: none).
+	ExtN, RemindDue int
+	ExtState        string
 }
 
 // FeedPlan is a live plan (proposed, active or blocked): its steps and whose turn it is.
@@ -211,6 +215,8 @@ type InboxEventInfo struct {
 	// Long (reason carry_out, slice 6b): a long step; Resume: it was running before this session.
 	Long   bool `json:"long"`
 	Resume bool `json:"resume"`
+	// AskN (Their reply: reasons ask_approved, nudge_due on a step): the message's number.
+	AskN int `json:"askN"`
 }
 
 // instructChipText is INSTRUCT_CHIP_TEXT: what a chip asks.
@@ -240,7 +246,7 @@ var inboxTriggers = map[string]string{
 }
 
 var inboxPriority = map[string]int{
-	"carry_out": 0, "item_done": 0, "item_stopped": 1, "answered": 1, "revise": 1, "recheck": 1, "instruct": 1, "new": 2, "message": 2,
+	"carry_out": 0, "item_done": 0, "ask_approved": 0, "external_reply": 1, "item_stopped": 1, "answered": 1, "revise": 1, "recheck": 1, "instruct": 1, "new": 2, "message": 2,
 	"woke": 3, "rejected": 3, "failed": 3, "restored": 3, "resume": 3, "nudge_due": 4, "summarize": 5,
 }
 
@@ -298,7 +304,15 @@ func InboxText(e InboxEventInfo) string {
 		if e.NudgeDays != nil {
 			days = *e.NudgeDays
 		}
-		lines = append(lines, fmt.Sprintf("%s has waited on them for %d days or more.", t, days))
+		if e.OutcomeID != "" {
+			lines = append(lines, fmt.Sprintf("Their reply step %s of plan %s (outcome %s) on %s: no answer to message %d for %d working days.", or(e.Step, "?"), or(e.PlanID, "?"), e.OutcomeID, t, e.AskN, days))
+		} else {
+			lines = append(lines, fmt.Sprintf("%s has waited on them for %d days or more.", t, days))
+		}
+	case "external_reply":
+		lines = append(lines, fmt.Sprintf("A new message came in on %s while Their reply step %s of plan %s (outcome %s) waits on them.", t, or(e.Step, "?"), or(e.PlanID, "?"), or(e.OutcomeID, "?")))
+	case "ask_approved":
+		lines = append(lines, fmt.Sprintf("The person approved message %d of Their reply step %s of plan %s (outcome %s) on thread %s.", e.AskN, or(e.Step, "?"), or(e.PlanID, "?"), or(e.OutcomeID, "?"), e.ThreadID))
 	case "carry_out":
 		if e.Resume {
 			lines = append(lines, fmt.Sprintf("Step %s of plan %s on thread %s, a %s (outcome %s), was running before this session: it is yours to finish.", or(e.Step, "?"), or(e.PlanID, "?"), e.ThreadID, or(e.OutcomeType, "?"), or(e.OutcomeID, "?")))
@@ -363,6 +377,8 @@ func InboxText(e InboxEventInfo) string {
 			what += " (Build: build what Approve idea approved, in a worktree; end with an open pull request, local checks green, NOT merged; report done with the PR link as result.permalink and what changed and which checks ran as result.text; then write the summary with ask \"Ship it?\" and before/after screenshots)"
 		case "keepgreen":
 			what += " (Keep green: rebase the pull request onto main, rerun the local checks, fix failures, loop until it is green and current; report each loop with step_progress (e.g. \"rebased on main 4f2a1c0, 212/214 green, fixing lint\"), then done with the head commit as result.text: Ship it? is offered. While Ship it? waits, whenever main moves: step_progress on this step with check rechecking, re-green it, then check green; Keep green ends when Ship it? is decided. Not solvable (a rebase conflict that needs a product decision, the same check failing after 3 fixes, an infrastructure failure such as a 503 or an emulator that will not start): report failed with result.error giving the failing check, a log excerpt and what you tried; at Ship it?, step_progress check blocked with the reason)"
+		case "their_reply":
+			what = fmt.Sprintf("draft the ask for Their reply step %s: step_ask kind ask, in the person's voice, to the step's who on its channel and address, asking for its need (thread_read shows the step's fields). Nothing is sent before the person approves it; do not report the step done now", or(e.OutcomeID, "?"))
 		case "release":
 			what += " (Release + live check: merge the approved pull request(s), run the release checks, release, check it live; report done with the merge sha, release number, live commit and production URL; attach screenshots with thread_attach. A bug: plan_send_back to Build with the reason)"
 		}
@@ -384,6 +400,13 @@ func InboxText(e InboxEventInfo) string {
 		what = "re-read the thread and write its summary (thread_summary, baseVersion the summary version thread_read shows). Change nothing else"
 	case "nudge_due":
 		what = "propose a nudge (outcome_propose, type nudge) if one makes sense, otherwise say why not with inbox_note"
+		if e.OutcomeID != "" {
+			what = fmt.Sprintf("draft one reminder with step_ask outcomeId=%s kind nudge (the person approves it before it is sent), or say why not with inbox_note", e.OutcomeID)
+		}
+	case "external_reply":
+		what = fmt.Sprintf("read their message against the step's need. A clear yes: outcome_done %s status done with evidence (messageId of their message as thread_read shows it, a short quote, your confidence). Not sure it counts: inbox_ask the person (e.g. \"Ana said X. Count that as done?\"). Partial or unclear: step_ask kind follow_up with reply (that messageId and a quote): the person approves it or marks the step done. Not about the step: inbox_note", or(e.OutcomeID, "?"))
+	case "ask_approved":
+		what = fmt.Sprintf("send message %d of step %s exactly as approved (ext.ask.text in thread_read) on the step's channel to its address, then report it with step_sent outcomeId=%s; the step then waits on them", e.AskN, or(e.OutcomeID, "?"), or(e.OutcomeID, "?"))
 	}
 	if e.Update {
 		lines = append(lines, fmt.Sprintf("Thread %s is already being worked on: this adds to it (thread_read shows the current state).", e.ThreadID))
@@ -408,6 +431,8 @@ type feedDue struct {
 	long                              *FeedRunning
 	state                             string
 	updatedAtMs                       *int64
+	// ext: a Their reply event's dedupe key (sent once per message and reason).
+	ext string
 }
 
 type feedFlight struct {
@@ -465,6 +490,7 @@ type InboxFeed struct {
 	checked  map[string]int64  // outcome id -> when its item was last looked at
 	checking map[string]bool
 	built    map[string]string // outcome id -> the item reason sent
+	extSent  map[string]bool   // Their reply events sent (feedDue.ext)
 	plansIn  bool              // the first plans snapshot came
 	handled  map[string]string
 	seen     map[string]bool
@@ -514,7 +540,7 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &InboxFeed{src: src, push: push, now: now, MaxInbox: o.MaxInbox, maxSteps: o.MaxSteps, mine: map[string]bool{}, beating: map[string]bool{}, handed: map[string]int64{}, perMinute: o.PerMinute,
 		nudgeMs: o.NudgeAfter.Milliseconds(), leaseMs: o.Lease.Milliseconds(), tickMs: o.Tick.Milliseconds(),
-		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, rechecks: map[string]FeedRecheck{}, recheckd: map[string]int64{}, instructs: map[string]FeedInstruct{}, instructd: map[string]string{}, summaries: map[string]FeedSummary{}, summarized: map[string]int64{}, summarizeMs: InboxSummarizeAfter.Milliseconds(), plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, handled: map[string]string{},
+		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, rechecks: map[string]FeedRecheck{}, recheckd: map[string]int64{}, instructs: map[string]FeedInstruct{}, instructd: map[string]string{}, summaries: map[string]FeedSummary{}, summarized: map[string]int64{}, summarizeMs: InboxSummarizeAfter.Milliseconds(), plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, extSent: map[string]bool{}, handled: map[string]string{},
 		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{}, asked: map[string]int64{},
 		inflight: map[string]*feedFlight{}, types: map[string]*FeedEvent{}, fetching: map[string]bool{},
 		wakes: map[string]string{}, ctx: ctx, cancel: cancel}
@@ -961,6 +987,10 @@ func (f *InboxFeed) Evaluate() {
 			}
 			continue
 		}
+		if r.Type == actions.TheirReply {
+			f.theirReply(r, now)
+			continue
+		}
 		slot := "b:" + r.ID
 		reason := ""
 		switch f.items[r.ID] {
@@ -1060,6 +1090,12 @@ func (f *InboxFeed) investigating(t FeedThread) string {
 		reason = "resume"
 	}
 	info := InboxEventInfo{Reason: reason, ThreadID: t.ID, Title: t.Title}
+	// Their reply: a message from them while a step waits on them wakes that step.
+	if r := f.theirStep(t.ID); reason == "message" && r != nil && r.ExtState == "sent" {
+		info.Reason, info.OutcomeID, info.OutcomeType, info.PlanID = "external_reply", r.ID, r.Type, r.PlanID
+		info.Step = f.plans[r.PlanID].stepOf(r.ID)
+		reason = "external_reply"
+	}
 	var data map[string]any
 	if ev != nil {
 		data = ev.Data
@@ -1094,8 +1130,8 @@ func (f *InboxFeed) waiting(t FeedThread, now int64) string {
 		}
 		return ""
 	}
-	if t.Waiting == nil || t.Waiting.On != "them" || now-t.UpdatedAtMs < f.nudgeMs {
-		return ""
+	if t.Waiting == nil || t.Waiting.On != "them" || now-t.UpdatedAtMs < f.nudgeMs || f.theirStep(t.ID) != nil {
+		return "" // a Their reply step has its own reminder (the notifier's timer)
 	}
 	if v, ok := f.nudged[t.ID]; (ok && v == t.UpdatedAtMs) || f.due["n:"+t.ID] != nil {
 		return ""
@@ -1105,6 +1141,35 @@ func (f *InboxFeed) waiting(t FeedThread, now int64) string {
 	f.due["n:"+t.ID] = &feedDue{slot: "t:" + t.ID, reason: "nudge_due", threadID: t.ID, atMs: t.UpdatedAtMs, memberUID: t.MemberUID, state: "waiting", updatedAtMs: &u,
 		info: InboxEventInfo{Reason: "nudge_due", ThreadID: t.ID, Title: t.Title, NudgeDays: &days}}
 	return ""
+}
+
+// theirStep is the running Their reply step of thread id, if any. Call with f.mu held.
+func (f *InboxFeed) theirStep(id string) *FeedRunning {
+	for _, rid := range f.norder {
+		if r := f.running[rid]; r.ThreadID == id && r.Type == actions.TheirReply {
+			return &r
+		}
+	}
+	return nil
+}
+
+// theirReply makes a running Their reply step's events due: an approved message to send, and
+// its one reminder once the notifier's timer fired for the message sent. Call with f.mu held.
+func (f *InboxFeed) theirReply(r FeedRunning, now int64) {
+	reason, key := "", ""
+	switch {
+	case r.ExtState == "approved":
+		reason, key = "ask_approved", fmt.Sprintf("x:%s:%d", r.ID, r.ExtN)
+	case r.ExtState == "sent" && r.RemindDue == r.ExtN && r.ExtN > 0:
+		reason, key = "nudge_due", fmt.Sprintf("y:%s:%d", r.ID, r.ExtN)
+	}
+	if reason == "" || f.extSent[key] || f.due[key] != nil {
+		return
+	}
+	rc := r
+	u := now
+	info := InboxEventInfo{Reason: reason, ThreadID: r.ThreadID, OutcomeID: r.ID, OutcomeType: r.Type, PlanID: r.PlanID, AskN: r.ExtN}
+	f.due[key] = &feedDue{slot: "b:" + r.ID, reason: reason, threadID: r.ThreadID, atMs: now, memberUID: r.MemberUID, build: &rc, info: info, ext: key, updatedAtMs: &u}
 }
 
 func (f *InboxFeed) fetch(ids []string) {
@@ -1186,7 +1251,9 @@ func (f *InboxFeed) pump() []Event {
 		if d.build != nil {
 			f.built[d.build.ID] = d.reason
 		}
-		if d.reason == "nudge_due" {
+		if d.ext != "" {
+			f.extSent[d.ext] = true
+		} else if d.reason == "nudge_due" {
 			f.nudged[d.threadID] = *d.updatedAtMs
 		}
 		if !update && !long {
@@ -1296,6 +1363,18 @@ type firestoreInbox struct{ c *Client }
 // InboxSource is what the channel's inbox feed reads: this agent's open threads and the approved
 // outcomes it carries out, live.
 func (c *Client) InboxSource() InboxSource { return firestoreInbox{c} }
+
+func feedInt(v any) int {
+	switch n := v.(type) {
+	case int64:
+		return int(n)
+	case int:
+		return n
+	case float64:
+		return int(n)
+	}
+	return 0
+}
 
 func feedMs(v any) int64 {
 	if t, ok := v.(time.Time); ok {
@@ -1490,7 +1569,16 @@ func (s firestoreInbox) WatchRunning(ctx context.Context, on func([]FeedRunning)
 					}
 				}
 			}
-			if isLong(r.Type) {
+			if r.Type == actions.TheirReply {
+				if ext, ok := m["ext"].(map[string]any); ok {
+					if a, ok := ext["ask"].(map[string]any); ok {
+						r.ExtState, _ = a["state"].(string)
+						r.ExtN = feedInt(a["n"])
+					}
+				}
+				r.RemindDue = feedInt(m["remindDue"])
+				rows = append(rows, r)
+			} else if isLong(r.Type) {
 				r.Long, r.BeatAtMs = true, feedMs(m["updatedAt"])
 				if pr, ok := m["progress"].(map[string]any); ok {
 					r.BeatAtMs = max(r.BeatAtMs, feedMs(pr["at"]))

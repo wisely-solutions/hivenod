@@ -170,7 +170,16 @@ var ToolRuns = map[string]Run{
 	"outcome_done": func(ctx context.Context, c *Client, a Args) (any, error) {
 		r := Args(asMap(a["result"]))
 		u := Args(asMap(a["usage"]))
-		return c.OutcomeDone(ctx, a.S("outcomeId"), a.S("status"), OutcomeResult{Text: r.SP("text"), Permalink: r.SP("permalink"), ItemID: r.SP("itemId"), Error: r.SP("error"), Tokens: u.F("tokens"), CostEur: u.F("costEur")})
+		e := Args(asMap(a["evidence"]))
+		return c.OutcomeDone(ctx, a.S("outcomeId"), a.S("status"), OutcomeResult{Text: r.SP("text"), Permalink: r.SP("permalink"), ItemID: r.SP("itemId"), Error: r.SP("error"), Tokens: u.F("tokens"), CostEur: u.F("costEur"),
+			EvidenceID: e.SP("messageId"), Quote: e.SP("quote"), Confidence: e.SP("confidence")})
+	},
+	"step_ask": func(ctx context.Context, c *Client, a Args) (any, error) {
+		r := Args(asMap(a["reply"]))
+		return c.StepAsk(ctx, a.S("outcomeId"), a.S("kind"), a.S("text"), r.SP("messageId"), r.SP("quote"))
+	},
+	"step_sent": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.StepSent(ctx, a.S("outcomeId"))
 	},
 	"step_progress": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.StepProgress(ctx, a.S("outcomeId"), a.S("line"), a.F("percent"), a.SP("check"))

@@ -891,6 +891,8 @@ func (c *Client) outcomeRevise(ctx context.Context, id, typ string, fields map[s
 // OutcomeResult is outcome_done's result.
 type OutcomeResult struct {
 	Text, Permalink, ItemID, Error *string
+	// Evidence (Their reply, done only): their message (doc id), a quote and a confidence.
+	EvidenceID, Quote, Confidence *string
 	// Usage (slice 6b): what carrying it out cost.
 	Tokens, CostEur *float64
 }
@@ -928,6 +930,16 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 			Tokens  *float64 `json:"tokens"`
 			CostEur *float64 `json:"costEur"`
 		}{res.Tokens, res.CostEur}
+	}
+	if res.EvidenceID != nil {
+		ev := &actions.FinishEvidence{MessageDocID: *res.EvidenceID, Confidence: res.Confidence}
+		if res.Quote != nil {
+			ev.Quote = *res.Quote
+		}
+		in.Evidence = ev
+		if in.EvidenceMessage, err = c.extMessage(ctx, *res.EvidenceID); err != nil {
+			return nil, err
+		}
 	}
 	p, err := actions.FinishOutcome(c.actx(), in)
 	if err != nil {

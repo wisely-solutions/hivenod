@@ -78,6 +78,8 @@ type InboxMessage struct {
 	ReceivedAt  time.Time         `firestore:"receivedAt" json:"receivedAt"`
 	Attachments []InboxAttachment `firestore:"attachments" json:"attachments"`
 	FetchedBy   string            `firestore:"fetchedBy" json:"fetchedBy"`
+	// CreatedAt: when it came into Hivenod (Their reply's evidence is newer than the last send).
+	CreatedAt time.Time `firestore:"createdAt" json:"createdAt"`
 }
 
 // InboxWaiting is what a waiting thread waits on.

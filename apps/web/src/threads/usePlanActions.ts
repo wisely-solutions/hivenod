@@ -5,6 +5,8 @@
  */
 import {
   approveOutcome,
+  approveStepAsk,
+  markStepDone,
   approvePlan,
   editPlan,
   rejectOutcome,
@@ -114,6 +116,32 @@ export function usePlanActions(
         () => sendBackPlan(ctx(), { ...pl, thread: th(), reason, toStep }),
         `Sent back to step ${toStep + 1}`,
         `Sent back to step ${toStep + 1}`,
+      ),
+    /** Their reply: approve the drafted message (maybe edited), or count the step as done. */
+    approveAsk: (s: Pick<PlanStepView, 'outcomeId' | 'number'>, label: string, text?: string) =>
+      commit(
+        () =>
+          approveStepAsk(ctx(), {
+            outcomeId: s.outcomeId,
+            outcome: pl.outcomes[s.outcomeId]!,
+            thread: th(),
+            plan: pl,
+            text: text ?? null,
+          }),
+        `${label} approved`,
+        `${label} approved`,
+      ),
+    markDone: (s: Pick<PlanStepView, 'outcomeId' | 'number'>) =>
+      commit(
+        () =>
+          markStepDone(ctx(), {
+            outcomeId: s.outcomeId,
+            outcome: pl.outcomes[s.outcomeId]!,
+            thread: th(),
+            plan: pl,
+          }),
+        `Step ${s.number} marked done`,
+        `Marked step ${s.number} done`,
       ),
     retry: () => commit(() => retryPlanStep(ctx(), { ...pl, thread: th() }), 'Retrying', 'Retry'),
     skip: () =>

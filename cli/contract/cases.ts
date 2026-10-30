@@ -40,6 +40,8 @@ import {
   proposePlan,
   sendBackPlan,
   stepProgress,
+  stepAsk,
+  stepSent,
   planThreadState,
   planView,
   type PlanInput,
@@ -1189,6 +1191,171 @@ function build(): ContractCase[] {
   sprog('blocked plan', AGENT, {
     plan: devPl(['done', 'done', 'running', 'proposed', 'approved', 'proposed'], 2, 'blocked'),
   });
+  // ---------- Their reply (packages/shared/src/theirreply.ts) ----------
+  const TR_FIELDS = { who: 'Ana', channel: 'mail', address: 'ana@example.com', need: 'Her OK' };
+  const trPl = (
+    state: OutcomeStateOf['state'],
+    ext: OutcomeStateOf['ext'] = undefined,
+    cursor = 0,
+  ) => {
+    const pl = PL(
+      [
+        ['their_reply', state, TR_FIELDS],
+        ['reply', 'approved'],
+      ],
+      cursor,
+    );
+    if (ext !== undefined) pl.outcomes.o1 = { ...pl.outcomes.o1!, ext };
+    return pl;
+  };
+  const OUT = ts(NOW_MS - 3_600_000);
+  const askOf = (state: 'proposed' | 'approved' | 'sent', n = 1, kind = 'ask' as const) => ({
+    n,
+    kind,
+    text: 'Hi Ana, is it OK?',
+    state,
+    by: 'agentA',
+    at: ts(NOW_MS - 7_200_000),
+  });
+  const SENT = { ask: askOf('sent'), outAt: OUT, sent: 1, reply: null };
+  const trAsk = (name: string, actor: Actor, input: Partial<Parameters<typeof stepAsk>[1]>) => {
+    const pl = input.plan ?? trPl('approved');
+    act(
+      `stepAsk/${name}`,
+      'stepAsk',
+      actor,
+      {
+        outcomeId: 'o1',
+        outcome: pl.outcomes.o1!,
+        thread: TH({ subjectId: 's1', state: 'waiting' }),
+        plan: pl,
+        kind: 'ask' as const,
+        text: '  Hi Ana, is the contract OK?  ',
+        ...input,
+      },
+      stepAsk,
+    );
+  };
+  trAsk('first ask', AGENT, {});
+  trAsk('not its executor', OTHER, {});
+  trAsk('a human', HUMAN, {});
+  trAsk('not approved', AGENT, { plan: trPl('proposed') });
+  trAsk('not its turn', AGENT, { plan: trPl('approved', undefined, 1) });
+  trAsk('first is a nudge', AGENT, { kind: 'nudge' });
+  trAsk('bad kind', AGENT, { kind: 'shout' as never });
+  trAsk('empty text', AGENT, { text: '  ' });
+  trAsk('text too long', AGENT, { text: 'x'.repeat(20_001) });
+  trAsk('replaces a draft', AGENT, {
+    plan: trPl('running', { ask: askOf('proposed'), outAt: null, sent: 0, reply: null }),
+  });
+  trAsk('approved not sent', AGENT, {
+    plan: trPl('running', { ask: askOf('approved'), outAt: null, sent: 0, reply: null }),
+  });
+  trAsk('follow-up quoting their reply', AGENT, {
+    plan: trPl('running', SENT),
+    kind: 'follow_up',
+    reply: { messageDocId: 'im9', quote: '  Maybe,   next week ' },
+    replyMessage: { threadId: 'it1', direction: 'in' },
+  });
+  trAsk('reply from the member', AGENT, {
+    plan: trPl('running', SENT),
+    kind: 'follow_up',
+    reply: { messageDocId: 'im9', quote: 'x' },
+    replyMessage: { threadId: 'it1', direction: 'out' },
+  });
+  trAsk('reply without the message', AGENT, {
+    plan: trPl('running', SENT),
+    kind: 'nudge',
+    reply: { messageDocId: 'im9', quote: 'x' },
+  });
+  trAsk('not their reply', AGENT, {
+    plan: PL(
+      [
+        ['reply', 'approved'],
+        ['reply', 'approved'],
+      ],
+      0,
+    ),
+  });
+  const trSent = (name: string, actor: Actor, pl: PlanInput) =>
+    act(
+      `stepSent/${name}`,
+      'stepSent',
+      actor,
+      { outcomeId: 'o1', outcome: pl.outcomes.o1!, thread: TH({ state: 'waiting' }), plan: pl },
+      stepSent,
+    );
+  trSent(
+    'approved',
+    AGENT,
+    trPl('running', {
+      ask: askOf('approved', 2, 'follow_up' as never),
+      outAt: OUT,
+      sent: 1,
+      reply: { messageDocId: 'im9', quote: 'Maybe' },
+    }),
+  );
+  trSent(
+    'a draft',
+    AGENT,
+    trPl('running', { ask: askOf('proposed'), outAt: null, sent: 0, reply: null }),
+  );
+  trSent('nothing', AGENT, trPl('approved'));
+  trSent(
+    'not its executor',
+    OTHER,
+    trPl('running', { ask: askOf('approved'), outAt: null, sent: 0, reply: null }),
+  );
+  const trDone = (name: string, input: Partial<Parameters<typeof finishOutcome>[1]>) => {
+    const pl = input.plan ?? trPl('running', SENT);
+    act(
+      `finishOutcome/their reply ${name}`,
+      'finishOutcome',
+      AGENT,
+      {
+        outcomeId: 'o1',
+        outcome: pl.outcomes.o1!,
+        thread: TH({ state: 'investigating' }),
+        status: 'done' as const,
+        plan: pl,
+        evidence: { messageDocId: 'im9', quote: ' Yes,  approved. ', confidence: 'high' },
+        evidenceMessage: {
+          threadId: 'it1',
+          direction: 'in' as const,
+          createdAtMs: NOW_MS - 60_000,
+        },
+        ...input,
+      },
+      finishOutcome,
+    );
+  };
+  trDone('with evidence', {});
+  trDone('no evidence', { evidence: null });
+  trDone('older than the send', {
+    evidenceMessage: { threadId: 'it1', direction: 'in', createdAtMs: NOW_MS - 7_200_000 },
+  });
+  trDone('from the member', {
+    evidenceMessage: { threadId: 'it1', direction: 'out', createdAtMs: NOW_MS },
+  });
+  trDone('nothing sent', {
+    plan: trPl('running', { ask: askOf('proposed'), outAt: null, sent: 0, reply: null }),
+  });
+  trDone('bad confidence', { evidence: { messageDocId: 'im9', quote: 'Yes', confidence: 'sure' } });
+  trDone('failed needs no evidence', {
+    status: 'failed',
+    evidence: null,
+    result: { error: 'Bounced' },
+  });
+  trDone('started', { status: 'started', plan: trPl('approved') });
+  pts(
+    'their reply draft',
+    trPl('running', { ask: askOf('proposed'), outAt: null, sent: 0, reply: null }),
+  );
+  pts(
+    'their reply to send',
+    trPl('running', { ask: askOf('approved'), outAt: null, sent: 0, reply: null }),
+  );
+  pts('their reply waiting', trPl('running', SENT));
   // ---------- Keep green (slice 6c) ----------
   const DEV7: [string, Record<string, unknown>?][] = [
     ['shape'],
