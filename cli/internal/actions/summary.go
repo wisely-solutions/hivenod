@@ -55,12 +55,14 @@ const (
 	SumMinEvents    = 2
 	SumEvents       = 12
 	SumEventLabel   = 60
+	SumAttachmentID = 200
+	SumPairLabel    = 24
 	SumVersionsKept = 20
 )
 
 var (
 	chartKinds   = []string{"bar", "line", "stacked_bar"}
-	visualKinds  = []string{"bar", "line", "stacked_bar", "number", "flow", "before_after", "timeline"}
+	visualKinds  = []string{"bar", "line", "stacked_bar", "number", "flow", "before_after", "timeline", "image", "image_pair"}
 	refKinds     = []string{"message", "attachment", "step", "event", "link"}
 	betterValues = []string{"up", "down"}
 	nodeWho      = []string{"agent", "person", "system"}
@@ -75,6 +77,8 @@ var (
 		"flow":         {"kind", "title", "caption", "nodes", "edges"},
 		"before_after": {"kind", "title", "caption", "before", "after"},
 		"timeline":     {"kind", "title", "caption", "events"},
+		"image":        {"kind", "title", "caption", "attachment"},
+		"image_pair":   {"kind", "title", "caption", "before", "after", "labels"},
 	}
 	summaryInputKeys = []string{"headline", "ask", "answer", "recommendation", "confidence", "bullets", "details", "visuals", "noVisualWhy", "refs"}
 	tagRe            = regexp.MustCompile(`<[a-zA-Z/!]`)
@@ -375,8 +379,33 @@ func svisual(where string, raw any) map[string]any {
 			es[i] = map[string]any{"at": at, "label": sneed(w+" label", d["label"], SumEventLabel, true), "state": soneOf(w+" state", d["state"], eventStates)}
 		}
 		out["events"] = es
+	case "image":
+		out["attachment"] = sneed(where+" attachment", v["attachment"], SumAttachmentID, false)
+	case "image_pair":
+		out["before"] = sneed(where+" before", v["before"], SumAttachmentID, false)
+		out["after"] = sneed(where+" after", v["after"], SumAttachmentID, false)
+		var labels any
+		if !absentV(v["labels"]) {
+			l := slist(where+" labels", v["labels"])
+			if len(l) != 2 {
+				sfail(where + " labels: two labels (before, after)")
+			}
+			labels = []any{sneed(where+" label 1", l[0], SumPairLabel, true), sneed(where+" label 2", l[1], SumPairLabel, true)}
+		}
+		out["labels"] = labels
 	}
 	return out
+}
+
+// visualAttachments is visualAttachments: the attachment ids an image visual names.
+func visualAttachments(v map[string]any) []string {
+	switch v["kind"] {
+	case "image":
+		return []string{v["attachment"].(string)}
+	case "image_pair":
+		return []string{v["before"].(string), v["after"].(string)}
+	}
+	return nil
 }
 
 // CheckSummary is checkSummary: what an agent gives, checked and cleaned (texts trimmed, every
@@ -457,7 +486,7 @@ func CheckSummary(input any) (out map[string]any, err error) {
 		refs[i] = sref("ref "+strconv.Itoa(i+1), r)
 	}
 	if ask != nil && len(visuals) == 0 && noVisualWhy == nil {
-		sfail("At a person step add a visual or say why there is none: a chart for data, before/after or a flow for a change, or noVisualWhy in one line.")
+		sfail("At a person step add a visual or say why there is none: a chart for data, before/after screenshots (thread_attach both, then an image_pair) or a flow for a change, or noVisualWhy in one line.")
 	}
 	return map[string]any{
 		"headline": headline, "ask": ask, "answer": answer, "recommendation": rec, "confidence": confidence,
@@ -484,6 +513,8 @@ type WriteSummaryInput struct {
 	BaseVersion *float64        `json:"baseVersion"`
 	Summary     any             `json:"summary"`
 	Basis       *SummaryBasis   `json:"basis"`
+	// Attachments are the thread's attachments as {id: kind}: image visuals must name its images.
+	Attachments map[string]string `json:"attachments"`
 }
 
 // WriteSummaryResult is the plan plus the version written.
@@ -529,6 +560,17 @@ func WriteSummary(ctx Ctx, in WriteSummaryInput) (WriteSummaryResult, error) {
 	content, err := CheckSummary(in.Summary)
 	if err != nil {
 		return WriteSummaryResult{}, err
+	}
+	for i, v := range content["visuals"].([]any) {
+		for _, aid := range visualAttachments(v.(map[string]any)) {
+			n := strconv.Itoa(i + 1)
+			if !IsThreadAttachmentOf(aid, in.ThreadID) {
+				return WriteSummaryResult{}, fail("visual " + n + `: "` + aid + `" is not an attachment of this thread`)
+			}
+			if in.Attachments[aid] != "image" {
+				return WriteSummaryResult{}, fail("visual " + n + `: no image "` + aid + `" on this thread (attach the screenshot with thread_attach first)`)
+			}
+		}
 	}
 	var lastEv, cursor any
 	if in.Basis != nil {

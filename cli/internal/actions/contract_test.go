@@ -130,6 +130,7 @@ var runners = map[string]runner{
 	"suggestChips":      act(SuggestChips),
 	// Thread summaries (item OE8FmrTaIxFVGcaeGG3N)
 	"writeSummary": act(WriteSummary),
+	"threadAttach": act(ThreadAttach),
 	"checkSummary": pure(func(in struct {
 		Summary any `json:"summary"`
 	}) (any, error) {

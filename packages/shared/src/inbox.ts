@@ -112,6 +112,8 @@ export const INBOX_EVENT_TYPES = [
   'thread.chips_suggested',
   // Summaries (item OE8FmrTaIxFVGcaeGG3N, ./summary.ts): the home agent wrote a new version
   'summary.written',
+  // Thread attachments (item OE8FmrTaIxFVGcaeGG3N, slice 4, ./threadattach.ts)
+  'thread.attached',
   // agents and the member
   'thread.titled',
   'thread.flagged',

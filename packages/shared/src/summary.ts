@@ -9,8 +9,9 @@
  *
  * Visuals are data, never pictures or markup: charts (bar, line, stacked_bar, number) and
  * diagrams (flow, before_after, timeline), rendered only by the app's own kit. Images (image,
- * image_pair) come with thread_attach (a later slice). Stored visuals are normalized: every key
- * of their kind is present, null when not given (edges [] = a straight sequence).
+ * image_pair, slice 4) name PNG/JPEG/WebP files the home agent attached to the same thread with
+ * thread_attach (./threadattach.ts). Stored visuals are normalized: every key of their kind is
+ * present, null when not given (edges [] = a straight sequence).
  *
  * `checkSummary` is the one validation (plain errors, the same in the Go CLI through the contract
  * cases); `writeSummary` is the action (one batch: summary, version, thread mirror, one
@@ -29,6 +30,7 @@ import {
 import { inboxPlan, inboxPaths, type ThreadStateOf } from './inbox';
 import { OUTCOME_CONFIDENCE } from './outcomes';
 import { timestamp } from './schema';
+import { isThreadAttachmentOf } from './threadattach';
 
 // ---------- limits and kinds ----------
 
@@ -76,6 +78,9 @@ export const SUMMARY_LIMITS = {
   minEvents: 2,
   events: 12,
   eventLabel: 60,
+  /** Images: an attachment id ({threadId}_{id}) and an image pair's two labels. */
+  attachmentId: 200,
+  pairLabel: 24,
   /** Versions kept (older ones are deleted by the writer in the same batch). */
   versionsKept: 20,
 } as const;
@@ -84,7 +89,15 @@ export const SUMMARY_LIMITS = {
 export const SUMMARIZE_AFTER_MS = 3 * 60_000;
 
 export const CHART_KINDS = ['bar', 'line', 'stacked_bar'] as const;
-export const VISUAL_KINDS = [...CHART_KINDS, 'number', 'flow', 'before_after', 'timeline'] as const;
+export const IMAGE_KINDS = ['image', 'image_pair'] as const;
+export const VISUAL_KINDS = [
+  ...CHART_KINDS,
+  'number',
+  'flow',
+  'before_after',
+  'timeline',
+  ...IMAGE_KINDS,
+] as const;
 export type VisualKind = (typeof VISUAL_KINDS)[number];
 export const REF_KINDS = ['message', 'attachment', 'step', 'event', 'link'] as const;
 export const BETTER = ['up', 'down'] as const;
@@ -101,6 +114,8 @@ const VISUAL_KEYS: Record<VisualKind, readonly string[]> = {
   flow: ['kind', 'title', 'caption', 'nodes', 'edges'],
   before_after: ['kind', 'title', 'caption', 'before', 'after'],
   timeline: ['kind', 'title', 'caption', 'events'],
+  image: ['kind', 'title', 'caption', 'attachment'],
+  image_pair: ['kind', 'title', 'caption', 'before', 'after', 'labels'],
 };
 export const SUMMARY_INPUT_KEYS = [
   'headline',
@@ -161,6 +176,8 @@ const chartSchema = (kind: (typeof CHART_KINDS)[number]) =>
     /** Which way is good (colours the change). */
     better,
   });
+const attachmentRef = z.string().min(1).max(L.attachmentId);
+const pairLabel = z.string().min(1).max(L.pairLabel);
 const side = z.object({
   label: z.string().min(1).max(L.sideLabel).nullable(),
   lines: z.array(z.string().min(1).max(L.line)).min(1).max(L.lines),
@@ -217,6 +234,17 @@ export const visualSchema = z.discriminatedUnion('kind', [
       )
       .min(L.minEvents)
       .max(L.events),
+  }),
+  /** A screenshot or picture: an image attachment of this thread. */
+  z.object({ kind: z.literal('image'), ...head, attachment: attachmentRef }),
+  /** Before and after screenshots, side by side (stacked on phones). */
+  z.object({
+    kind: z.literal('image_pair'),
+    ...head,
+    before: attachmentRef,
+    after: attachmentRef,
+    /** Null: "Before", "After". */
+    labels: z.tuple([pairLabel, pairLabel]).nullable(),
   }),
 ]);
 export type Visual = z.infer<typeof visualSchema>;
@@ -484,7 +512,34 @@ function visual(where: string, raw: unknown): Visual {
       });
       return { kind, ...top, events: es };
     }
+    case 'image':
+      return {
+        kind,
+        ...top,
+        attachment: need(`${where} attachment`, v.attachment, L.attachmentId),
+      };
+    case 'image_pair': {
+      const before = need(`${where} before`, v.before, L.attachmentId);
+      const after = need(`${where} after`, v.after, L.attachmentId);
+      let labels: [string, string] | null = null;
+      if (!absent(v.labels)) {
+        const l = list(`${where} labels`, v.labels);
+        if (l.length !== 2) fail(`${where} labels: two labels (before, after)`);
+        labels = [
+          need(`${where} label 1`, l[0], L.pairLabel, true),
+          need(`${where} label 2`, l[1], L.pairLabel, true),
+        ];
+      }
+      return { kind, ...top, before, after, labels };
+    }
   }
+}
+
+/** The attachment ids a visual names (images only). */
+export function visualAttachments(v: Visual): string[] {
+  if (v.kind === 'image') return [v.attachment];
+  if (v.kind === 'image_pair') return [v.before, v.after];
+  return [];
 }
 
 /**
@@ -529,7 +584,7 @@ export function checkSummary(input: unknown): SummaryContent {
   const refs = rl.map((r, i) => ref(`ref ${i + 1}`, r));
   if (ask !== null && visuals.length === 0 && noVisualWhy === null)
     fail(
-      'At a person step add a visual or say why there is none: a chart for data, before/after or a flow for a change, or noVisualWhy in one line.',
+      'At a person step add a visual or say why there is none: a chart for data, before/after screenshots (thread_attach both, then an image_pair) or a flow for a change, or noVisualWhy in one line.',
     );
   return {
     headline,
@@ -564,6 +619,8 @@ export interface WriteSummaryInput {
   /** What the agent gives (checkSummary). */
   summary: unknown;
   basis: SummaryBasis;
+  /** The thread's attachments as {id: kind}: image visuals must name its images. */
+  attachments?: Readonly<Record<string, string>>;
 }
 
 /** The thread's mirror of its summary (one read for Today and the Inbox list). */
@@ -604,6 +661,17 @@ export function writeSummary(
         : `The summary moved on to v${cur}: re-read the thread (thread_read), then write it with baseVersion ${cur}.`,
     );
   const content = checkSummary(input.summary);
+  const atts = input.attachments ?? {};
+  content.visuals.forEach((v, i) => {
+    for (const aid of visualAttachments(v)) {
+      if (!isThreadAttachmentOf(aid, input.threadId))
+        fail(`visual ${i + 1}: "${aid}" is not an attachment of this thread`);
+      if (atts[aid] !== 'image')
+        fail(
+          `visual ${i + 1}: no image "${aid}" on this thread (attach the screenshot with thread_attach first)`,
+        );
+    }
+  });
   const b = input.basis;
   const basis: SummaryBasis = {
     lastEventId: b?.lastEventId ?? null,
@@ -696,8 +764,10 @@ export function summarizeDue(
  */
 export function summaryRulesBlock(): string {
   const q = (l: readonly string[]) => `[${l.map((k) => `'${k}'`).join(', ')}]`;
-  const unroll = (fn: string, n: number) =>
-    Array.from({ length: n }, (_, i) => `(l.size() <= ${i} || ${fn}(l[${i}]))`).join('\n    && ');
+  const unroll = (fn: string, n: number, more = '') =>
+    Array.from({ length: n }, (_, i) => `(l.size() <= ${i} || ${fn}(l[${i}]${more}))`).join(
+      '\n    && ',
+    );
   const size = (v: string, min: number, max: number) =>
     `${v} is list && ${v}.size() >= ${min} && ${v}.size() <= ${max}`;
   const lines = [
@@ -711,7 +781,8 @@ export function summaryRulesBlock(): string {
     `  return ${size('l', 1, L.bullets)}`,
     `    && ${unroll('summaryBulletOk', L.bullets)};`,
     '}',
-    'function summaryVisualOk(v) {',
+    "function summaryAtt(a, t) { return a.matches(t + '_[A-Za-z0-9]{1,40}'); }",
+    'function summaryVisualOk(v, t) {',
     `  return v.kind in ${q(VISUAL_KINDS)}`,
     `    && summaryPlain(v.title, ${L.title}) && summaryPlain(v.caption, ${L.caption})`,
     `    && (v.kind in ${q(CHART_KINDS)} ? ${size('v.x', L.minPoints, L.points)}`,
@@ -719,11 +790,13 @@ export function summaryRulesBlock(): string {
     `      : v.kind == 'number' ? v.value is number && (v.trend == null || v.trend.size() <= ${L.points})`,
     `      : v.kind == 'flow' ? ${size('v.nodes', L.minNodes, L.nodes)} && v.edges.size() <= ${L.edges}`,
     `      : v.kind == 'before_after' ? v.before.lines.size() <= ${L.lines} && v.after.lines.size() <= ${L.lines}`,
+    `      : v.kind == 'image' ? summaryAtt(v.attachment, t)`,
+    `      : v.kind == 'image_pair' ? summaryAtt(v.before, t) && summaryAtt(v.after, t)`,
     `      : ${size('v.events', L.minEvents, L.events)});`,
     '}',
-    'function summaryVisualsOk(l) {',
+    'function summaryVisualsOk(l, t) {',
     `  return l.size() <= ${L.visuals}`,
-    `    && ${unroll('summaryVisualOk', L.visuals)};`,
+    `    && ${unroll('summaryVisualOk', L.visuals, ', t')};`,
     '}',
     '// END summary checks',
   ];
