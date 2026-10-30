@@ -1470,8 +1470,8 @@ service cloud.firestore {
           && inboxMessageIn(wid, request.resource.data.lastEventId, tid);
         // Not now (item OE8FmrTaIxFVGcaeGG3N, slice 3): the member only; `updatedAt` stays (the
         // summary stays fresh).
-        allow update: if (inboxOwner(wid, resource.data) && inboxNotNow(wid, tid, request.resource.data, resource.data))
-          || (request.resource.data.updatedAt == request.time
+        // (Last: the other branches are near the 1000-expression budget.)
+        allow update: if (request.resource.data.updatedAt == request.time
           // Summaries (item OE8FmrTaIxFVGcaeGG3N): the home agent's mirror of the summary it wrote.
           && ((changed(['summary', 'updatedAt', 'lastEventId']) && isActiveAgent(wid)
               && inboxSummaryMirrored(wid, tid, request.resource.data, resource.data))
@@ -1498,7 +1498,9 @@ service cloud.firestore {
             // and suggests chips.
             || (inboxOwner(wid, resource.data) && inboxInstructed(wid, tid, request.resource.data, resource.data))
             || (isActiveAgent(wid) && inboxInstructionAnswered(wid, tid, request.resource.data, resource.data))
-            || (isActiveAgent(wid) && inboxChipsSuggested(wid, tid, request.resource.data, resource.data))));
+            || (isActiveAgent(wid) && inboxChipsSuggested(wid, tid, request.resource.data, resource.data))))
+          || (request.resource.data.updatedAt == resource.data.updatedAt
+            && inboxOwner(wid, resource.data) && inboxNotNow(wid, tid, request.resource.data, resource.data));
         allow delete: if false;
 
         // Out of Today until a time within 48 hours, about the decision its event names, only
