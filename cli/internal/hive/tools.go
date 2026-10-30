@@ -193,6 +193,9 @@ var ToolRuns = map[string]Run{
 	"thread_answer_instruction": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.ThreadAnswerInstruction(ctx, a.S("threadId"), a.S("instructionId"), a.S("kind"), a.SP("refId"), a.SP("note"))
 	},
+	"thread_attach": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.ThreadAttach(ctx, a.S("threadId"), a.S("source"), a.S("name"))
+	},
 	"thread_summary": func(ctx context.Context, c *Client, a Args) (any, error) {
 		return c.ThreadSummary(ctx, a.S("threadId"), a["summary"], a.F("baseVersion"))
 	},

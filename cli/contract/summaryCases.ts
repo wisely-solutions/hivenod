@@ -3,7 +3,7 @@
  * in packages/shared/src/summary.ts and their Go port cli/internal/actions/summary.go. Kept
  * apart from cases.ts so parallel work on other actions merges cleanly.
  */
-import { checkSummary, writeSummary } from '../../packages/shared/src/index';
+import { checkSummary, threadAttach, writeSummary } from '../../packages/shared/src/index';
 import type { ActionContext, Actor, ThreadStateOf } from '../../packages/shared/src/index';
 
 type Act = <I>(
@@ -378,4 +378,71 @@ export function summaryCases(
   write('long basis', who.agent, { basis: { lastEventId: 'x'.repeat(129), planCursor: null } });
   write('not the home agent', who.other, {});
   write('person refused', who.human, {});
+
+  // Slice 4: image visuals name image attachments of the same thread.
+  const pair = {
+    kind: 'image_pair',
+    title: ' Board card ',
+    caption: 'The card shows the summary',
+    before: 'it1_b4',
+    after: 'it1_af',
+  };
+  const shots = (visuals: unknown[]) => ({ summary: { ...BASE, ask: 'Ship it?', visuals } });
+  const both = { it1_b4: 'image', it1_af: 'image' };
+  write('image pair', who.agent, { ...shots([pair]), attachments: both });
+  write('image and labels', who.agent, {
+    ...shots([
+      { kind: 'image', title: 'Shot', caption: 'New page', attachment: 'it1_b4' },
+      { ...pair, labels: [' Old ', 'New'] },
+    ]),
+    attachments: both,
+  });
+  write('image missing', who.agent, { ...shots([pair]), attachments: { it1_b4: 'image' } });
+  write('image not an image', who.agent, {
+    ...shots([pair]),
+    attachments: { ...both, it1_af: 'html' },
+  });
+  write('image of another thread', who.agent, {
+    ...shots([{ ...pair, after: 'it2_af' }]),
+    attachments: { ...both, it2_af: 'image' },
+  });
+  write('image as a url', who.agent, {
+    ...shots([{ ...pair, before: 'https://example.com/a.png' }]),
+    attachments: both,
+  });
+  write('image without attachments', who.agent, shots([pair]));
+  for (const [name, v] of [
+    ['image no attachment', { kind: 'image', title: 'T', caption: 'C' }],
+    ['image extra field', { kind: 'image', title: 'T', caption: 'C', attachment: 'a', url: 'x' }],
+    ['pair one label', { ...pair, labels: ['Old'] }],
+    ['pair html label', { ...pair, labels: ['<b>x</b>', 'New'] }],
+    ['pair no after', { ...pair, after: undefined }],
+    ['pair long id', { ...pair, before: 'x'.repeat(201) }],
+  ] as const)
+    check(`refused/${name}`, { ...BASE, visuals: [v] });
+
+  // thread_attach (./threadattach.ts).
+  const PNG = 'data:image/png;base64,iVBORw0KGgo=';
+  const att = (name: string, actor: Actor, input: Record<string, unknown>) =>
+    act(
+      `threadAttach/${name}`,
+      'threadAttach',
+      actor,
+      { threadId: 'it1', thread: TH, kind: 'image', name: ' before.png ', content: PNG, ...input },
+      threadAttach as never,
+    );
+  att('image', who.agent, { id: 'shot1' });
+  att('new id', who.agent, { kind: 'text', content: 'héllo' });
+  att('webp', who.agent, { content: 'data:image/webp;base64,UklGRg==' });
+  att('link', who.agent, { kind: 'link', content: undefined, url: ' https://example.com/pr/1 ' });
+  att('http link', who.agent, { kind: 'link', content: undefined, url: 'http://example.com' });
+  att('svg', who.agent, { content: 'data:image/svg+xml;base64,PHN2Zz4=' });
+  att('html as image', who.agent, { content: '<b>x</b>' });
+  att('bad id', who.agent, { id: 'a_b' });
+  att('no name', who.agent, { name: '  ' });
+  att('long name', who.agent, { name: 'n'.repeat(201) });
+  att('bad kind', who.agent, { kind: 'video' });
+  att('no content', who.agent, { content: undefined });
+  att('not the home agent', who.other, {});
+  att('person refused', who.human, {});
 }

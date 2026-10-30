@@ -212,7 +212,7 @@ describe('summaries: the home agent writes', () => {
       { visuals: [{ ...v0, kind: 'pie' }] },
       { visuals: [{ ...v0, kind: 'image', attachment: 'a1' }] },
       { visuals: [{ ...v0, x: Array.from({ length: 25 }, (_, i) => `d${i}`) }] },
-      { visuals: [{ kind: 'image', title: 'T', caption: 'C', events: [{}, {}] }] },
+      { visuals: [{ kind: 'video', title: 'T', caption: 'C', events: [{}, {}] }] },
       {
         visuals: [
           { ...v0, series: Array.from({ length: 5 }, () => ({ name: 'm', values: [1, 2, 3] })) },

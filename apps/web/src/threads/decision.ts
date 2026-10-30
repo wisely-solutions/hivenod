@@ -7,15 +7,20 @@
 import {
   cliSupports,
   inboxSummarySchema,
+  isThreadAttachmentOf,
   minVersionFor,
   summaryFreshness,
   SUMMARY_LIMITS,
+  THREAD_IMAGE_RE,
   visualSchema,
+  type InboxAttachment,
   type InboxThread,
   type PlanView,
   type Visual,
 } from '@hive/shared';
 import { z } from 'zod';
+import type { Row } from '../lib/live';
+import type { ThreadImages } from '../ui/visuals/ImageVisuals';
 import { timeAgo } from '../agents/logic';
 import { dayLabel, hhmm } from '../today/logic';
 import { lineDiff } from '../ui/visuals/scale';
@@ -48,6 +53,26 @@ export const looseSummarySchema = inboxSummarySchema.extend({
     .transform((l) => l.map(parseVisual)),
 });
 export type ShownSummary = z.infer<typeof looseSummarySchema>;
+
+/**
+ * The thread's images a visual may show (slice 4): image attachments of this thread (by id and
+ * by field) whose content is a PNG, JPEG or WebP data URL. Never SVG, HTML or a URL.
+ */
+export function threadImages(rows: readonly Row<InboxAttachment>[], tid: string): ThreadImages {
+  const out = new Map<string, { name: string; src: string }>();
+  for (const r of rows) {
+    const a = r.data;
+    if (
+      a.kind === 'image' &&
+      a.threadId === tid &&
+      isThreadAttachmentOf(r.id, tid) &&
+      typeof a.content === 'string' &&
+      THREAD_IMAGE_RE.test(a.content)
+    )
+      out.set(r.id, { name: a.name, src: a.content });
+  }
+  return out;
+}
 
 /** Only https links are followed (a ref's url, a bullet's ref). */
 export function safeHttps(url: string | null | undefined): string | null {
@@ -261,9 +286,12 @@ export function everythingHint(c: {
   notes: number;
   outcomes: number;
   links: number;
+  /** Files the agent attached to the thread (slice 4). */
+  files?: number;
 }) {
   const parts = [count(c.messages, 'message')];
   if (c.notes) parts.push(count(c.notes, 'note'));
+  if (c.files) parts.push(count(c.files, 'file'));
   if (c.outcomes) parts.push(count(c.outcomes, 'outcome'));
   if (c.links) parts.push(count(c.links, 'link'));
   parts.push('log');

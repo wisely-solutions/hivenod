@@ -338,10 +338,7 @@ test.describe('desktop 1440', () => {
       await adminUpdate(`workspaces/${s.wid}/inboxSummaries/${s.threads.price}`, {
         ask: 'Sign off <script>alert(1)</script>?',
         bullets: [{ text: '<b>bold</b> stays text', refs: [] }],
-        visuals: [
-          ...charts,
-          { kind: 'image', title: 'Screenshot', caption: 'The list', attachment: 'a1' },
-        ],
+        visuals: [...charts, { kind: 'video', title: 'Screen recording', caption: 'The list' }],
       });
       await page.goto(`/inbox/${s.wid}/t/${s.threads.price}`);
       const t = top(page);
@@ -359,7 +356,7 @@ test.describe('desktop 1440', () => {
       );
       await expect(page.locator('[data-visual="line"] polyline')).toHaveCount(2);
       await expect(page.locator('[data-visual="number"]')).toContainText('38');
-      await expect(page.locator('[data-visual-unknown="image"]')).toContainText('can’t show yet');
+      await expect(page.locator('[data-visual-unknown="video"]')).toContainText('can’t show yet');
       await expect(t.locator('[data-kicker]')).toHaveText(/Your approval/);
       await look(page, 'decision-kinds-1440');
 

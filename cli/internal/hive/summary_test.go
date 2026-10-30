@@ -11,9 +11,10 @@ import (
 )
 
 // Item OE8FmrTaIxFVGcaeGG3N: the visual rule at person steps is in the channel instructions and
-// in thread_summary's description (SKILL.md: scripts/plugin-skill.test.mjs).
+// in thread_summary's and thread_attach's descriptions (SKILL.md: scripts/plugin-skill.test.mjs).
+// Slice 4: a UI change shows before/after screenshots (thread_attach both, then an image_pair).
 func TestSummaryVisualRuleTexts(t *testing.T) {
-	for _, w := range []string{"thread_summary", "At every person step", "noVisualWhy", "summarize"} {
+	for _, w := range []string{"thread_summary", "At every person step", "noVisualWhy", "summarize", "thread_attach both, then an image_pair"} {
 		if !strings.Contains(InboxInstructions, w) {
 			t.Errorf("channel instructions lack %q", w)
 		}
@@ -37,19 +38,20 @@ func TestSummaryVisualRuleTexts(t *testing.T) {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 	}{sf.Plain.Tools, sf.Channel.Tools} {
-		found := false
+		want := map[string][]string{
+			"thread_summary": {"At every person step", "noVisualWhy", "baseVersion", "thread_attach both, then an image_pair", "image_pair {"},
+			"thread_attach":  {"At every person step", "before and after screenshots", "image_pair", "webp"},
+		}
 		for _, tl := range mode {
-			if tl.Name == "thread_summary" {
-				found = true
-				for _, w := range []string{"At every person step", "noVisualWhy", "baseVersion"} {
-					if !strings.Contains(tl.Description, w) {
-						t.Errorf("thread_summary description lacks %q", w)
-					}
+			for _, w := range want[tl.Name] {
+				if !strings.Contains(tl.Description, w) {
+					t.Errorf("%s description lacks %q", tl.Name, w)
 				}
 			}
+			delete(want, tl.Name)
 		}
-		if !found {
-			t.Error("thread_summary missing from surface.json")
+		for name := range want {
+			t.Errorf("%s missing from surface.json", name)
 		}
 	}
 }

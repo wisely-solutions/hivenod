@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { useReady } from '../auth/context';
 import { useOrgs } from '../orgs/data';
 import {
+  inboxAttachmentSchema,
   inboxEventSchema,
   inboxMessageSchema,
   inboxOutcomeSchema,
@@ -55,6 +56,12 @@ const threadPlansQuery = (wid: string, uid: string, tid: string) =>
 const threadEventsQuery = (wid: string, uid: string, tid: string) =>
   query(
     collection(db, `workspaces/${wid}/inboxEvents`),
+    where('memberUid', '==', uid),
+    where('threadId', '==', tid),
+  );
+const threadAttachmentsQuery = (wid: string, uid: string, tid: string) =>
+  query(
+    collection(db, `workspaces/${wid}/inboxAttachments`),
     where('memberUid', '==', uid),
     where('threadId', '==', tid),
   );
@@ -190,7 +197,7 @@ export function useThreadOutcomes(wid: string, tid: string, uid: string) {
   );
 }
 
-/** One thread with its messages, outcomes, plans and events. */
+/** One thread with its messages, outcomes, plans, events and attached files. */
 export function useThread(wid: string, tid: string, uid: string) {
   // Someone else's thread is refused: say so at once, not after the sign-in retries.
   const thread = useLiveDoc(inboxPaths.thread(wid, tid), inboxThreadSchema, { failFast: true });
@@ -208,9 +215,15 @@ export function useThread(wid: string, tid: string, uid: string) {
   const events = useLiveQuery(`ie:${k}`, () => threadEventsQuery(wid, uid, tid), inboxEventSchema);
   // Plans (item qwFAWxZM5xkcE7PPjAzi): their steps are among the outcomes above.
   const plans = useLiveQuery(`ip:${k}`, () => threadPlansQuery(wid, uid, tid), inboxPlanSchema);
+  // Files the home agent attached (item OE8FmrTaIxFVGcaeGG3N, slice 4): Everything, image visuals.
+  const attachments = useLiveQuery(
+    `ia:${k}`,
+    () => threadAttachmentsQuery(wid, uid, tid),
+    inboxAttachmentSchema,
+  );
   const sid = thread.state === 'ready' ? (thread.data?.subjectId ?? null) : null;
   const subject = useLiveDoc(sid ? inboxPaths.subject(wid, sid) : null, inboxSubjectSchema);
-  return { thread, messages, outcomes, events, plans, subject };
+  return { thread, messages, outcomes, events, plans, attachments, subject };
 }
 
 /** One subject with its threads and its timeline events. */

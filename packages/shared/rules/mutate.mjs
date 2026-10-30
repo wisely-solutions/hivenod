@@ -416,8 +416,8 @@ const MUTATIONS = [
     'plans: agent decides a step',
     [
       [
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written']));",
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'outcome.approved']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached', 'outcome.approved']));",
       ],
       [
         'return (inboxOwner(r) && inboxPlanLive(p)',
@@ -450,8 +450,8 @@ const MUTATIONS = [
     'plans: agent edits steps',
     [
       [
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written']));",
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'plan.edited']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached', 'plan.edited']));",
       ],
       ['return (inboxOwner(r)\n', 'return ((inboxOwner(r) || isActiveAgent(wid))\n'],
     ],
@@ -494,7 +494,7 @@ const MUTATIONS = [
     'inbox: agent sets an area outside a filing',
     [
       [
-        "inboxTracked(d.lastEventId, ['thread.filed'], r.memberUid)\n          && inboxEv(d.lastEventId).data.subjectId == sid;",
+        "inboxTracked(d.lastEventId, ['thread.filed'], r.memberUid)\n          && inboxEvOf(d).subjectId == sid;",
         'true;',
       ],
     ],
@@ -533,10 +533,7 @@ const MUTATIONS = [
     'inbox: member label outside the list',
     [["&& (d.label in inboxLabelList() || ('label' in r && d.label == r.label))", '']],
   ],
-  [
-    'inbox: label change without its event',
-    [["&& inboxEv(d.lastEventId).data.type == 'subject.label'))", '))']],
-  ],
+  ['inbox: label change without its event', [["&& inboxEvOf(d).type == 'subject.label'))", '))']]],
   [
     'inbox: people create labelled subjects',
     [
@@ -596,8 +593,8 @@ const MUTATIONS = [
     'inbox: agents decide relations',
     [
       [
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written']));",
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'relation.accepted']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached']));",
+        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached', 'relation.accepted']));",
       ],
       [
         "return inboxOwner(r)\n          && touched(['state', 'note', 'decision'",
@@ -968,7 +965,7 @@ const MUTATIONS = [
     'summary: unknown visual kind',
     [
       [
-        "return v.kind in ['bar', 'line', 'stacked_bar', 'number', 'flow', 'before_after', 'timeline']\n",
+        "return v.kind in ['bar', 'line', 'stacked_bar', 'number', 'flow', 'before_after', 'timeline', 'image', 'image_pair']\n",
         'return true\n',
       ],
     ],
@@ -1008,6 +1005,66 @@ const MUTATIONS = [
   [
     'summary: version doc under any id',
     [["return vid == d.threadId + '_' + string(d.version)\n          && ", 'return ']],
+  ],
+  // Thread attachments and image visuals (slice 4).
+  [
+    'summary: image of another thread',
+    [["v.kind == 'image' ? summaryAtt(v.attachment, t)", "v.kind == 'image' ? true"]],
+  ],
+  [
+    'summary: image pair of another thread',
+    [['summaryAtt(v.before, t) && summaryAtt(v.after, t)', 'true']],
+  ],
+  [
+    'attachment: any agent',
+    [
+      [
+        '&& summaryAtt(aid, d.threadId) && t.fetchedBy == me() &&',
+        '&& summaryAtt(aid, d.threadId) &&',
+      ],
+    ],
+  ],
+  [
+    'attachment: another member',
+    [
+      [
+        't.fetchedBy == me() && d.memberUid == t.memberUid\n            && d.by == me()',
+        't.fetchedBy == me()\n            && d.by == me()',
+      ],
+    ],
+  ],
+  ['attachment: any id', [['&& summaryAtt(aid, d.threadId) && t.fetchedBy', '&& t.fetchedBy']]],
+  [
+    'attachment: any image',
+    [
+      [
+        "\n                && (d.kind != 'image' || d.content.matches('data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+'))",
+        '',
+      ],
+    ],
+  ],
+  ['attachment: http links', [["d.url.matches('https://[^ ]+')", "d.url.matches('[a-z]+:.+')"]]],
+  [
+    'attachment: untracked',
+    [["\n            && inboxDocTracked(d, ['thread.attached'], d.memberUid, d.threadId);", ';']],
+  ],
+  [
+    'attachment: mutable',
+    [
+      [
+        'allow create: if isActiveAgent(wid) && inboxAttOk(request.resource.data);',
+        'allow create: if isActiveAgent(wid) && inboxAttOk(request.resource.data);\n        allow update, delete: if true;',
+      ],
+    ],
+  ],
+  [
+    'attachment: read by anyone',
+    [
+      [
+        'match /inboxAttachments/{aid} {\n        allow read: if inboxReader(resource.data);',
+        'match /inboxAttachments/{aid} {\n        allow read: if signedIn();',
+      ],
+    ],
   ],
   [
     'summary: deletes newer versions',

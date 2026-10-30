@@ -60,6 +60,8 @@ service cloud.firestore {
     function decisionPath(wid, pid, did) { return /databases/$(database)/documents/workspaces/$(wid)/projects/$(pid)/decisions/$(did); }
     function runPath(wid, rid) { return /databases/$(database)/documents/workspaces/$(wid)/runs/$(rid); }
     function eventPath(wid, eid) { return /databases/$(database)/documents/workspaces/$(wid)/events/$(eid); }
+    // The event the written document `d` names (written in this batch).
+    function evOf(wid, d) { return getAfter(eventPath(wid, d.lastEventId)).data; }
     function memberPath(wid, uid) { return /databases/$(database)/documents/workspaces/$(wid)/members/$(uid); }
     function invitePath(wid, code) { return /databases/$(database)/documents/workspaces/$(wid)/invites/$(code); }
 
@@ -592,7 +594,7 @@ service cloud.firestore {
         let before = resource.data.adminUids.toSet();
         let after = d.adminUids.toSet();
         // The event names the person whose role changes; ch must be exactly that one person.
-        let k = getAfter(eventPath(wid, d.lastEventId)).data.data.get('uid', '');
+        let k = evOf(wid, d).data.get('uid', '');
         return ch.size() <= 1
           && d.adminUids.size() == after.size()
           && after.size() >= 1
@@ -688,7 +690,7 @@ service cloud.firestore {
           && r.expiresAt > request.time
           && r.email == request.auth.token.get('email', '').lower()
           && docTracked(wid, d, ['member.joined'])
-          && getAfter(eventPath(wid, d.lastEventId)).data.data.inviteCode == code
+          && evOf(wid, d).data.inviteCode == code
           && getAfter(wsPath(wid)).data.memberRoles[me()] == r.role;
         }
         allow delete: if isAdmin(wid) && trackedDelete(wid, 'invites', code, 'member.inviteRevoked');
@@ -758,9 +760,9 @@ service cloud.firestore {
             && validAgentFields(d)
             // The name changes only with an agent.renamed event, and that event only with a new name.
             && ((d.name == r.name
-                  && getAfter(eventPath(wid, d.lastEventId)).data.type != 'agent.renamed')
+                  && evOf(wid, d).type != 'agent.renamed')
                 || (d.name != r.name
-                  && getAfter(eventPath(wid, d.lastEventId)).data.type == 'agent.renamed'))
+                  && evOf(wid, d).type == 'agent.renamed'))
             && (d.revokedAt == null || d.revokedAt == request.time)
             && (d.get('pausedAt', null) == r.get('pausedAt', null)
                 || d.get('pausedAt', null) == null)
@@ -837,7 +839,7 @@ service cloud.firestore {
         // agent's limit (default 3) the agent pauses itself. A released run does not count.
         function keepsStreak(d) {
           let b = resource.data;
-          let e = getAfter(eventPath(wid, d.lastEventId)).data;
+          let e = evOf(wid, d);
           let run = getAfter(runPath(wid, e.runId)).data;
           let before = b.get('failStreak', 0);
           let after = d.get('failStreak', 0);
@@ -1001,7 +1003,7 @@ service cloud.firestore {
           && d.summary == null
           && runMatchesClaim(d)
           && docTracked(wid, d, ['item.claimed', 'run.started'])
-          && getAfter(eventPath(wid, d.lastEventId)).data.runId == rid;
+          && evOf(wid, d).runId == rid;
         }
 
         // Only the run's own agent, only while the run is open, never its identity fields.
@@ -1029,7 +1031,7 @@ service cloud.firestore {
           && str(d.stoppedBy.name, 0, 200)
           && strOrNull(d.summary, 4000)
           && docTracked(wid, d, ['item.workStopped'])
-          && getAfter(eventPath(wid, d.lastEventId)).data.runId == rid
+          && evOf(wid, d).runId == rid
           && stoppedWithItem(r, d.lastEventId);
         }
 
@@ -1047,7 +1049,7 @@ service cloud.firestore {
           && (getAfter(itemPath(wid, r.projectId, r.itemId)).data.claim == null
               || getAfter(itemPath(wid, r.projectId, r.itemId)).data.claim.runId != rid)
           && docTracked(wid, d, ['item.released'])
-          && getAfter(eventPath(wid, d.lastEventId)).data.runId == rid;
+          && evOf(wid, d).runId == rid;
         }
 
         // Revoking (or rotating) an agent ends its open runs in the same batch: the CLI was cut
@@ -1138,7 +1140,7 @@ service cloud.firestore {
             && d.heartbeatEventAt == request.time
             && request.time >= resource.data.heartbeatEventAt + duration.value(5, 'm')
             && docTracked(wid, d, ['run.heartbeat'])
-            && getAfter(eventPath(wid, d.lastEventId)).data.runId == rid;
+            && evOf(wid, d).runId == rid;
         }
         function endRun() {
           let d = request.resource.data;
@@ -1153,7 +1155,7 @@ service cloud.firestore {
             && d.get('tokensCached', 0) <= d.tokensIn
             && strOrNull(d.model, 80) && strOrNull(d.summary, 4000)
             && docTracked(wid, d, ['run.ended', 'item.released', 'item.completed', 'item.shaped', 'item.sentBack'])
-            && getAfter(eventPath(wid, d.lastEventId)).data.runId == rid;
+            && evOf(wid, d).runId == rid;
         }
 
         // Agent log lines: ids 0..499 (max 500 per run), create-only, by the run's agent.
@@ -1190,6 +1192,7 @@ service cloud.firestore {
       function inboxOwner(d) { return isMember(wid) && d.memberUid == me(); }
       function inboxReader(d) { return inboxOwner(d) || isActiveAgent(wid); }
       function inboxEv(eid) { return getAfter(inboxDoc('inboxEvents', eid)); }
+      function inboxEvOf(d) { return inboxEv(d.lastEventId).data; }
       // The inbox event `eid` is written in this batch by me, now, with one of `types`, for `member`.
       function inboxTracked(eid, types, member) {
         let e = inboxEv(eid);
@@ -1262,22 +1265,25 @@ service cloud.firestore {
           && (l.size() <= 3 || summaryBulletOk(l[3]))
           && (l.size() <= 4 || summaryBulletOk(l[4]));
       }
-      function summaryVisualOk(v) {
-        return v.kind in ['bar', 'line', 'stacked_bar', 'number', 'flow', 'before_after', 'timeline']
+      function summaryAtt(a, t) { return a.matches(t + '_[A-Za-z0-9]{1,40}'); }
+      function summaryVisualOk(v, t) {
+        return v.kind in ['bar', 'line', 'stacked_bar', 'number', 'flow', 'before_after', 'timeline', 'image', 'image_pair']
           && summaryPlain(v.title, 80) && summaryPlain(v.caption, 200)
           && (v.kind in ['bar', 'line', 'stacked_bar'] ? v.x is list && v.x.size() >= 2 && v.x.size() <= 24
               && v.series is list && v.series.size() >= 1 && v.series.size() <= 4 && (v.kind != 'stacked_bar' || v.series.size() >= 2)
             : v.kind == 'number' ? v.value is number && (v.trend == null || v.trend.size() <= 24)
             : v.kind == 'flow' ? v.nodes is list && v.nodes.size() >= 2 && v.nodes.size() <= 8 && v.edges.size() <= 10
             : v.kind == 'before_after' ? v.before.lines.size() <= 6 && v.after.lines.size() <= 6
+            : v.kind == 'image' ? summaryAtt(v.attachment, t)
+            : v.kind == 'image_pair' ? summaryAtt(v.before, t) && summaryAtt(v.after, t)
             : v.events is list && v.events.size() >= 2 && v.events.size() <= 12);
       }
-      function summaryVisualsOk(l) {
+      function summaryVisualsOk(l, t) {
         return l.size() <= 4
-          && (l.size() <= 0 || summaryVisualOk(l[0]))
-          && (l.size() <= 1 || summaryVisualOk(l[1]))
-          && (l.size() <= 2 || summaryVisualOk(l[2]))
-          && (l.size() <= 3 || summaryVisualOk(l[3]));
+          && (l.size() <= 0 || summaryVisualOk(l[0], t))
+          && (l.size() <= 1 || summaryVisualOk(l[1], t))
+          && (l.size() <= 2 || summaryVisualOk(l[2], t))
+          && (l.size() <= 3 || summaryVisualOk(l[3], t));
       }
       // END summary checks
       function inboxSummaryDoc(tid) { return inboxDoc('inboxSummaries', tid); }
@@ -1303,7 +1309,7 @@ service cloud.firestore {
           && d.basis is map && exactKeys(d.basis, ['lastEventId', 'planCursor'])
           && strOrNull(d.basis.lastEventId, 128) && (d.basis.planCursor == null || d.basis.planCursor is int)
           && inboxDocTracked(d, ['summary.written'], d.memberUid, tid)
-          && inboxEv(d.lastEventId).data.data.version == d.version
+          && inboxEvOf(d).data.version == d.version
           && existsAfter(inboxSummaryVersionDoc(tid, d.version))
           && getAfter(inboxDoc('inboxThreads', tid)).data.get('summary', {}).get('version', 0) == d.version;
       }
@@ -1328,6 +1334,23 @@ service cloud.firestore {
         allow create: if isActiveAgent(wid) && inboxSummaryOk(tid, request.resource.data, 0);
         allow update: if isActiveAgent(wid) && inboxSummaryOk(tid, request.resource.data, resource.data.version);
         allow delete: if false;
+      }
+
+      // Thread attachments (slice 4, packages/shared/src/threadattach.ts): the home agent's files,
+      // inline and immutable, under {threadId}_{id}; images only PNG, JPEG or WebP; links https.
+      match /inboxAttachments/{aid} {
+        allow read: if inboxReader(resource.data);
+        allow create: if isActiveAgent(wid) && inboxAttOk(request.resource.data);
+        function inboxAttOk(d) {
+          let t = get(inboxDoc('inboxThreads', d.threadId)).data;
+          return exactKeys(d, ['memberUid', 'threadId', 'kind', 'name', 'content', 'url', 'bytes', 'by', 'at', 'lastEventId'])
+            && summaryAtt(aid, d.threadId) && t.fetchedBy == me() && d.memberUid == t.memberUid
+            && d.by == me() && d.at == request.time && str(d.name, 1, 200) && d.bytes is int
+            && (d.kind == 'link' ? d.content == null && str(d.url, 9, 2048) && d.url.matches('https://[^ ]+')
+              : d.kind in ['html', 'markdown', 'text', 'pdf', 'image'] && d.url == null && str(d.content, 0, 921600)
+                && (d.kind != 'image' || d.content.matches('data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+')))
+            && inboxDocTracked(d, ['thread.attached'], d.memberUid, d.threadId);
+        }
       }
 
       // A version is a copy of the summary written in the same batch, under {tid}_{version}: its
@@ -1413,8 +1436,8 @@ service cloud.firestore {
           && get(inboxDoc('inboxThreads', d.threadId)).data.memberUid == d.memberUid
           && inboxDocTracked(d, ['plan.proposed'],
                d.memberUid, d.threadId)
-          && inboxEv(d.lastEventId).data.data.planId == pid
-          && inboxEv(d.lastEventId).data.data.steps == d.steps
+          && inboxEvOf(d).data.planId == pid
+          && inboxEvOf(d).data.steps == d.steps
           && inboxStepsMade(pid, d.steps);
         }
         allow update: if inboxPlansUpdateOk();
@@ -1431,9 +1454,9 @@ service cloud.firestore {
                ['outcome.approved', 'outcome.rejected', 'plan.approved', 'plan.rejected', 'plan.edited',
                 'plan.retried', 'plan.skipped', 'plan.stopped', 'outcome.done', 'outcome.failed', 'thread.woke'],
                r.memberUid, r.threadId)
-          && inboxEv(d.lastEventId).data.data.planId == pid
+          && inboxEvOf(d).data.planId == pid
           && inboxPlanMoved(d, r,
-               inboxEv(d.lastEventId).data);
+               inboxEvOf(d));
         }
         allow delete: if false;
 
@@ -1532,7 +1555,7 @@ service cloud.firestore {
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.revised',
                   'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
                   'plan.proposed', 'outcome.started', 'thread.rechecked',
-                  'thread.instruction_answered', 'thread.chips_suggested', 'summary.written']));
+                  'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached']));
         }
         allow update, delete: if false;
       }
@@ -1548,7 +1571,7 @@ service cloud.firestore {
           && inboxMessageOk(d)
           && inboxDocTracked(d, ['inbox.added'],
                d.memberUid, d.threadId)
-          && inboxEv(d.lastEventId).data.data.messageDocId == mid
+          && inboxEvOf(d).data.messageDocId == mid
           && getAfter(inboxDoc('inboxThreads', d.threadId)).data.memberUid == d.memberUid
           && getAfter(inboxDoc('inboxThreads', d.threadId)).data.lastEventId == d.lastEventId;
         }
@@ -1651,7 +1674,7 @@ service cloud.firestore {
                  'answer': s.answer, 'recAction': s.recommendation == null ? null : s.recommendation.action,
                  'confidence': s.confidence}
             && inboxDocTracked(d, ['summary.written'], r.memberUid, tid)
-            && summaryVisualsOk(s.visuals);
+            && summaryVisualsOk(s.visuals, tid);
         }
 
         // One new instruction (its id is its event's), pending, by the member, with a text or a
@@ -1884,7 +1907,7 @@ service cloud.firestore {
           && inboxProposalOk(d, get(inboxDoc('inboxThreads', d.threadId)).data)
           && inboxDocTracked(d, ['outcome.proposed'],
                d.memberUid, d.threadId)
-          && inboxEv(d.lastEventId).data.data.outcomeId == oid)
+          && inboxEvOf(d).data.outcomeId == oid)
           || inboxStepCreate(d);
         }
         allow update: if inboxOutcomesUpdateOk();
@@ -1921,17 +1944,17 @@ service cloud.firestore {
                ['outcome.approved', 'outcome.rejected', 'outcome.done', 'outcome.failed',
                 'outcome.revise_requested', 'outcome.revised'],
                resource.data.memberUid, resource.data.threadId)
-          && inboxEv(d.lastEventId).data.data.outcomeId == oid
+          && inboxEvOf(d).data.outcomeId == oid
           && ((inboxOwner(resource.data)
                 && (inboxDecide(d, resource.data,
-                      inboxEv(d.lastEventId).data.type)
+                      inboxEvOf(d).type)
                   || inboxReviseAsk(d, resource.data,
-                      inboxEv(d.lastEventId).data.type)))
+                      inboxEvOf(d).type)))
             || (isActiveAgent(wid)
                 && (inboxCarriedOut(d, resource.data,
-                      inboxEv(d.lastEventId).data.type)
+                      inboxEvOf(d).type)
                   || inboxRevised(d, resource.data,
-                      inboxEv(d.lastEventId).data.type))));
+                      inboxEvOf(d).type))));
         }
 
         // A plan step (item qwFAWxZM5xkcE7PPjAzi): proposed by an agent with its plan (one
@@ -1939,7 +1962,7 @@ service cloud.firestore {
         // the same thread and lists it.
         function inboxStepCreate(d) {
           let p = getAfter(inboxPlanDoc(d.planId)).data;
-          let e = inboxEv(d.lastEventId).data;
+          let e = inboxEvOf(d);
           return keysOk(d, ['memberUid', 'threadId', 'type', 'fields', 'state', 'note',
                  'proposedBy', 'executor', 'decision', 'result', 'planId', 'createdAt', 'updatedAt', 'lastEventId'],
                  ['confidence', 'checks'])
@@ -1961,7 +1984,7 @@ service cloud.firestore {
         }
         // A plan step changes only through its own event (or the plan's), and never out of turn.
         function inboxStepUpdate(d, r) {
-          let e = inboxEv(d.lastEventId).data;
+          let e = inboxEvOf(d);
           return inboxDocTracked(d,
                  ['outcome.approved', 'outcome.rejected', 'outcome.done', 'outcome.failed', 'outcome.started',
                   'outcome.revise_requested', 'outcome.revised', 'plan.approved', 'plan.rejected', 'plan.edited',
@@ -2195,7 +2218,7 @@ service cloud.firestore {
                 && inboxAgentLabel(d)
                 && d.createdBy == me_('agent')
                 && inboxTracked(d.lastEventId, ['thread.filed'], d.memberUid)
-                && inboxEv(d.lastEventId).data.subjectId == sid)
+                && inboxEvOf(d).subjectId == sid)
             || (isMember(wid) && d.memberUid == me()
                 && inboxNoLabel(d)
                 && d.createdBy == me_('human')
@@ -2214,7 +2237,7 @@ service cloud.firestore {
           && (!d.diff(r).affectedKeys().hasAny(inboxLabelKeys())
               || (d.keys().hasAll(inboxLabelKeys())
                   && inboxMemberLabel(d, r)
-                  && inboxEv(d.lastEventId).data.type == 'subject.label'))
+                  && inboxEvOf(d).type == 'subject.label'))
           && d.updatedAt == request.time
           && inboxTracked(d.lastEventId, ['subject.renamed', 'subject.merged', 'subject.area', 'subject.label'], me());
         }
@@ -2233,7 +2256,7 @@ service cloud.firestore {
                   && !(r.get('labelBy', null) == 'member')))
           && d.updatedAt == request.time
           && inboxTracked(d.lastEventId, ['thread.filed'], r.memberUid)
-          && inboxEv(d.lastEventId).data.subjectId == sid;
+          && inboxEvOf(d).subjectId == sid;
         }
         // A merge deletes the subject it empties, with the tombstone event del-subject-<sid>.
         allow delete: if inboxOwner(resource.data)
@@ -2271,7 +2294,7 @@ service cloud.firestore {
           && inboxRelationPairOk(d)
           && d.createdAt == request.time
           && d.updatedAt == request.time
-          && inboxEv(d.lastEventId).data.data.relationId == rid
+          && inboxEvOf(d).data.relationId == rid
           && ((isActiveAgent(wid) && inboxMember(d.memberUid)
                 && d.state == 'proposed'
                 && d.proposedBy == me_('agent')
@@ -2294,9 +2317,9 @@ service cloud.firestore {
           && inboxRelationDecisionOk(d)
           && inboxTracked(d.lastEventId,
                ['relation.accepted', 'relation.created', 'relation.rejected', 'relation.removed'], me())
-          && inboxEv(d.lastEventId).data.data.relationId == rid
+          && inboxEvOf(d).data.relationId == rid
           && inboxRelationMove(r, d,
-               inboxEv(d.lastEventId).data.type);
+               inboxEvOf(d).type);
         }
         allow delete: if false;
 
@@ -2379,7 +2402,7 @@ service cloud.firestore {
                 // An approver adds an agent's proposed step (card st5INNZj); the event names the item.
                 || (docTracked(wid, d, ['step.accepted'])
                     && canSetStepAgents(wid, r)
-                    && getAfter(eventPath(wid, d.lastEventId)).data.projectId == pid))
+                    && evOf(wid, d).projectId == pid))
             && membersOnlyGainDeciders(r, d))
           // Only an admin decides who is on a project.
           || (isAdmin(wid)
@@ -2510,7 +2533,7 @@ service cloud.firestore {
                     && !hasStep(get(projPath(wid, pid)).data, x.stepId)
                     && hasStep(getAfter(projPath(wid, pid)).data, x.stepId)
                     && docTracked(wid, d, ['step.accepted'])))
-              && getAfter(eventPath(wid, d.lastEventId)).data.projectId == pid;
+              && evOf(wid, d).projectId == pid;
           }
         }
 
@@ -2700,7 +2723,7 @@ service cloud.firestore {
           // the item it holds at an agent step, changing agent steps ahead, asking for a people
           // step change, or dropping a step the library no longer has.
           function agentPathUpdate(r, p, d) {
-            let e = getAfter(eventPath(wid, d.lastEventId)).data;
+            let e = evOf(wid, d);
             return d.get('pathRev', 0) == r.get('pathRev', 0) + 1 && ownsClaim(r)
               && (unshaped(r)
                 // Shaping: the asks for people steps first, then the shape itself.
@@ -2719,7 +2742,7 @@ service cloud.firestore {
               && d.attachmentCount is int && d.attachmentCount == r.get('attachmentCount', 0) + 1
               && itemTracked(wid, d, ['attachment.added'], pid, iid)
               && existsAfter(attPath(wid, pid, iid,
-                   getAfter(eventPath(wid, d.lastEventId)).data.data.attachmentId));
+                   evOf(wid, d).data.attachmentId));
           }
           function ownsClaim(r) { return r.claim != null && r.claim.agentUid == me(); }
 
@@ -2836,7 +2859,7 @@ service cloud.firestore {
               && d.costEur is number && d.costEur >= r.costEur
               && noGate(between, n, r.get('gateSkips', {}))
               && itemTracked(wid, d, ['item.sentBack'], pid, iid)
-              && str(getAfter(eventPath(wid, d.lastEventId)).data.data.get('reason', ''), 1, 2000)
+              && str(evOf(wid, d).data.get('reason', ''), 1, 2000)
               && getAfter(runPath(wid, r.claim.runId)).data.endedAt == request.time;
           }
           // Every step of the list `l` (n steps, n <= 12) is an agent step or a people step in g
@@ -2984,7 +3007,7 @@ service cloud.firestore {
               && ((w.mode == 'back' && d.status == 'queued')
                   || (w.mode == 'cancel' && d.status == 'stopped'))
               && itemTracked(wid, d, ['item.workStopped'], pid, iid)
-              && stopEventOk(p, getAfter(eventPath(wid, d.lastEventId)).data, w, r.claim.runId)
+              && stopEventOk(p, evOf(wid, d), w, r.claim.runId)
               && getAfter(runPath(wid, r.claim.runId)).data.endedAt != null;
           }
           function stopEventOk(p, e, w, runId) {
@@ -3000,7 +3023,7 @@ service cloud.firestore {
               && d.updatedAt == request.time
               && itemTracked(wid, d, ['item.resumed'], pid, iid)
               && canStopWork(wid, p,
-                   getAfter(eventPath(wid, d.lastEventId)).data.data.get('gateStepId', ''));
+                   evOf(wid, d).data.get('gateStepId', ''));
           }
           // Revoking an agent gives back the items it held (same batch; see the runs rules).
           function releaseRevokedIt(r) {
@@ -3077,7 +3100,7 @@ service cloud.firestore {
           }
           // "Add to this item": the triage event of a finding may also append to its parent.
           function addFindingToItem(d) {
-            let e = getAfter(eventPath(wid, d.lastEventId)).data;
+            let e = evOf(wid, d);
             return touched(['summary'])
               && docTracked(wid, d, ['finding.triaged'])
               && e.projectId == pid && e.data.parentItemId == iid;
@@ -3106,7 +3129,7 @@ service cloud.firestore {
 
           // A person's path write, routed by its event.
           function humanPathUpdate(r, p, d) {
-            let e = getAfter(eventPath(wid, d.lastEventId)).data;
+            let e = evOf(wid, d);
             return d.get('pathRev', 0) == r.get('pathRev', 0) + 1
               && (e.type == 'item.shaped'
                 ? unshaped(r) && r.claim == null && shapeIt(r, p, 'human', d)

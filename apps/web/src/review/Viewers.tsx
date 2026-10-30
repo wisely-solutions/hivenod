@@ -135,8 +135,11 @@ function LinkCard({ url, name }: { url: string; name: string }) {
   );
 }
 
+/** What a viewer needs of an attachment (an item's, or a thread's: slice 4). */
+export type ViewableAttachment = Pick<Attachment, 'kind' | 'name' | 'content' | 'url'>;
+
 /** The one place that decides how each kind of attachment is shown full page. */
-export function AttachmentViewer({ attachment: a }: { attachment: Attachment }) {
+export function AttachmentViewer({ attachment: a }: { attachment: ViewableAttachment }) {
   if (a.kind === 'html') {
     return (
       <SandboxedHtml

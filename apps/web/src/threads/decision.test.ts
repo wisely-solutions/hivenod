@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bulletDiff,
   everythingHint,
+  threadImages,
   excerpt,
   freshness,
   looseSummarySchema,
@@ -234,8 +235,12 @@ describe('parseVisual and the loose schema', () => {
   it('a known kind parses; an unknown or broken one is "not shown" with its kind', () => {
     expect(parseVisual(bar)).toMatchObject({ ok: true, visual: { kind: 'bar' } });
     expect(parseVisual({ kind: 'image', title: 'x', caption: 'y', attachment: 'a1' })).toEqual({
+      ok: true,
+      visual: { kind: 'image', title: 'x', caption: 'y', attachment: 'a1' },
+    });
+    expect(parseVisual({ kind: 'video', title: 'x', caption: 'y' })).toEqual({
       ok: false,
-      kind: 'image',
+      kind: 'video',
     });
     expect(parseVisual({ ...bar, x: ['only one'] })).toEqual({ ok: false, kind: 'bar' });
     expect(parseVisual('nope')).toEqual({ ok: false, kind: 'unknown' });
@@ -325,5 +330,34 @@ describe('summaryLine (slice 3)', () => {
       'Sam asks to move the review',
     );
     expect(summaryLine({ state: 'yourCall' })).toBeNull();
+  });
+});
+
+describe('threadImages (slice 4)', () => {
+  const PNG = 'data:image/png;base64,iVBORw0KGgo=';
+  const row = (id: string, over: Record<string, unknown> = {}) =>
+    ({
+      id,
+      data: { kind: 'image', threadId: 't1', name: `${id}.png`, content: PNG, ...over },
+    }) as never;
+  it('keeps only PNG/JPEG/WebP images of this thread', () => {
+    const m = threadImages(
+      [
+        row('t1_a'),
+        row('t1_svg', { content: 'data:image/svg+xml;base64,PHN2Zz4=' }),
+        row('t1_html', { kind: 'html', content: '<b>x</b>' }),
+        row('t2_b', { threadId: 't2' }),
+        row('t1_c', { threadId: 't2' }),
+        row('t1_url', { content: 'https://example.com/a.png' }),
+      ],
+      't1',
+    );
+    expect([...m.keys()]).toEqual(['t1_a']);
+    expect(m.get('t1_a')).toEqual({ name: 't1_a.png', src: PNG });
+  });
+  it('Everything counts files', () => {
+    expect(everythingHint({ messages: 1, notes: 0, outcomes: 0, links: 0, files: 2 })).toBe(
+      '1 message · 2 files · log',
+    );
   });
 });

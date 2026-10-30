@@ -11,6 +11,7 @@ import {
   summarizeDue,
   summaryFreshness,
   summaryRulesBlock,
+  visualAttachments,
   visualSchema,
   writeSummary,
   SUMMARIZE_AFTER_MS,
@@ -184,11 +185,58 @@ describe('checkSummary', () => {
     [{ ...BASE, visuals: [bar(), bar(), bar(), bar(), bar()] }, 'visuals: 5 visuals, at most 4'],
     [
       { ...BASE, visuals: [{ ...bar(), kind: 'pie' }] },
-      'visual 1 kind: one of bar, line, stacked_bar, number, flow, before_after, timeline',
+      'visual 1 kind: one of bar, line, stacked_bar, number, flow, before_after, timeline, image, image_pair',
+    ],
+    [{ ...BASE, visuals: [{ ...bar(), kind: 'image' }] }, 'visual 1: unknown field "series"'],
+    [
+      { ...BASE, visuals: [{ kind: 'image', title: 'Shot', caption: 'The new page' }] },
+      'visual 1 attachment: required',
     ],
     [
-      { ...BASE, visuals: [{ ...bar(), kind: 'image' }] },
-      'visual 1 kind: one of bar, line, stacked_bar, number, flow, before_after, timeline',
+      {
+        ...BASE,
+        visuals: [{ kind: 'image', title: 'Shot', caption: 'New', attachment: 't1_a', url: 'x' }],
+      },
+      'visual 1: unknown field "url"',
+    ],
+    [
+      {
+        ...BASE,
+        visuals: [{ kind: 'image_pair', title: 'Shot', caption: 'New', before: 't1_a' }],
+      },
+      'visual 1 after: required',
+    ],
+    [
+      {
+        ...BASE,
+        visuals: [
+          {
+            kind: 'image_pair',
+            title: 'Shot',
+            caption: 'New',
+            before: 't1_a',
+            after: 't1_b',
+            labels: ['Old'],
+          },
+        ],
+      },
+      'visual 1 labels: two labels (before, after)',
+    ],
+    [
+      {
+        ...BASE,
+        visuals: [
+          {
+            kind: 'image_pair',
+            title: 'Shot',
+            caption: 'New',
+            before: 't1_a',
+            after: 't1_b',
+            labels: ['<b>Old</b>', 'New'],
+          },
+        ],
+      },
+      'visual 1 label 1: plain text only (no HTML)',
     ],
     [{ ...BASE, visuals: [bar({ svg: '<svg/>' })] }, 'visual 1: unknown field "svg"'],
     [
@@ -411,6 +459,59 @@ describe('checkSummary', () => {
   });
 });
 
+describe('image visuals', () => {
+  const pair = {
+    kind: 'image_pair',
+    title: ' Board ',
+    caption: 'The card now shows the summary',
+    before: 't1_b4',
+    after: 't1_af',
+  };
+  it('are stored normalized and parse with the stored schema', () => {
+    const c = checkSummary({
+      ...BASE,
+      ask: 'Ship it?',
+      visuals: [{ kind: 'image', title: 'Shot', caption: 'New page', attachment: 't1_x' }, pair],
+    });
+    expect(c.visuals).toEqual([
+      { kind: 'image', title: 'Shot', caption: 'New page', attachment: 't1_x' },
+      { ...pair, title: 'Board', labels: null },
+    ]);
+    for (const v of c.visuals) expect(visualSchema.parse(v)).toEqual(v);
+    expect(c.visuals.flatMap(visualAttachments)).toEqual(['t1_x', 't1_b4', 't1_af']);
+    expect(
+      checkSummary({ ...BASE, visuals: [{ ...pair, labels: [' Old ', 'New'] }] }).visuals[0],
+    ).toMatchObject({ labels: ['Old', 'New'] });
+  });
+  it('writeSummary: only images of this thread', () => {
+    const input = (visuals: unknown[], attachments: Record<string, string> = {}) => ({
+      threadId: 't1',
+      thread: TH,
+      current: null,
+      baseVersion: 0,
+      summary: { ...BASE, ask: 'Ship it?', visuals },
+      basis: { lastEventId: null, planCursor: null },
+      attachments,
+    });
+    const ok = { t1_b4: 'image', t1_af: 'image' };
+    expect(writeSummary(agent, input([pair], ok)).version).toBe(1);
+    expect(err(() => writeSummary(agent, input([pair], { t1_b4: 'image' })))).toBe(
+      'visual 1: no image "t1_af" on this thread (attach the screenshot with thread_attach first)',
+    );
+    expect(err(() => writeSummary(agent, input([pair], { ...ok, t1_af: 'html' })))).toMatch(
+      /^visual 1: no image "t1_af"/,
+    );
+    expect(
+      err(() =>
+        writeSummary(agent, input([{ ...pair, after: 't2_af' }], { ...ok, t2_af: 'image' })),
+      ),
+    ).toBe('visual 1: "t2_af" is not an attachment of this thread');
+    expect(
+      err(() => writeSummary(agent, input([{ ...pair, after: 'https://example.com/a.png' }], ok))),
+    ).toBe('visual 1: "https://example.com/a.png" is not an attachment of this thread');
+  });
+});
+
 describe('writeSummary', () => {
   const input = (over: Partial<Parameters<typeof writeSummary>[1]> = {}) => ({
     threadId: 't1',
@@ -510,7 +611,10 @@ describe('rules block', () => {
     expect(b).toMatch(/BEGIN summary checks/);
     expect(b).toContain("(v.kind != 'stacked_bar' || v.series.size() >= 2)");
     expect(b).toContain('v.series.size() >= 1 && v.series.size() <= 4');
-    expect(b).toContain('(l.size() <= 3 || summaryVisualOk(l[3]))');
+    expect(b).toContain('(l.size() <= 3 || summaryVisualOk(l[3], t))');
+    expect(b).toContain(
+      "v.kind == 'image_pair' ? summaryAtt(v.before, t) && summaryAtt(v.after, t)",
+    );
     expect(b).not.toContain('(l.size() <= 4 || summaryVisualOk(');
     expect(b).toContain('(l.size() <= 4 || summaryBulletOk(l[4]))');
   });
