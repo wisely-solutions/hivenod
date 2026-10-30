@@ -214,3 +214,47 @@ test('screenshots', async ({ page }, info) => {
     }
   }
 });
+
+test('an admin exports the organization as one JSON file', async ({ page }) => {
+  test.setTimeout(90_000);
+  const { who, wid, uid } = await enter(page, 'Eva Export');
+  const base = `workspaces/${wid}`;
+  await adminSet(`${base}/projects/p1`, projectFields('Export me', uid));
+  await adminSet(`${base}/projects/p1/items/i1`, { title: 'An item', status: 'queued' });
+  await adminSet(`${base}/projects/p1/items/i1/attachments/a1`, {
+    kind: 'html',
+    name: 'plan.html',
+    content: '<p>inline</p>',
+  });
+  await adminSet(`${base}/projects/p1/decisions/d1`, { outcome: 'approved' });
+  await adminSet(`${base}/runs/r1`, { projectId: 'p1', status: 'done' });
+  await adminSet(`${base}/runs/r1/log/0`, { text: 'a line' });
+  await adminSet(`${base}/calendar/${uid}_ev1`, { memberUid: uid, title: 'Standup' });
+
+  await page.goto('/settings/organization');
+  const button = page.getByRole('button', { name: 'Export organization data (JSON)' });
+  await expect(button).toBeVisible();
+  await axe(page);
+  const download = page.waitForEvent('download');
+  await button.click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^.+-export-\d{4}-\d{2}-\d{2}\.json$/);
+  const stream = await file.createReadStream();
+  let text = '';
+  for await (const chunk of stream) text += chunk;
+  const json = JSON.parse(text);
+  expect(json).toMatchObject({ format: 'hivenod-org-export', version: 1, workspaceId: wid });
+  expect(json.projects.map((p: { id: string }) => p.id)).toContain('p1');
+  const project = json.projects.find((p: { id: string }) => p.id === 'p1');
+  expect(project.data.name).toBe('Export me');
+  expect(project.items[0].attachments[0].data.content).toBe('<p>inline</p>');
+  expect(project.decisions[0].data.outcome).toBe('approved');
+  expect(json.runs[0].log[0].data.text).toBe('a line');
+  expect(json.calendar[0].data.title).toBe('Standup');
+  expect(json.counts.projects).toBe(1);
+  await expect(page.getByRole('status').filter({ hasText: /^Done: \d+ documents/ })).toBeVisible();
+  if (process.env.EXPORT_SHOT && test.info().project.name.startsWith('desktop')) {
+    await page.screenshot({ path: process.env.EXPORT_SHOT });
+  }
+  void who;
+});

@@ -144,6 +144,26 @@ Release tags: `pnpm release` tags `release-<max+1>` (numeric, so a stray `releas
 idempotent: a commit that already has a release tag keeps it, a taken name moves on to the next free
 number, and existing tags are never moved or deleted.
 
+## Exporting an organization's data (JSON)
+
+Before the old Projects and Calendar data is deleted (Inbox item OE8Fm, slices 10-11), each organization's
+data is exported to one JSON file. Two ways, same format (`"format": "hivenod-org-export"`, `"version": 1`,
+`workspace`, `members`, `groups`, `agents`, `events`, `runs` (each with its `log`), `projects` (each with
+`items` > `attachments`, `messages`, plus `decisions` and `stepProposals`), `calendar`, `busy`, `agentHomes`,
+and a trailing `counts` object with the number of documents per collection, for checking against a deletion):
+
+- **In the app:** an admin opens Settings > Organization > "Export organization data (JSON)". The browser
+  reads what the rules let an admin read, page by page, shows progress and saves the file. `busy` and
+  `agentHomes` are `null` there: no browser may read them (the rules deny it; they were not widened).
+- **Operator script (complete):** `node scripts/export-org.mjs --org <workspaceId> --out <file>`. Admin access
+  through the REST API with the service account (`GOOGLE_APPLICATION_CREDENTIALS`), read-only; it also exports the
+  busy blocks in the members' stores and `agentHomes`. Production runs need the owner's OK at run time. Test it
+  against the emulator with `--emulator host:port` (project `demo-hive`, token `owner`), e.g.
+  `node scripts/emu-exec.mjs "node scripts/export-org.mjs --org <id> --out /tmp/x.json --emulator \$FIRESTORE_EMULATOR_HOST"`.
+  Timestamps are written as `{"$timestamp": "<ISO>"}`.
+
+Check the file before deleting anything: `counts` per collection must match what the console shows.
+
 ## Rules size and compile time
 
 Google refuses to **release** Firestore rules whose compiled executables are 256000 bytes or more
