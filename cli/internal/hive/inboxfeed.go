@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/wisely-solutions/hivenod/cli/internal/actions"
 	"math"
 	"sort"
 	"strconv"
@@ -57,11 +58,15 @@ type FeedOutcome struct {
 	PlanID string
 }
 
-// FeedRunning is a Build it plan step this agent carries out, waiting for its item (running).
+// FeedRunning is a running plan step this agent carries out: a Build it step waiting for its
+// item, or a long step (Build, Release: slice 6b) being worked on.
 type FeedRunning struct {
 	ID, ThreadID, MemberUID, Type, PlanID string
 	// ItemID and ProjectID: the item it made (ProjectID "" when the link does not say).
 	ItemID, ProjectID string
+	// Long (slice 6b): a long step; BeatAtMs is its last heartbeat (progress, or the start).
+	Long     bool
+	BeatAtMs int64
 }
 
 // FeedPlan is a live plan (proposed, active or blocked): its steps and whose turn it is.
@@ -158,11 +163,15 @@ type InboxSource interface {
 	ItemState(ctx context.Context, projectID, itemID string) (status string, gone bool, err error)
 	EventOf(ctx context.Context, eventID string) (*FeedEvent, error)
 	Wake(ctx context.Context, threadID string) error
+	// Heartbeat stamps a running long step this session holds (step_progress, its last line).
+	Heartbeat(ctx context.Context, outcomeID string) error
 }
 
 // InboxOptions configure the feed (zero values: the defaults; MaxInbox -1 is "unset").
 type InboxOptions struct {
-	MaxInbox   int // 0 is off
+	MaxInbox int // 0 is off
+	// MaxSteps (slice 6b): long steps this session runs at once (--max-items); 0 means 1.
+	MaxSteps   int
 	PerMinute  int
 	NudgeAfter time.Duration
 	Lease      time.Duration
@@ -196,6 +205,9 @@ type InboxEventInfo struct {
 	InstructionID string `json:"instructionId"`
 	// SentBack (reason carry_out, slice 6): the plan was sent back to this step; Why says why.
 	SentBack bool `json:"sentBack"`
+	// Long (reason carry_out, slice 6b): a long step; Resume: it was running before this session.
+	Long   bool `json:"long"`
+	Resume bool `json:"resume"`
 }
 
 // instructChipText is INSTRUCT_CHIP_TEXT: what a chip asks.
@@ -285,7 +297,9 @@ func InboxText(e InboxEventInfo) string {
 		}
 		lines = append(lines, fmt.Sprintf("%s has waited on them for %d days or more.", t, days))
 	case "carry_out":
-		if e.PlanID != "" {
+		if e.Resume {
+			lines = append(lines, fmt.Sprintf("Step %s of plan %s on thread %s, a %s (outcome %s), was running before this session: it is yours to finish.", or(e.Step, "?"), or(e.PlanID, "?"), e.ThreadID, or(e.OutcomeType, "?"), or(e.OutcomeID, "?")))
+		} else if e.PlanID != "" {
 			lines = append(lines, fmt.Sprintf("Step %s of plan %s on thread %s is approved and its turn: a %s (outcome %s).", or(e.Step, "?"), e.PlanID, e.ThreadID, or(e.OutcomeType, "?"), or(e.OutcomeID, "?")))
 			if e.SentBack {
 				lines = append(lines, "The plan was sent back to this step: "+clip(or(e.Why, "no reason given"), 1000)+". Do it again with that change; the steps after it run again in order.")
@@ -334,6 +348,11 @@ func InboxText(e InboxEventInfo) string {
 		if e.PlanID != "" && e.OutcomeType == "make_it_work" {
 			what += " status started with result.itemId once the item is made (the plan waits until the item is Done; then report it done)"
 		}
+		if e.Resume {
+			what = fmt.Sprintf("continue outcome %s where it stands (thread_read shows its progress; your worktree and pull request may already exist), keep reporting step_progress, then report it with outcome_done", or(e.OutcomeID, "?"))
+		} else if e.Long {
+			what += "; it is a long step: first outcome_done status started, then step_progress (a line and a percent) at least every 10 minutes (this session also stamps it every 5 minutes), then outcome_done status done"
+		}
 		switch e.OutcomeType {
 		case "shape":
 			what += " (Shape: research the idea, write the proposal into the summary with ask \"Build this?\", attach drafts with thread_attach, give the size S/M/L; report done)"
@@ -363,6 +382,8 @@ func InboxText(e InboxEventInfo) string {
 	}
 	if e.Update {
 		lines = append(lines, fmt.Sprintf("Thread %s is already being worked on: this adds to it (thread_read shows the current state).", e.ThreadID))
+	} else if e.Long {
+		lines = append(lines, fmt.Sprintf(`Start with thread_read (threadId %s), then %s. Nothing is sent or handed over without the person's approval. A long step counts toward max_items until it is done.`, e.ThreadID, what))
 	} else {
 		lines = append(lines, fmt.Sprintf(`Start with thread_read (threadId %s), then %s. Nothing is sent or handed over without the person's approval. Inbox work does not count toward max_items and never holds up an item.`, e.ThreadID, what))
 	}
@@ -379,6 +400,7 @@ type feedDue struct {
 	instruct                          *FeedInstruct
 	summary                           *FeedSummary
 	build                             *FeedRunning
+	long                              *FeedRunning
 	state                             string
 	updatedAtMs                       *int64
 }
@@ -403,6 +425,7 @@ type InboxFeed struct {
 	now  func() time.Time
 
 	MaxInbox                 int
+	maxSteps                 int
 	perMinute                int
 	nudgeMs, leaseMs, tickMs int64
 
@@ -427,23 +450,29 @@ type InboxFeed struct {
 	plans       map[string]FeedPlan
 	running     map[string]FeedRunning
 	norder      []string
-	items       map[string]string // outcome id -> its item's state ("done", "stopped", "gone", …)
-	checked     map[string]int64  // outcome id -> when its item was last looked at
-	checking    map[string]bool
-	built       map[string]string // outcome id -> the item reason sent
-	plansIn     bool              // the first plans snapshot came
-	handled     map[string]string
-	seen        map[string]bool
-	due         map[string]*feedDue
-	nudged      map[string]int64
-	carried     map[string]bool
-	inflight    map[string]*feedFlight
-	sent        []int64
-	types       map[string]*FeedEvent
-	fetching    map[string]bool
-	wakes       map[string]string
-	closed      bool
-	pumping     bool
+	// Long steps (slice 6b): the ones this session was handed (carry_out or resume), and the
+	// heartbeats under way.
+	mine    map[string]bool
+	beating map[string]bool
+	// handed: long carry_outs sent and not seen running yet (outcome id -> when).
+	handed   map[string]int64
+	items    map[string]string // outcome id -> its item's state ("done", "stopped", "gone", …)
+	checked  map[string]int64  // outcome id -> when its item was last looked at
+	checking map[string]bool
+	built    map[string]string // outcome id -> the item reason sent
+	plansIn  bool              // the first plans snapshot came
+	handled  map[string]string
+	seen     map[string]bool
+	due      map[string]*feedDue
+	nudged   map[string]int64
+	carried  map[string]bool
+	inflight map[string]*feedFlight
+	sent     []int64
+	types    map[string]*FeedEvent
+	fetching map[string]bool
+	wakes    map[string]string
+	closed   bool
+	pumping  bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -472,8 +501,11 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 	if now == nil {
 		now = time.Now
 	}
+	if o.MaxSteps <= 0 {
+		o.MaxSteps = 1
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &InboxFeed{src: src, push: push, now: now, MaxInbox: o.MaxInbox, perMinute: o.PerMinute,
+	return &InboxFeed{src: src, push: push, now: now, MaxInbox: o.MaxInbox, maxSteps: o.MaxSteps, mine: map[string]bool{}, beating: map[string]bool{}, handed: map[string]int64{}, perMinute: o.PerMinute,
 		nudgeMs: o.NudgeAfter.Milliseconds(), leaseMs: o.Lease.Milliseconds(), tickMs: o.Tick.Milliseconds(),
 		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, rechecks: map[string]FeedRecheck{}, recheckd: map[string]int64{}, instructs: map[string]FeedInstruct{}, instructd: map[string]string{}, summaries: map[string]FeedSummary{}, summarized: map[string]int64{}, summarizeMs: InboxSummarizeAfter.Milliseconds(), plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, handled: map[string]string{},
 		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{},
@@ -759,8 +791,13 @@ func (f *InboxFeed) Evaluate() {
 		if f.carried[f.round(o)] || f.due[slot] != nil || !f.atTurn(o) {
 			continue
 		}
+		long := isLong(o.Type)
+		// Long steps count toward max items (slice 6b): one more only while a slot is free.
+		if long && f.longBusy(o.ID) >= f.maxSteps {
+			continue
+		}
 		oc := o
-		info := InboxEventInfo{Reason: "carry_out", ThreadID: o.ThreadID, OutcomeID: o.ID, OutcomeType: o.Type}
+		info := InboxEventInfo{Reason: "carry_out", ThreadID: o.ThreadID, OutcomeID: o.ID, OutcomeType: o.Type, Long: long}
 		if o.PlanID != "" {
 			p := f.plans[o.PlanID]
 			info.PlanID, info.Step = o.PlanID, p.stepOf(o.ID)
@@ -861,9 +898,23 @@ func (f *InboxFeed) Evaluate() {
 		}
 	}
 	// Build it (item qwFAWxZM5xkcE7PPjAzi): a running step's item reaching Done (or stopped).
-	var look []FeedRunning
+	var look, beat []FeedRunning
 	for _, id := range f.norder {
 		r := f.running[id]
+		if r.Long {
+			// A long step running before this session (slice 6b): resume it, once.
+			if slot := "l:" + r.ID; !f.mine[r.ID] && f.due[slot] == nil {
+				rc := r
+				info := InboxEventInfo{Reason: "carry_out", ThreadID: r.ThreadID, OutcomeID: r.ID, OutcomeType: r.Type, PlanID: r.PlanID, Long: true, Resume: true}
+				f.due[slot] = &feedDue{slot: slot, reason: "carry_out", threadID: r.ThreadID, atMs: now, memberUID: r.MemberUID, long: &rc, info: info}
+			}
+			// The heartbeat of a step this session holds.
+			if f.mine[r.ID] && !f.beating[r.ID] && now-r.BeatAtMs >= StepHeartbeatMs {
+				f.beating[r.ID] = true
+				beat = append(beat, r)
+			}
+			continue
+		}
 		slot := "b:" + r.ID
 		reason := ""
 		switch f.items[r.ID] {
@@ -887,8 +938,14 @@ func (f *InboxFeed) Evaluate() {
 		f.due[slot] = &feedDue{slot: slot, reason: reason, threadID: r.ThreadID, atMs: now, memberUID: r.MemberUID, build: &rc, info: info}
 	}
 	for slot, d := range f.due {
-		if d.build != nil {
-			if _, ok := f.running[d.build.ID]; !ok {
+		if d.build != nil || d.long != nil {
+			id := ""
+			if d.build != nil {
+				id = d.build.ID
+			} else {
+				id = d.long.ID
+			}
+			if _, ok := f.running[id]; !ok {
 				delete(f.due, slot)
 			}
 		}
@@ -903,6 +960,14 @@ func (f *InboxFeed) Evaluate() {
 	f.mu.Unlock()
 	if len(look) > 0 {
 		go f.checkItems(look)
+	}
+	for _, r := range beat {
+		go func(id string) {
+			_ = f.src.Heartbeat(f.ctx, id) // tried again at a later tick when it fails
+			f.mu.Lock()
+			delete(f.beating, id)
+			f.mu.Unlock()
+		}(r.ID)
 	}
 	if len(fetch) > 0 {
 		// One batch, then one look: the threads of a snapshot go out in priority order.
@@ -1041,7 +1106,9 @@ func (f *InboxFeed) pump() []Event {
 	for _, key := range keys {
 		d := f.due[key]
 		_, update := f.inflight[d.slot]
-		if !update && len(f.inflight) >= f.MaxInbox {
+		// Long steps (slice 6b) count toward max items, not toward the inbox cap.
+		long := d.long != nil || (d.outcome != nil && isLong(d.outcome.Type))
+		if !long && !update && len(f.inflight) >= f.MaxInbox {
 			continue
 		}
 		if !f.allowed() {
@@ -1051,6 +1118,12 @@ func (f *InboxFeed) pump() []Event {
 		delete(f.due, key)
 		if d.outcome != nil {
 			f.carried[f.round(*d.outcome)] = true
+		}
+		if long {
+			f.mine[d.info.OutcomeID] = true
+			if d.outcome != nil {
+				f.handed[d.outcome.ID] = f.nowMs()
+			}
 		}
 		if d.revise != nil {
 			f.revised[d.revise.ID] = d.revise.AtMs
@@ -1070,7 +1143,7 @@ func (f *InboxFeed) pump() []Event {
 		if d.reason == "nudge_due" {
 			f.nudged[d.threadID] = *d.updatedAtMs
 		}
-		if !update {
+		if !update && !long {
 			f.inflight[d.slot] = &feedFlight{at: f.nowMs(), outcome: d.outcome != nil, revise: d.revise != nil, recheck: d.recheck != nil, instruct: d.instruct != nil, summary: d.summary != nil, threadID: d.threadID, build: d.build != nil, state: d.state, updatedAtMs: d.updatedAtMs}
 		}
 		f.sent = append(f.sent, f.nowMs())
@@ -1086,6 +1159,12 @@ func (f *InboxFeed) pump() []Event {
 		}
 		if d.build != nil {
 			meta["outcome_id"], meta["outcome_type"], meta["item_id"] = d.build.ID, d.build.Type, d.build.ItemID
+		}
+		if d.long != nil {
+			meta["outcome_id"], meta["outcome_type"], meta["why"] = d.long.ID, d.long.Type, "resume"
+		}
+		if long {
+			meta["long"] = "true"
 		}
 		if d.instruct != nil {
 			meta["instruction_id"] = d.instruct.ID
@@ -1336,6 +1415,11 @@ func (s firestoreInbox) WatchPlans(ctx context.Context, on func([]FeedPlan)) {
 }
 
 // WatchRunning listens to this agent's running plan steps (Build it, waiting for its item).
+// Heartbeat stamps a running long step this session holds (slice 6b).
+func (s firestoreInbox) Heartbeat(ctx context.Context, outcomeID string) error {
+	return s.c.StepHeartbeat(ctx, outcomeID)
+}
+
 func (s firestoreInbox) WatchRunning(ctx context.Context, on func([]FeedRunning)) {
 	q := s.c.DB.Collection(model.Paths.InboxCollection(s.c.WorkspaceID, "inboxOutcomes")).
 		Where("executor", "==", s.c.UID).Where("state", "==", "running")
@@ -1353,7 +1437,13 @@ func (s firestoreInbox) WatchRunning(ctx context.Context, on func([]FeedRunning)
 					}
 				}
 			}
-			if r.ItemID != "" {
+			if isLong(r.Type) {
+				r.Long, r.BeatAtMs = true, feedMs(m["updatedAt"])
+				if pr, ok := m["progress"].(map[string]any); ok {
+					r.BeatAtMs = max(r.BeatAtMs, feedMs(pr["at"]))
+				}
+				rows = append(rows, r)
+			} else if r.ItemID != "" {
 				rows = append(rows, r)
 			}
 		}
@@ -1440,4 +1530,51 @@ func (s firestoreInbox) EventOf(ctx context.Context, eventID string) (*FeedEvent
 func (s firestoreInbox) Wake(ctx context.Context, threadID string) error {
 	_, err := s.c.ThreadWake(ctx, threadID)
 	return err
+}
+
+// StepHeartbeatMs is how often this session stamps a running long step it holds (slice 6b).
+const StepHeartbeatMs = int64(5 * 60_000)
+
+// longStartGraceMs: a long step handed over and gone from the approved outcomes still counts
+// this long, until the running listener shows it.
+const longStartGraceMs = int64(10_000)
+
+func isLong(typeID string) bool {
+	t := actions.OutcomeTypeOf(typeID)
+	return t != nil && t.Long
+}
+
+// longBusy counts the long steps this agent runs (running, or handed over and not yet started)
+// plus the long carry_outs due, the step `except` aside (the one being decided). Call with f.mu
+// held.
+func (f *InboxFeed) longBusy(except string) int {
+	n := 0
+	for _, r := range f.running {
+		if r.Long {
+			n++
+		}
+	}
+	// Handed over and not seen running yet: still approved at its turn, or just started (the
+	// two listeners may tell it in either order; a short grace covers the gap).
+	now := f.nowMs()
+	for id, at := range f.handed {
+		if id == except {
+			continue
+		}
+		if r, ok := f.running[id]; ok && r.Long {
+			delete(f.handed, id)
+			continue
+		}
+		if o, ok := f.outcomes[id]; (ok && f.atTurn(o)) || now-at < longStartGraceMs {
+			n++
+		} else {
+			delete(f.handed, id)
+		}
+	}
+	for _, d := range f.due {
+		if d.outcome != nil && isLong(d.outcome.Type) {
+			n++
+		}
+	}
+	return n
 }

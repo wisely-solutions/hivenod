@@ -1337,7 +1337,7 @@
       },
       {
         "name": "outcome_done",
-        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A make_it_work plan step (Build it): status started with result.itemId once the item is made; report it done when the item is Done. A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it.",
+        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A make_it_work plan step (Build it): status started with result.itemId once the item is made; report it done when the item is Done. A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, release): report status started when you begin, step_progress as you go, then done.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1374,6 +1374,22 @@
                   "maxLength": 1000
                 }
               }
+            },
+            "usage": {
+              "type": "object",
+              "properties": {
+                "tokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Tokens it took"
+                },
+                "costEur": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "What it cost, in euros"
+                }
+              },
+              "description": "What carrying it out cost, when you know it (shown in the timeline)"
             }
           },
           "required": [
@@ -1384,6 +1400,37 @@
         },
         "execution": {
           "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "step_progress",
+        "description": "Report where a long plan step you started (Build, Release + live check) stands: one line for the person (at most 140 characters) and a percent if you know one. Report at least every 10 minutes while you work on it; this session also stamps it every 5 minutes (the heartbeat). Without one for an hour the person sees you as quiet and a new session resumes the step. Start the step first with outcome_done status started; end it with outcome_done status done.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcomeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The step (outcome_id of its carry_out)"
+            },
+            "line": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 140,
+              "description": "Where it stands, e.g. \"Tests green, writing the PR\""
+            },
+            "percent": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "How far along, 0-100, if you know"
+            }
+          },
+          "required": [
+            "outcomeId",
+            "line"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
         }
       },
       {
@@ -3206,7 +3253,7 @@
       },
       {
         "name": "outcome_done",
-        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A make_it_work plan step (Build it): status started with result.itemId once the item is made; report it done when the item is Done. A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it.",
+        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.itemId of the item you created, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A make_it_work plan step (Build it): status started with result.itemId once the item is made; report it done when the item is Done. A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, release): report status started when you begin, step_progress as you go, then done.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -3243,6 +3290,22 @@
                   "maxLength": 1000
                 }
               }
+            },
+            "usage": {
+              "type": "object",
+              "properties": {
+                "tokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Tokens it took"
+                },
+                "costEur": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "What it cost, in euros"
+                }
+              },
+              "description": "What carrying it out cost, when you know it (shown in the timeline)"
             }
           },
           "required": [
@@ -3253,6 +3316,37 @@
         },
         "execution": {
           "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "step_progress",
+        "description": "Report where a long plan step you started (Build, Release + live check) stands: one line for the person (at most 140 characters) and a percent if you know one. Report at least every 10 minutes while you work on it; this session also stamps it every 5 minutes (the heartbeat). Without one for an hour the person sees you as quiet and a new session resumes the step. Start the step first with outcome_done status started; end it with outcome_done status done.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcomeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The step (outcome_id of its carry_out)"
+            },
+            "line": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 140,
+              "description": "Where it stands, e.g. \"Tests green, writing the PR\""
+            },
+            "percent": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "How far along, 0-100, if you know"
+            }
+          },
+          "required": [
+            "outcomeId",
+            "line"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
         }
       },
       {

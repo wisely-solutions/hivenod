@@ -103,7 +103,7 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 			Presence: msEnv("HIVENOD_PRESENCE_MS"), Retry: msEnv("HIVENOD_CHANNEL_RETRY_MS"),
 			ParkCheck: msEnv("HIVENOD_PARK_CHECK_MS"), StatusCheck: msEnv("HIVENOD_STATUS_CHECK_MS"),
 			StatusMinute: msEnv("HIVENOD_STATUS_MINUTE_MS"),
-			Inbox: hive.InboxOptions{MaxInbox: maxInbox, PerMinute: int(msEnv("HIVENOD_INBOX_PER_MIN") / time.Millisecond),
+			Inbox: hive.InboxOptions{MaxInbox: maxInbox, MaxSteps: maxItems, PerMinute: int(msEnv("HIVENOD_INBOX_PER_MIN") / time.Millisecond),
 				NudgeAfter: msEnv("HIVENOD_INBOX_NUDGE_MS"), Lease: msEnv("HIVENOD_INBOX_LEASE_MS"), Tick: msEnv("HIVENOD_INBOX_TICK_MS")}}
 		if cfg.WebURL != "" && os.Getenv("HIVENOD_NO_UPDATE_CHECK") == "" {
 			u := &update.Updater{Site: cfg.WebURL}

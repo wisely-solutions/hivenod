@@ -20,6 +20,7 @@ import {
   finishOutcome,
   proposeOutcome,
   proposePlan,
+  stepProgress,
   recheckDone,
   answerInstruction,
   suggestChips,
@@ -234,6 +235,26 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
         }),
       );
       return oid;
+    },
+    /** Reports where the running long step at the plan's turn stands (step_progress, slice 6b). */
+    async progress(pid: string, line: string, percent: number | null = null) {
+      const plan = (await getDoc(doc(db, inboxPaths.plan(wid, pid)))).data() as PlanInput['plan'];
+      const outcomes: Record<string, OutcomeStateOf> = {};
+      for (const id of plan.steps)
+        outcomes[id] = (
+          await getDoc(doc(db, inboxPaths.outcome(wid, id)))
+        ).data() as OutcomeStateOf;
+      const oid = plan.steps[plan.cursor]!;
+      await run(
+        stepProgress(ctx, {
+          outcomeId: oid,
+          outcome: outcomes[oid]!,
+          thread: await thread(plan.threadId),
+          line,
+          percent,
+          plan: { planId: pid, plan, outcomes },
+        }),
+      );
     },
     /** Attaches a file to the thread (thread_attach, slice 4); returns its attachment id. */
     async attach(

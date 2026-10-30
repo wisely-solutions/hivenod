@@ -128,6 +128,12 @@ func (c *Client) planRows(ctx context.Context, threadID string) ([]any, map[stri
 		steps := make([]any, len(v.Steps))
 		for i, s := range v.Steps {
 			steps[i] = map[string]any{"step": s.Number, "outcomeId": s.OutcomeID, "type": s.Type, "kind": s.Kind, "label": s.Label, "ui": s.UI, "atCursor": s.AtCursor}
+			// A running long step (slice 6b): where it stands, as last reported.
+			if s.UI == "running" && s.Type != nil && isLong(*s.Type) {
+				if o, err := c.outcome(ctx, s.OutcomeID); err == nil && o.Progress != nil {
+					steps[i].(map[string]any)["progress"] = map[string]any{"line": o.Progress.Line, "percent": o.Progress.Percent}
+				}
+			}
 			stepOf[s.OutcomeID] = fmt.Sprintf("%d of %d", s.Number, v.Total)
 		}
 		row := map[string]any{

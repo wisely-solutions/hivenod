@@ -40,7 +40,7 @@ export function waitingText(w: InboxThread['waiting']): string {
     case 'thirdParty':
       return 'Waiting on someone else';
     case 'item':
-      return 'Waiting on the item';
+      return 'Waiting on the work';
     case 'date':
       return w.until
         ? `Waiting until ${new Date(ms(w.until)).toLocaleString(undefined, {

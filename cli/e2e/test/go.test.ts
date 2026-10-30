@@ -1489,6 +1489,63 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
     matchesGolden(r);
   }, 120_000);
 
+  it('long steps (item OE8Fm, slice 6b): Build starts with no item, reports progress, ends done with its usage', async () => {
+    const r = await scenario(async (call, uid) => {
+      const owner = as('owner');
+      const thread = async (tid: string) =>
+        (await snap(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+      const planOf = async (pid: string): Promise<PlanInput> => {
+        const plan = (await snap(inboxPaths.plan(W, pid))) as unknown as PlanInput['plan'];
+        const outcomes: Record<string, OutcomeStateOf> = {};
+        for (const id of plan.steps)
+          outcomes[id] = (await snap(inboxPaths.outcome(W, id))) as unknown as OutcomeStateOf;
+        return { planId: pid, plan, outcomes };
+      };
+      await owner.run(
+        createMemberThread(owner.ctx, {
+          title: 'Dark mode',
+          text: 'Add a dark mode to the board.',
+          agentUid: uid,
+          template: 'dev',
+          threadId: 'lt1',
+          planId: 'lp1',
+          stepIds: ['l1', 'l2', 'l3', 'l4', 'l5', 'l6'],
+        }),
+      );
+      await call('outcome_done', { outcomeId: 'l1', status: 'done' });
+      const pl = await planOf('lp1');
+      await owner.run(
+        approveOutcome(owner.ctx, {
+          outcomeId: 'l2',
+          outcome: pl.outcomes.l2!,
+          thread: await thread('lt1'),
+          plan: pl,
+        }),
+      );
+      // Progress before the start is refused; then started with no item.
+      await call('step_progress', { outcomeId: 'l3', line: 'Reading the code' });
+      await call('outcome_done', { outcomeId: 'l3', status: 'started' });
+      await call('step_progress', {
+        outcomeId: 'l3',
+        line: 'Tests green, writing the PR',
+        percent: 70,
+      });
+      await call('step_progress', { outcomeId: 'l3', line: 'x', percent: 101 });
+      await call('thread_read', { threadId: 'lt1' });
+      await call('outcome_done', {
+        outcomeId: 'l3',
+        status: 'done',
+        result: { permalink: 'https://github.com/example/board/pull/86', text: 'PR #86 open' },
+        usage: { tokens: 123456, costEur: 1.23 },
+      });
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([true, false, true, true, false, true, true]);
+    expect(r.calls[2]).toMatchObject({ out: { state: 'running' } });
+    expect(r.calls[5]).toMatchObject({ out: { state: 'waiting', waiting: { on: 'item' } } });
+    matchesGolden(r);
+  }, 120_000);
+
   it('errors: gate, not claimed, wrong run, unknown item, oversized file, bad progress', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hive-att-'));
     const big = join(dir, 'big.txt');

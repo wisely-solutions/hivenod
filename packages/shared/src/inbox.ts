@@ -143,6 +143,8 @@ export const INBOX_EVENT_TYPES = [
   // member (Ask for changes on a gate) or by the agent (plan_send_back)
   'thread.created',
   'plan.sent_back',
+  // Long steps (slice 6b): the executing agent's progress line and heartbeat on a running step
+  'step.progress',
   'subject.created',
   'subject.renamed',
   'subject.merged',
@@ -202,6 +204,8 @@ export const INBOX_LIMITS = {
   instructions: 20,
   suggestedChips: 5,
   instructNote: 500,
+  /** A long step's progress line (step_progress, slice 6b), in characters. */
+  progressLine: 140,
 } as const;
 
 /**
@@ -494,6 +498,13 @@ export const inboxOutcomeSchema = z.object({
     .nullable(),
   /** The plan it is a step of (item qwFAWxZM5xkcE7PPjAzi); absent: a single outcome. */
   planId: z.string().optional(),
+  /**
+   * A running long step's last progress (slice 6b, step_progress): its line, a percentage, and
+   * when (the heartbeat). Absent until the first one.
+   */
+  progress: z
+    .object({ line: z.string(), percent: z.number().int().nullable(), at: timestamp })
+    .optional(),
   /** When the home agent last re-checked it and found it still good (absent: never). */
   checkedAt: timestamp.optional(),
   createdAt: timestamp,
@@ -1352,11 +1363,14 @@ export function finishOutcome(
     };
     /** The plan, when the outcome is a plan step. */
     plan?: PlanInput;
+    /** What carrying it out cost (slice 6b), recorded on the event. */
+    usage?: { tokens?: number | null; costEur?: number | null } | null;
   },
 ): ActionPlan {
   requireAgent(ctx);
   const o = input.outcome;
   const planned = o.planId !== undefined && o.planId !== null;
+  const usage = cleanUsage(input.usage);
   need(
     o.state === 'approved' || (planned && o.state === 'running' && input.status !== 'started'),
     o.state === 'proposed' || o.state === 'revising'
@@ -1398,7 +1412,8 @@ export function finishOutcome(
       pl.plan.steps[pl.plan.cursor] === input.outcomeId,
       'Not its turn: a plan step is carried out only once the steps before it are done.',
     );
-    if (input.status === 'started') {
+    // A long step (Build, Release: slice 6b) starts with no item; Build it with the item it made.
+    if (input.status === 'started' && outcomeType(o.type)?.long !== true) {
       need(
         outcomeType(o.type)?.after.waitingOn === 'item',
         `A ${o.type} step is reported done or failed, not started.`,
@@ -1423,6 +1438,7 @@ export function finishOutcome(
         permalink,
         itemId,
         ...(error ? { error } : {}),
+        ...(usage ? { usage } : {}),
       },
       (eventId) => [
         upd(inboxPaths.outcome(ctx.workspaceId, input.outcomeId), { state, result }, eventId),
@@ -1438,7 +1454,14 @@ export function finishOutcome(
     ctx,
     input.status === 'done' ? 'outcome.done' : 'outcome.failed',
     { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
-    { outcomeId: input.outcomeId, type: o.type, permalink, itemId, ...(error ? { error } : {}) },
+    {
+      outcomeId: input.outcomeId,
+      type: o.type,
+      permalink,
+      itemId,
+      ...(error ? { error } : {}),
+      ...(usage ? { usage } : {}),
+    },
     (eventId) => [
       upd(
         inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
@@ -1446,6 +1469,90 @@ export function finishOutcome(
         eventId,
       ),
       upd(inboxPaths.thread(ctx.workspaceId, o.threadId), after, eventId),
+    ],
+  );
+}
+
+/** A run's usage (outcome_done usage, slice 6b): whole tokens and euros, both optional. */
+function cleanUsage(
+  u: { tokens?: number | null; costEur?: number | null } | null | undefined,
+): { tokens?: number; costEur?: number } | null {
+  if (!u) return null;
+  const out: { tokens?: number; costEur?: number } = {};
+  if (u.tokens !== undefined && u.tokens !== null) {
+    need(
+      Number.isInteger(u.tokens) && u.tokens >= 0 && u.tokens <= 1e10,
+      'usage.tokens is a whole number from 0.',
+    );
+    out.tokens = u.tokens;
+  }
+  if (u.costEur !== undefined && u.costEur !== null) {
+    need(
+      Number.isFinite(u.costEur) && u.costEur >= 0 && u.costEur <= 1e6,
+      'usage.costEur is a number of euros from 0.',
+    );
+    out.costEur = Math.round(u.costEur * 10000) / 10000;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** How often the CLI stamps a running long step it holds, and when the web calls it quiet. */
+export const STEP_HEARTBEAT_MS = 5 * 60_000;
+export const STEP_QUIET_MS = 60 * 60_000;
+
+/**
+ * step_progress (slice 6b, design 6.6): the agent carrying out a running long step (Build,
+ * Release) says where it stands: a line (1-140 characters) and maybe a percentage. It is also the
+ * heartbeat (the CLI sends one every 5 minutes while its session holds the step); without one
+ * for an hour the page says the agent is quiet. Only the step changes, with one step.progress
+ * event: the thread and its summary are not touched.
+ */
+export function stepProgress(
+  ctx: ActionContext,
+  input: {
+    outcomeId: string;
+    outcome: OutcomeStateOf;
+    thread: ThreadStateOf;
+    line: string;
+    percent?: number | null;
+    plan: PlanInput;
+  },
+): ActionPlan {
+  requireAgent(ctx);
+  const o = input.outcome;
+  need(
+    o.executor === ctx.actor.id,
+    'Only the agent that carries this step out reports its progress.',
+  );
+  need(
+    o.state === 'running' && outcomeType(o.type)?.long === true,
+    'Progress is for a long step you started (outcome_done status started first).',
+  );
+  const pl = planFor(input.plan, o, input.outcomeId);
+  need(
+    (pl.plan.state === 'active' || pl.plan.state === 'proposed') &&
+      pl.plan.steps[pl.plan.cursor] === input.outcomeId,
+    'Not its turn: this step is not the one the plan runs now.',
+  );
+  const line = (input.line ?? '').trim().replace(/\s+/g, ' ');
+  need(line.length > 0, 'Say where it stands (line).');
+  need(line.length <= INBOX_LIMITS.progressLine, tooLong('The line', INBOX_LIMITS.progressLine));
+  const percent = input.percent ?? null;
+  need(
+    percent === null || (Number.isInteger(percent) && percent >= 0 && percent <= 100),
+    'The percent is a whole number from 0 to 100.',
+  );
+  return inboxPlan(
+    ctx,
+    'step.progress',
+    { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
+    { planId: pl.planId, outcomeId: input.outcomeId, line, percent },
+    (eventId) => [
+      upd(
+        inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
+        { progress: { line, percent, at: SERVER_TIME } },
+        eventId,
+      ),
     ],
   );
 }

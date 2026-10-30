@@ -215,7 +215,11 @@ var ToolRuns = map[string]Run{
 	},
 	"outcome_done": func(ctx context.Context, c *Client, a Args) (any, error) {
 		r := Args(asMap(a["result"]))
-		return c.OutcomeDone(ctx, a.S("outcomeId"), a.S("status"), OutcomeResult{r.SP("text"), r.SP("permalink"), r.SP("itemId"), r.SP("error")})
+		u := Args(asMap(a["usage"]))
+		return c.OutcomeDone(ctx, a.S("outcomeId"), a.S("status"), OutcomeResult{Text: r.SP("text"), Permalink: r.SP("permalink"), ItemID: r.SP("itemId"), Error: r.SP("error"), Tokens: u.F("tokens"), CostEur: u.F("costEur")})
+	},
+	"step_progress": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.StepProgress(ctx, a.S("outcomeId"), a.S("line"), a.F("percent"))
 	},
 	"plan_propose": func(ctx context.Context, c *Client, a Args) (any, error) {
 		var steps []PlanStepArg

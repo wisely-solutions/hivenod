@@ -26,7 +26,7 @@ import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
 import { UndoButton } from '../ui/UndoButton';
 import { AskAgent } from './AskAgent';
-import { freshness, topState, type ShownSummary, type TopTone } from './decision';
+import { freshness, quietFor, topState, type ShownSummary, type TopTone } from './decision';
 import { firstFree, planInputOf, planLive, planMain, sendBackChoices, stepTitle } from './plan';
 import { GateAsk } from './GateAsk';
 import { ActionMenu, type MenuAction } from '../ui/menu';
@@ -446,6 +446,9 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           </p>
         ) : null}
         {widget ? <div className="mt-1">{widget}</div> : null}
+        {top.kind === 'working' && cur ? (
+          <LongProgress outcome={cur.data} now={now} agent={agent} />
+        ) : null}
         {nn.error ? (
           <p role="alert" className="mt-3 text-14 text-sendback">
             {nn.error}
@@ -531,6 +534,60 @@ const EMPTY_PLAN = {
   plan: { memberUid: '', threadId: '', steps: [], cursor: 0, state: 'stopped' as const },
   outcomes: {},
 };
+
+/**
+ * A long step being worked on (slice 6b): the agent's last progress line and percent, and a
+ * warning when it has been quiet for an hour (a new session of the agent picks the step up).
+ */
+function LongProgress({
+  outcome,
+  now,
+  agent,
+}: {
+  outcome: InboxOutcome;
+  now: number;
+  agent: string;
+}) {
+  if (outcome.state !== 'running' || outcomeType(outcome.type)?.long !== true) return null;
+  const p = outcome.progress;
+  const beat = Math.max(p?.at.toMillis() ?? 0, outcome.updatedAt.toMillis());
+  const quiet = quietFor(beat, now);
+  return (
+    <div data-long-progress="" className="mt-3">
+      {p ? (
+        <>
+          <p data-progress-line="" className="text-14 text-ink [overflow-wrap:anywhere]">
+            {p.line}
+            {p.percent !== null ? <span className="text-text-2"> · {p.percent}%</span> : null}
+          </p>
+          {p.percent !== null ? (
+            <div
+              role="progressbar"
+              aria-label="Progress"
+              aria-valuenow={p.percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="mt-2 h-1.5 overflow-hidden rounded-full bg-line"
+            >
+              <div className="h-full bg-agent" style={{ width: `${p.percent}%` }} />
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-14 text-text-2">Started: no progress reported yet.</p>
+      )}
+      {quiet ? (
+        <p
+          data-quiet=""
+          className="mt-2 inline-flex items-center gap-1 text-13 font-medium text-gate-text"
+        >
+          <Icon icon={TriangleAlert} size={14} />
+          {agent} quiet for {quiet}: a new session of {agent} picks this step up again.
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 /** The decisions that leave the plan (Not approved, Reject plan): out of the way, in a ⋯ menu. */
 function MoreDecisions({ actions }: { actions: MenuAction[] }) {

@@ -1133,6 +1133,33 @@ const MUTATIONS = [
     'gate: summary version of any type',
     [["\n                      && d.decision.get('summaryVersion', 1) is int", '']],
   ],
+  // Long steps (item OE8FmrTaIxFVGcaeGG3N, slice 6b): progress by the executor, in bounds.
+  [
+    'step progress: any agent',
+    [
+      [
+        "e.type == 'step.progress' && isActiveAgent(wid) && r.executor == me() && turn",
+        "e.type == 'step.progress' && isActiveAgent(wid) && turn",
+      ],
+    ],
+  ],
+  [
+    'step progress: any percent',
+    [
+      [
+        '|| (d.progress.percent is int && d.progress.percent >= 0 && d.progress.percent <= 100))',
+        '|| true)',
+      ],
+    ],
+  ],
+  [
+    'step progress: other fields too',
+    [["&& touched(['progress']) && exactKeys(d.progress", '&& exactKeys(d.progress']],
+  ],
+  [
+    'step progress: not running',
+    [["\n              && r.state == 'running' && r.type in outcomeLong()", '\n             ']],
+  ],
   [
     'summary: deletes newer versions',
     [

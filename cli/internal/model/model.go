@@ -584,6 +584,8 @@ type InboxOutcome struct {
 	Revise   *ReviseRequest   `firestore:"revise" json:"revise"`
 	// PlanID: a step of that plan (item qwFAWxZM5xkcE7PPjAzi); nil: a single outcome.
 	PlanID *string `firestore:"planId" json:"planId"`
+	// Progress (slice 6b): a running long step's last progress line, percent and time.
+	Progress *InboxProgress `firestore:"progress" json:"progress"`
 	// CheckedAt: when the home agent last re-checked it and found it still good (nil: never).
 	CheckedAt *time.Time `firestore:"checkedAt" json:"checkedAt"`
 }
@@ -652,4 +654,11 @@ type InboxEvent struct {
 	Type string         `firestore:"type" json:"type"`
 	Data map[string]any `firestore:"data" json:"data"`
 	At   time.Time      `firestore:"at" json:"at"`
+}
+
+// InboxProgress is a running long step's last step_progress.
+type InboxProgress struct {
+	Line    string    `firestore:"line" json:"line"`
+	Percent *int64    `firestore:"percent" json:"percent"`
+	At      time.Time `firestore:"at" json:"at"`
 }

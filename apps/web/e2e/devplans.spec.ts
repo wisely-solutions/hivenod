@@ -81,9 +81,9 @@ async function newDevThread(page: Page, s: Seed, shot?: string) {
   await dialog.locator('[data-new-thread-create]').click();
   await expect(page).toHaveURL(new RegExp(`/inbox/${s.wid}/t/`), { timeout: 20_000 });
   const tid = new URL(page.url()).pathname.split('/').pop()!;
-  const plans = await s.agent.plansOf(tid);
-  expect(plans).toHaveLength(1);
-  return { tid, planId: plans[0]! };
+  await expect.poll(async () => (await s.agent.plansOf(tid)).length).toBe(1);
+  const [planId] = await s.agent.plansOf(tid);
+  return { tid, planId: planId! };
 }
 
 /** The agent runs Shape, the member approves the idea, the agent builds: Ship it? waits. */
@@ -104,9 +104,23 @@ async function toShipIt(page: Page, s: Seed, tid: string, planId: string) {
   await page.waitForTimeout(UNDO_WAIT);
   await expect.poll(() => cursorOf(s, planId)).toBe(2);
   const [, gate] = await s.agent.stepsOf(planId);
-  const dec = (await docOf(oPath(s, gate!))).decision?.mapValue?.fields;
-  expect(dec?.summaryVersion?.integerValue).toBe(String(v));
-  // Build: an open, green, unmerged pull request.
+  // Polled: under load the admin read can come before the decision is visible.
+  await expect
+    .poll(
+      async () =>
+        (await docOf(oPath(s, gate!))).decision?.mapValue?.fields?.summaryVersion?.integerValue,
+    )
+    .toBe(String(v));
+  // Build (a long step, slice 6b): started, its progress on the top card, then an open, green,
+  // unmerged pull request.
+  await s.agent.finishStep(planId, 'started');
+  await s.agent.progress(planId, 'Tests green, writing the PR', 70);
+  await expect(top(page).locator('[data-progress-line]')).toHaveText(
+    'Tests green, writing the PR · 70%',
+    { timeout: 20_000 },
+  );
+  await expect(top(page).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '70');
+  await look(page, `slice6b-building-${test.info().project.name}`);
   await s.agent.finishStep(planId, 'done', {
     permalink: 'https://github.com/example/board/pull/86',
   });
@@ -154,11 +168,13 @@ async function shipItThenSendBack(page: Page, s: Seed, planId: string, shot: str
   await page.waitForTimeout(UNDO_WAIT);
   await expect.poll(() => cursorOf(s, planId)).toBe(2);
   const [, , build, ship] = await s.agent.stepsOf(planId);
-  expect(await stateOf(s, build!)).toBe('approved');
-  expect(await stateOf(s, ship!)).toBe('proposed');
-  const sb = (await docOf(planPath(s, planId))).sentBack?.mapValue?.fields;
-  expect(sb?.reason?.stringValue).toBe('The toggle should sit at the top of Settings.');
-  expect(sb?.n?.integerValue).toBe('1');
+  await expect.poll(() => stateOf(s, build!)).toBe('approved');
+  await expect.poll(() => stateOf(s, ship!)).toBe('proposed');
+  const sentBack = async () => (await docOf(planPath(s, planId))).sentBack?.mapValue?.fields;
+  await expect
+    .poll(async () => (await sentBack())?.reason?.stringValue)
+    .toBe('The toggle should sit at the top of Settings.');
+  await expect.poll(async () => (await sentBack())?.n?.integerValue).toBe('1');
   await expect(card).toHaveAttribute('data-top', 'working', { timeout: 20_000 });
   await expect(card.locator('[data-kicker]')).toContainText('step 3 of 6');
 }
@@ -184,7 +200,7 @@ test.describe('desktop 1440', () => {
       await expect(rows.nth(3)).toContainText('Ship it?');
       await expect(top(page)).toHaveAttribute('data-top', 'working');
       const [shape] = await s.agent.stepsOf(planId);
-      expect(await stateOf(s, shape!)).toBe('approved');
+      await expect.poll(() => stateOf(s, shape!)).toBe('approved');
       await toShipIt(page, s, tid, planId);
       await shipItThenSendBack(page, s, planId, 'slice6-shipit-1440');
     } finally {

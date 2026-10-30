@@ -2,6 +2,7 @@ import { planView, type PlanView } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
 import {
   bulletDiff,
+  quietFor,
   everythingHint,
   threadImages,
   excerpt,
@@ -359,5 +360,15 @@ describe('threadImages (slice 4)', () => {
     expect(everythingHint({ messages: 1, notes: 0, outcomes: 0, links: 0, files: 2 })).toBe(
       '1 message · 2 files · log',
     );
+  });
+});
+
+describe('quietFor (slice 6b)', () => {
+  it('is null under an hour, then hours, then days', () => {
+    const now = 10 * 86_400_000;
+    expect(quietFor(now - 59 * 60_000, now)).toBeNull();
+    expect(quietFor(now - 60 * 60_000, now)).toBe('1 h');
+    expect(quietFor(now - 5 * 3_600_000, now)).toBe('5 h');
+    expect(quietFor(now - 50 * 3_600_000, now)).toBe('2 d');
   });
 });

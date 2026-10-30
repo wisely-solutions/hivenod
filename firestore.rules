@@ -1143,6 +1143,7 @@ service cloud.firestore {
       function outcomePlanTypes() { return ['reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'shape', 'build', 'release', 'approval']; }
       function outcomeHuman() { return ['approval']; }
       function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval']; }
+      function outcomeLong() { return ['build', 'release']; }
       function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'release': 'done', 'approval': 'done'}; }
       function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'release': null, 'approval': null}; }
       function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'release': ['notes'], 'approval': ['what', 'detail', 'link']}; }
@@ -1484,7 +1485,7 @@ service cloud.firestore {
                   'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
                   'plan.proposed', 'outcome.started', 'thread.rechecked',
                   'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',
-                  'plan.sent_back']));
+                  'plan.sent_back', 'step.progress']));
         }
         allow update, delete: if false;
       }
@@ -1931,7 +1932,7 @@ service cloud.firestore {
           return inboxDocTracked(d,
                  ['outcome.approved', 'outcome.rejected', 'outcome.done', 'outcome.failed', 'outcome.started',
                   'outcome.revise_requested', 'outcome.revised', 'plan.approved', 'plan.rejected', 'plan.edited',
-                  'plan.retried', 'plan.skipped', 'thread.woke', 'plan.sent_back'],
+                  'plan.retried', 'plan.skipped', 'thread.woke', 'plan.sent_back', 'step.progress'],
                  r.memberUid, r.threadId)
             && (e.type in ['outcome.revise_requested', 'outcome.revised']
               // Ask for changes works on a step as on a single outcome.
@@ -1965,7 +1966,15 @@ service cloud.firestore {
           let turn = inboxAtCursor(p, oid);
           // Send back (slice 6): a step the plan goes back over starts again (the plan's rule says
           // who may); a person step is decided again.
-          return (e.type == 'plan.sent_back' && r.state in ['done', 'running'] && pa.cursor < p.cursor
+          // Long steps (slice 6b): the executor's progress line and heartbeat on its running step.
+          return (e.type == 'step.progress' && isActiveAgent(wid) && r.executor == me() && turn
+              && r.state == 'running' && r.type in outcomeLong() && p.state in ['proposed', 'active']
+              && touched(['progress']) && exactKeys(d.progress, ['line', 'percent', 'at'])
+              && str(d.progress.line, 1, 140) && d.progress.at == request.time
+              && (d.progress.percent == null
+                || (d.progress.percent is int && d.progress.percent >= 0 && d.progress.percent <= 100))
+              && e.data.line == d.progress.line)
+            || (e.type == 'plan.sent_back' && r.state in ['done', 'running'] && pa.cursor < p.cursor
               && (human ? touched(['state', 'decision']) && d.state == 'proposed' && d.decision == null
                 : touched(['state']) && d.state == 'approved'))
             || (inboxOwner(r) && inboxPlanLive(p)
@@ -2013,7 +2022,8 @@ service cloud.firestore {
               && ((e.type in ['outcome.done', 'outcome.failed', 'outcome.started'] && r.executor == me()
                   && (e.type == 'outcome.started'
                     ? r.state == 'approved' && d.state == 'running'
-                      && outcomeWaitingOn()[r.type] == 'item' && d.result.itemId is string
+                      && (r.type in outcomeLong()
+                        || (outcomeWaitingOn()[r.type] == 'item' && d.result.itemId is string))
                     : r.state in ['approved', 'running']
                       && (e.type == 'outcome.done'
                         ? d.state == 'done' && pa.cursor == p.cursor + 1

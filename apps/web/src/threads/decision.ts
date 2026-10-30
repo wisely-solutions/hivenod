@@ -6,6 +6,7 @@
  */
 import {
   cliSupports,
+  STEP_QUIET_MS,
   inboxSummarySchema,
   isThreadAttachmentOf,
   minVersionFor,
@@ -318,4 +319,15 @@ export function summaryLine(t: Pick<InboxThread, 'state' | 'summary'>): string |
   if (!s) return null;
   const waits = t.state === 'needsYou' || t.state === 'yourCall';
   return (waits && s.ask) || s.headline;
+}
+
+/**
+ * How long a running long step's agent has been quiet (slice 6b): "1 h", "2 d", or null while
+ * its last heartbeat (progress, or the start) is under an hour old.
+ */
+export function quietFor(beatMs: number, now: number): string | null {
+  const ms = now - beatMs;
+  if (ms < STEP_QUIET_MS) return null;
+  const h = Math.floor(ms / 3_600_000);
+  return h >= 24 ? `${Math.floor(h / 24)} d` : `${h} h`;
 }
