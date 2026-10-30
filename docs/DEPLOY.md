@@ -144,6 +144,36 @@ Release tags: `pnpm release` tags `release-<max+1>` (numeric, so a stray `releas
 idempotent: a commit that already has a release tag keeps it, a taken name moves on to the next free
 number, and existing tags are never moved or deleted.
 
+## Rules size
+
+Google refuses to **release** Firestore rules whose compiled executables are 256000 bytes or more
+("Total size of compiled executables must be smaller than 256000 bytes (actual: N bytes)", a 400 on
+`PATCH releases/cloud.firestore`). Uploading the ruleset still succeeds, and firebase-tools then reports a
+misleading 409 "release already exists". This is a size limit for the whole file, separate from the
+1000-expression budget per request that `test:rules:headroom` measures.
+
+- **Measure:** `node scripts/rules-size.mjs [file]` prints the compiled size Google computes, e.g.
+  `rules compiled size: 232566 of 256000 bytes (9% headroom)`, and exits 1 over the budget. Nothing
+  reports the size of rules that fit, so it uploads a throwaway ruleset and tries a throwaway release
+  `size-probe` (never `cloud.firestore`), padded with identical unused functions until Google refuses it,
+  and reads the size from the 400 (two pad sizes give the cost per pad, which is subtracted). It deletes
+  every ruleset and release it creates (Google keeps at most 2500 rulesets). It needs the deploy service
+  account (`GOOGLE_APPLICATION_CREDENTIALS`) and takes about a minute.
+- **Release guard:** `pnpm release` runs the same probe before deploying rules and stops with
+  "rules too big: N of 256000 bytes" (nothing deployed). A 409 behind which the 400 hides is reported the same
+  way and never retried.
+- **Offline budget (before merging):** `pnpm test:scripts` (`scripts/rules-size.test.mjs`) fails when the
+  _estimated_ compiled size of `firestore.rules` is over **235000 bytes** (`RULES_COMPILED_BUDGET`, about 8%
+  under the limit). The estimate (`estimateCompiledSize` in `scripts/rules-size-lib.mjs`) is
+  4.4727 x tokens + 0.9526 x characters of names, strings and numbers - 10837, comments and whitespace
+  excluded, fitted on eight measured rulesets, within about 1500 bytes. Every token costs about 4.5 bytes and every
+  character of a name about 1, so what grows the size is repeated code, not comments.
+- **When it is tight:** measure with the probe, then trim without weakening a guarantee: repeated
+  `request.resource.data` / `resource.data` become `let d` / `let r` in a function; functions inside a match
+  read its wildcards (`wid`, `pid`, `iid`, ...) instead of taking them as parameters; `touched(keys)` is
+  `changed(keys + ['updatedAt', 'lastEventId'])`; repeated unrolled checks become a small function.
+  Re-fit the estimate if the probe and the estimate drift apart by more than about 2000 bytes.
+
 ## GitHub Actions
 
 `Release` (after green CI on `main`) and `Rollback` deploy only when the repo secret
