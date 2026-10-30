@@ -73,19 +73,19 @@ export function RunPill({
 /** The plan of each run: "Prepare → You approve → Send" (agent blue, you amber). */
 export function StepPills({ steps, agent }: { steps: ScheduleStepView[]; agent?: string }) {
   return (
-    <ol className="flex flex-wrap items-center gap-1" data-plan-pills="">
+    <ol className="flex min-w-0 max-w-full flex-wrap items-center gap-1" data-plan-pills="">
       {steps.map((s, i) => (
-        <li key={i} className="flex min-w-0 items-center gap-1">
+        <li key={i} className="flex min-w-0 max-w-full items-center gap-1">
           {i > 0 ? (
-            <span aria-hidden className="text-12 text-text-3">
+            <span aria-hidden className="shrink-0 text-12 text-text-3">
               →
             </span>
           ) : null}
           <Pill
             tone={s.who === 'you' ? 'gate' : 'agent'}
-            className="h-5 max-w-[14rem] px-2 text-12"
+            className="h-5 min-w-0 max-w-full overflow-hidden px-2 text-12"
           >
-            <span className="truncate" title={s.title}>
+            <span className="min-w-0 truncate" title={s.title}>
               {s.who === 'you' ? 'You: ' : agent ? `${agent}: ` : ''}
               {s.title.replace(/^You approve: /, 'approve ')}
             </span>
@@ -231,7 +231,7 @@ export function CantRunCardView({
             )}
           </p>
           <p className="mt-0.5 text-14 text-text-2 [overflow-wrap:anywhere]">
-            Why: {card.why} {compact ? null : card.skip}
+            Why: {/[.!?]$/.test(card.why) ? card.why : `${card.why}.`} {compact ? null : card.skip}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
