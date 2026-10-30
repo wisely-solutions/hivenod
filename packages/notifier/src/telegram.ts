@@ -3,6 +3,15 @@ import { randomId, notifyPath, type Notice } from '@hive/shared';
 import type { Firestore } from 'firebase-admin/firestore';
 import type { ReachTelegram, TelegramAction, ThreadTelegram } from './engine';
 import { decideReach } from './reachDecide';
+import {
+  decideRunAction,
+  runWhyNot,
+  memberZone,
+  type RunAction,
+  type RunDecision,
+} from './runDecide';
+import type { RunTelegram } from './scheduler';
+import { parseLaterTime } from '@hive/shared';
 import { decideThread, threadCheck, type ThreadAction, type ThreadDecision } from './threadDecide';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -50,6 +59,49 @@ export function reachKeyboard(code: string, open: string): Button[][] {
   ];
 }
 
+/**
+ * The keyboard of a run that could not happen (scheduled tasks, slice 4): Run now · Try later /
+ * Skip this one · Open. A digest lists its runs, two buttons each (Run now · Skip). Callback data
+ * `x<kind>:<code>` (xn run now, xl try later, xs skip; xh in 1 hour, xt tomorrow 09:00, xp pick a
+ * time). One code per run. Pure: the tests render it.
+ */
+export function runKeyboard(
+  codes: { code: string; title: string }[],
+  open: string,
+  digest = false,
+): Button[][] {
+  const openB: Button = { text: 'Open', url: open };
+  if (!digest && codes.length === 1) {
+    const c = codes[0]!.code;
+    return [
+      [
+        { text: 'Run now', callback_data: `xn:${c}` },
+        { text: 'Try later', callback_data: `xl:${c}` },
+      ],
+      [{ text: 'Skip this one', callback_data: `xs:${c}` }, openB],
+    ];
+  }
+  return [
+    ...codes.map(({ code, title }) => [
+      { text: label(`Run now · ${title}`), callback_data: `xn:${code}` },
+      { text: 'Skip', callback_data: `xs:${code}` },
+    ]),
+    [openB],
+  ];
+}
+
+/** Try later's choices: In 1 hour · Tomorrow 09:00 / Pick a time… */
+export function laterKeyboard(code: string): Button[][] {
+  return [
+    [
+      { text: 'In 1 hour', callback_data: `xh:${code}` },
+      { text: 'Tomorrow 09:00', callback_data: `xt:${code}` },
+    ],
+    [{ text: 'Pick a time…', callback_data: `xp:${code}` }],
+  ];
+}
+
+const isRun = (a: TelegramAction): a is RunTelegram => (a as { kind?: string }).kind === 'run';
 const isThread = (a: TelegramAction): a is ThreadTelegram =>
   (a as { kind?: string }).kind === 'thread';
 const isReach = (a: TelegramAction): a is ReachTelegram =>
@@ -111,7 +163,12 @@ export class TelegramBot {
   }
 
   /** The Ports.sendTelegram implementation. */
-  async send(chatId: number, notice: Notice, action?: TelegramAction): Promise<boolean> {
+  async send(
+    chatId: number,
+    notice: Notice,
+    action?: TelegramAction,
+    silent?: boolean,
+  ): Promise<boolean> {
     const text = noticeText(notice);
     const row1 = [{ text: 'Open', url: `${this.appUrl}${notice.url}` }];
     let rows: unknown[][] = [row1];
@@ -121,6 +178,21 @@ export class TelegramBot {
         .doc(`telegramActions/${code}`)
         .set({ ...action, chatId, createdAt: this.now() });
       rows = reachKeyboard(code, `${this.appUrl}${notice.url}`);
+    } else if (action && isRun(action)) {
+      const codes: { code: string; title: string }[] = [];
+      for (const r of action.runs) {
+        const code = randomId(12);
+        const doc: RunAction = {
+          kind: 'run',
+          wid: r.wid,
+          runId: r.runId,
+          uid: action.uid,
+          title: r.title,
+        };
+        await this.db.doc(`telegramActions/${code}`).set({ ...doc, chatId, createdAt: this.now() });
+        codes.push({ code, title: r.title });
+      }
+      rows = runKeyboard(codes, `${this.appUrl}${notice.url}`, action.digest === true);
     } else if (action && isThread(action)) {
       const code = randomId(12);
       const doc: ThreadAction = {
@@ -139,6 +211,7 @@ export class TelegramBot {
         text,
         parse_mode: 'HTML',
         reply_markup: { inline_keyboard: rows },
+        ...(silent ? { disable_notification: true } : {}),
       });
       return true;
     } catch (e) {
@@ -342,11 +415,72 @@ export class TelegramBot {
     if (r.ok) await this.say(chatId, r.text);
   }
 
+  private async runAction(code: string, chatId: number): Promise<RunAction | null> {
+    const d = (await this.db.doc(`telegramActions/${code}`).get()).data() as
+      (RunAction & { chatId: number }) | undefined;
+    if (!d || d.kind !== 'run' || d.chatId !== chatId) return null;
+    const link = (await this.db.doc(notifyPath.telegram(d.uid)).get()).data() as
+      { chatId?: number } | undefined;
+    return link?.chatId === chatId ? d : null;
+  }
+
+  /** The buttons of a run that could not happen (scheduled tasks, slice 4). */
+  private async onRunButton(
+    q: NonNullable<Update['callback_query']>,
+    chatId: number,
+    kind: string,
+    code: string,
+  ) {
+    const a = await this.runAction(code, chatId);
+    const answer = (text?: string, alert = false) =>
+      this.api.call('answerCallbackQuery', {
+        callback_query_id: q.id,
+        ...(text ? { text: text.slice(0, 190) } : {}),
+        ...(alert ? { show_alert: true } : {}),
+      });
+    if (!a) return void (await answer('This button has expired.', true));
+    if (kind === 'xl' || kind === 'xp') {
+      const why = await runWhyNot(this.db, a);
+      if (why) return void (await answer(why, true));
+      await answer();
+      if (kind === 'xl') {
+        await this.say(chatId, `Try “${a.title}” again when?`, {
+          reply_markup: { inline_keyboard: laterKeyboard(code) },
+        });
+        return;
+      }
+      const sent = await this.say(
+        chatId,
+        `When should I try “${a.title}” again? Reply with a time, e.g. 14:30, tomorrow 10:00 or 3 Nov 9:00.`,
+        { reply_markup: { force_reply: true, input_field_placeholder: 'e.g. tomorrow 10:00' } },
+      );
+      await this.db
+        .doc(`telegramActions/${code}`)
+        .update({ promptMessageId: sent.message_id, prompt: 'later' });
+      return;
+    }
+    const d: RunDecision | null =
+      kind === 'xn'
+        ? { choice: 'runNow' }
+        : kind === 'xs'
+          ? { choice: 'skip' }
+          : kind === 'xh'
+            ? { choice: 'later', at: 'hour' }
+            : kind === 'xt'
+              ? { choice: 'later', at: 'tomorrow' }
+              : null;
+    if (!d) return void (await answer());
+    const r = await decideRunAction(this.db, a, d, this.now());
+    await answer(r.text, !r.ok);
+    if (r.ok) await this.say(chatId, r.text);
+  }
+
   private async onButton(q: NonNullable<Update['callback_query']>) {
     const chatId = q.message?.chat.id;
     const [kind, code] = (q.data ?? '').split(':');
     if (chatId && code && kind?.startsWith('t')) return this.onThreadButton(q, chatId, kind, code);
     if (chatId && code && kind?.startsWith('r')) return this.onReachButton(q, chatId, kind, code);
+    if (chatId && code && kind?.startsWith('x')) return this.onRunButton(q, chatId, kind, code);
     // Old Approve / Send back buttons of project items (gone, design 7) answer nothing.
     if (chatId && code && (kind === 'a' || kind === 's'))
       return void (await this.api.call('answerCallbackQuery', {
@@ -366,6 +500,16 @@ export class TelegramBot {
       .get();
     const doc = q.docs[0];
     if (!doc) return;
+    if (doc.data().kind === 'run') {
+      const ra = await this.runAction(doc.id, chatId);
+      if (!ra) return;
+      const p = parseLaterTime(text, this.now(), await memberZone(this.db, ra.uid));
+      if (!p.ok) return void (await this.say(chatId, `${p.error} Reply to my question again.`));
+      const r = await decideRunAction(this.db, ra, { choice: 'later', atMs: p.atMs }, this.now());
+      if (r.ok) await doc.ref.update({ promptMessageId: null }).catch(() => undefined);
+      await this.say(chatId, r.text);
+      return;
+    }
     if (doc.data().kind === 'thread') {
       const ta = await this.threadAction(doc.id, chatId);
       if (!ta) return;
