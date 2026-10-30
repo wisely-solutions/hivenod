@@ -81,6 +81,11 @@ type heldItem struct {
 	seen      bool
 	statusDue time.Time
 	askSeen   time.Time
+	// Reach out (item KZ6O9), guarded by s.mu: the last tool call this session saw on the item
+	// (any tool, reads too), so a status request from Hivenod is answered without a model turn
+	// when the agent was at work on it since its last status.
+	lastTool   string
+	lastToolAt time.Time
 }
 
 type everyState struct {
@@ -117,6 +122,9 @@ type Session struct {
 	stopOnce     sync.Once
 	// The inbox events of this session (nil when off, busy, or before Start).
 	Inbox *InboxFeed
+	// autoStatus writes the status the session answers Hivenod's request with (item KZ6O9);
+	// tests replace it. Nil: none (the request goes to the model).
+	autoStatus func(ctx context.Context, itemID, text, projectID string) error
 }
 
 // NewSession makes a session; Start begins it.
@@ -150,7 +158,14 @@ func NewSession(c *Client, cfg Config, push func(Event), o ChannelOptions) *Sess
 		o.StatusMinute = time.Minute
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Session{c: c, cfg: cfg, push: push, o: o, stoppedItems: map[string]string{}, stoppedRuns: map[string]bool{}, givenBack: map[string]time.Time{}, every: map[string]everyState{}, ctx: ctx, cancel: cancel}
+	s := &Session{c: c, cfg: cfg, push: push, o: o, stoppedItems: map[string]string{}, stoppedRuns: map[string]bool{}, givenBack: map[string]time.Time{}, every: map[string]everyState{}, ctx: ctx, cancel: cancel}
+	if c != nil {
+		s.autoStatus = func(ctx context.Context, itemID, text, projectID string) error {
+			_, err := c.Status(ctx, itemID, text, nil, projectID)
+			return err
+		}
+	}
+	return s
 }
 
 // active is how many held items are being worked (not parked): what MaxItems counts. Call with
@@ -267,7 +282,8 @@ func (s *Session) ReturnStale(ctx context.Context) []string {
 	return out
 }
 
-// StatusText is the content of a status event (item AzveC); why is "interval" or "asked".
+// StatusText is the content of a status event (item AzveC); why is "interval", "asked" or "check"
+// (Hivenod's own request when the item went quiet, item KZ6O9).
 func StatusText(itemID, title, why, by string, maxItems int) string {
 	head := fmt.Sprintf(`Status check on "%s" (item_id %s).`, clip(title, 200), itemID)
 	if why == "asked" {
@@ -275,6 +291,9 @@ func StatusText(itemID, title, why, by string, maxItems int) string {
 			by = "A person"
 		}
 		head = fmt.Sprintf(`%s asked for a status on "%s" (item_id %s).`, by, clip(title, 200), itemID)
+	}
+	if why == "check" {
+		head = fmt.Sprintf(`Hivenod asks for a status on "%s" (item_id %s): nothing was heard from you on it for a while. If it waits on something, say what; if you are stuck, say so.`, clip(title, 200), itemID)
 	}
 	how := fmt.Sprintf(`answer with the status tool (itemId="%s", text: one line on where the work stands, pct: a percentage when known), then carry on.`, itemID)
 	if maxItems > 1 {
@@ -336,10 +355,57 @@ func (s *Session) onStatusFields(h *heldItem, it *model.Item) {
 		return
 	}
 	h.askSeen = ask.At
-	push := !first && (st == nil || st.At.Before(ask.At)) && s.worked(h)
+	open := !first && (st == nil || st.At.Before(ask.At))
+	if ask.ByUID == actions.SystemUID {
+		// Hivenod's own request (item KZ6O9): also on a parked item. Answered here, without a model
+		// turn, when the session saw the agent work on the item since its last status.
+		var since time.Time
+		if st != nil {
+			since = st.At
+		}
+		auto := ""
+		if open && h.lastTool != "" && h.lastToolAt.After(since) {
+			auto = AutoStatusText(h.lastTool, s.o.Now().Sub(h.lastToolAt))
+		}
+		s.mu.Unlock()
+		if !open {
+			return
+		}
+		if auto != "" && s.autoStatus != nil {
+			write := s.autoStatus
+			go func() {
+				if err := write(s.ctx, h.ItemID, auto, h.ProjectID); err != nil {
+					s.pushStatus(h, "check", "", "")
+				}
+			}()
+			return
+		}
+		go s.pushStatus(h, "check", "", "")
+		return
+	}
+	push := open && s.worked(h)
 	s.mu.Unlock()
 	if push {
 		go s.pushStatus(h, "asked", it.LastEventID, ask.ByUID)
+	}
+}
+
+// AutoStatusText is the status the session writes itself for Hivenod's request (item KZ6O9).
+func AutoStatusText(tool string, ago time.Duration) string {
+	min := int(ago / time.Minute)
+	when := "just now"
+	if min >= 1 {
+		when = fmt.Sprintf("%d min ago", min)
+	}
+	return fmt.Sprintf("Alive, last: %s %s", tool, when)
+}
+
+// Touched records a tool call on a held item (item KZ6O9): the agent is at work on it.
+func (s *Session) Touched(itemID, tool string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if h := s.byItem(itemID); h != nil && tool != "status" {
+		h.lastTool, h.lastToolAt = tool, s.o.Now()
 	}
 }
 

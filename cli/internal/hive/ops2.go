@@ -481,6 +481,9 @@ func (c *Client) StatusEvery(ctx context.Context, projectID string) (int64, erro
 // AskedBy is who asked for a status (item AzveC): the person named by the event the ask wrote,
 // when it is still the item's lastEventId. Best effort: "" when unreadable.
 func (c *Client) AskedBy(ctx context.Context, eventID, byUID string) string {
+	if byUID == actions.SystemUID {
+		return actions.SystemName
+	}
 	if eventID == "" {
 		return ""
 	}

@@ -10,7 +10,13 @@ import type { NeedsAll } from '../needs/data';
 import { briefOf, type Brief, type Segment } from '../needs/brief';
 import { entryBand, type NeedsEntry } from '../needs/logic';
 import { orgColor } from '../orgs/color';
-import { useLatestNotes, useMessagesSince, useSubjectsById, useThreadMessages } from './data';
+import {
+  useLatestNotes,
+  useMessagesSince,
+  useSilentThreads,
+  useSubjectsById,
+  useThreadMessages,
+} from './data';
 import { dueShort } from './logic';
 
 const DAY = 86_400_000;
@@ -96,13 +102,29 @@ export function useToday(
         })),
     [threadsAll, uid],
   );
+  const silent = useSilentThreads(uid, wids, now);
   const working = investigating.map((t) => ({
     key: `${t.wid}/${t.id}`,
     wid: t.wid,
     tid: t.id,
     title: t.data.title || 'Untitled thread',
     note: notes.get(`${t.wid}/${t.id}`)?.text ?? '',
+    silent: silent.get(`${t.wid}/${t.id}`) ?? '',
   }));
+  // A silent step on a thread not being investigated still shows (item KZ6O9).
+  for (const [key, text] of silent) {
+    if (working.some((w) => w.key === key)) continue;
+    const t = threadsAll.find((x) => `${x.wid}/${x.id}` === key);
+    if (t)
+      working.unshift({
+        key,
+        wid: t.wid,
+        tid: t.id,
+        title: t.data.title || 'Untitled thread',
+        note: '',
+        silent: text,
+      });
+  }
 
   const brief = useMemo<Brief | null>(() => {
     if (recent.state === 'loading') return null;
