@@ -692,6 +692,28 @@ last event id it handled (`lastEventId`):
 - Tuning and tests: `HIVENOD_INBOX_PER_MIN`, and in milliseconds `HIVENOD_INBOX_NUDGE_MS`,
   `HIVENOD_INBOX_LEASE_MS` and `HIVENOD_INBOX_TICK_MS`.
 
+**Off (scheduled tasks slice 7).** A member switches agents Off (all, or some) in an
+organization: `agentsOff/{memberUid}` (`setAgentsOff`, his own doc; no timer turns it back on).
+The session listens to the organization's Off docs (one listener, no polling) and, while Off for
+this agent:
+
+- **holds** what the agent would do on its own for that member: `carry_out` of a step decided
+  before `since` (`decision.at`, else `createdAt`), `message` and `new` brought in from outside
+  (`inbox.added`), `nudge_due`, `summarize`, `woke` and the wake itself, `failed`, `resume`
+  (a long step's too), `item_done` and `item_stopped`;
+- **delivers** what he does himself: his New thread (`thread.created`), `answered`, `rejected`,
+  `restored`, `instruct`, `revise`, `recheck`, and `carry_out` of a step he approved after
+  `since`;
+- sends `kind="info" code="off"` once per Off (meta `member`, and `outcome_ids` of the work
+  already in this session's hands, told to stop at a safe point and report) and
+  `code="on"` when it ends; what was held then goes out in the usual order.
+
+Its tools refuse automated writes for that member with the same line: `inbox_add`,
+`thread_wake`, `outcome_done` started or done of a step decided before Off (failed always goes),
+and `outcome_propose`, `plan_propose`, `schedule_propose` on a thread the member did not touch
+since Off (his message, Ask the agent, a re-check or an answer). Revisions he asked for go. The
+rules backstop the step start for older CLIs (`inboxOnFor`, below `off` in `cliversion.ts`).
+
 ## The Inbox view (web app)
 
 - **`/inbox`**: the member's subjects, across all their organizations or one (`?org=<id>`).
