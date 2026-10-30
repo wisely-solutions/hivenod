@@ -136,9 +136,12 @@ async function toKeepGreen(page: Page, s: Seed, tid: string, planId: string) {
     'rebased on main 4f2a1c0, 212/214 green, fixing lint · 90%',
     { timeout: 20_000 },
   );
-  const rows = page.locator(`[data-plan="${planId}"]`).locator('li[data-step]');
-  await expect(rows.nth(3)).toHaveAttribute('data-step-ui', 'running');
-  await expect(rows.nth(3)).toContainText('Keep green');
+  // The rail (on a phone it sits in the plan sheet).
+  if ((page.viewportSize()?.width ?? 0) >= 1024) {
+    const rows = page.locator(`[data-plan="${planId}"]`).locator('li[data-step]');
+    await expect(rows.nth(3)).toHaveAttribute('data-step-ui', 'running');
+    await expect(rows.nth(3)).toContainText('Keep green');
+  }
 }
 
 /** Keep green reports green and current: Ship it? waits. */

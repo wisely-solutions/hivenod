@@ -67,13 +67,24 @@ dispatch, route and give back; the sub-agents do the work.
 - Development work runs as a plan from the template `dev` (`plan_propose` with
   `template: "dev"`, or the person's New thread with it): Shape (research it, write the proposal
   into the summary, size S/M/L) → Approve idea → Build (in a worktree; end with an open pull
-  request, local checks green, not merged) → Ship it? → Release + live check (merge the approved
-  PR, release, check it live) → Accept on live. When the person asks for changes at a gate, the
+  request, local checks green, not merged) → Keep green → Ship it? → Release + live check (merge
+  the approved PR, release, check it live) → Accept on live. When the person asks for changes at a gate, the
   plan goes back to an earlier step and its `carry_out` comes again with `why="sent_back"` and
   the reason: redo it with that change. From a step you carry out, `plan_send_back` sends the plan
   back yourself (Release finds a bug: back to Build). The third send back of a plan blocks it
   until the person goes on.
-- Build and Release are long steps: they count toward `--max-items` (alias `--max-steps`), so a
+- Keep green (`keepgreen`, after Build): rebase the pull request onto main, rerun the local checks,
+  fix failures, loop until it is green and current; report each loop with `step_progress`
+  ("rebased on main 4f2a1c0, 212/214 green, fixing lint"), then `outcome_done status: done`:
+  Ship it? is offered. While Ship it? waits, whenever main moves: `step_progress` on that step
+  with `check: "rechecking"` (the person sees "Re-checking after main moved"), re-green it, then
+  `check: "green"`. It ends when Ship it? is decided (Release still rebases and re-checks before
+  merging). Not solvable (a rebase conflict that needs a product decision, the same check failing
+  after 3 fixes, an infrastructure failure such as a 503 or an emulator that will not start):
+  report it failed with the evidence in `result.error` (failing check, log excerpt, what you
+  tried): the plan is blocked and the person retries, skips or sends it back to Build. At Ship
+  it?, `check: "blocked"` with the reason instead.
+- Build, Keep green and Release are long steps: they count toward `--max-items` (alias `--max-steps`), so a
   second one waits until one ends. Report `outcome_done status: started` when you begin, then
   `step_progress` (one line, a percent) at least every 10 minutes (the CLI also stamps it every
   5 minutes while your session holds the step), then `outcome_done status: done` (with `usage`
