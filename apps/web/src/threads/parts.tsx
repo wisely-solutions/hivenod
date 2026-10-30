@@ -10,15 +10,18 @@ import { STATE_CHIP, waitingText } from './logic';
 export function StateChip({
   state,
   waiting,
+  agent,
 }: {
   state: ThreadState;
   waiting?: InboxThread['waiting'];
+  /** The thread's agent, for "Waiting on <agent>". */
+  agent?: string;
 }) {
   const c = STATE_CHIP[state];
   return (
     <Pill tone={c.tone} className="shrink-0 whitespace-nowrap">
       <span data-state={state}>
-        {state === 'waiting' && waiting ? waitingText(waiting) : c.label}
+        {state === 'waiting' && waiting ? waitingText(waiting, agent) : c.label}
       </span>
     </Pill>
   );

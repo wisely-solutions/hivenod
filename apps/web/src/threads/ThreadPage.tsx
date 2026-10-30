@@ -418,7 +418,7 @@ export function ThreadPage() {
               ) : subject.state === 'ready' && subject.data?.area ? (
                 <Chip>{subject.data.area}</Chip>
               ) : null}
-              <StateChip state={t.state} waiting={t.waiting} />
+              <StateChip state={t.state} waiting={t.waiting} agent={agentName(t.fetchedBy)} />
               {urgent ? (
                 <Pill tone="sendback">
                   <span data-urgent="">Urgent</span>

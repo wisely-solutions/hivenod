@@ -792,6 +792,40 @@ describe('outcomes: proposed by agents, decided by the member only', () => {
     );
   });
 
+  it('approved with nothing else to decide, the thread waits on the agent until it reports', async () => {
+    const oid = await proposed('reply', { text: 'Thursday works.' });
+    const alice = as('alice');
+    const p = approveOutcome(alice.ctx, {
+      outcomeId: oid,
+      outcome: await outcome(oid),
+      thread: await thread(),
+      othersPending: false,
+    });
+    // Only waiting on the agent: not another state, not on them.
+    const swap = (data: object) =>
+      p.ops.map((op) => (op.path === T('itr1') ? { ...op, data: { ...op.data, ...data } } : op));
+    await denied(alice.run(swap({ state: 'done', waiting: null })));
+    await denied(alice.run(swap({ waiting: { on: 'them', until: null } })));
+    await ok(alice.run(p));
+    expect(await thread()).toMatchObject({
+      state: 'waiting',
+      waiting: { on: 'agent', until: null },
+    });
+    const a = as(AGENTS.a);
+    await ok(
+      a.run(
+        finishOutcome(a.ctx, {
+          outcomeId: oid,
+          outcome: await outcome(oid),
+          thread: await thread(),
+          status: 'done',
+          result: { permalink: 'https://teams.example.com/m/2' },
+        }),
+      ),
+    );
+    expect(await thread()).toMatchObject({ state: 'waiting', waiting: { on: 'them' } });
+  });
+
   it('a failed outcome sends the thread back to investigating', async () => {
     const oid = await approved('handover', { to: 'Sam', note: 'Fix the export' });
     const a = as(AGENTS.a);

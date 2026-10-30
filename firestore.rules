@@ -805,7 +805,7 @@ service cloud.firestore {
       // A thread state of the right shape (the plan's thread state, set by the plan actions).
       function inboxThreadShapeOk(d) {
         return d.state == 'waiting'
-          ? exactKeys(d.waiting, ['on', 'until']) && d.waiting.on in ['them', 'thirdParty', 'date', 'item']
+          ? exactKeys(d.waiting, ['on', 'until']) && d.waiting.on in ['them', 'thirdParty', 'date', 'item', 'agent']
             && (d.waiting.on == 'date' ? d.waiting.until is timestamp : d.waiting.until == null)
           : d.waiting == null;
       }
@@ -1308,9 +1308,12 @@ service cloud.firestore {
               : e.data.type.matches('plan[.].*') ? false
               : e.data.type == 'outcome.approved'
               ? inboxOutcomeOf(d.lastEventId).threadId == tid
-                && inboxOutcomeOf(d.lastEventId).type in outcomeImmediate()
-                && inboxOutcomeOf(d.lastEventId).state == 'done'
-                && inboxAfterOk(d, inboxOutcomeOf(d.lastEventId).type)
+                && (inboxOutcomeOf(d.lastEventId).type in outcomeImmediate()
+                  ? inboxOutcomeOf(d.lastEventId).state == 'done'
+                    && inboxAfterOk(d, inboxOutcomeOf(d.lastEventId).type)
+                  // Approved for the agent to carry out: the thread waits on it.
+                  : inboxOutcomeOf(d.lastEventId).state == 'approved' && r.state == 'yourCall'
+                    && d.state == 'waiting' && d.waiting == {'on': 'agent', 'until': null})
               : d.waiting == null
                 && (e.data.type == 'outcome.rejected'
                   ? r.state == 'yourCall' && d.state == 'investigating'

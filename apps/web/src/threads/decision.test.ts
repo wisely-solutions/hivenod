@@ -74,6 +74,36 @@ describe('topState', () => {
     );
     expect(s.kicker).toBe('Your approval · plan of 2 steps');
   });
+  it('an approved agent step at the cursor: the agent is working, not Your approval', () => {
+    const view = plan(['done', 'approved', 'gate'], 1);
+    const s = topState(
+      base({
+        thread: {
+          state: 'waiting',
+          question: null,
+          waiting: { on: 'agent', until: null },
+          updatedAt: NOW,
+        },
+        plan: { view, main: null, label: null, error: null },
+      }),
+    );
+    expect(s.kind).toBe('working');
+    expect(s.kicker).toBe('Hive is working · step 2 of 3');
+  });
+  it('an approved single outcome: waiting on the agent', () => {
+    const s = topState(
+      base({
+        thread: {
+          state: 'waiting',
+          question: null,
+          waiting: { on: 'agent', until: null },
+          updatedAt: NOW,
+        },
+      }),
+    );
+    expect(s.kind).toBe('waiting');
+    expect(s.kicker).toBe('Waiting on Hive');
+  });
   it('a single proposal', () => {
     expect(topState(base({ proposals: 1 })).kicker).toBe('Your approval');
     expect(topState(base({ proposals: 3 })).kicker).toBe('Your approval · 3 proposals');

@@ -8012,7 +8012,7 @@
             "path": "workspaces/w1/inboxThreads/it1",
             "data": {
               "state": "waiting",
-              "waiting": { "on": "them", "until": null },
+              "waiting": { "on": "agent", "until": null },
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
             }
@@ -8979,7 +8979,7 @@
             "path": "workspaces/w1/inboxThreads/it1",
             "data": {
               "state": "waiting",
-              "waiting": { "on": "item", "until": null },
+              "waiting": { "on": "agent", "until": null },
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
             }
@@ -9524,7 +9524,7 @@
             "path": "workspaces/w1/inboxThreads/it1",
             "data": {
               "state": "waiting",
-              "waiting": { "on": "them", "until": null },
+              "waiting": { "on": "agent", "until": null },
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
             }
@@ -9888,7 +9888,7 @@
           }
         }
       },
-      "output": { "state": "yourCall", "waiting": null }
+      "output": { "state": "waiting", "waiting": { "on": "agent", "until": null } }
     },
     {
       "name": "planThreadState/gate",
@@ -10018,7 +10018,7 @@
           }
         }
       },
-      "output": { "state": "waiting", "waiting": { "on": "thirdParty", "until": null } }
+      "output": { "state": "waiting", "waiting": { "on": "agent", "until": null } }
     },
     {
       "name": "planThreadState/failed",
@@ -10652,7 +10652,7 @@
             "path": "workspaces/w1/inboxThreads/it1",
             "data": {
               "state": "waiting",
-              "waiting": { "on": "item", "until": null },
+              "waiting": { "on": "agent", "until": null },
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
             }
@@ -10808,7 +10808,7 @@
             "path": "workspaces/w1/inboxThreads/it1",
             "data": {
               "state": "waiting",
-              "waiting": { "on": "item", "until": null },
+              "waiting": { "on": "agent", "until": null },
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
             }
@@ -10983,8 +10983,8 @@
             "kind": "update",
             "path": "workspaces/w1/inboxThreads/it1",
             "data": {
-              "state": "yourCall",
-              "waiting": null,
+              "state": "waiting",
+              "waiting": { "on": "agent", "until": null },
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
             }
@@ -11150,7 +11150,7 @@
             "path": "workspaces/w1/inboxThreads/it1",
             "data": {
               "state": "waiting",
-              "waiting": { "on": "item", "until": null },
+              "waiting": { "on": "agent", "until": null },
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
             }

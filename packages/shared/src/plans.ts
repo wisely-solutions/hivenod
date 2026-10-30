@@ -225,8 +225,9 @@ const YOUR_CALL: ThreadStateAfter = { state: 'yourCall', waiting: null };
  *   a failed step: retry, skip or stop) → yourCall;
  * - a Build it step running → waiting on the item;
  * - an approved snooze ("wait until") at the cursor → waiting until its date;
- * - another approved agent step at the cursor → the previous agent step's after-state (yourCall
- *   for the first one, like an approved single outcome);
+ * - another approved agent step at the cursor, not started yet → waiting on the agent (it carries
+ *   it out; nothing waits for the member, item OE8FmrTaIxFVGcaeGG3N), unless an agent step of the
+ *   plan still waits for approval (Approve plan: the member's call);
  * - every step through → the last agent step's after-state (done if there is none).
  * Only steps an agent carries out have an after-state: after a person step, a skipped step or
  * a wait-until step, the one before them holds.
@@ -254,6 +255,13 @@ export function planThreadState(
   if (o.state !== 'approved' || outcomeKind(o.type) === 'human') return YOUR_CALL;
   const t = outcomeType(o.type);
   if (t?.executor === 'none' && t.after.waitingOn === 'date') return threadAfter(o.type, o.fields);
-  return before(plan.cursor) ?? YOUR_CALL;
+  // Approved, its turn, not started yet: the agent picks it up. Your call only while an agent
+  // step still waits for approval ahead (Approve plan, as Today and the decision page ask).
+  const ahead = plan.steps.some((id) => {
+    const s = outcomes[id];
+    return s?.state === 'proposed' && outcomeKind(s.type) === 'agent';
+  });
+  return ahead ? YOUR_CALL : ON_AGENT;
 }
+const ON_AGENT: ThreadStateAfter = { state: 'waiting', waiting: { on: 'agent', until: null } };
 const afterDone: ThreadStateAfter = { state: 'done', waiting: null };

@@ -31,10 +31,12 @@ export const STATE_CHIP: Record<ThreadState, { label: string; tone: Tone }> = {
 type Ms = { toMillis(): number };
 const ms = (t: Ms | null | undefined) => (t ? t.toMillis() : 0);
 
-/** "Waiting on them", "Waiting until 3 Nov, 09:00", … */
-export function waitingText(w: InboxThread['waiting']): string {
+/** "Waiting on them", "Waiting until 3 Nov, 09:00", "Waiting on <agent>" (`agent`: its name), … */
+export function waitingText(w: InboxThread['waiting'], agent?: string): string {
   if (!w) return 'Waiting';
   switch (w.on) {
+    case 'agent':
+      return `Waiting on ${agent || 'the agent'}`;
     case 'them':
       return 'Waiting on them';
     case 'thirdParty':
@@ -54,6 +56,12 @@ export function waitingText(w: InboxThread['waiting']): string {
 }
 
 export const forMember = (s: ThreadState) => THREAD_FOR_MEMBER.includes(s);
+/**
+ * The agent's turn: investigating, or waiting on the agent (an approved outcome or plan step it
+ * has yet to carry out, item OE8FmrTaIxFVGcaeGG3N).
+ */
+export const agentsTurn = (t: { state: ThreadState; waiting?: { on: string } | null }) =>
+  t.state === 'investigating' || (t.state === 'waiting' && t.waiting?.on === 'agent');
 
 const DAY = 86_400_000;
 /** How pressing a thread is (design 3.5): 1 red, 2 amber, 3-4 grey. */
@@ -572,7 +580,7 @@ export function filterByLabels<T extends { label: string | null }>(
 export interface StateGroups {
   /** A thread in needsYou or yourCall, by that thread's rank (design 3.5). */
   needs: SubjectRow[];
-  /** A thread an agent is investigating. */
+  /** A thread an agent is investigating, or one waiting on its agent. */
   working: SubjectRow[];
   /** A thread waiting on others. */
   waiting: SubjectRow[];
@@ -588,7 +596,7 @@ export interface StateGroups {
 export function subjectState(row: SubjectRow): 'needs' | 'working' | 'waiting' | 'recent' {
   const states = row.threads.map((t) => t.data.state);
   if (states.some((s) => forMember(s))) return 'needs';
-  if (states.includes('investigating')) return 'working';
+  if (row.threads.some((t) => agentsTurn(t.data))) return 'working';
   if (states.includes('waiting')) return 'waiting';
   return 'recent';
 }

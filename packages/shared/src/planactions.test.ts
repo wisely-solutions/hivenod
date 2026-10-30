@@ -157,7 +157,8 @@ describe('approvePlan', () => {
       decision: { byUid: 'joao', edited: false, reason: null },
     });
     expect(at(p.ops, P)!.data).toMatchObject({ state: 'active' });
-    expect(at(p.ops, T)!.data).toMatchObject({ state: 'yourCall' });
+    // the first step is approved and its turn: the agent's, nothing waits for the member
+    expect(at(p.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'agent' } });
     expect(p.ops.some((o) => o.path.includes('/calendar/') || o.path.includes('/busy/'))).toBe(
       false,
     );
@@ -197,8 +198,8 @@ describe('approving and deciding steps', () => {
     const p = approveOutcome(joao, step(now, 2));
     expect(at(p.ops, O('s3'))!.data).toMatchObject({ state: 'done' });
     expect(at(p.ops, P)!.data).toMatchObject({ cursor: 3 });
-    // the next step is approved: the thread shows the last agent step's after-state
-    expect(at(p.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'them' } });
+    // the next step is approved: the agent carries it out, the thread waits on it
+    expect(at(p.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'agent' } });
   });
   it('Not approved on a gate stops the plan and hands the thread back', () => {
     const now = plan(['done', 'done', 'proposed', 'approved', 'approved'], 2);
@@ -232,7 +233,7 @@ describe('carrying out', () => {
     });
     expect(at(p.ops, O('s1'))!.data).toMatchObject({ state: 'done' });
     expect(at(p.ops, P)!.data).toEqual(expect.objectContaining({ cursor: 1 }));
-    expect(at(p.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'them' } });
+    expect(at(p.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'agent' } });
   });
   it('the last step done finishes the plan', () => {
     const pl = plan(['done', 'done', 'done', 'done', 'approved'], 4);
@@ -343,8 +344,8 @@ describe('carrying out', () => {
     });
     expect(at(p.ops, O('a'))!.data).toMatchObject({ state: 'done' });
     expect(at(p.ops, P)!.data).toMatchObject({ cursor: 1 });
-    // the nudge runs next: no agent step before it, so Your call
-    expect(at(p.ops, T)!.data).toMatchObject({ state: 'yourCall' });
+    // the nudge runs next: the agent's turn, not the member's
+    expect(at(p.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'agent' } });
   });
 });
 

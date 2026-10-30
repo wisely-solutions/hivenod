@@ -80,6 +80,7 @@ export function OutcomeCard({
               outcome,
               thread: { ...thread },
               ...(editing ? { fields: editedFields(outcome.type, values) } : {}),
+              ...(outcome.planId ? {} : { othersPending }),
             })
           : rejectOutcome(ctx, {
               outcomeId: oid,
