@@ -78,6 +78,9 @@ describe('the registry', () => {
       'handover',
       'snooze',
       'nudge',
+      'shape',
+      'build',
+      'release',
       'approval',
     ]);
   });

@@ -81,7 +81,14 @@ import { askedText, AskBox, DiffText, RevisingStrip, VersionSwitcher } from './R
 import { LabelBadge } from '../threads/labels';
 import { FieldView } from '../threads/OutcomeCard';
 import { useThreadOutcomes } from '../threads/data';
-import { BAR as PLAN_BAR, planInputOf, planMain, stepTitle } from '../threads/plan';
+import {
+  BAR as PLAN_BAR,
+  planInputOf,
+  planMain,
+  sendBackChoices,
+  stepTitle,
+} from '../threads/plan';
+import { GateAsk } from '../threads/GateAsk';
 import { usePlanActions } from '../threads/usePlanActions';
 import { askOf } from '../needs/logic';
 import { NotNowButton, useNotNow } from '../threads/NotNow';
@@ -504,12 +511,15 @@ const PlanDecision = forwardRef<
   const inner = useRef<DecisionCardHandle>(null);
   const at = main && main.kind !== 'approvePlan' ? view.steps[main.index] : undefined;
   const atRow = at ? rows.find((r) => r.id === at.outcomeId) : undefined;
+  // Ask for changes on a gate (slice 6): the plan goes back to an earlier step, with the text.
+  const back = main?.kind === 'step' && main.gate ? sendBackChoices(pl, main.index) : null;
+  const [asking, setAsking] = useState(false);
   useImperativeHandle(ref, () => ({
     approve: () => {
       if (!main) return;
       if (main.kind === 'approvePlan') acts.approveAll();
       else if (main.kind === 'retry') acts.retry();
-      else if (main.gate && at) acts.gate(at, true);
+      else if (main.gate && at) acts.gate(at, true, thread.data.summary?.version);
       else inner.current?.approve();
     },
     edit: () => inner.current?.edit(),
@@ -517,7 +527,13 @@ const PlanDecision = forwardRef<
       if (main?.kind === 'step' && main.gate && at) acts.gate(at, false);
       else inner.current?.reject();
     },
-    ask: () => inner.current?.ask?.() ?? false,
+    ask: () => {
+      if (main?.kind === 'step' && main.gate && back?.target !== null && back) {
+        setAsking(true);
+        return true;
+      }
+      return inner.current?.ask?.() ?? false;
+    },
     version: (step) => inner.current?.version?.(step),
   }));
   const busy = !!acts.counting;
@@ -665,25 +681,51 @@ const PlanDecision = forwardRef<
               <Button
                 variant="approve"
                 data-gate-approve=""
-                onClick={() => acts.gate(at, true)}
+                onClick={() => acts.gate(at, true, thread.data.summary?.version)}
                 leading={<Icon icon={Check} size={16} />}
               >
                 Approve
                 <Key>A</Key>
               </Button>
-              <Button variant="sendback" data-gate-reject="" onClick={() => acts.gate(at, false)}>
-                Not approved
-              </Button>
+              {back && back.target !== null ? (
+                <Button
+                  variant="secondary"
+                  data-gate-ask-open=""
+                  aria-expanded={asking}
+                  onClick={() => setAsking(!asking)}
+                >
+                  Ask for changes
+                  <Key>C</Key>
+                </Button>
+              ) : null}
+              <ActionMenu
+                label="More decisions"
+                actions={[
+                  {
+                    id: 'not-approved',
+                    label: 'Not approved: stop the plan',
+                    tone: 'danger',
+                    onSelect: () => acts.gate(at, false),
+                  },
+                ]}
+                trigger={
+                  <Button variant="ghost" data-more-decisions="" aria-label="More decisions">
+                    <Icon icon={MoreHorizontal} size={18} />
+                  </Button>
+                }
+              />
             </>
           ) : main?.kind === 'retry' ? (
             <>
               <Button variant="approve" data-retry="" onClick={acts.retry}>
-                Retry
+                {at?.outcome?.state === 'failed' ? 'Retry' : 'Go on'}
                 <Key>A</Key>
               </Button>
-              <Button variant="secondary" data-skip="" onClick={acts.skip}>
-                Skip step
-              </Button>
+              {at?.outcome?.state === 'failed' ? (
+                <Button variant="secondary" data-skip="" onClick={acts.skip}>
+                  Skip step
+                </Button>
+              ) : null}
               <Button variant="sendback" data-stop="" onClick={acts.stop}>
                 Stop plan
               </Button>
@@ -693,6 +735,19 @@ const PlanDecision = forwardRef<
           {open}
           {skip}
         </div>
+      ) : null}
+      {asking && back && back.target !== null && !acts.counting ? (
+        <GateAsk
+          choices={back.choices}
+          target={back.target}
+          sentBefore={plan.data.sentBack?.n ?? 0}
+          agent={agentName(thread.data.fetchedBy)}
+          onCancel={() => setAsking(false)}
+          onSend={(reason, to) => {
+            setAsking(false);
+            acts.sendBack(reason, to);
+          }}
+        />
       ) : null}
     </div>
   );

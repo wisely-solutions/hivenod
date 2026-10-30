@@ -1,0 +1,1778 @@
+{
+  "calls": [
+    {
+      "tool": "inbox_list",
+      "ok": true,
+      "out": {
+        "toCarryOut": [
+          {
+            "fields": {
+              "idea": "Add a dark mode to the board."
+            },
+            "member": "owner",
+            "outcomeId": "ds1",
+            "planId": "dp1",
+            "step": "1 of 6",
+            "threadId": "dev1",
+            "type": "shape"
+          }
+        ],
+        "toWake": [],
+        "toWork": []
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "<id>",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": null,
+              "name": "Owner"
+            },
+            "source": "hivenod",
+            "text": "Add a dark mode to the board.",
+            "threadRef": "dev1"
+          }
+        ],
+        "next": "Carry out the approved outcome exactly as approved (its fields, as the person left them), then report it with outcome_done.",
+        "outcomes": [
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "idea": "Add a dark mode to the board."
+            },
+            "note": "",
+            "outcomeId": "ds1",
+            "planId": "dp1",
+            "result": null,
+            "state": "approved",
+            "step": "1 of 6",
+            "type": "shape"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Approve idea"
+            },
+            "note": "",
+            "outcomeId": "ds2",
+            "planId": "dp1",
+            "result": null,
+            "state": "proposed",
+            "step": "2 of 6",
+            "type": "approval"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "ds3",
+            "planId": "dp1",
+            "result": null,
+            "state": "approved",
+            "step": "3 of 6",
+            "type": "build"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Ship it?"
+            },
+            "note": "",
+            "outcomeId": "ds4",
+            "planId": "dp1",
+            "result": null,
+            "state": "proposed",
+            "step": "4 of 6",
+            "type": "approval"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "ds5",
+            "planId": "dp1",
+            "result": null,
+            "state": "approved",
+            "step": "5 of 6",
+            "type": "release"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Accept on live"
+            },
+            "note": "",
+            "outcomeId": "ds6",
+            "planId": "dp1",
+            "result": null,
+            "state": "proposed",
+            "step": "6 of 6",
+            "type": "approval"
+          }
+        ],
+        "plans": [
+          {
+            "confidence": null,
+            "cursor": 0,
+            "note": "",
+            "planId": "dp1",
+            "progress": "Step 1 of 6",
+            "state": "active",
+            "steps": [
+              {
+                "atCursor": true,
+                "kind": "agent",
+                "label": "Shape",
+                "outcomeId": "ds1",
+                "step": 1,
+                "type": "shape",
+                "ui": "running"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds2",
+                "step": 2,
+                "type": "approval",
+                "ui": "proposed"
+              },
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Build",
+                "outcomeId": "ds3",
+                "step": 3,
+                "type": "build",
+                "ui": "approved"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds4",
+                "step": 4,
+                "type": "approval",
+                "ui": "proposed"
+              },
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Release + live check",
+                "outcomeId": "ds5",
+                "step": 5,
+                "type": "release",
+                "ui": "approved"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds6",
+                "step": 6,
+                "type": "approval",
+                "ui": "proposed"
+              }
+            ],
+            "templateId": "dev"
+          }
+        ],
+        "question": null,
+        "state": "yourCall",
+        "subject": null,
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
+        "threadId": "dev1",
+        "timeline": [],
+        "title": "Dark mode",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": false,
+      "out": "Not its turn: a plan step is carried out only once the steps before it are done."
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "ds1",
+        "planId": "dp1",
+        "state": "done",
+        "threadId": "dev1",
+        "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "inbox_list",
+      "ok": true,
+      "out": {
+        "toCarryOut": [],
+        "toWake": [],
+        "toWork": []
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "ds3",
+        "planId": "dp1",
+        "state": "done",
+        "threadId": "dev1",
+        "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "<id>",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": null,
+              "name": "Owner"
+            },
+            "source": "hivenod",
+            "text": "Add a dark mode to the board.",
+            "threadRef": "dev1"
+          }
+        ],
+        "next": "Carry out the approved outcome exactly as approved (its fields, as the person left them), then report it with outcome_done.",
+        "outcomes": [
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "idea": "Add a dark mode to the board."
+            },
+            "note": "",
+            "outcomeId": "ds1",
+            "planId": "dp1",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": null,
+              "text": "Size M"
+            },
+            "state": "done",
+            "step": "1 of 6",
+            "type": "shape"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": {
+              "edited": false,
+              "reason": null
+            },
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Approve idea"
+            },
+            "note": "",
+            "outcomeId": "ds2",
+            "planId": "dp1",
+            "result": null,
+            "state": "done",
+            "step": "2 of 6",
+            "type": "approval"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "ds3",
+            "planId": "dp1",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": "https://github.com/example/board/pull/86",
+              "text": "PR #86 open"
+            },
+            "state": "approved",
+            "step": "3 of 6",
+            "type": "build"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Ship it?"
+            },
+            "note": "",
+            "outcomeId": "ds4",
+            "planId": "dp1",
+            "result": null,
+            "state": "proposed",
+            "step": "4 of 6",
+            "type": "approval"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "ds5",
+            "planId": "dp1",
+            "result": null,
+            "state": "approved",
+            "step": "5 of 6",
+            "type": "release"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Accept on live"
+            },
+            "note": "",
+            "outcomeId": "ds6",
+            "planId": "dp1",
+            "result": null,
+            "state": "proposed",
+            "step": "6 of 6",
+            "type": "approval"
+          }
+        ],
+        "plans": [
+          {
+            "confidence": null,
+            "cursor": 2,
+            "note": "",
+            "planId": "dp1",
+            "progress": "Step 3 of 6",
+            "sentBack": {
+              "by": "owner",
+              "n": 1,
+              "reason": "Bigger toggle",
+              "toStep": "3 of 6"
+            },
+            "state": "active",
+            "steps": [
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Shape",
+                "outcomeId": "ds1",
+                "step": 1,
+                "type": "shape",
+                "ui": "done"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds2",
+                "step": 2,
+                "type": "approval",
+                "ui": "done"
+              },
+              {
+                "atCursor": true,
+                "kind": "agent",
+                "label": "Build",
+                "outcomeId": "ds3",
+                "step": 3,
+                "type": "build",
+                "ui": "running"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds4",
+                "step": 4,
+                "type": "approval",
+                "ui": "proposed"
+              },
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Release + live check",
+                "outcomeId": "ds5",
+                "step": 5,
+                "type": "release",
+                "ui": "approved"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds6",
+                "step": 6,
+                "type": "approval",
+                "ui": "proposed"
+              }
+            ],
+            "templateId": "dev"
+          }
+        ],
+        "question": null,
+        "state": "waiting",
+        "subject": null,
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
+        "threadId": "dev1",
+        "timeline": [],
+        "title": "Dark mode",
+        "urgent": false,
+        "waiting": {
+          "on": "item",
+          "until": null
+        }
+      }
+    },
+    {
+      "tool": "inbox_list",
+      "ok": true,
+      "out": {
+        "toCarryOut": [
+          {
+            "fields": {},
+            "member": "owner",
+            "outcomeId": "ds3",
+            "planId": "dp1",
+            "step": "3 of 6",
+            "threadId": "dev1",
+            "type": "build"
+          }
+        ],
+        "toWake": [],
+        "toWork": []
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "ds3",
+        "planId": "dp1",
+        "state": "done",
+        "threadId": "dev1",
+        "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "plan_send_back",
+      "ok": false,
+      "out": "Send it back to an earlier agent step that is done."
+    },
+    {
+      "tool": "plan_send_back",
+      "ok": false,
+      "out": "Say what should change."
+    },
+    {
+      "tool": "plan_send_back",
+      "ok": true,
+      "out": {
+        "blocked": false,
+        "note": "Sent back to step 3 of 6: you get carry_out for it again (why sent_back, with the reason).",
+        "planId": "dp1",
+        "threadId": "dev1",
+        "toStep": 3
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "ds3",
+        "planId": "dp1",
+        "state": "done",
+        "threadId": "dev1",
+        "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "plan_send_back",
+      "ok": true,
+      "out": {
+        "blocked": true,
+        "note": "Sent back to step 3 of 6, the third time: the plan is blocked until the person retries or stops it.",
+        "planId": "dp1",
+        "threadId": "dev1",
+        "toStep": 3
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": false,
+      "out": "This plan is blocked: its steps are not carried out."
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "in",
+            "messageId": "<id>",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": null,
+              "name": "Owner"
+            },
+            "source": "hivenod",
+            "text": "Add a dark mode to the board.",
+            "threadRef": "dev1"
+          }
+        ],
+        "next": "Waiting for the person to approve, edit or reject the proposed outcomes.",
+        "outcomes": [
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {
+              "idea": "Add a dark mode to the board."
+            },
+            "note": "",
+            "outcomeId": "ds1",
+            "planId": "dp1",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": null,
+              "text": "Size M"
+            },
+            "state": "done",
+            "step": "1 of 6",
+            "type": "shape"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": {
+              "edited": false,
+              "reason": null
+            },
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Approve idea"
+            },
+            "note": "",
+            "outcomeId": "ds2",
+            "planId": "dp1",
+            "result": null,
+            "state": "done",
+            "step": "2 of 6",
+            "type": "approval"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "ds3",
+            "planId": "dp1",
+            "result": {
+              "error": null,
+              "itemId": null,
+              "permalink": null,
+              "text": "Fixed"
+            },
+            "state": "approved",
+            "step": "3 of 6",
+            "type": "build"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Ship it?"
+            },
+            "note": "",
+            "outcomeId": "ds4",
+            "planId": "dp1",
+            "result": null,
+            "state": "proposed",
+            "step": "4 of 6",
+            "type": "approval"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": "<agent>",
+            "executorIsMe": true,
+            "fields": {},
+            "note": "",
+            "outcomeId": "ds5",
+            "planId": "dp1",
+            "result": null,
+            "state": "approved",
+            "step": "5 of 6",
+            "type": "release"
+          },
+          {
+            "checks": [],
+            "confidence": null,
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "what": "Accept on live"
+            },
+            "note": "",
+            "outcomeId": "ds6",
+            "planId": "dp1",
+            "result": null,
+            "state": "proposed",
+            "step": "6 of 6",
+            "type": "approval"
+          }
+        ],
+        "plans": [
+          {
+            "confidence": null,
+            "cursor": 2,
+            "note": "",
+            "planId": "dp1",
+            "progress": "Step 3 of 6",
+            "sentBack": {
+              "by": "<agent>",
+              "n": 3,
+              "reason": "Still failing",
+              "toStep": "3 of 6"
+            },
+            "state": "blocked",
+            "steps": [
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Shape",
+                "outcomeId": "ds1",
+                "step": 1,
+                "type": "shape",
+                "ui": "done"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds2",
+                "step": 2,
+                "type": "approval",
+                "ui": "done"
+              },
+              {
+                "atCursor": true,
+                "kind": "agent",
+                "label": "Build",
+                "outcomeId": "ds3",
+                "step": 3,
+                "type": "build",
+                "ui": "blocked"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds4",
+                "step": 4,
+                "type": "approval",
+                "ui": "proposed"
+              },
+              {
+                "atCursor": false,
+                "kind": "agent",
+                "label": "Release + live check",
+                "outcomeId": "ds5",
+                "step": 5,
+                "type": "release",
+                "ui": "approved"
+              },
+              {
+                "atCursor": false,
+                "kind": "human",
+                "label": "Your approval",
+                "outcomeId": "ds6",
+                "step": 6,
+                "type": "approval",
+                "ui": "proposed"
+              }
+            ],
+            "templateId": "dev"
+          }
+        ],
+        "question": null,
+        "state": "yourCall",
+        "subject": null,
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
+        "threadId": "dev1",
+        "timeline": [],
+        "title": "Dark mode",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "ds3",
+        "planId": "dp1",
+        "state": "done",
+        "threadId": "dev1",
+        "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "plan_propose",
+      "ok": true,
+      "out": {
+        "note": "Plan proposed. The person approves the whole plan or step by step; each step is carried out only once it is approved and the steps before it are done (you get a carry_out per step). An approval step waits for the person.",
+        "planId": "<id>",
+        "state": "proposed",
+        "stepIds": [
+          "<id>",
+          "<id>",
+          "<id>",
+          "<id>",
+          "<id>",
+          "<id>"
+        ],
+        "steps": [
+          {
+            "kind": "agent",
+            "outcomeId": "<id>",
+            "step": 1,
+            "type": "shape"
+          },
+          {
+            "kind": "human",
+            "outcomeId": "<id>",
+            "step": 2,
+            "type": "approval"
+          },
+          {
+            "kind": "agent",
+            "outcomeId": "<id>",
+            "step": 3,
+            "type": "build"
+          },
+          {
+            "kind": "human",
+            "outcomeId": "<id>",
+            "step": 4,
+            "type": "approval"
+          },
+          {
+            "kind": "agent",
+            "outcomeId": "<id>",
+            "step": 5,
+            "type": "release"
+          },
+          {
+            "kind": "human",
+            "outcomeId": "<id>",
+            "step": 6,
+            "type": "approval"
+          }
+        ],
+        "threadId": "dev1"
+      }
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      }
+    ],
+    "workspaces/w1/inboxThreads": [
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "dev1"
+        ],
+        "state": "yourCall",
+        "subjectId": null,
+        "title": "Dark mode",
+        "updatedAt": "<ts>",
+        "waiting": null
+      }
+    ],
+    "workspaces/w1/inboxMessages": [
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "owner",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "<id>",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": null,
+          "name": "Owner"
+        },
+        "source": "hivenod",
+        "text": "Add a dark mode to the board.",
+        "threadId": "dev1",
+        "threadRef": "dev1"
+      }
+    ],
+    "workspaces/w1/inboxOutcomes": [
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {
+          "idea": "A second idea"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "<id>",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "proposed",
+        "threadId": "dev1",
+        "type": "shape",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {
+          "idea": "Add a dark mode to the board."
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dp1",
+        "proposedBy": "owner",
+        "result": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "error": null,
+          "itemId": null,
+          "permalink": null,
+          "text": "Size M"
+        },
+        "state": "done",
+        "threadId": "dev1",
+        "type": "shape",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {},
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "<id>",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "proposed",
+        "threadId": "dev1",
+        "type": "build",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {},
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "<id>",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "proposed",
+        "threadId": "dev1",
+        "type": "release",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {},
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dp1",
+        "proposedBy": "owner",
+        "result": null,
+        "state": "approved",
+        "threadId": "dev1",
+        "type": "release",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {},
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dp1",
+        "proposedBy": "owner",
+        "result": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "error": null,
+          "itemId": null,
+          "permalink": null,
+          "text": null
+        },
+        "state": "done",
+        "threadId": "dev1",
+        "type": "build",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": null,
+        "fields": {
+          "what": "Accept on live"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "<id>",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "proposed",
+        "threadId": "dev1",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": null,
+        "fields": {
+          "what": "Accept on live"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dp1",
+        "proposedBy": "owner",
+        "result": null,
+        "state": "proposed",
+        "threadId": "dev1",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": null,
+        "fields": {
+          "what": "Approve idea"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "<id>",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "proposed",
+        "threadId": "dev1",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": null,
+        "fields": {
+          "what": "Ship it?"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "<id>",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "proposed",
+        "threadId": "dev1",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": null,
+        "fields": {
+          "what": "Ship it?"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dp1",
+        "proposedBy": "owner",
+        "result": null,
+        "state": "proposed",
+        "threadId": "dev1",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "owner",
+          "edited": false,
+          "reason": null,
+          "summaryVersion": 1
+        },
+        "executor": null,
+        "fields": {
+          "what": "Approve idea"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dp1",
+        "proposedBy": "owner",
+        "result": null,
+        "state": "done",
+        "threadId": "dev1",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/inboxEvents": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "from": 4,
+          "n": 2,
+          "outcomeId": "ds3",
+          "planId": "dp1",
+          "reason": "e2e fails on main",
+          "reset": [
+            "ds3",
+            "ds4"
+          ],
+          "to": 2
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "plan.sent_back"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "from": 4,
+          "n": 3,
+          "outcomeId": "ds3",
+          "planId": "dp1",
+          "reason": "Still failing",
+          "reset": [
+            "ds3",
+            "ds4"
+          ],
+          "to": 2
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "plan.sent_back"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "ds1",
+          "permalink": null,
+          "planId": "dp1",
+          "type": "shape"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "ds3",
+          "permalink": "https://github.com/example/board/pull/86",
+          "planId": "dp1",
+          "type": "build"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "ds3",
+          "permalink": null,
+          "planId": "dp1",
+          "type": "build"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "ds3",
+          "permalink": null,
+          "planId": "dp1",
+          "type": "build"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "ds3",
+          "permalink": null,
+          "planId": "dp1",
+          "type": "build"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "planId": "<id>",
+          "steps": [
+            "<id>",
+            "<id>",
+            "<id>",
+            "<id>",
+            "<id>",
+            "<id>"
+          ],
+          "templateId": "dev",
+          "types": [
+            "shape",
+            "approval",
+            "build",
+            "approval",
+            "release",
+            "approval"
+          ]
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "plan.proposed"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "agentUid": "<agent>",
+          "messageDocId": "<id>",
+          "planId": "dp1",
+          "steps": [
+            "ds1",
+            "ds2",
+            "ds3",
+            "ds4",
+            "ds5",
+            "ds6"
+          ],
+          "templateId": "dev"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "thread.created"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "edited": false,
+          "outcomeId": "ds2",
+          "planId": "dp1",
+          "summaryVersion": 1,
+          "type": "approval"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.approved"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "edited": false,
+          "outcomeId": "ds4",
+          "planId": "dp1",
+          "summaryVersion": 1,
+          "type": "approval"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.approved"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "edited": false,
+          "outcomeId": "ds4",
+          "planId": "dp1",
+          "summaryVersion": 1,
+          "type": "approval"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "outcome.approved"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "from": 3,
+          "n": 1,
+          "outcomeId": "ds3",
+          "planId": "dp1",
+          "reason": "Bigger toggle",
+          "reset": [
+            "ds3"
+          ],
+          "to": 2
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "plan.sent_back"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "outcomeId": "ds3",
+          "planId": "dp1"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dev1",
+        "type": "plan.retried"
+      }
+    ],
+    "workspaces/w1/inboxPlans": [
+      {
+        "createdAt": "<ts>",
+        "cursor": 0,
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "proposedBy": "<agent>",
+        "sendBackTo": {
+          "<id>": "<id>"
+        },
+        "state": "proposed",
+        "steps": [
+          "<id>",
+          "<id>",
+          "<id>",
+          "<id>",
+          "<id>",
+          "<id>"
+        ],
+        "templateId": "dev",
+        "threadId": "dev1",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "cursor": 3,
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "proposedBy": "owner",
+        "sendBackTo": {
+          "ds2": "ds1",
+          "ds4": "ds3",
+          "ds6": "ds3"
+        },
+        "sentBack": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "n": 3,
+          "reason": "Still failing",
+          "to": "ds3"
+        },
+        "state": "active",
+        "steps": [
+          "ds1",
+          "ds2",
+          "ds3",
+          "ds4",
+          "ds5",
+          "ds6"
+        ],
+        "templateId": "dev",
+        "threadId": "dev1",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects": [
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      },
+      {
+        "archivedAt": null,
+        "budgetEur": 10,
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "emoji": "📝",
+        "lastEventId": "seed",
+        "memberUids": [
+          "alice",
+          "bob",
+          "carol",
+          "dave"
+        ],
+        "name": "Blog",
+        "stepIndex": {
+          "draft": 1,
+          "intake": 0,
+          "publish": 3,
+          "review": 2
+        },
+        "steps": [
+          {
+            "description": "New work",
+            "id": "intake",
+            "kind": "agent",
+            "name": "Intake"
+          },
+          {
+            "description": "Write it",
+            "id": "draft",
+            "instructions": "Write",
+            "kind": "agent",
+            "name": "Draft"
+          },
+          {
+            "description": "Decide",
+            "gate": {
+              "deciderUids": [
+                "alice",
+                "bob",
+                "carol"
+              ],
+              "groupIds": [],
+              "mustInclude": [],
+              "n": 1,
+              "rejectPolicy": "one",
+              "remindAfterHours": 24,
+              "rule": "any"
+            },
+            "id": "review",
+            "kind": "human",
+            "name": "Review"
+          },
+          {
+            "description": "Ship it",
+            "id": "publish",
+            "kind": "agent",
+            "name": "Publish"
+          }
+        ],
+        "templateId": "content"
+      }
+    ],
+    "workspaces/w1/projects/p1/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      },
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": {
+          "approvals": {},
+          "rejections": {},
+          "stepId": "review"
+        },
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "waiting",
+        "stepId": "review",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/projects/p2/items": [
+      {
+        "claim": null,
+        "costEur": 0,
+        "createdBy": {
+          "id": "alice",
+          "type": "human"
+        },
+        "gate": null,
+        "lastEventId": "seed",
+        "order": 1,
+        "parentItemId": null,
+        "progress": null,
+        "sendBackCount": 0,
+        "source": {
+          "kind": "manual",
+          "label": "Alice"
+        },
+        "sourceRunId": null,
+        "status": "queued",
+        "stepId": "draft",
+        "summary": "",
+        "title": "Post about bees",
+        "triage": null,
+        "type": "idea",
+        "updatedAt": "<ts>"
+      }
+    ]
+  }
+}

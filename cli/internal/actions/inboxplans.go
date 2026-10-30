@@ -26,6 +26,11 @@ type PlanState struct {
 	Steps     []string `json:"steps"`
 	Cursor    int      `json:"cursor"`
 	State     string   `json:"state"`
+	// Development plans (slice 6): the gates' send-back targets and the last send back.
+	SendBackTo map[string]string `json:"sendBackTo,omitempty"`
+	SentBack   *struct {
+		N int `json:"n"`
+	} `json:"sentBack,omitempty"`
 }
 
 // PlanInput is a plan with its steps' outcomes (by id), as the plan actions take it.
@@ -41,7 +46,13 @@ func PlanStateFrom(p model.InboxPlan) PlanState {
 	if steps == nil {
 		steps = []string{}
 	}
-	return PlanState{MemberUID: p.MemberUID, ThreadID: p.ThreadID, Steps: steps, Cursor: p.Cursor, State: p.State}
+	ps := PlanState{MemberUID: p.MemberUID, ThreadID: p.ThreadID, Steps: steps, Cursor: p.Cursor, State: p.State, SendBackTo: p.SendBackTo}
+	if p.SentBack != nil {
+		ps.SentBack = &struct {
+			N int `json:"n"`
+		}{p.SentBack.N}
+	}
+	return ps
 }
 
 // OutcomeKind is outcomeKind: "human" for a person-approval gate, else "agent".
@@ -68,6 +79,10 @@ func PlanThreadState(p PlanState, outcomes map[string]OutcomeState) (map[string]
 	yourCall := map[string]any{"state": "yourCall", "waiting": nil}
 	if p.State == "stopped" {
 		return map[string]any{"state": "investigating", "waiting": nil}, nil
+	}
+	// Blocked (a failed step, or the third send back): the person decides.
+	if p.State == "blocked" {
+		return yourCall, nil
 	}
 	pl := PlanInput{Plan: p, Outcomes: outcomes}
 	before := func(end int) (map[string]any, error) {
@@ -149,6 +164,9 @@ func stepUI(o *OutcomeState, atCursor bool, planState string) string {
 	case "running", "revising":
 		return o.State
 	case "approved":
+		if atCursor && planState == "blocked" {
+			return "blocked"
+		}
 		if atCursor {
 			return "running"
 		}
@@ -291,6 +309,9 @@ type ProposePlanInput struct {
 	Steps      []PlanStepInput `json:"steps"`
 	PlanID     *string         `json:"planId"`
 	StepIDs    []string        `json:"stepIds"`
+	// Template (slice 6): the plan is the template's steps, Steps giving their fields over the
+	// defaults, in order.
+	Template *string `json:"template"`
 }
 
 // ProposePlanResult is the plan plus the new plan's and steps' ids.
@@ -318,7 +339,11 @@ func ProposePlan(ctx Ctx, in ProposePlanInput) (ProposePlanResult, error) {
 	if err := liveThread(t); err != nil {
 		return ProposePlanResult{}, err
 	}
-	if err := need(len(in.Steps) >= 1 && len(in.Steps) <= PlanMaxSteps, "A plan has 1 to "+strconv.Itoa(PlanMaxSteps)+" steps."); err != nil {
+	tpl := ""
+	if in.Template != nil {
+		tpl = *in.Template
+	}
+	if err := need((tpl != "" || len(in.Steps) >= 1) && len(in.Steps) <= PlanMaxSteps, "A plan has 1 to "+strconv.Itoa(PlanMaxSteps)+" steps."); err != nil {
 		return ProposePlanResult{}, err
 	}
 	note := ""
@@ -332,8 +357,18 @@ func ProposePlan(ctx Ctx, in ProposePlanInput) (ProposePlanResult, error) {
 		return ProposePlanResult{}, err
 	}
 	planTypes := PlanOutcomeTypes()
-	steps := make([]cleanStep, len(in.Steps))
-	for i, st := range in.Steps {
+	raw := in.Steps
+	if tpl != "" {
+		var err error
+		if raw, err = fromTemplate(tpl, in.Steps); err != nil {
+			return ProposePlanResult{}, err
+		}
+	}
+	if err := need(len(raw) >= 1 && len(raw) <= PlanMaxSteps, "A plan has 1 to "+strconv.Itoa(PlanMaxSteps)+" steps."); err != nil {
+		return ProposePlanResult{}, err
+	}
+	steps := make([]cleanStep, len(raw))
+	for i, st := range raw {
 		n := "Step " + strconv.Itoa(i+1)
 		if !inList(st.Type, planTypes...) {
 			return ProposePlanResult{}, fail(n + ": " + st.Type + " is not a plan step. Plan steps: " + strings.Join(planTypes, ", ") + ".")
@@ -386,7 +421,7 @@ func ProposePlan(ctx Ctx, in ProposePlanInput) (ProposePlanResult, error) {
 	for i, st := range steps {
 		types[i] = st.typ
 	}
-	p := InboxPlan(ctx, "plan.proposed", t.MemberUID, sp(in.ThreadID), t.SubjectID, map[string]any{"planId": planID, "steps": stepIDs, "types": types}, func(eventID string) []plan.Op {
+	p := InboxPlan(ctx, "plan.proposed", t.MemberUID, sp(in.ThreadID), t.SubjectID, evData(planID, stepIDs, types, tpl), func(eventID string) []plan.Op {
 		var ops []plan.Op
 		for i, st := range steps {
 			var executor any
@@ -415,10 +450,21 @@ func ProposePlan(ctx Ctx, in ProposePlanInput) (ProposePlanResult, error) {
 		if in.Confidence != nil {
 			pd["confidence"] = *in.Confidence
 		}
+		if tpl != "" {
+			pd["templateId"], pd["sendBackTo"] = tpl, TemplateSendBack(tpl, stepIDs)
+		}
 		return append(ops,
 			plan.Op{Kind: "set", Path: model.Paths.InboxPlan(ctx.WorkspaceID, planID), Data: pd},
 			upd(model.Paths.InboxThread(ctx.WorkspaceID, in.ThreadID), map[string]any{"state": "yourCall", "waiting": nil}, eventID),
 		)
 	}, "")
 	return ProposePlanResult{Plan: p, PlanID: planID, StepIDs: stepIDs}, nil
+}
+
+func evData(planID string, stepIDs, types []string, tpl string) map[string]any {
+	d := map[string]any{"planId": planID, "steps": stepIDs, "types": types}
+	if tpl != "" {
+		d["templateId"] = tpl
+	}
+	return d
 }

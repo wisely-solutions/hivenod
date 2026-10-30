@@ -482,6 +482,46 @@ func TestInboxFeedPlanCarryOutAtTheCursor(t *testing.T) {
 	}
 }
 
+// Development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6): a step carried out before a send back
+// is carried out again after it, once per round, with why=sent_back and the reason; a member's
+// New thread arrives as new.
+func TestInboxFeedPlanSentBackCarriesOutAgain(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 3})
+	r.feed.Start()
+	b := FeedOutcome{ID: "o3", ThreadID: "t1", MemberUID: "joao", Type: "build", CreatedAtMs: r.now.UnixMilli(), PlanID: "p1"}
+	pl := FeedPlan{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"o1", "o2", "o3", "o4"}, Cursor: 2}
+	r.plans([]FeedPlan{pl})
+	r.set(nil, []FeedOutcome{b})
+	r.want("t1:carry_out")
+	r.mu.Lock()
+	c := r.pushed[0].Content
+	r.mu.Unlock()
+	if !strings.Contains(c, "NOT merged") || r.meta(0)["why"] != "" {
+		t.Fatal(c, r.meta(0))
+	}
+	// Build done: the gate at the cursor; then Ship it? sends the plan back to Build.
+	r.set(nil, nil)
+	pl.Cursor = 3
+	r.plans([]FeedPlan{pl})
+	r.want("t1:carry_out")
+	pl.Cursor, pl.SentBack, pl.SentBackTo, pl.SentBackOf = 2, 1, "o3", "Make the button bigger"
+	r.plans([]FeedPlan{pl})
+	r.set(nil, []FeedOutcome{b})
+	r.want("t1:carry_out", "t1:carry_out")
+	if m := r.meta(1); m["why"] != "sent_back" || m["outcome_id"] != "o3" || m["step"] != "3 of 4" {
+		t.Fatal(m)
+	}
+	r.mu.Lock()
+	c = r.pushed[1].Content
+	r.mu.Unlock()
+	if !strings.Contains(c, "sent back to this step: Make the button bigger") {
+		t.Fatal(c)
+	}
+	// The same round again (a reconnect): not sent twice.
+	r.set(nil, []FeedOutcome{b})
+	r.want("t1:carry_out", "t1:carry_out")
+}
+
 func TestInboxFeedPlanBlockedOrStoppedSendsNothing(t *testing.T) {
 	r := newRig(t, InboxOptions{MaxInbox: 3})
 	r.feed.Start()

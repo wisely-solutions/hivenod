@@ -528,7 +528,8 @@ describe('decision points on threads end to end (slice 3, design 9b)', () => {
       await press(bot, 42, code);
       expect((await db.doc(inboxPaths.outcome(W, 'g1')).get()).data()).toMatchObject({
         state: 'done',
-        decision: { byUid: 'alice' },
+        // The gate pins the summary version the one-liner came from (slice 6).
+        decision: { byUid: 'alice', summaryVersion: 3 },
       });
       expect((await db.doc(inboxPaths.plan(W, 'pl1')).get()).data()!.cursor).toBe(1);
       const ev = await db
@@ -607,6 +608,78 @@ describe('decision points on threads end to end (slice 3, design 9b)', () => {
         state: 'revising',
         revise: { instruction: 'Say Friday instead' },
       });
+    } finally {
+      stop();
+    }
+  });
+
+  it('a Development gate: Ask for changes sends the plan back to Build with the text', async () => {
+    const now = harnessNow();
+    await put({
+      ...people(),
+      [inboxPaths.thread(W, 'dt1')]: thread(),
+      [inboxPaths.plan(W, 'pl1')]: {
+        memberUid: 'alice',
+        threadId: 'dt1',
+        proposedBy: 'alice',
+        steps: ['s1', 's2', 's3', 's4'],
+        cursor: 3,
+        state: 'active',
+        note: '',
+        templateId: 'dev',
+        sendBackTo: { s2: 's1', s4: 's3' },
+        createdAt: now,
+        updatedAt: now,
+        lastEventId: 'e1',
+      },
+      [inboxPaths.outcome(W, 's1')]: outcome({
+        type: 'shape',
+        fields: {},
+        state: 'done',
+        planId: 'pl1',
+      }),
+      [inboxPaths.outcome(W, 's2')]: outcome({
+        type: 'approval',
+        fields: { what: 'Approve idea' },
+        state: 'done',
+        executor: null,
+        planId: 'pl1',
+      }),
+      [inboxPaths.outcome(W, 's3')]: outcome({
+        type: 'build',
+        fields: {},
+        state: 'done',
+        planId: 'pl1',
+      }),
+      [inboxPaths.outcome(W, 's4')]: outcome({
+        type: 'approval',
+        fields: { what: 'Ship it?' },
+        executor: null,
+        planId: 'pl1',
+      }),
+    });
+    const { calls, bot, stop } = await start();
+    try {
+      await until(() => sent(calls, 'Ship release 175').length > 0);
+      await press(bot, 42, buttonCode(calls, 'tc:')!);
+      const prompt = calls.filter((c) => c.body.reply_markup?.force_reply).pop()!;
+      await bot.handle({
+        update_id: 3,
+        message: {
+          message_id: 78,
+          chat: { id: 42, type: 'private' },
+          text: 'The button is too small',
+          reply_to_message: { message_id: 100 + calls.indexOf(prompt) },
+        },
+      });
+      await until(async () => (await db.doc(inboxPaths.plan(W, 'pl1')).get()).data()!.cursor === 2);
+      expect((await db.doc(inboxPaths.plan(W, 'pl1')).get()).data()).toMatchObject({
+        cursor: 2,
+        state: 'active',
+        sentBack: { n: 1, to: 's3', reason: 'The button is too small', by: 'alice' },
+      });
+      expect((await db.doc(inboxPaths.outcome(W, 's3')).get()).data()!.state).toBe('approved');
+      expect((await db.doc(inboxPaths.outcome(W, 's4')).get()).data()!.state).toBe('proposed');
     } finally {
       stop();
     }

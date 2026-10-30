@@ -193,7 +193,9 @@ test.describe('desktop 1440', () => {
       await page.waitForTimeout(UNDO_WAIT);
       await expect.poll(() => stateOf(s, stepIds[0]!)).toBe('approved');
       expect(await stateOf(s, stepIds[2]!)).toBe('proposed');
-      await plan.getByRole('button', { name: 'Reject plan' }).click();
+      // Reject plan is out of the way, in the plan's ⋯ menu (slice 6).
+      await plan.getByRole('button', { name: 'Plan actions' }).click();
+      await page.getByRole('menuitem', { name: 'Reject plan' }).click();
       await page.waitForTimeout(UNDO_WAIT);
       await expect.poll(() => planState(s, planId)).toBe('stopped');
       await expect

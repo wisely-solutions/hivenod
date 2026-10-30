@@ -1138,15 +1138,15 @@ service cloud.firestore {
 
       // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by
       // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)
-      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'approval']; }
+      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'release', 'approval']; }
       function outcomeSingle() { return ['reply', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore']; }
-      function outcomePlanTypes() { return ['reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'approval']; }
+      function outcomePlanTypes() { return ['reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'shape', 'build', 'release', 'approval']; }
       function outcomeHuman() { return ['approval']; }
       function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval']; }
-      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'approval': 'done'}; }
-      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'approval': null}; }
-      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'approval': ['what', 'detail', 'link']}; }
-      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'approval': ['what']}; }
+      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'release': 'done', 'approval': 'done'}; }
+      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'release': null, 'approval': null}; }
+      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'release': ['notes'], 'approval': ['what', 'detail', 'link']}; }
+      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'release': [], 'approval': ['what']}; }
       // END outcome registry
 
       // ---------- summaries (item OE8FmrTaIxFVGcaeGG3N, packages/shared/src/summary.ts) ----------
@@ -1320,24 +1320,28 @@ service cloud.firestore {
         allow read: if inboxReader(resource.data);
         // An agent proposes: cursor 0, 1-8 distinct steps, each created in the same batch as a
         // step of this plan, with one plan.proposed event that lists them.
+        // The member's own plan (New thread from a template, slice 6) starts active, with its new
+        // thread: its agent steps approved by the creation (inboxStepCreate). Agents only propose.
         allow create: if inboxPlansCreateOk();
         function inboxPlansCreateOk() {
           let d = request.resource.data;
-          return isActiveAgent(wid)
+          let a = isActiveAgent(wid);
+          return (a || inboxOwner(d))
           && keysOk(d, ['memberUid', 'threadId', 'proposedBy', 'steps', 'cursor',
                'state', 'note', 'createdAt', 'updatedAt', 'lastEventId'],
-               ['confidence'])
+               ['confidence', 'templateId', 'sendBackTo'])
           && (!('confidence' in d) || d.confidence in ['high', 'medium', 'low'])
+          && d.get('sendBackTo', {}) is map && strOrNull(d.get('templateId', null), 40)
           && d.proposedBy == me()
-          && d.state == 'proposed' && d.cursor == 0
+          && d.state == (a ? 'proposed' : 'active') && d.cursor == 0
           && d.steps is list && d.steps.size() >= 1
           && d.steps.size() <= 8
           && d.steps.toSet().size() == d.steps.size()
           && str(d.note, 0, 2000)
           && d.createdAt == request.time
           && d.updatedAt == request.time
-          && get(inboxDoc('inboxThreads', d.threadId)).data.memberUid == d.memberUid
-          && inboxDocTracked(d, ['plan.proposed'],
+          && getAfter(inboxDoc('inboxThreads', d.threadId)).data.memberUid == d.memberUid
+          && inboxDocTracked(d, [a ? 'plan.proposed' : 'thread.created'],
                d.memberUid, d.threadId)
           && inboxEvOf(d).data.planId == pid
           && inboxEvOf(d).data.steps == d.steps
@@ -1348,18 +1352,19 @@ service cloud.firestore {
           let d = request.resource.data;
           let r = resource.data;
           return d.updatedAt == request.time
-          && touched(['steps', 'cursor', 'state'])
+          && touched(['steps', 'cursor', 'state', 'sentBack'])
           && d.steps is list && d.steps.size() >= 1
           && d.steps.size() <= 8
           && d.cursor is int && d.cursor >= 0
           && d.cursor <= d.steps.size()
           && inboxDocTracked(d,
                ['outcome.approved', 'outcome.rejected', 'plan.approved', 'plan.rejected', 'plan.edited',
-                'plan.retried', 'plan.skipped', 'plan.stopped', 'outcome.done', 'outcome.failed', 'thread.woke'],
+                'plan.retried', 'plan.skipped', 'plan.stopped', 'outcome.done', 'outcome.failed', 'thread.woke',
+                'plan.sent_back'],
                r.memberUid, r.threadId)
           && inboxEvOf(d).data.planId == pid
-          && inboxPlanMoved(d, r,
-               inboxEvOf(d));
+          && (inboxEvOf(d).type == 'plan.sent_back' ? inboxPlanSentBack(d, r, inboxEvOf(d).data)
+            : d.get('sentBack', null) == r.get('sentBack', null) && inboxPlanMoved(d, r, inboxEvOf(d)));
         }
         allow delete: if false;
 
@@ -1392,6 +1397,26 @@ service cloud.firestore {
                 || (e.type == 'outcome.failed' && o.executor == me() && o.state == 'failed'
                   && same && d.cursor == r.cursor && d.state == 'blocked')
                 || (e.type == 'thread.woke' && o.type == 'snooze' && o.state == 'done' && next)));
+        }
+        // Send back (slice 6): from the gate at its turn (the member) or the agent step at its turn
+        // (its executor) back to an earlier agent step that is done; the steps from there to the
+        // cursor are listed as reset (each resets itself: inboxStepUpdate); counted, and from the
+        // third on the plan is blocked for the member.
+        function inboxPlanSentBack(d, r, e) {
+          let c = getAfter(inboxDoc('inboxOutcomes', r.steps[r.cursor])).data;
+          let t = getAfter(inboxDoc('inboxOutcomes', e.outcomeId)).data;
+          let n = r.get('sentBack', {'n': 0}).n + 1;
+          return r.state in ['proposed', 'active'] && d.steps == r.steps
+            && e.to is int && e.to < r.cursor && d.cursor == e.to && e.from == r.cursor
+            && r.steps[e.to] == e.outcomeId && e.n == n && r.steps[e.to:r.cursor + 1].hasAll(e.reset)
+            && !(t.type in outcomeHuman()) && t.state == 'approved'
+            && d.state == (n >= 3 ? 'blocked' : 'active')
+            && exactKeys(d.sentBack, ['n', 'to', 'reason', 'by', 'at']) && d.sentBack.n == n
+            && d.sentBack.to == e.outcomeId && d.sentBack.reason == e.reason && str(e.reason, 1, 1000)
+            && d.sentBack.by == me() && d.sentBack.at == request.time
+            && (c.type in outcomeHuman()
+              ? inboxOwner(r) && c.state == 'proposed'
+              : isActiveAgent(wid) && c.executor == me() && c.state == 'approved');
         }
         // Edit plan: move, remove or add one step, never before `first`; the steps before it
         // stay as they are.
@@ -1450,7 +1475,7 @@ service cloud.firestore {
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged', 'thread.due', 'plan.approved', 'plan.rejected', 'plan.edited',
                   'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
-                  'thread.instructed', 'thread.not_now'])
+                  'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back'])
                 && (d.type != 'thread.itemMade' || inboxItemMade(d))
             || (d.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(d.memberUid)
@@ -1458,7 +1483,8 @@ service cloud.firestore {
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.revised',
                   'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
                   'plan.proposed', 'outcome.started', 'thread.rechecked',
-                  'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached']));
+                  'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',
+                  'plan.sent_back']));
         }
         allow update, delete: if false;
       }
@@ -1470,9 +1496,10 @@ service cloud.firestore {
         allow create: if inboxMessagesCreateOk();
         function inboxMessagesCreateOk() {
           let d = request.resource.data;
-          return isActiveAgent(wid)
+          // New thread (slice 6): the member's own first message, with the thread.
+          return (isActiveAgent(wid) || inboxOwner(d))
           && inboxMessageOk(d)
-          && inboxDocTracked(d, ['inbox.added'],
+          && inboxDocTracked(d, [isActiveAgent(wid) ? 'inbox.added' : 'thread.created'],
                d.memberUid, d.threadId)
           && inboxEvOf(d).data.messageDocId == mid
           && getAfter(inboxDoc('inboxThreads', d.threadId)).data.memberUid == d.memberUid
@@ -1500,25 +1527,31 @@ service cloud.firestore {
       match /inboxThreads/{tid} {
         // Members list theirs with where('memberUid', '==', uid).
         allow read: if inboxReader(resource.data);
-        // A new thread comes with its first message, from an agent.
+        // A new thread comes with its first message, from an agent; or (New thread, slice 6) from
+        // the member, for an active agent of the organization (its home agent), with its plan when
+        // the member picked a template (the thread then follows the plan: the plan's own rules).
         allow create: if inboxThreadsCreateOk();
         function inboxThreadsCreateOk() {
           let d = request.resource.data;
-          return isActiveAgent(wid)
+          let a = isActiveAgent(wid);
+          let p = getAfter(inboxPlanDoc(inboxEvOf(d).data.get('planId', '-')));
+          return (a || (inboxOwner(d) && activeAgentDoc(get(agentPath(wid, d.fetchedBy)))))
           && exactKeys(d, ['memberUid', 'subjectId', 'state', 'waiting', 'question',
                'title', 'refs', 'lastMessageAt', 'fetchedBy', 'createdAt', 'updatedAt', 'lastEventId'])
           && inboxMember(d.memberUid)
           && d.subjectId == null
-          && d.state == 'investigating'
-          && d.waiting == null && d.question == null
-          && str(d.title, 0, 200)
+          && (a || p == null ? d.state == 'investigating' && d.waiting == null
+            : p.data.threadId == tid && inboxPlanNextOk(d, p.data))
+          && d.question == null
+          && str(d.title, a ? 0 : 1, 200)
           && d.refs is list && d.refs.size() == 1
-          && d.fetchedBy == me()
+          && (!a || d.fetchedBy == me())
           && d.lastMessageAt == request.time
           && d.createdAt == request.time
           && d.updatedAt == request.time
-          && inboxDocTracked(d, ['inbox.added'],
+          && inboxDocTracked(d, [a ? 'inbox.added' : 'thread.created'],
                d.memberUid, tid)
+          && inboxEvOf(d).data.get('agentUid', d.fetchedBy) == d.fetchedBy
           && inboxMessageIn(d.lastEventId, tid);
         }
         allow update: if inboxThreadsUpdateOk();
@@ -1699,7 +1732,7 @@ service cloud.firestore {
         function inboxThreadAgentState(d, r) {
           let e = inboxEv(d.lastEventId);
           return inboxDocTracked(d, ['outcome.proposed', 'outcome.done', 'outcome.failed', 'thread.woke',
-                   'plan.proposed', 'outcome.started'], r.memberUid, tid)
+                   'plan.proposed', 'outcome.started', 'plan.sent_back'], r.memberUid, tid)
             && (e.data.data.get('planId', null) != null
               ? inboxThreadPlanAgent(d, r, e.data)
               : e.data.type == 'outcome.started' || e.data.type == 'plan.proposed' ? false
@@ -1739,6 +1772,7 @@ service cloud.firestore {
                         && exactKeys(d.waiting, ['on', 'until']) && d.waiting.on == 'item' && d.waiting.until == null
                       : e.type == 'outcome.failed'
                         ? o.state == 'failed' && p.state == 'blocked' && d.state == 'yourCall' && d.waiting == null
+                        : e.type == 'plan.sent_back' ? d.state in ['yourCall', 'waiting'] && inboxThreadShapeOk(d)
                         : o.state == 'done' && inboxPlanNextOk(d, p))));
         }
         function inboxThreadOwner(d, r) {
@@ -1758,7 +1792,8 @@ service cloud.firestore {
         function inboxThreadOwnerState(d, r) {
           let e = inboxEv(d.lastEventId);
           return inboxDocTracked(d, ['outcome.approved', 'outcome.rejected', 'thread.ignored', 'thread.closed', 'thread.restored',
-                   'plan.approved', 'plan.rejected', 'plan.edited', 'plan.retried', 'plan.skipped', 'plan.stopped'], me(), tid)
+                   'plan.approved', 'plan.rejected', 'plan.edited', 'plan.retried', 'plan.skipped', 'plan.stopped',
+                   'plan.sent_back'], me(), tid)
             && (e.data.data.get('planId', null) != null
               // A plan decision: the thread follows the plan (stopped: back to the agent).
               ? getAfter(inboxPlanDoc(e.data.data.planId)).data.threadId == tid
@@ -1874,13 +1909,18 @@ service cloud.firestore {
             && d.planId is string && p.threadId == d.threadId && p.memberUid == d.memberUid && oid in p.steps
             && d.type in outcomePlanTypes()
             && inboxFieldsOk(d.type, d.fields)
-            && d.state == 'proposed' && str(d.note, 0, 2000) && d.proposedBy == me()
+            && d.state == (e.type == 'thread.created' && !(d.type in outcomeHuman()) ? 'approved' : 'proposed')
+            && str(d.note, 0, 2000) && d.proposedBy == me()
             && d.decision == null && d.result == null
             && d.createdAt == request.time && d.updatedAt == request.time
             && e.data.planId == d.planId
             && ((isActiveAgent(wid) && p.proposedBy == me()
                 && inboxProposalOk(d, get(inboxDoc('inboxThreads', d.threadId)).data)
                 && inboxDocTracked(d, ['plan.proposed'], d.memberUid, d.threadId))
+              // New thread from a template (slice 6): the member's plan with its new thread.
+              || (inboxOwner(d) && p.proposedBy == me()
+                && inboxProposalOk(d, getAfter(inboxDoc('inboxThreads', d.threadId)).data)
+                && inboxDocTracked(d, ['thread.created'], d.memberUid, d.threadId))
               || (inboxOwner(d) && d.type == 'approval' && d.executor == null
                 && inboxDocTracked(d, ['plan.edited'], d.memberUid, d.threadId)
                 && e.data.op == 'add' && e.data.outcomeId == oid));
@@ -1891,7 +1931,7 @@ service cloud.firestore {
           return inboxDocTracked(d,
                  ['outcome.approved', 'outcome.rejected', 'outcome.done', 'outcome.failed', 'outcome.started',
                   'outcome.revise_requested', 'outcome.revised', 'plan.approved', 'plan.rejected', 'plan.edited',
-                  'plan.retried', 'plan.skipped', 'thread.woke'],
+                  'plan.retried', 'plan.skipped', 'thread.woke', 'plan.sent_back'],
                  r.memberUid, r.threadId)
             && (e.type in ['outcome.revise_requested', 'outcome.revised']
               // Ask for changes works on a step as on a single outcome.
@@ -1901,6 +1941,7 @@ service cloud.firestore {
               : e.data.planId == r.planId
                 && (e.type == 'plan.approved' ? oid in e.data.approved
                   : e.type == 'plan.rejected' ? oid in e.data.rejected
+                  : e.type == 'plan.sent_back' ? oid in e.data.reset
                   : e.data.outcomeId == oid)
                 && inboxStepMove(d, r, e,
                      get(inboxPlanDoc(r.planId)).data, getAfter(inboxPlanDoc(r.planId)).data));
@@ -1922,17 +1963,24 @@ service cloud.firestore {
         function inboxStepMove(d, r, e, p, pa) {
           let human = r.type in outcomeHuman();
           let turn = inboxAtCursor(p, oid);
-          return (inboxOwner(r) && inboxPlanLive(p)
+          // Send back (slice 6): a step the plan goes back over starts again (the plan's rule says
+          // who may); a person step is decided again.
+          return (e.type == 'plan.sent_back' && r.state in ['done', 'running'] && pa.cursor < p.cursor
+              && (human ? touched(['state', 'decision']) && d.state == 'proposed' && d.decision == null
+                : touched(['state']) && d.state == 'approved'))
+            || (inboxOwner(r) && inboxPlanLive(p)
               && ((e.type == 'outcome.approved' && r.state in ['proposed', 'revising']
                   && touched(['state', 'fields', 'decision', 'revise'])
                   && d.get('revise', null) == null && inboxFieldsOk(r.type, d.fields)
                   && inboxStepDecision(d) && d.decision.reason == null
-                  && d.decision.keys().hasOnly(['byUid', 'at', 'edited', 'reason', 'version'])
+                  && d.decision.keys().hasOnly(['byUid', 'at', 'edited', 'reason', 'version', 'summaryVersion'])
                   && (d.decision.get('version', null) == null
                     || (d.decision.version is int && d.decision.version >= 1
                       && d.decision.version <= r.get('versions', []).size()))
                   && (human
+                    // A gate's approval may pin the summary version on screen (slice 6).
                     ? turn && r.state == 'proposed' && d.state == 'done' && pa.cursor == p.cursor + 1
+                      && d.decision.get('summaryVersion', 1) is int
                     : d.state == 'approved'))
                 || (e.type == 'outcome.rejected' && human && turn && r.state == 'proposed'
                   && touched(['state', 'decision'])

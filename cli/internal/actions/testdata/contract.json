@@ -20836,7 +20836,7 @@
         ]
       },
       "output": {
-        "error": "Step 2: book is not a plan step. Plan steps: reply, make_it_work, handover, snooze, nudge, approval."
+        "error": "Step 2: book is not a plan step. Plan steps: reply, make_it_work, handover, snooze, nudge, shape, build, release, approval."
       }
     },
     {
@@ -20961,7 +20961,7 @@
         ]
       },
       "output": {
-        "error": "Step 2: no_reply is not a plan step. Plan steps: reply, make_it_work, handover, snooze, nudge, approval."
+        "error": "Step 2: no_reply is not a plan step. Plan steps: reply, make_it_work, handover, snooze, nudge, shape, build, release, approval."
       }
     },
     {
@@ -20983,7 +20983,7 @@
         "steps": [{ "type": "launch", "fields": {} }]
       },
       "output": {
-        "error": "Step 1: launch is not a plan step. Plan steps: reply, make_it_work, handover, snooze, nudge, approval."
+        "error": "Step 1: launch is not a plan step. Plan steps: reply, make_it_work, handover, snooze, nudge, shape, build, release, approval."
       }
     },
     {
@@ -25794,6 +25794,2249 @@
       "output": { "state": "yourCall", "waiting": null }
     },
     {
+      "name": "planThreadState/blocked by send backs",
+      "action": "planThreadState",
+      "input": {
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2"],
+          "cursor": 1,
+          "state": "blocked"
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          }
+        }
+      },
+      "output": { "state": "yourCall", "waiting": null }
+    },
+    {
+      "name": "proposePlan/dev template",
+      "action": "proposePlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentB",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "note": "  Reply, book, then the prices. ",
+        "confidence": "medium",
+        "steps": [{ "type": "shape", "fields": { "idea": " Dark mode " }, "note": " Size M " }],
+        "template": "dev"
+      },
+      "output": {
+        "eventId": "id08",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/id02",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": { "idea": "Dark mode" },
+              "state": "proposed",
+              "note": "Size M",
+              "proposedBy": "agentA",
+              "executor": "agentB",
+              "decision": null,
+              "result": null,
+              "planId": "id01",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id08"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/id03",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": null,
+              "decision": null,
+              "result": null,
+              "planId": "id01",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id08"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/id04",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": "agentB",
+              "decision": null,
+              "result": null,
+              "planId": "id01",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id08"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/id05",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": null,
+              "decision": null,
+              "result": null,
+              "planId": "id01",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id08"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/id06",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": "agentB",
+              "decision": null,
+              "result": null,
+              "planId": "id01",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id08"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/id07",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": null,
+              "decision": null,
+              "result": null,
+              "planId": "id01",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id08"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxPlans/id01",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "proposedBy": "agentA",
+              "steps": ["id02", "id03", "id04", "id05", "id06", "id07"],
+              "cursor": 0,
+              "state": "proposed",
+              "note": "Reply, book, then the prices.",
+              "confidence": "medium",
+              "templateId": "dev",
+              "sendBackTo": { "id03": "id02", "id05": "id04", "id07": "id04" },
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id08"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id08"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id08",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "plan.proposed",
+              "data": {
+                "planId": "id01",
+                "steps": ["id02", "id03", "id04", "id05", "id06", "id07"],
+                "types": ["shape", "approval", "build", "approval", "release", "approval"],
+                "templateId": "dev"
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "planId": "id01",
+        "stepIds": ["id02", "id03", "id04", "id05", "id06", "id07"]
+      }
+    },
+    {
+      "name": "proposePlan/dev template, own ids, no steps",
+      "action": "proposePlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentB",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "note": "  Reply, book, then the prices. ",
+        "confidence": "medium",
+        "steps": [],
+        "template": "dev",
+        "planId": "pl9",
+        "stepIds": ["s1", "s2", "s3", "s4", "s5", "s6"]
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/s1",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "shape",
+              "fields": {},
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": "agentB",
+              "decision": null,
+              "result": null,
+              "planId": "pl9",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/s2",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Approve idea" },
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": null,
+              "decision": null,
+              "result": null,
+              "planId": "pl9",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/s3",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "build",
+              "fields": {},
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": "agentB",
+              "decision": null,
+              "result": null,
+              "planId": "pl9",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/s4",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Ship it?" },
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": null,
+              "decision": null,
+              "result": null,
+              "planId": "pl9",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/s5",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "release",
+              "fields": {},
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": "agentB",
+              "decision": null,
+              "result": null,
+              "planId": "pl9",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/s6",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "approval",
+              "fields": { "what": "Accept on live" },
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": null,
+              "decision": null,
+              "result": null,
+              "planId": "pl9",
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxPlans/pl9",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "proposedBy": "agentA",
+              "steps": ["s1", "s2", "s3", "s4", "s5", "s6"],
+              "cursor": 0,
+              "state": "proposed",
+              "note": "Reply, book, then the prices.",
+              "confidence": "medium",
+              "templateId": "dev",
+              "sendBackTo": { "s2": "s1", "s4": "s3", "s6": "s3" },
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "plan.proposed",
+              "data": {
+                "planId": "pl9",
+                "steps": ["s1", "s2", "s3", "s4", "s5", "s6"],
+                "types": ["shape", "approval", "build", "approval", "release", "approval"],
+                "templateId": "dev"
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "planId": "pl9",
+        "stepIds": ["s1", "s2", "s3", "s4", "s5", "s6"]
+      }
+    },
+    {
+      "name": "proposePlan/dev template, another type",
+      "action": "proposePlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentB",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "note": "  Reply, book, then the prices. ",
+        "confidence": "medium",
+        "steps": [{ "type": "reply", "fields": { "text": "x" } }],
+        "template": "dev"
+      },
+      "output": { "error": "Step 1 of the Development template is shape, not reply." }
+    },
+    {
+      "name": "proposePlan/dev template, too many steps",
+      "action": "proposePlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentB",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "note": "  Reply, book, then the prices. ",
+        "confidence": "medium",
+        "steps": [
+          { "type": "", "fields": {} },
+          { "type": "", "fields": {} },
+          { "type": "", "fields": {} },
+          { "type": "", "fields": {} },
+          { "type": "", "fields": {} },
+          { "type": "", "fields": {} },
+          { "type": "", "fields": {} }
+        ],
+        "template": "dev"
+      },
+      "output": { "error": "The Development template has 6 steps." }
+    },
+    {
+      "name": "proposePlan/dev template, bad field",
+      "action": "proposePlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentB",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "note": "  Reply, book, then the prices. ",
+        "confidence": "medium",
+        "steps": [{ "type": "shape", "fields": { "title": "x" } }],
+        "template": "dev"
+      },
+      "output": { "error": "Step 1: shape has no field title. Its fields: idea." }
+    },
+    {
+      "name": "proposePlan/unknown template",
+      "action": "proposePlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentB",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "note": "  Reply, book, then the prices. ",
+        "confidence": "medium",
+        "steps": [],
+        "template": "launch"
+      },
+      "output": { "error": "Unknown template launch. Templates: dev." }
+    },
+    {
+      "name": "sendBackPlan/release to build",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main ",
+        "toStep": 2
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "state": "approved",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o4",
+            "data": {
+              "state": "proposed",
+              "decision": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxPlans/pl1",
+            "data": {
+              "cursor": 2,
+              "state": "active",
+              "sentBack": {
+                "n": 1,
+                "to": "o3",
+                "reason": "The e2e fails on main",
+                "by": "agentA",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "waiting",
+              "waiting": { "on": "item", "until": null },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "plan.sent_back",
+              "data": {
+                "planId": "pl1",
+                "outcomeId": "o3",
+                "from": 4,
+                "to": 2,
+                "reset": ["o3", "o4"],
+                "reason": "The e2e fails on main",
+                "n": 1
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "toStep": 2,
+        "blocked": false
+      }
+    },
+    {
+      "name": "sendBackPlan/default target",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "state": "approved",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o4",
+            "data": {
+              "state": "proposed",
+              "decision": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxPlans/pl1",
+            "data": {
+              "cursor": 2,
+              "state": "active",
+              "sentBack": {
+                "n": 1,
+                "to": "o3",
+                "reason": "The e2e fails on main",
+                "by": "agentA",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "waiting",
+              "waiting": { "on": "item", "until": null },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "plan.sent_back",
+              "data": {
+                "planId": "pl1",
+                "outcomeId": "o3",
+                "from": 4,
+                "to": 2,
+                "reset": ["o3", "o4"],
+                "reason": "The e2e fails on main",
+                "n": 1
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "toStep": 2,
+        "blocked": false
+      }
+    },
+    {
+      "name": "sendBackPlan/to shape",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main ",
+        "toStep": 0
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "approved",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o2",
+            "data": {
+              "state": "proposed",
+              "decision": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "state": "approved",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o4",
+            "data": {
+              "state": "proposed",
+              "decision": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxPlans/pl1",
+            "data": {
+              "cursor": 0,
+              "state": "active",
+              "sentBack": {
+                "n": 1,
+                "to": "o1",
+                "reason": "The e2e fails on main",
+                "by": "agentA",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "plan.sent_back",
+              "data": {
+                "planId": "pl1",
+                "outcomeId": "o1",
+                "from": 4,
+                "to": 0,
+                "reset": ["o1", "o2", "o3", "o4"],
+                "reason": "The e2e fails on main",
+                "n": 1
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "toStep": 0,
+        "blocked": false
+      }
+    },
+    {
+      "name": "sendBackPlan/running step",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "running",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main ",
+        "toStep": 2
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "state": "approved",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o4",
+            "data": {
+              "state": "proposed",
+              "decision": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o5",
+            "data": {
+              "state": "approved",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxPlans/pl1",
+            "data": {
+              "cursor": 2,
+              "state": "active",
+              "sentBack": {
+                "n": 1,
+                "to": "o3",
+                "reason": "The e2e fails on main",
+                "by": "agentA",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "waiting",
+              "waiting": { "on": "item", "until": null },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "plan.sent_back",
+              "data": {
+                "planId": "pl1",
+                "outcomeId": "o3",
+                "from": 4,
+                "to": 2,
+                "reset": ["o3", "o4", "o5"],
+                "reason": "The e2e fails on main",
+                "n": 1
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "toStep": 2,
+        "blocked": false
+      }
+    },
+    {
+      "name": "sendBackPlan/third blocks",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" },
+          "sentBack": { "n": 2 }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o3",
+            "data": {
+              "state": "approved",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o4",
+            "data": {
+              "state": "proposed",
+              "decision": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxPlans/pl1",
+            "data": {
+              "cursor": 2,
+              "state": "blocked",
+              "sentBack": {
+                "n": 3,
+                "to": "o3",
+                "reason": "The e2e fails on main",
+                "by": "agentA",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "plan.sent_back",
+              "data": {
+                "planId": "pl1",
+                "outcomeId": "o3",
+                "from": 4,
+                "to": 2,
+                "reset": ["o3", "o4"],
+                "reason": "The e2e fails on main",
+                "n": 3
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "toStep": 2,
+        "blocked": true
+      }
+    },
+    {
+      "name": "sendBackPlan/to a gate",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main ",
+        "toStep": 3
+      },
+      "output": { "error": "Send it back to an earlier agent step that is done." }
+    },
+    {
+      "name": "sendBackPlan/to a later step",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main ",
+        "toStep": 5
+      },
+      "output": { "error": "Send it back to an earlier agent step that is done." }
+    },
+    {
+      "name": "sendBackPlan/to itself",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main ",
+        "toStep": 4
+      },
+      "output": { "error": "Send it back to an earlier agent step that is done." }
+    },
+    {
+      "name": "sendBackPlan/no reason",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": "  "
+      },
+      "output": { "error": "Say what should change." }
+    },
+    {
+      "name": "sendBackPlan/reason too long",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+      },
+      "output": { "error": "The reason is at most 1000 characters." }
+    },
+    {
+      "name": "sendBackPlan/not its executor",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main "
+      },
+      "output": { "error": "Only the agent carrying out the step at its turn sends the plan back." }
+    },
+    {
+      "name": "sendBackPlan/at a gate",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 3,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main "
+      },
+      "output": { "error": "Only the agent carrying out the step at its turn sends the plan back." }
+    },
+    {
+      "name": "sendBackPlan/step not approved",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 2,
+          "state": "active",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "proposed",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "proposed",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main "
+      },
+      "output": { "error": "This step is proposed: nothing to send back." }
+    },
+    {
+      "name": "sendBackPlan/blocked",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 2,
+          "state": "blocked",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" },
+          "sentBack": { "n": 3 }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main "
+      },
+      "output": { "error": "This plan is blocked: retry or stop it first." }
+    },
+    {
+      "name": "sendBackPlan/stopped",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2", "o3", "o4", "o5", "o6"],
+          "cursor": 4,
+          "state": "stopped",
+          "sendBackTo": { "o2": "o1", "o4": "o3", "o6": "o3" }
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "shape",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Approve idea" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o3": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o4": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Ship it?" },
+            "state": "done",
+            "executor": null,
+            "planId": "pl1"
+          },
+          "o5": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o6": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "approval",
+            "fields": { "what": "Accept on live" },
+            "state": "proposed",
+            "executor": null,
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main "
+      },
+      "output": { "error": "This plan is stopped." }
+    },
+    {
+      "name": "sendBackPlan/nothing to go back to",
+      "action": "sendBackPlan",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "planId": "pl1",
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1"],
+          "cursor": 0,
+          "state": "active"
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "release",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "reason": " The e2e fails on main "
+      },
+      "output": { "error": "No earlier agent step to send it back to." }
+    },
+    {
+      "name": "planView/blocked by send backs",
+      "action": "planView",
+      "input": {
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2"],
+          "cursor": 1,
+          "state": "blocked"
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          }
+        }
+      },
+      "output": {
+        "state": "blocked",
+        "cursor": 1,
+        "total": 2,
+        "through": 1,
+        "progress": "Step 2 of 2",
+        "steps": [
+          {
+            "number": 1,
+            "outcomeId": "o1",
+            "type": "reply",
+            "kind": "agent",
+            "label": "Reply",
+            "ui": "done",
+            "atCursor": false
+          },
+          {
+            "number": 2,
+            "outcomeId": "o2",
+            "type": "build",
+            "kind": "agent",
+            "label": "Build",
+            "ui": "blocked",
+            "atCursor": true
+          }
+        ]
+      }
+    },
+    {
       "name": "planView/mixed",
       "action": "planView",
       "input": {
@@ -26184,7 +28427,7 @@
       "action": "cleanOutcomeFields",
       "input": { "type": "x", "fields": {} },
       "output": {
-        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, approval."
+        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, shape, build, release, approval."
       }
     },
     {

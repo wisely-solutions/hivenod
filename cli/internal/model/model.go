@@ -600,6 +600,19 @@ type InboxPlan struct {
 	Note       string    `firestore:"note" json:"note"`
 	Confidence *string   `firestore:"confidence" json:"confidence"`
 	CreatedAt  time.Time `firestore:"createdAt" json:"createdAt"`
+	// Development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6).
+	TemplateID *string           `firestore:"templateId" json:"templateId"`
+	SendBackTo map[string]string `firestore:"sendBackTo" json:"sendBackTo"`
+	SentBack   *InboxSentBack    `firestore:"sentBack" json:"sentBack"`
+}
+
+// InboxSentBack is a plan's last send back: how many so far, to which step, why, by whom.
+type InboxSentBack struct {
+	N      int       `firestore:"n" json:"n"`
+	To     string    `firestore:"to" json:"to"`
+	Reason string    `firestore:"reason" json:"reason"`
+	By     string    `firestore:"by" json:"by"`
+	At     time.Time `firestore:"at" json:"at"`
 }
 
 // InboxRelation is workspaces/{w}/inboxRelations/{rid}: two related subjects (a < b).

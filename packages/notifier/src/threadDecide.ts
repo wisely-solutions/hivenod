@@ -26,6 +26,8 @@ import {
   paths,
   REVISABLE_TYPES,
   requestRevision,
+  sendBackPlan,
+  sendBackTarget,
   threadAsk,
   versionCount,
   INBOX_LIMITS,
@@ -34,6 +36,7 @@ import {
   type InboxPlan,
   type InboxThread,
   type PlanInput,
+  type SendBackOf,
   type ThreadAsk,
 } from '@hive/shared';
 import type { Firestore } from 'firebase-admin/firestore';
@@ -162,7 +165,7 @@ export function threadWhyNot(s: Loaded | null, a: ThreadAction): string | null {
   return null;
 }
 
-function planInput(s: Loaded): PlanInput | undefined {
+function planInput(s: Loaded): (PlanInput & { plan: SendBackOf }) | undefined {
   if (!s.plan) return undefined;
   const by: Record<string, InboxOutcome> = {};
   for (const o of s.outcomes) if (s.plan.data.steps.includes(o.id)) by[o.id] = o.data;
@@ -174,6 +177,8 @@ function planInput(s: Loaded): PlanInput | undefined {
       steps: [...s.plan.data.steps],
       cursor: s.plan.data.cursor,
       state: s.plan.data.state,
+      ...(s.plan.data.sendBackTo ? { sendBackTo: s.plan.data.sendBackTo } : {}),
+      ...(s.plan.data.sentBack ? { sentBack: { n: s.plan.data.sentBack.n } } : {}),
     },
     outcomes: by,
   };
@@ -241,6 +246,8 @@ export async function decideThread(
           outcome: o,
           thread,
           ...(o.planId ? { plan: planInput(s) } : {}),
+          // A gate pins the summary version the person decided on (slice 6).
+          ...(s.thread.summary ? { summaryVersion: s.thread.summary.version } : {}),
         }),
       );
       const what =
@@ -249,12 +256,34 @@ export async function decideThread(
           : (outcomeType(o.type)?.label ?? o.type);
       return { ok: true, text: `Approved ${what}: ${title}` };
     }
-    // Ask for changes: a revisable proposal (or agent step) is revised by its agent; anything
-    // else (a plan, a gate) goes to the home agent as an instruction (Ask the agent).
+    // Ask for changes: a gate with an earlier agent step sends the plan back to it (slice 6,
+    // design 6.5); a revisable proposal (or agent step) is revised by its agent; anything else
+    // (a plan, a plain gate) goes to the home agent as an instruction (Ask the agent).
     const text = d.text.trim();
     if (text.length < 3) return { ok: false, text: 'Please say what should change.' };
     const oid = ask.kind === 'step' || ask.kind === 'proposal' ? ask.outcomeId : '';
     const o = oid ? outcome(oid) : undefined;
+    const pl = planInput(s);
+    if (ask.kind === 'step' && o && pl && o.type === 'approval') {
+      const types = Object.fromEntries(pl.plan.steps.map((id) => [id, pl.outcomes[id]?.type]));
+      const at = pl.plan.steps.indexOf(oid);
+      const to = sendBackTarget(pl.plan.steps, types, at, pl.plan.sendBackTo ?? null);
+      if (to !== null && pl.outcomes[pl.plan.steps[to]!]?.state === 'done') {
+        const r = sendBackPlan(ctx, {
+          ...pl,
+          thread,
+          reason: text.slice(0, INBOX_LIMITS.reason),
+          toStep: to,
+        });
+        await applyPlanAdmin(db, r);
+        return {
+          ok: true,
+          text: r.blocked
+            ? `Sent back to step ${to + 1}, the third time: the plan now waits for you. ${title}`
+            : `Sent back to step ${to + 1}: ${title}`,
+        };
+      }
+    }
     if (
       o &&
       o.state === 'proposed' &&

@@ -78,22 +78,32 @@ func (c *Client) livePlan(ctx context.Context, threadID string) (*actions.PlanIn
 type PlanStepArg = actions.PlanStepInput
 
 // PlanPropose proposes a plan (plan_propose): 1-8 ordered steps in one batch.
-func (c *Client) PlanPropose(ctx context.Context, threadID string, note, confidence *string, steps []PlanStepArg) (map[string]any, error) {
+func (c *Client) PlanPropose(ctx context.Context, threadID string, note, confidence *string, steps []PlanStepArg, template *string) (map[string]any, error) {
 	t, err := c.thread(ctx, threadID)
 	if err != nil {
 		return nil, err
 	}
-	r, err := actions.ProposePlan(c.actx(), actions.ProposePlanInput{ThreadID: threadID, Thread: actions.ThreadStateFrom(t), Note: note, Confidence: confidence, Steps: steps})
+	if steps == nil {
+		steps = []PlanStepArg{}
+	}
+	r, err := actions.ProposePlan(c.actx(), actions.ProposePlanInput{ThreadID: threadID, Thread: actions.ThreadStateFrom(t), Note: note, Confidence: confidence, Steps: steps, Template: template})
 	if err != nil {
 		return nil, wrap(err)
 	}
 	if err := c.inboxWrite(ctx, r.Plan); err != nil {
 		return nil, err
 	}
-	rows := make([]any, len(steps))
-	for i, s := range steps {
-		kind := actions.OutcomeKind(s.Type)
-		rows[i] = map[string]any{"step": i + 1, "outcomeId": r.StepIDs[i], "type": s.Type, "kind": kind}
+	types := make([]string, len(r.StepIDs))
+	for i := range r.StepIDs {
+		if template != nil && *template != "" {
+			types[i] = actions.PlanTemplateOf(*template).Steps[i].Type
+		} else {
+			types[i] = steps[i].Type
+		}
+	}
+	rows := make([]any, len(r.StepIDs))
+	for i, ty := range types {
+		rows[i] = map[string]any{"step": i + 1, "outcomeId": r.StepIDs[i], "type": ty, "kind": actions.OutcomeKind(ty)}
 	}
 	return map[string]any{
 		"planId": r.PlanID, "threadId": threadID, "state": "proposed", "stepIds": r.StepIDs, "steps": rows,
@@ -120,10 +130,55 @@ func (c *Client) planRows(ctx context.Context, threadID string) ([]any, map[stri
 			steps[i] = map[string]any{"step": s.Number, "outcomeId": s.OutcomeID, "type": s.Type, "kind": s.Kind, "label": s.Label, "ui": s.UI, "atCursor": s.AtCursor}
 			stepOf[s.OutcomeID] = fmt.Sprintf("%d of %d", s.Number, v.Total)
 		}
-		rows = append(rows, map[string]any{
+		row := map[string]any{
 			"planId": d.ID, "state": p.State, "cursor": p.Cursor, "progress": v.Progress, "note": p.Note,
 			"confidence": strOrNull(p.Confidence), "steps": steps,
-		})
+		}
+		// Development plans (slice 6): the template, and the last send back (to which step, why).
+		if p.TemplateID != nil {
+			row["templateId"] = *p.TemplateID
+		}
+		if p.SentBack != nil {
+			row["sentBack"] = map[string]any{"n": p.SentBack.N, "toStep": stepOf[p.SentBack.To], "reason": p.SentBack.Reason, "by": p.SentBack.By}
+		}
+		rows = append(rows, row)
 	}
 	return rows, stepOf, nil
+}
+
+// PlanSendBack is plan_send_back (item OE8FmrTaIxFVGcaeGG3N, slice 6): from the plan step this
+// agent carries out, back to an earlier agent step (toStep, 1-based; default the nearest), with
+// the reason. The third send back leaves the plan blocked for the person.
+func (c *Client) PlanSendBack(ctx context.Context, threadID, reason string, toStep *float64) (map[string]any, error) {
+	if threadID == "" {
+		return nil, Errf("Give the thread (threadId).")
+	}
+	pl, err := c.livePlan(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if pl == nil {
+		return nil, Errf("This thread has no live plan.")
+	}
+	t, err := c.thread(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	var to *int
+	if toStep != nil {
+		n := int(*toStep) - 1
+		to = &n
+	}
+	r, err := actions.SendBackPlan(c.actx(), actions.SendBackPlanInput{PlanInput: *pl, Thread: actions.ThreadStateFrom(t), Reason: reason, ToStep: to})
+	if err != nil {
+		return nil, wrap(err)
+	}
+	if err := c.inboxWrite(ctx, r.Plan); err != nil {
+		return nil, err
+	}
+	note := fmt.Sprintf("Sent back to step %d of %d: you get carry_out for it again (why sent_back, with the reason).", r.ToStep+1, len(pl.Plan.Steps))
+	if r.Blocked {
+		note = fmt.Sprintf("Sent back to step %d of %d, the third time: the plan is blocked until the person retries or stops it.", r.ToStep+1, len(pl.Plan.Steps))
+	}
+	return map[string]any{"planId": pl.PlanID, "threadId": threadID, "toStep": r.ToStep + 1, "blocked": r.Blocked, "note": note}, nil
 }

@@ -77,6 +77,7 @@ import {
   titleFrom,
   wakeThread,
   proposePlan,
+  sendBackPlan,
   planThreadState,
   planView,
   type PlanInput,
@@ -2224,6 +2225,113 @@ function build(): ContractCase[] {
     ...PL([['reply', 'done']], 1),
     plan: { ...PL([['reply', 'done']], 1).plan, steps: ['o1', 'oX'] },
   });
+  // ---------- development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6) ----------
+  pts(
+    'blocked by send backs',
+    PL(
+      [
+        ['reply', 'done'],
+        ['build', 'approved'],
+      ],
+      1,
+      'blocked',
+    ),
+  );
+  pp('dev template', AGENT, {
+    template: 'dev',
+    steps: [{ type: 'shape', fields: { idea: ' Dark mode ' }, note: ' Size M ' }],
+  });
+  pp('dev template, own ids, no steps', AGENT, {
+    template: 'dev',
+    steps: [],
+    planId: 'pl9',
+    stepIds: ['s1', 's2', 's3', 's4', 's5', 's6'],
+  });
+  pp('dev template, another type', AGENT, {
+    template: 'dev',
+    steps: [{ type: 'reply', fields: { text: 'x' } }],
+  });
+  pp('dev template, too many steps', AGENT, {
+    template: 'dev',
+    steps: Array.from({ length: 7 }, () => ({ type: '', fields: {} })),
+  });
+  pp('dev template, bad field', AGENT, {
+    template: 'dev',
+    steps: [{ type: 'shape', fields: { title: 'x' } }],
+  });
+  pp('unknown template', AGENT, { template: 'launch', steps: [] });
+  const DEV: [string, OutcomeStateOf['state'], Record<string, unknown>?][] = [
+    ['shape', 'done'],
+    ['approval', 'done', { what: 'Approve idea' }],
+    ['build', 'done'],
+    ['approval', 'done', { what: 'Ship it?' }],
+    ['release', 'approved'],
+    ['approval', 'proposed', { what: 'Accept on live' }],
+  ];
+  const devPl = (
+    states: OutcomeStateOf['state'][],
+    cursor: number,
+    state: PlanInput['plan']['state'] = 'active',
+    sent = 0,
+  ) => {
+    const pl = PL(
+      DEV.map(([t, , f], i) => [t, states[i]!, f]),
+      cursor,
+      state,
+    );
+    return {
+      ...pl,
+      plan: {
+        ...pl.plan,
+        sendBackTo: { o2: 'o1', o4: 'o3', o6: 'o3' },
+        ...(sent ? { sentBack: { n: sent } } : {}),
+      },
+    };
+  };
+  const sb = (name: string, actor: Actor, input: Partial<Parameters<typeof sendBackPlan>[1]>) =>
+    act(
+      `sendBackPlan/${name}`,
+      'sendBackPlan',
+      actor,
+      {
+        ...devPl(['done', 'done', 'done', 'done', 'approved', 'proposed'], 4),
+        thread: TH({ subjectId: 's1', state: 'waiting' }),
+        reason: ' The e2e fails on main ',
+        ...input,
+      },
+      sendBackPlan,
+    );
+  sb('release to build', AGENT, { toStep: 2 });
+  sb('default target', AGENT, {});
+  sb('to shape', AGENT, { toStep: 0 });
+  sb('running step', AGENT, {
+    ...devPl(['done', 'done', 'done', 'done', 'running', 'proposed'], 4),
+    toStep: 2,
+  });
+  sb('third blocks', AGENT, {
+    ...devPl(['done', 'done', 'done', 'done', 'approved', 'proposed'], 4, 'active', 2),
+  });
+  sb('to a gate', AGENT, { toStep: 3 });
+  sb('to a later step', AGENT, { toStep: 5 });
+  sb('to itself', AGENT, { toStep: 4 });
+  sb('no reason', AGENT, { reason: '  ' });
+  sb('reason too long', AGENT, { reason: 'r'.repeat(1001) });
+  sb('not its executor', OTHER, {});
+  sb('at a gate', AGENT, {
+    ...devPl(['done', 'done', 'done', 'proposed', 'approved', 'proposed'], 3),
+  });
+  sb('step not approved', AGENT, {
+    ...devPl(['done', 'proposed', 'proposed', 'proposed', 'proposed', 'proposed'], 2),
+  });
+  sb('blocked', AGENT, {
+    ...devPl(['done', 'done', 'approved', 'proposed', 'approved', 'proposed'], 2, 'blocked', 3),
+  });
+  sb('stopped', AGENT, {
+    ...devPl(['done', 'done', 'done', 'done', 'approved', 'proposed'], 4, 'stopped'),
+  });
+  sb('nothing to go back to', AGENT, {
+    ...PL([['release', 'approved']], 0),
+  });
   const pv = (name: string, pl: PlanInput) =>
     pure(`planView/${name}`, 'planView', { plan: pl.plan, outcomes: pl.outcomes }, (i) => {
       const v = planView(i.plan, i.outcomes);
@@ -2244,6 +2352,17 @@ function build(): ContractCase[] {
         })),
       };
     });
+  pv(
+    'blocked by send backs',
+    PL(
+      [
+        ['reply', 'done'],
+        ['build', 'approved'],
+      ],
+      1,
+      'blocked',
+    ),
+  );
   pv(
     'mixed',
     PL(

@@ -23,7 +23,10 @@ import {
   relationId,
   approveOutcome,
   approvePlan,
+  createMemberThread,
   retryPlanStep,
+  sendBackPlan,
+  type SendBackOf,
   requestRevision,
   requestRecheck,
   instructThread,
@@ -1349,6 +1352,140 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
     expect(r.calls[22]).toMatchObject({
       out: { state: 'waiting', plans: [{ state: 'done', progress: 'Done' }] },
     });
+    matchesGolden(r);
+  }, 120_000);
+
+  it('development plans (item OE8Fm, slice 6): a New thread from the template runs gate by gate; send backs from the person and the agent; the third blocks', async () => {
+    const r = await scenario(async (call, uid) => {
+      const owner = as('owner');
+      const thread = async (tid: string) =>
+        (await snap(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+      const planOf = async (pid: string): Promise<PlanInput & { plan: SendBackOf }> => {
+        const plan = (await snap(inboxPaths.plan(W, pid))) as unknown as PlanInput['plan'] &
+          SendBackOf;
+        const outcomes: Record<string, OutcomeStateOf> = {};
+        for (const id of plan.steps)
+          outcomes[id] = (await snap(inboxPaths.outcome(W, id))) as unknown as OutcomeStateOf;
+        return { planId: pid, plan, outcomes };
+      };
+      const gate = async (pid: string) => {
+        const pl = await planOf(pid);
+        const id = pl.plan.steps[pl.plan.cursor]!;
+        await owner.run(
+          approveOutcome(owner.ctx, {
+            outcomeId: id,
+            outcome: pl.outcomes[id]!,
+            thread: await thread(pl.plan.threadId),
+            plan: pl,
+            summaryVersion: 1,
+          }),
+        );
+      };
+      // The person's New thread with the Development template: Shape is theirs, approved.
+      const made = createMemberThread(owner.ctx, {
+        title: 'Dark mode',
+        text: 'Add a dark mode to the board.',
+        agentUid: uid,
+        template: 'dev',
+        threadId: 'dev1',
+        planId: 'dp1',
+        stepIds: ['ds1', 'ds2', 'ds3', 'ds4', 'ds5', 'ds6'],
+      });
+      await owner.run(made);
+      await call('inbox_list', {});
+      await call('thread_read', { threadId: 'dev1' });
+      // Build is approved but not its turn.
+      await call('outcome_done', { outcomeId: 'ds3', status: 'done' });
+      await call('outcome_done', { outcomeId: 'ds1', status: 'done', result: { text: 'Size M' } });
+      // Approve idea waits for the person; then Build: an open, unmerged PR.
+      await call('inbox_list', {});
+      await gate('dp1');
+      await call('outcome_done', {
+        outcomeId: 'ds3',
+        status: 'done',
+        result: { permalink: 'https://github.com/example/board/pull/86', text: 'PR #86 open' },
+      });
+      // Ship it? → Build, from the person.
+      await owner.run(
+        sendBackPlan(owner.ctx, {
+          ...(await planOf('dp1')),
+          thread: await thread('dev1'),
+          reason: 'Bigger toggle',
+        }),
+      );
+      await call('thread_read', { threadId: 'dev1' });
+      await call('inbox_list', {});
+      await call('outcome_done', {
+        outcomeId: 'ds3',
+        status: 'done',
+        result: { text: 'PR #86 updated' },
+      });
+      await gate('dp1');
+      // Release finds a bug: the agent sends the plan back to Build (refused: to a gate, no reason).
+      await call('plan_send_back', { threadId: 'dev1', reason: 'x', toStep: 4 });
+      await call('plan_send_back', { threadId: 'dev1', reason: ' ' });
+      await call('plan_send_back', { threadId: 'dev1', reason: 'e2e fails on main', toStep: 3 });
+      await call('outcome_done', { outcomeId: 'ds3', status: 'done', result: { text: 'Fixed' } });
+      await gate('dp1');
+      // The third send back blocks the plan for the person.
+      await call('plan_send_back', { threadId: 'dev1', reason: 'Still failing' });
+      await call('outcome_done', { outcomeId: 'ds3', status: 'done' });
+      await call('thread_read', { threadId: 'dev1' });
+      await owner.run(
+        retryPlanStep(owner.ctx, { ...(await planOf('dp1')), thread: await thread('dev1') }),
+      );
+      await call('outcome_done', { outcomeId: 'ds3', status: 'done' });
+      // The agent's own Development plan on a thread: proposed, nothing approved.
+      await call('plan_propose', {
+        threadId: 'dev1',
+        template: 'dev',
+        steps: [{ type: 'shape', fields: { idea: 'A second idea' } }],
+      });
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+    ]);
+    expect(r.calls[0]).toMatchObject({ out: { toCarryOut: [{ step: '1 of 6', type: 'shape' }] } });
+    expect(r.calls[6]).toMatchObject({
+      out: {
+        plans: [
+          { templateId: 'dev', sentBack: { n: 1, toStep: '3 of 6', reason: 'Bigger toggle' } },
+        ],
+      },
+    });
+    expect(r.calls[11]).toMatchObject({ out: { toStep: 3, blocked: false } });
+    expect(r.calls[13]).toMatchObject({ out: { toStep: 3, blocked: true } });
+    expect(r.calls[15]).toMatchObject({
+      out: { state: 'yourCall', plans: [{ state: 'blocked' }] },
+    });
+    expect(r.calls[17]).toMatchObject({ out: { state: 'proposed' } });
+    const steps = (r.calls[17] as { out: { steps: { type: string }[] } }).out.steps;
+    expect(steps.map((x) => x.type)).toEqual([
+      'shape',
+      'approval',
+      'build',
+      'approval',
+      'release',
+      'approval',
+    ]);
     matchesGolden(r);
   }, 120_000);
 

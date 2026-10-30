@@ -16,7 +16,7 @@ import {
   type InboxPlan,
   type InboxThread,
 } from '@hive/shared';
-import { Check, ChevronRight, MessageSquare, TriangleAlert, X } from 'lucide-react';
+import { Check, ChevronRight, MessageSquare, MoreHorizontal, TriangleAlert } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
 import type { Row } from '../lib/live';
 import { effectLines } from '../lib/outcomes';
@@ -27,7 +27,9 @@ import { Icon } from '../ui/icon';
 import { UndoButton } from '../ui/UndoButton';
 import { AskAgent } from './AskAgent';
 import { freshness, topState, type ShownSummary, type TopTone } from './decision';
-import { firstFree, planInputOf, planLive, planMain, stepTitle } from './plan';
+import { firstFree, planInputOf, planLive, planMain, sendBackChoices, stepTitle } from './plan';
+import { GateAsk } from './GateAsk';
+import { ActionMenu, type MenuAction } from '../ui/menu';
 import { RecheckButton, useRecheck } from './Recheck';
 import { SummaryVersions } from './SummaryVersions';
 import { usePlanActions } from './usePlanActions';
@@ -148,7 +150,11 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
             view,
             main,
             label: gateRow ? str(gateRow.data.fields.what) || null : null,
-            error: cur?.data.result?.error ?? null,
+            error:
+              cur?.data.result?.error ??
+              (plan!.data.state === 'blocked' && plan!.data.sentBack
+                ? `sent back ${plan!.data.sentBack.n} times, waiting for you`
+                : null),
           }
         : null,
       proposals: main ? 0 : proposals.length,
@@ -191,16 +197,25 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
     const nn = useNotNow(wid, thread, ask);
     const notNow = <NotNowButton nn={nn} className="max-sm:w-full" />;
     const panelRef = useRef<DecisionCardHandle>(null);
+    // Ask for changes on a gate (slice 6): back to an earlier step, with the text.
+    const [gateAsk, setGateAsk] = useState(false);
+    const gateBack =
+      main?.kind === 'step' && main.gate && pl ? sendBackChoices(pl, main.index) : null;
     useImperativeHandle(ref, () => ({
       approve: () => {
         if (panelRef.current) panelRef.current.approve();
         else if (main?.kind === 'approvePlan') acts.approveAll();
         else if (main?.kind === 'step' && main.gate && view)
-          acts.gate(view.steps[main.index]!, true);
+          acts.gate(view.steps[main.index]!, true, summary?.version);
       },
       edit: () => panelRef.current?.edit(),
       reject: () => panelRef.current?.reject(),
-      ask: () => panelRef.current?.ask?.() ?? false,
+      ask: () => {
+        if (panelRef.current) return panelRef.current.ask?.() ?? false;
+        if (gateBack?.target === null || !gateBack) return false;
+        setGateAsk(true);
+        return true;
+      },
       notNow: () => void nn.notNow(),
     }));
 
@@ -230,14 +245,18 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
 
     let widget: ReactNode = null;
     if (top.kind === 'blocked' && pl && live) {
+      // Blocked by its third send back (slice 6): the step is approved, not failed: go on or stop.
+      const failed = cur?.data.state === 'failed';
       widget = (
         <Row3 counting={acts.counting}>
           <Button variant="approve" data-retry="" className="max-sm:w-full" onClick={acts.retry}>
-            Retry
+            {failed ? 'Retry' : 'Go on'}
           </Button>
-          <Button variant="secondary" data-skip="" className="max-sm:w-full" onClick={acts.skip}>
-            Skip
-          </Button>
+          {failed ? (
+            <Button variant="secondary" data-skip="" className="max-sm:w-full" onClick={acts.skip}>
+              Skip
+            </Button>
+          ) : null}
           <Button variant="sendback" data-stop="" className="max-sm:w-full" onClick={acts.stop}>
             Stop plan
           </Button>
@@ -269,9 +288,16 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
             Approve plan
           </Button>
           {notNow}
-          <Button variant="secondary" className="max-sm:w-full" onClick={acts.rejectAll}>
-            Reject plan
-          </Button>
+          <MoreDecisions
+            actions={[
+              {
+                id: 'reject-plan',
+                label: 'Reject plan',
+                tone: 'danger',
+                onSelect: acts.rejectAll,
+              },
+            ]}
+          />
         </Row3>
       );
     } else if (main?.kind === 'step' && main.gate && view) {
@@ -289,22 +315,45 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
               variant="approve"
               data-gate-approve=""
               className="max-sm:w-full"
-              onClick={() => acts.gate(s, true)}
+              onClick={() => acts.gate(s, true, summary?.version)}
               leading={<Icon icon={Check} size={16} />}
             >
               Approve
             </Button>
-            {notNow}
             <Button
-              variant="sendback"
-              data-gate-reject=""
+              variant="secondary"
+              data-gate-ask-open=""
+              aria-expanded={gateBack?.target !== null ? gateAsk : askOpen}
               className="max-sm:w-full"
-              onClick={() => acts.gate(s, false)}
-              leading={<Icon icon={X} size={16} />}
+              onClick={() => (gateBack?.target !== null ? setGateAsk(!gateAsk) : setAskOpen(true))}
             >
-              Not approved
+              Ask for changes
             </Button>
+            {notNow}
+            <MoreDecisions
+              actions={[
+                {
+                  id: 'not-approved',
+                  label: 'Not approved: stop the plan',
+                  tone: 'danger',
+                  onSelect: () => acts.gate(s, false),
+                },
+              ]}
+            />
           </Row3>
+          {gateAsk && gateBack && gateBack.target !== null && !acts.counting ? (
+            <GateAsk
+              choices={gateBack.choices}
+              target={gateBack.target}
+              sentBefore={plan?.data.sentBack?.n ?? 0}
+              agent={agent}
+              onCancel={() => setGateAsk(false)}
+              onSend={(reason, to) => {
+                setGateAsk(false);
+                acts.sendBack(reason, to);
+              }}
+            />
+          ) : null}
         </>
       );
     } else if (stepRow && pl && view) {
@@ -482,6 +531,27 @@ const EMPTY_PLAN = {
   plan: { memberUid: '', threadId: '', steps: [], cursor: 0, state: 'stopped' as const },
   outcomes: {},
 };
+
+/** The decisions that leave the plan (Not approved, Reject plan): out of the way, in a ⋯ menu. */
+function MoreDecisions({ actions }: { actions: MenuAction[] }) {
+  return (
+    <ActionMenu
+      label="More decisions"
+      actions={actions}
+      trigger={
+        <Button
+          variant="ghost"
+          data-more-decisions=""
+          aria-label="More decisions"
+          className="min-h-11 px-3 max-sm:w-full"
+          leading={<Icon icon={MoreHorizontal} size={18} />}
+        >
+          <span className="sm:sr-only">More</span>
+        </Button>
+      }
+    />
+  );
+}
 
 /** A row of decision buttons (full width on a phone, Approve first); Undo while counting down. */
 function Row3({
