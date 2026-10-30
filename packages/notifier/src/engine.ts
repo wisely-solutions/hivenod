@@ -83,6 +83,8 @@ export type TelegramAction = ThreadTelegram | ReachTelegram | RunTelegram;
 export interface ThreadTelegram extends ThreadAction {
   ask: ThreadAsk['kind'];
   options: string[];
+  /** Their reply: the drafted message's kind (Approve follow-up · Mark done · Open). */
+  ext?: string;
 }
 
 /** The summary mirror's top line (inboxThreads/{tid}.summary). */
@@ -165,6 +167,7 @@ export function threadAction(t: InboxWaiting): ThreadTelegram | undefined {
     arrival: t.arrival,
     ask: a.kind,
     options: a.kind === 'question' ? a.options : [],
+    ...(a.kind === 'step' && a.ext ? { ext: a.ext.kind } : {}),
   };
 }
 

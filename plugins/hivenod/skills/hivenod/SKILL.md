@@ -84,6 +84,18 @@ orchestrator: you dispatch and route; the sub-agents do the work.
   report it failed with the evidence in `result.error` (failing check, log excerpt, what you
   tried): the plan is blocked and the person retries, skips or sends it back to Build. At Ship
   it?, `check: "blocked"` with the reason instead.
+- Their reply (`their_reply`): a plan step that waits on one person outside Hivenod (a client, a
+  supplier) reached by a message: fields `who`, `org`, `channel`, `address`, `need` (one line) and
+  `remindAfterDays` (working days, default 3). At its turn (`carry_out`) draft the ask in the
+  person's voice with `step_ask` (`kind: "ask"`); nothing is sent before the person approves it.
+  `reason="ask_approved"`: send it exactly as approved on that channel, then `step_sent`. Their
+  reply wakes you with `reason="external_reply"`: a clear yes is `outcome_done status: done` with
+  `evidence` (the `messageId` of their message as `thread_read` shows it, a short quote, your
+  confidence); it must have come in after your last message. Not sure it counts: `inbox_ask` the
+  person ("Ana said X. Count that as done?"). Partial or unclear: `step_ask` with
+  `kind: "follow_up"` and `reply` (that messageId and a quote); the person approves it or marks
+  the step done. No reply after the working days: one `reason="nudge_due"` with the step's
+  `outcome_id`: draft one reminder with `step_ask` `kind: "nudge"`. One person per step.
 - Build, Keep green and Release are long steps: they count toward `--max-items` (alias `--max-steps`), so a
   second one waits until one ends. Report `outcome_done status: started` when you begin, then
   `step_progress` (one line, a percent) at least every 10 minutes (the CLI also stamps it every

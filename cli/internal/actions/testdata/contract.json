@@ -4865,7 +4865,7 @@
         ]
       },
       "output": {
-        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -4995,7 +4995,7 @@
         "stepIds": ["s1", "s2", "s3", "s4", "s5"]
       },
       "output": {
-        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -5166,7 +5166,7 @@
         ]
       },
       "output": {
-        "error": "Step 2: book is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 2: book is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -5291,7 +5291,7 @@
         ]
       },
       "output": {
-        "error": "Step 2: no_reply is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 2: no_reply is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -5313,7 +5313,7 @@
         "steps": [{ "type": "launch", "fields": {} }]
       },
       "output": {
-        "error": "Step 1: launch is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 1: launch is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -5531,7 +5531,7 @@
         "stepIds": ["s1", "s1", "s3", "s4", "s5"]
       },
       "output": {
-        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -13043,6 +13043,2720 @@
       "output": { "error": "Not its turn: this step is not the one the plan runs now." }
     },
     {
+      "name": "stepAsk/first ask",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "ask",
+        "text": "  Hi Ana, is the contract OK?  "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "running",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is the contract OK?",
+                  "state": "proposed",
+                  "by": "agentA",
+                  "at": { "__hive": "serverTime" }
+                },
+                "outAt": null,
+                "sent": 0,
+                "reply": null
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "step.external",
+              "data": { "outcomeId": "o1", "planId": "pl1", "op": "ask", "n": 1, "kind": "ask" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "n": 1
+      }
+    },
+    {
+      "name": "stepAsk/not its executor",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "ask",
+        "text": "  Hi Ana, is the contract OK?  "
+      },
+      "output": { "error": "Only the agent that carries this step out drafts its messages." }
+    },
+    {
+      "name": "stepAsk/a human",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "ask",
+        "text": "  Hi Ana, is the contract OK?  "
+      },
+      "output": { "error": "Only agents can do this" }
+    },
+    {
+      "name": "stepAsk/not approved",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "proposed",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "proposed",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "ask",
+        "text": "  Hi Ana, is the contract OK?  "
+      },
+      "output": { "error": "Not approved: the step runs only once the person approved the plan." }
+    },
+    {
+      "name": "stepAsk/not its turn",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 1,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "ask",
+        "text": "  Hi Ana, is the contract OK?  "
+      },
+      "output": { "error": "Not its turn: this step is not the one the plan runs now." }
+    },
+    {
+      "name": "stepAsk/first is a nudge",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "nudge",
+        "text": "  Hi Ana, is the contract OK?  "
+      },
+      "output": { "error": "Nothing was sent yet: the first message is the ask." }
+    },
+    {
+      "name": "stepAsk/bad kind",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "shout",
+        "text": "  Hi Ana, is the contract OK?  "
+      },
+      "output": { "error": "The kind is ask, follow_up or nudge." }
+    },
+    {
+      "name": "stepAsk/empty text",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "ask",
+        "text": "  "
+      },
+      "output": { "error": "Write the message (text)." }
+    },
+    {
+      "name": "stepAsk/text too long",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "ask",
+        "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "output": { "error": "The message is at most 20000 characters." }
+    },
+    {
+      "name": "stepAsk/replaces a draft",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "proposed",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": null,
+            "sent": 0,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "proposed",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": null,
+                "sent": 0,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "ask",
+        "text": "  Hi Ana, is the contract OK?  "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "running",
+              "ext": {
+                "ask": {
+                  "n": 2,
+                  "kind": "ask",
+                  "text": "Hi Ana, is the contract OK?",
+                  "state": "proposed",
+                  "by": "agentA",
+                  "at": { "__hive": "serverTime" }
+                },
+                "outAt": null,
+                "sent": 0,
+                "reply": null
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "step.external",
+              "data": { "outcomeId": "o1", "planId": "pl1", "op": "ask", "n": 2, "kind": "ask" },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "n": 2
+      }
+    },
+    {
+      "name": "stepAsk/approved not sent",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "approved",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": null,
+            "sent": 0,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "approved",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": null,
+                "sent": 0,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "ask",
+        "text": "  Hi Ana, is the contract OK?  "
+      },
+      "output": { "error": "The approved message is not sent yet: send it, then step_sent." }
+    },
+    {
+      "name": "stepAsk/follow-up quoting their reply",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "sent",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+            "sent": 1,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "sent",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "follow_up",
+        "text": "  Hi Ana, is the contract OK?  ",
+        "reply": { "messageDocId": "im9", "quote": "  Maybe,   next week " },
+        "replyMessage": { "threadId": "it1", "direction": "in" }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "running",
+              "ext": {
+                "ask": {
+                  "n": 2,
+                  "kind": "follow_up",
+                  "text": "Hi Ana, is the contract OK?",
+                  "state": "proposed",
+                  "by": "agentA",
+                  "at": { "__hive": "serverTime" }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": { "messageDocId": "im9", "quote": "Maybe, next week" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "step.external",
+              "data": {
+                "outcomeId": "o1",
+                "planId": "pl1",
+                "op": "ask",
+                "n": 2,
+                "kind": "follow_up"
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "n": 2
+      }
+    },
+    {
+      "name": "stepAsk/reply from the member",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "sent",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+            "sent": 1,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "sent",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "follow_up",
+        "text": "  Hi Ana, is the contract OK?  ",
+        "reply": { "messageDocId": "im9", "quote": "x" },
+        "replyMessage": { "threadId": "it1", "direction": "out" }
+      },
+      "output": {
+        "error": "The reply is a message from them on this thread (its messageId as thread_read shows it)."
+      }
+    },
+    {
+      "name": "stepAsk/reply without the message",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "sent",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+            "sent": 1,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "sent",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "nudge",
+        "text": "  Hi Ana, is the contract OK?  ",
+        "reply": { "messageDocId": "im9", "quote": "x" }
+      },
+      "output": {
+        "error": "The reply is a message from them on this thread (its messageId as thread_read shows it)."
+      }
+    },
+    {
+      "name": "stepAsk/not their reply",
+      "action": "stepAsk",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "reply",
+          "fields": { "text": "x" },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "kind": "ask",
+        "text": "  Hi Ana, is the contract OK?  "
+      },
+      "output": { "error": "This is for a Their reply step only." }
+    },
+    {
+      "name": "stepSent/approved",
+      "action": "stepSent",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 2,
+              "kind": "follow_up",
+              "text": "Hi Ana, is it OK?",
+              "state": "approved",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+            "sent": 1,
+            "reply": { "messageDocId": "im9", "quote": "Maybe" }
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 2,
+                  "kind": "follow_up",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "approved",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": { "messageDocId": "im9", "quote": "Maybe" }
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "ext": {
+                "ask": {
+                  "n": 2,
+                  "kind": "follow_up",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "sent",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "serverTime" },
+                "sent": 2,
+                "reply": { "messageDocId": "im9", "quote": "Maybe" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "waiting",
+              "waiting": { "on": "them", "until": null },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": null,
+              "type": "step.external",
+              "data": { "outcomeId": "o1", "planId": "pl1", "op": "sent", "n": 2 },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "stepSent/a draft",
+      "action": "stepSent",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "proposed",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": null,
+            "sent": 0,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "proposed",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": null,
+                "sent": 0,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "Not approved: nothing is sent before the person approves it." }
+    },
+    {
+      "name": "stepSent/nothing",
+      "action": "stepSent",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "No approved message waits to be sent." }
+    },
+    {
+      "name": "stepSent/not its executor",
+      "action": "stepSent",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "approved",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": null,
+            "sent": 0,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "waiting",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "approved",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": null,
+                "sent": 0,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        }
+      },
+      "output": { "error": "Only the agent that carries this step out reports it." }
+    },
+    {
+      "name": "finishOutcome/their reply with evidence",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "sent",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+            "sent": 1,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "done",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "sent",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "evidence": { "messageDocId": "im9", "quote": " Yes,  approved. ", "confidence": "high" },
+        "evidenceMessage": { "threadId": "it1", "direction": "in", "createdAtMs": 1799999940000 }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "done",
+              "result": {
+                "text": "Yes, approved.",
+                "permalink": null,
+                "itemId": null,
+                "error": null,
+                "by": "agentA",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxPlans/pl1",
+            "data": {
+              "cursor": 1,
+              "cursorAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "waiting",
+              "waiting": { "on": "agent", "until": null },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": null,
+              "type": "outcome.done",
+              "data": {
+                "outcomeId": "o1",
+                "type": "their_reply",
+                "planId": "pl1",
+                "permalink": null,
+                "itemId": null,
+                "evidence": "im9",
+                "confidence": "high"
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "finishOutcome/their reply no evidence",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "sent",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+            "sent": 1,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "done",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "sent",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "evidence": null,
+        "evidenceMessage": { "threadId": "it1", "direction": "in", "createdAtMs": 1799999940000 }
+      },
+      "output": {
+        "error": "Give the evidence: the messageId of their reply (as thread_read shows it) and a quote."
+      }
+    },
+    {
+      "name": "finishOutcome/their reply older than the send",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "sent",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+            "sent": 1,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "done",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "sent",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "evidence": { "messageDocId": "im9", "quote": " Yes,  approved. ", "confidence": "high" },
+        "evidenceMessage": { "threadId": "it1", "direction": "in", "createdAtMs": 1799992800000 }
+      },
+      "output": {
+        "error": "The evidence is a message from them on this thread that came in after your last message."
+      }
+    },
+    {
+      "name": "finishOutcome/their reply from the member",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "sent",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+            "sent": 1,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "done",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "sent",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "evidence": { "messageDocId": "im9", "quote": " Yes,  approved. ", "confidence": "high" },
+        "evidenceMessage": { "threadId": "it1", "direction": "out", "createdAtMs": 1800000000000 }
+      },
+      "output": {
+        "error": "The evidence is a message from them on this thread that came in after your last message."
+      }
+    },
+    {
+      "name": "finishOutcome/their reply nothing sent",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "proposed",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": null,
+            "sent": 0,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "done",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "proposed",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": null,
+                "sent": 0,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "evidence": { "messageDocId": "im9", "quote": " Yes,  approved. ", "confidence": "high" },
+        "evidenceMessage": { "threadId": "it1", "direction": "in", "createdAtMs": 1799999940000 }
+      },
+      "output": { "error": "Nothing was sent to them yet: draft the ask with step_ask first." }
+    },
+    {
+      "name": "finishOutcome/their reply bad confidence",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "sent",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+            "sent": 1,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "done",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "sent",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "evidence": { "messageDocId": "im9", "quote": "Yes", "confidence": "sure" },
+        "evidenceMessage": { "threadId": "it1", "direction": "in", "createdAtMs": 1799999940000 }
+      },
+      "output": { "error": "The confidence is high, medium or low." }
+    },
+    {
+      "name": "finishOutcome/their reply failed needs no evidence",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "running",
+          "executor": "agentA",
+          "planId": "pl1",
+          "ext": {
+            "ask": {
+              "n": 1,
+              "kind": "ask",
+              "text": "Hi Ana, is it OK?",
+              "state": "sent",
+              "by": "agentA",
+              "at": { "__hive": "timestamp", "ms": 1799992800000 }
+            },
+            "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+            "sent": 1,
+            "reply": null
+          }
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "failed",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "running",
+              "executor": "agentA",
+              "planId": "pl1",
+              "ext": {
+                "ask": {
+                  "n": 1,
+                  "kind": "ask",
+                  "text": "Hi Ana, is it OK?",
+                  "state": "sent",
+                  "by": "agentA",
+                  "at": { "__hive": "timestamp", "ms": 1799992800000 }
+                },
+                "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+                "sent": 1,
+                "reply": null
+              }
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "evidence": null,
+        "evidenceMessage": { "threadId": "it1", "direction": "in", "createdAtMs": 1799999940000 },
+        "result": { "error": "Bounced" }
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "failed",
+              "result": {
+                "text": null,
+                "permalink": null,
+                "itemId": null,
+                "error": "Bounced",
+                "by": "agentA",
+                "at": { "__hive": "serverTime" }
+              },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxPlans/pl1",
+            "data": {
+              "state": "blocked",
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": null,
+              "type": "outcome.failed",
+              "data": {
+                "outcomeId": "o1",
+                "type": "their_reply",
+                "planId": "pl1",
+                "permalink": null,
+                "itemId": null,
+                "error": "Bounced"
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "finishOutcome/their reply started",
+      "action": "finishOutcome",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "their_reply",
+          "fields": {
+            "who": "Ana",
+            "channel": "mail",
+            "address": "ana@example.com",
+            "need": "Her OK"
+          },
+          "state": "approved",
+          "executor": "agentA",
+          "planId": "pl1"
+        },
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": null,
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "status": "started",
+        "plan": {
+          "planId": "pl1",
+          "plan": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "steps": ["o1", "o2"],
+            "cursor": 0,
+            "state": "active"
+          },
+          "outcomes": {
+            "o1": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "their_reply",
+              "fields": {
+                "who": "Ana",
+                "channel": "mail",
+                "address": "ana@example.com",
+                "need": "Her OK"
+              },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            },
+            "o2": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "reply",
+              "fields": { "text": "x" },
+              "state": "approved",
+              "executor": "agentA",
+              "planId": "pl1"
+            }
+          }
+        },
+        "evidence": { "messageDocId": "im9", "quote": " Yes,  approved. ", "confidence": "high" },
+        "evidenceMessage": { "threadId": "it1", "direction": "in", "createdAtMs": 1799999940000 }
+      },
+      "output": { "error": "A Their reply step starts with step_ask, not status started." }
+    },
+    {
+      "name": "planThreadState/their reply draft",
+      "action": "planThreadState",
+      "input": {
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2"],
+          "cursor": 0,
+          "state": "active"
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "their_reply",
+            "fields": {
+              "who": "Ana",
+              "channel": "mail",
+              "address": "ana@example.com",
+              "need": "Her OK"
+            },
+            "state": "running",
+            "executor": "agentA",
+            "planId": "pl1",
+            "ext": {
+              "ask": {
+                "n": 1,
+                "kind": "ask",
+                "text": "Hi Ana, is it OK?",
+                "state": "proposed",
+                "by": "agentA",
+                "at": { "__hive": "timestamp", "ms": 1799992800000 }
+              },
+              "outAt": null,
+              "sent": 0,
+              "reply": null
+            }
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          }
+        }
+      },
+      "output": { "state": "yourCall", "waiting": null }
+    },
+    {
+      "name": "planThreadState/their reply to send",
+      "action": "planThreadState",
+      "input": {
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2"],
+          "cursor": 0,
+          "state": "active"
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "their_reply",
+            "fields": {
+              "who": "Ana",
+              "channel": "mail",
+              "address": "ana@example.com",
+              "need": "Her OK"
+            },
+            "state": "running",
+            "executor": "agentA",
+            "planId": "pl1",
+            "ext": {
+              "ask": {
+                "n": 1,
+                "kind": "ask",
+                "text": "Hi Ana, is it OK?",
+                "state": "approved",
+                "by": "agentA",
+                "at": { "__hive": "timestamp", "ms": 1799992800000 }
+              },
+              "outAt": null,
+              "sent": 0,
+              "reply": null
+            }
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          }
+        }
+      },
+      "output": { "state": "waiting", "waiting": { "on": "agent", "until": null } }
+    },
+    {
+      "name": "planThreadState/their reply waiting",
+      "action": "planThreadState",
+      "input": {
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2"],
+          "cursor": 0,
+          "state": "active"
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "their_reply",
+            "fields": {
+              "who": "Ana",
+              "channel": "mail",
+              "address": "ana@example.com",
+              "need": "Her OK"
+            },
+            "state": "running",
+            "executor": "agentA",
+            "planId": "pl1",
+            "ext": {
+              "ask": {
+                "n": 1,
+                "kind": "ask",
+                "text": "Hi Ana, is it OK?",
+                "state": "sent",
+                "by": "agentA",
+                "at": { "__hive": "timestamp", "ms": 1799992800000 }
+              },
+              "outAt": { "__hive": "timestamp", "ms": 1799996400000 },
+              "sent": 1,
+              "reply": null
+            }
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          }
+        }
+      },
+      "output": { "state": "waiting", "waiting": { "on": "them", "until": null } }
+    },
+    {
       "name": "stepProgress/keep green running",
       "action": "stepProgress",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
@@ -15926,7 +18640,7 @@
       "action": "cleanOutcomeFields",
       "input": { "type": "x", "fields": {} },
       "output": {
-        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, shape, build, keepgreen, release, approval, schedule."
+        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, shape, build, keepgreen, release, their_reply, approval, schedule."
       }
     },
     {
@@ -23968,7 +26682,7 @@
         "steps": [{ "type": "schedule", "fields": {} }]
       },
       "output": {
-        "error": "Step 1: schedule is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 1: schedule is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {

@@ -20,6 +20,8 @@ import { makePushSender, newVapidKeys } from './push';
 import { firestorePorts, watchAll } from './store';
 import { ReachOut } from './reach';
 import { firestoreReachPorts } from './reachStore';
+import { Reminders } from './remind';
+import { firestoreRemindPorts } from './remindStore';
 import { TelegramApi, TelegramBot } from './telegram';
 import { notifyPath } from '@hive/shared';
 import { describePersonalOrg, parsePersonalOrgArgs, personalOrg } from './personalOrg';
@@ -133,7 +135,9 @@ async function run() {
   };
   // Reach out (item KZ6O9): one timer per item or thread step in agent hands, fed by the listeners.
   const reach = new ReachOut(firestoreReachPorts(db, engine, log));
-  const stopWatch = watchAll(db, engine, kick, log, reach);
+  // Their reply: one reminder timer per step waiting on someone outside Hivenod.
+  const remind = new Reminders(firestoreRemindPorts(db, log));
+  const stopWatch = watchAll(db, engine, kick, log, reach, remind);
   const every = setInterval(() => void sweep(), 60_000);
   // Scheduled tasks (slices 3-4): the clock of every schedule; HIVE_SCHEDULER=off leaves it out.
   let scheduler: Scheduler | null = null;

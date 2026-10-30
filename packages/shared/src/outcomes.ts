@@ -29,6 +29,8 @@ export interface OutcomeField {
   max?: number;
   /** For the agent: what goes in it. */
   help: string;
+  /** A line must match it (a JavaScript and Go regular expression), e.g. a number of days. */
+  pattern?: string;
 }
 /** 'agent': an approved outcome or plan step the agent has yet to carry out. */
 export type WaitingOn = 'them' | 'thirdParty' | 'date' | 'item' | 'agent';
@@ -66,6 +68,11 @@ export interface OutcomeType {
    * never approved.
    */
   retired?: boolean;
+  /**
+   * External (Their reply, ./theirreply.ts): an agent step that waits on someone outside Hivenod;
+   * the agent drafts each message for the member's approval and judges their reply.
+   */
+  external?: boolean;
   /**
    * A long step (item OE8FmrTaIxFVGcaeGG3N, slice 6: development plans): hours of agent work
    * (Build, Release), reported started, with progress, then done.
@@ -290,6 +297,35 @@ export const OUTCOMES = {
     planOnly: true,
     long: true,
   },
+  // Their reply (./theirreply.ts): a step that waits on someone outside Hivenod. At its turn the
+  // agent drafts the ask (step_ask) for the member's approval, sends it, and the step waits on them;
+  // their reply wakes the agent (reason external_reply), which reports it done with the reply as
+  // evidence, or drafts a follow-up. No reply after remindAfterDays working days: one reminder.
+  their_reply: {
+    label: 'Their reply',
+    approve: 'Approve',
+    description:
+      "A plan step that waits on one person outside Hivenod (a client, a supplier) reached by a message: at its turn draft the ask in the member's voice with step_ask (nothing is sent before the member approves it), send it, report step_sent; their reply wakes you (external_reply): a clear yes is outcome_done with evidence (the inbound messageId and the quote), anything else a follow-up step_ask. One person per step.",
+    fields: {
+      who: line('Who', 'Their name'),
+      org: line('Organization', 'Their company or team', false),
+      channel: line('Channel', 'Where you reach them: mail, teams, slack… (one you can send on)'),
+      address: line('Address', 'Their address or handle on that channel'),
+      need: line('Need', 'One line: what we need from them'),
+      remindAfterDays: {
+        kind: 'line',
+        label: 'Remind after (working days)',
+        help: 'Working days without a reply before one reminder is drafted, 1-30 (default 3)',
+        max: 2,
+        pattern: '^([1-9]|[12][0-9]|30)$',
+      },
+    },
+    executor: 'agent',
+    after: { state: 'waiting', waitingOn: 'them' },
+    external: true,
+    plan: true,
+    planOnly: true,
+  },
   approval: {
     label: 'Your approval',
     approve: 'Approve',
@@ -399,6 +435,8 @@ export function cleanOutcomeFields(
     }
     const max = f.max ?? (f.kind === 'text' ? 20_000 : 300);
     if (s.length > max) throw new OutcomeFieldError(`${k} is at most ${max} characters.`);
+    if (f.pattern && !new RegExp(f.pattern).test(s))
+      throw new OutcomeFieldError(`${k}: ${f.help}.`);
     out[k] = s;
   }
   return out;

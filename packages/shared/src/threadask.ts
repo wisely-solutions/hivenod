@@ -37,7 +37,11 @@ export function planMain(pl: {
   if (v.state === 'blocked' && v.current) return { kind: 'retry', index: v.current.index };
   const agentWaits = v.steps.some((s) => s.kind === 'agent' && s.outcome?.state === 'proposed');
   if (v.state === 'proposed' && agentWaits) return { kind: 'approvePlan' };
-  if (v.waitingForYou && v.waitingForYou.outcome?.state === 'proposed')
+  // A proposed step, or a Their reply step whose drafted message waits for approval.
+  if (
+    v.waitingForYou &&
+    (v.waitingForYou.outcome?.state === 'proposed' || v.waitingForYou.type === 'their_reply')
+  )
     return {
       kind: 'step',
       index: v.waitingForYou.index,
@@ -66,6 +70,8 @@ export interface AskInput {
     planId?: string | null;
     createdAtMs: number;
     fields?: Readonly<Record<string, unknown>>;
+    /** A running Their reply step whose drafted message waits for approval (its number, kind). */
+    ext?: { n: number; kind: string } | null;
   }>;
 }
 
@@ -82,6 +88,8 @@ export type ThreadAsk =
       total: number;
       type: string;
       what: string;
+      /** Their reply: the drafted message waiting for approval (ask, follow_up, nudge). */
+      ext?: { n: number; kind: string };
     }
   | { kind: 'retry'; key: string; planId: string; number: number; total: number }
   | { kind: 'proposal'; key: string; outcomeId: string; type: string; count: number };
@@ -101,7 +109,21 @@ export function threadAsk(i: AskInput): ThreadAsk | null {
             .filter((o) => o.planId === pl.id)
             .map((o) => [
               o.id,
-              { type: o.type, state: o.state as PlanOutcomeOf['state'], fields: {} },
+              {
+                type: o.type,
+                state: o.state as PlanOutcomeOf['state'],
+                fields: {},
+                ...(o.ext
+                  ? {
+                      ext: {
+                        ask: { n: o.ext.n, kind: 'ask', text: '', state: 'proposed', by: '' },
+                        outAt: null,
+                        sent: 0,
+                        reply: null,
+                      } as const,
+                    }
+                  : {}),
+              },
             ]),
         ),
       })
@@ -129,7 +151,8 @@ export function threadAsk(i: AskInput): ThreadAsk | null {
     const what = typeof o?.fields?.what === 'string' ? o.fields.what.trim() : '';
     return {
       kind: 'step',
-      key: `s:${pl.id}:${main.outcomeId}`,
+      // Each drafted message of a Their reply step is a new arrival.
+      key: `s:${pl.id}:${main.outcomeId}${o?.ext ? `:${o.ext.n}` : ''}`,
       planId: pl.id,
       outcomeId: main.outcomeId,
       gate: main.gate,
@@ -137,6 +160,7 @@ export function threadAsk(i: AskInput): ThreadAsk | null {
       total,
       type: o?.type ?? '',
       what,
+      ...(o?.ext ? { ext: { n: o.ext.n, kind: o.ext.kind } } : {}),
     };
   }
   const singles = i.open
@@ -155,6 +179,13 @@ export function threadAsk(i: AskInput): ThreadAsk | null {
   return null;
 }
 
+/** Their reply: what a drafted message is called (its Approve button says it too). */
+export const EXT_ASK_LABEL: Readonly<Record<string, string>> = {
+  ask: 'Ask',
+  follow_up: 'Follow-up',
+  nudge: 'Reminder',
+};
+
 /** Whether the quick actions Approve and Ask for changes apply (else only answers or Open). */
 export function askApproves(a: ThreadAsk | null): boolean {
   return !!a && (a.kind === 'approvePlan' || a.kind === 'step' || a.kind === 'proposal');
@@ -169,6 +200,8 @@ export function askFallback(a: ThreadAsk, title: string): string {
     case 'approvePlan':
       return `Approve the plan for “${named}”? ${a.total} ${a.total === 1 ? 'step' : 'steps'}`;
     case 'step':
+      if (a.ext)
+        return `${EXT_ASK_LABEL[a.ext.kind] ?? 'Message'} to approve · step ${a.number} of ${a.total}`;
       return a.gate
         ? `${a.what || 'Your approval'} · step ${a.number} of ${a.total}`
         : `Step ${a.number} of ${a.total}: ${outcomeType(a.type)?.label ?? a.type}`;

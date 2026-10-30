@@ -821,3 +821,63 @@ func TestInboxFeedStepStatusRequest(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestInboxFeedTheirReply(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 3, Tick: time.Minute})
+	r.src.plans = []FeedPlan{{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"o1", "o2"}, Cursor: 0}}
+	r.feed.Start()
+	step := FeedRunning{ID: "o1", ThreadID: "t1", MemberUID: "joao", Type: "their_reply", PlanID: "p1", ExtN: 1, ExtState: "proposed"}
+	r.runningSteps([]FeedRunning{step})
+	r.want() // a draft waits for the person: nothing for the agent
+	// Approved: send it, once.
+	step.ExtState = "approved"
+	r.runningSteps([]FeedRunning{step})
+	r.want("t1:ask_approved")
+	m := r.meta(0)
+	if m["outcome_id"] != "o1" || m["plan_id"] != "p1" || m["step"] != "1 of 2" {
+		t.Fatal(m)
+	}
+	r.mu.Lock()
+	c := r.pushed[0].Content
+	r.mu.Unlock()
+	if !strings.Contains(c, "step_sent outcomeId=o1") || !strings.Contains(c, "message 1") {
+		t.Fatal(c)
+	}
+	r.runningSteps([]FeedRunning{step})
+	r.want("t1:ask_approved")
+	// Sent and waiting on them: no thread nudge after 3 days (the step has its own reminder).
+	step.ExtState = "sent"
+	r.runningSteps([]FeedRunning{step})
+	r.set([]FeedThread{r.th("t1", func(x *FeedThread) { x.State = "waiting"; x.Waiting = &FeedWaiting{On: "them"} })}, nil)
+	r.advance(4 * 24 * time.Hour)
+	r.feed.Evaluate()
+	r.settle()
+	r.want("t1:ask_approved")
+	// The notifier's timer fired for message 1: one reminder.
+	step.RemindDue = 1
+	r.runningSteps([]FeedRunning{step})
+	r.runningSteps([]FeedRunning{step})
+	r.want("t1:ask_approved", "t1:nudge_due")
+	r.mu.Lock()
+	c = r.pushed[1].Content
+	r.mu.Unlock()
+	if !strings.Contains(c, "step_ask outcomeId=o1 kind nudge") {
+		t.Fatal(c)
+	}
+	// Their reply comes in: external_reply with the step.
+	r.event("e-t1", "inbox.added", map[string]any{"messageDocId": "im1", "reopened": true})
+	r.set([]FeedThread{r.th("t1", nil)}, nil)
+	r.want("t1:ask_approved", "t1:nudge_due", "t1:external_reply")
+	m = r.meta(2)
+	if m["outcome_id"] != "o1" || m["plan_id"] != "p1" {
+		t.Fatal(m)
+	}
+	r.mu.Lock()
+	c = r.pushed[2].Content
+	r.mu.Unlock()
+	for _, w := range []string{"outcome_done o1 status done with evidence", "kind follow_up", "inbox_ask"} {
+		if !strings.Contains(c, w) {
+			t.Fatalf("%q lacks %q", c, w)
+		}
+	}
+}

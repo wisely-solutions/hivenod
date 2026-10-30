@@ -30,6 +30,7 @@ import {
   Check,
   Clock,
   GripVertical,
+  MessagesSquare,
   MoreHorizontal,
   Plus,
   Trash2,
@@ -54,6 +55,7 @@ import { GateAsk } from './GateAsk';
 import { FieldView } from './OutcomeCard';
 import { usePlanActions } from './usePlanActions';
 import { RecheckButton, RecheckLine, StaleChip, useRecheck } from './Recheck';
+import { TheirReplyBody, theirReplyPill, TheirReplyQuote } from './TheirReply';
 import {
   firstFree,
   keepGreenRecheck,
@@ -129,6 +131,8 @@ export function PlanPanel(props: PlanPanelProps) {
     ...(view.steps.some((s) => s.type === 'build' || s.type === 'release') ? ['longstep'] : []),
     // Keep green needs the CLI that knows the step and its re-checks (slice 6c).
     ...(view.steps.some((s) => s.type === 'keepgreen') ? ['keepgreen'] : []),
+    // Their reply needs the CLI that drafts, sends and wakes on their reply.
+    ...(view.steps.some((s) => s.type === 'their_reply') ? ['their_reply'] : []),
   ];
   const oldKinds = kinds.filter(
     (k) => home.state === 'ready' && !!home.data && cliSupports(k, have) === 'old',
@@ -140,8 +144,20 @@ export function PlanPanel(props: PlanPanelProps) {
       .sort(compareVersions)
       .pop() ?? '';
 
-  const { counting, error, edit, approveAll, rejectAll, gate, retry, skip, stop, sendBack } =
-    usePlanActions(wid, thread, pl);
+  const {
+    counting,
+    error,
+    edit,
+    approveAll,
+    rejectAll,
+    gate,
+    retry,
+    skip,
+    stop,
+    sendBack,
+    approveAsk,
+    markDone,
+  } = usePlanActions(wid, thread, pl);
   // Ask for changes on the gate at its turn (slice 6): the step it sends the plan back to.
   const [askingGate, setAskingGate] = useState<string | null>(null);
   const summaryVersion = thread.data.summary?.version;
@@ -277,10 +293,23 @@ export function PlanPanel(props: PlanPanelProps) {
       );
     return (
       <div className="mt-2 rounded-card border border-line bg-surface-2 p-3.5">
+        {o.type === 'their_reply' ? (
+          <TheirReplyBody
+            o={o}
+            now={props.now}
+            live={live}
+            atCursor={s.atCursor}
+            agent={agentName(thread.data.fetchedBy)}
+            counting={counting}
+            onApprove={(label, text) => approveAsk(s, label, text)}
+            onMarkDone={() => markDone(s)}
+          />
+        ) : null}
         <div
           className={cn(
             'flex flex-col gap-2.5',
-            o.type === 'make_it_work' && o.result?.itemId && 'hidden',
+            ((o.type === 'make_it_work' && o.result?.itemId) || o.type === 'their_reply') &&
+              'hidden',
           )}
         >
           {Object.entries(t?.fields ?? {}).map(([k, f]) => (
@@ -558,20 +587,33 @@ export function PlanPanel(props: PlanPanelProps) {
                 </span>
                 <span
                   aria-hidden
-                  title={s.kind === 'human' ? 'Your approval' : 'Agent action'}
+                  title={
+                    s.kind === 'human'
+                      ? 'Your approval'
+                      : s.type === 'their_reply'
+                        ? 'Their reply: someone outside Hivenod'
+                        : 'Agent action'
+                  }
                   className={cn(
                     'grid size-6 shrink-0 place-items-center rounded-btn border',
                     s.kind === 'human'
                       ? 'border-gate/60 bg-gate-bg text-gate-text'
-                      : 'border-agent/30 bg-agent-soft text-agent',
+                      : s.type === 'their_reply'
+                        ? 'border-external/40 bg-external-bg text-external'
+                        : 'border-agent/30 bg-agent-soft text-agent',
                   )}
                 >
-                  <Icon icon={s.kind === 'human' ? User : Zap} size={13} />
+                  <Icon
+                    icon={
+                      s.kind === 'human' ? User : s.type === 'their_reply' ? MessagesSquare : Zap
+                    }
+                    size={13}
+                  />
                 </span>
                 <button
                   type="button"
                   aria-expanded={open}
-                  aria-label={`Step ${s.number}: ${title}, ${s.kind === 'human' ? 'your approval' : 'agent action'}, ${STEP_UI_TEXT[s.ui]}`}
+                  aria-label={`Step ${s.number}: ${title}, ${s.kind === 'human' ? 'your approval' : s.type === 'their_reply' ? 'their reply' : 'agent action'}, ${(row && theirReplyPill(row.data, props.now)) || STEP_UI_TEXT[s.ui]}`}
                   title={title}
                   onClick={() => setOpenId(open ? '' : s.outcomeId)}
                   className="min-w-0 flex-1 truncate text-left text-14 font-semibold text-ink hov:underline foc:outline-2 foc:outline-focus"
@@ -585,6 +627,13 @@ export function PlanPanel(props: PlanPanelProps) {
                     data-testid="pill-recheck"
                   >
                     {recheckAt(s.index + 1)!.check === 'blocked' ? 'Stuck' : 'Re-checking'}
+                  </Pill>
+                ) : row && theirReplyPill(row.data, props.now) ? (
+                  // Their reply: it waits on someone outside Hivenod.
+                  <Pill tone="external" data-testid="pill-waiting-on">
+                    {sheet
+                      ? `${theirReplyPill(row.data, props.now)!.replace(/^waiting on /, '')}`
+                      : theirReplyPill(row.data, props.now)}
                   </Pill>
                 ) : (
                   <Pill tone={PILL[s.ui]}>
@@ -617,6 +666,11 @@ export function PlanPanel(props: PlanPanelProps) {
                     <Icon icon={Clock} size={12} />
                     {stepSilentText(row.data, props.now)}
                   </Pill>
+                </div>
+              ) : null}
+              {row && !open && row.data.type === 'their_reply' ? (
+                <div className="pl-9 sm:pl-14">
+                  <TheirReplyQuote o={row.data} now={props.now} />
                 </div>
               ) : null}
               {open ? <div className="pl-9 sm:pl-14">{body(s)}</div> : null}

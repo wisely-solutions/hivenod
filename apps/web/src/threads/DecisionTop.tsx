@@ -32,6 +32,7 @@ import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } fro
 import { useLiveDoc, type Row } from '../lib/live';
 import { effectLines } from '../lib/outcomes';
 import { ProposalPanel, QuestionPanel, type DecisionCardHandle } from '../today/DecisionCard';
+import { TheirReplyBody } from './TheirReply';
 import { Pill } from '../ui/badge';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
@@ -440,6 +441,23 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
             />
           ) : null}
         </>
+      );
+    } else if (stepRow && view && stepRow.data.type === 'their_reply') {
+      // Their reply: the drafted message waits for the member (Approve, Edit, Mark done anyway).
+      const s = view.steps[main!.index]!;
+      widget = (
+        <div className="mt-2">
+          <TheirReplyBody
+            o={stepRow.data}
+            now={now}
+            live={live}
+            atCursor
+            agent={agent}
+            counting={acts.counting}
+            onApprove={(label, text) => acts.approveAsk(s, label, text)}
+            onMarkDone={() => acts.markDone(s)}
+          />
+        </div>
       );
     } else if (stepRow && pl && view) {
       const free = firstFree(pl);

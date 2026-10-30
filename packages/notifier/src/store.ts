@@ -23,6 +23,7 @@ import {
   type SummaryTop,
 } from './engine';
 import type { ReachOut } from './reach';
+import type { Reminders, RemindStep } from './remind';
 import { stepDoc, stepWatched, type StepDoc } from './reachStore';
 
 /** Old bell entries are pruned when a person gets a new one, at most once an hour per person. */
@@ -118,6 +119,8 @@ export function watchAll(
   log: (s: string) => void,
   /** Reach out (item KZ6O9): thread steps in agent hands. */
   reach?: ReachOut,
+  /** Their reply: the one reminder timer per step waiting on someone outside Hivenod. */
+  remind?: Reminders,
 ) {
   const stops: (() => void)[] = [];
   const orgs = new Map<string, () => void>();
@@ -150,10 +153,13 @@ export function watchAll(
       by: string;
       at: number;
       fields: Record<string, unknown>;
+      /** Their reply: a running step whose drafted message waits for approval. */
+      ext?: { n: number; kind: string };
     };
     type P = { id: string; threadId: string; plan: PlanStateOf; at: number; updatedAt: number };
     let threads = new Map<string, T>();
     let proposals = new Map<string, O[]>();
+    let drafts = new Map<string, O[]>();
     let plans = new Map<string, P>();
     const keys = new Set<string>();
     const subjects = new Map<string, string>();
@@ -173,7 +179,7 @@ export function watchAll(
       const now = new Map<string, InboxWaiting>();
       let wake = Infinity;
       for (const [tid, t] of threads) {
-        const open = proposals.get(tid) ?? [];
+        const open = [...(proposals.get(tid) ?? []), ...(drafts.get(tid) ?? [])];
         const plan = plans.get(tid) ?? null;
         const ask = threadAsk({
           thread: {
@@ -195,6 +201,7 @@ export function watchAll(
             planId: o.planId,
             createdAtMs: o.at,
             fields: o.fields,
+            ...(o.ext ? { ext: o.ext } : {}),
           })),
         });
         // Nothing to decide (an approved plan step about to run): nobody is told.
@@ -404,29 +411,67 @@ export function watchAll(
       stepKeys.clear();
       now.forEach((k) => stepKeys.add(k));
     };
-    const stopSteps = reach
-      ? db
-          .collection(`workspaces/${wid}/inboxOutcomes`)
-          .where('state', 'in', ['approved', 'running'])
-          .onSnapshot(
-            (snap) => {
-              const next = new Map<string, StepDoc>();
-              for (const d of snap.docs) {
-                const o = stepDoc(d.id, d.data());
-                if (o) next.set(d.id, o);
-              }
-              steps = next;
-              void publishSteps().catch((e) => log(`inbox steps ${wid}: ${String(e)}`));
-            },
-            (e) => log(`inbox steps ${wid}: ${String(e)}`),
-          )
-      : () => undefined;
+    const stopSteps =
+      reach || remind
+        ? db
+            .collection(`workspaces/${wid}/inboxOutcomes`)
+            .where('state', 'in', ['approved', 'running'])
+            .onSnapshot(
+              (snap) => {
+                const next = new Map<string, StepDoc>();
+                const nextDrafts = new Map<string, O[]>();
+                const waitingOn: RemindStep[] = [];
+                for (const d of snap.docs) {
+                  const x = d.data();
+                  const o = stepDoc(d.id, x);
+                  if (o) next.set(d.id, o);
+                  // Their reply: a draft to approve, or a sent message waiting on them.
+                  const ask = (
+                    x.ext as { ask?: { n?: unknown; kind?: unknown; state?: unknown } } | undefined
+                  )?.ask;
+                  if (x.type !== 'their_reply' || x.state !== 'running' || !ask) continue;
+                  if (ask.state === 'proposed' && typeof x.threadId === 'string')
+                    nextDrafts.set(x.threadId, [
+                      ...(nextDrafts.get(x.threadId) ?? []),
+                      {
+                        id: d.id,
+                        type: 'their_reply',
+                        state: 'running',
+                        planId: typeof x.planId === 'string' ? x.planId : null,
+                        by: String(x.proposedBy ?? ''),
+                        at: ms(x.updatedAt),
+                        fields: (x.fields as Record<string, unknown> | undefined) ?? {},
+                        ext: { n: Number(ask.n), kind: String(ask.kind) },
+                      },
+                    ]);
+                  const outMs = ms((x.ext as { outAt?: unknown }).outAt);
+                  if (ask.state === 'sent' && outMs)
+                    waitingOn.push({
+                      key: `${wid}/${d.id}`,
+                      wid,
+                      oid: d.id,
+                      n: Number(ask.n),
+                      outMs,
+                      fields: (x.fields as Record<string, unknown> | undefined) ?? {},
+                      remindDue: Number(x.remindDue ?? 0),
+                    });
+                }
+                steps = next;
+                drafts = nextDrafts;
+                remind?.sync(wid, waitingOn);
+                void publish().catch((e) => log(`inbox ${wid}: ${String(e)}`));
+                void publishSteps().catch((e) => log(`inbox steps ${wid}: ${String(e)}`));
+              },
+              (e) => log(`inbox steps ${wid}: ${String(e)}`),
+            )
+        : () => undefined;
     return () => {
       stopThreads();
       stopOutcomes();
       stopPlans();
       stopSteps();
       stepKeys.forEach((k) => reach?.remove(k));
+      remind?.sync(wid, []);
       clearTimeout(holdTimer);
       keys.forEach((k) => engine.setInbox(null, k));
     };

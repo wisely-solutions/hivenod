@@ -655,16 +655,16 @@ service cloud.firestore {
 
       // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by
       // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)
-      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'keepgreen', 'release', 'approval', 'schedule']; }
+      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'keepgreen', 'release', 'their_reply', 'approval', 'schedule']; }
       function outcomeSingle() { return ['reply', 'no_reply', 'handover', 'snooze', 'nudge', 'ignore']; }
-      function outcomePlanTypes() { return ['reply', 'handover', 'snooze', 'nudge', 'shape', 'build', 'keepgreen', 'release', 'approval']; }
+      function outcomePlanTypes() { return ['reply', 'handover', 'snooze', 'nudge', 'shape', 'build', 'keepgreen', 'release', 'their_reply', 'approval']; }
       function outcomeHuman() { return ['approval']; }
       function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval', 'schedule']; }
       function outcomeLong() { return ['build', 'keepgreen', 'release']; }
-      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'keepgreen': 'waiting', 'release': 'done', 'approval': 'done', 'schedule': 'done'}; }
-      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'keepgreen': 'item', 'release': null, 'approval': null, 'schedule': null}; }
-      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'keepgreen': [], 'release': ['notes'], 'approval': ['what', 'detail', 'link'], 'schedule': ['scheduleId', 'sentence']}; }
-      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'keepgreen': [], 'release': [], 'approval': ['what'], 'schedule': ['scheduleId', 'sentence']}; }
+      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'keepgreen': 'waiting', 'release': 'done', 'their_reply': 'waiting', 'approval': 'done', 'schedule': 'done'}; }
+      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'keepgreen': 'item', 'release': null, 'their_reply': 'them', 'approval': null, 'schedule': null}; }
+      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'keepgreen': [], 'release': ['notes'], 'their_reply': ['who', 'org', 'channel', 'address', 'need', 'remindAfterDays'], 'approval': ['what', 'detail', 'link'], 'schedule': ['scheduleId', 'sentence']}; }
+      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'keepgreen': [], 'release': [], 'their_reply': ['who', 'channel', 'address', 'need'], 'approval': ['what'], 'schedule': ['scheduleId', 'sentence']}; }
       // END outcome registry
 
       // ---------- summaries (item OE8FmrTaIxFVGcaeGG3N, packages/shared/src/summary.ts) ----------
@@ -878,7 +878,7 @@ service cloud.firestore {
           && inboxDocTracked(d,
                ['outcome.approved', 'outcome.rejected', 'plan.approved', 'plan.rejected', 'plan.edited',
                 'plan.retried', 'plan.skipped', 'plan.stopped', 'outcome.done', 'outcome.failed', 'thread.woke',
-                'plan.sent_back'],
+                'plan.sent_back', 'step.external'],
                r.memberUid, r.threadId)
           && inboxEvOf(d).data.planId == pid
           && (inboxEvOf(d).type == 'plan.sent_back' ? inboxPlanSentBack(d, r, inboxEvOf(d).data)
@@ -908,6 +908,9 @@ service cloud.firestore {
                   && same && d.cursor == r.cursor && d.state == 'active')
                 || (e.type == 'plan.skipped' && r.state == 'blocked' && atCursor && o.state == 'rejected'
                   && next)
+                // Their reply: Mark done anyway.
+                || (e.type == 'step.external' && r.state in ['proposed', 'active'] && atCursor
+                  && o.type == 'their_reply' && o.state == 'done' && next)
                 || (e.type == 'plan.edited' && inboxPlanLive(r) && d.cursor == r.cursor
                   && inboxPlanEdited(d, r, e, inboxPlanFirstFree(r)))))
             || (isActiveAgent(wid) && r.state in ['proposed', 'active'] && atCursor
@@ -988,7 +991,7 @@ service cloud.firestore {
                   'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
                   'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back',
                   'schedule.created', 'schedule.updated', 'schedule.paused', 'schedule.resumed',
-                  'schedule.deleted', 'run.decided', 'agents.off', 'agents.on'])
+                  'schedule.deleted', 'run.decided', 'agents.off', 'agents.on', 'step.external'])
             || (d.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(d.memberUid)
                 && d.type in ['inbox.added', 'thread.filed', 'thread.note',
@@ -996,7 +999,7 @@ service cloud.firestore {
                   'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
                   'plan.proposed', 'outcome.started', 'thread.rechecked',
                   'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',
-                  'plan.sent_back', 'step.progress']));
+                  'plan.sent_back', 'step.progress', 'step.external']));
         }
         allow update, delete: if false;
       }
@@ -1239,7 +1242,7 @@ service cloud.firestore {
         function inboxThreadAgentState(d, r) {
           let e = inboxEv(d.lastEventId);
           return inboxDocTracked(d, ['outcome.proposed', 'outcome.done', 'outcome.failed', 'thread.woke',
-                   'plan.proposed', 'outcome.started', 'plan.sent_back'], r.memberUid, tid)
+                   'plan.proposed', 'outcome.started', 'plan.sent_back', 'step.external'], r.memberUid, tid)
             && (e.data.data.get('planId', null) != null
               ? inboxThreadPlanAgent(d, r, e.data)
               : e.data.type == 'outcome.started' || e.data.type == 'plan.proposed' ? false
@@ -1279,7 +1282,7 @@ service cloud.firestore {
                         && exactKeys(d.waiting, ['on', 'until']) && d.waiting.on == 'item' && d.waiting.until == null
                       : e.type == 'outcome.failed'
                         ? o.state == 'failed' && p.state == 'blocked' && d.state == 'yourCall' && d.waiting == null
-                        : e.type == 'plan.sent_back' ? d.state in ['yourCall', 'waiting'] && inboxThreadShapeOk(d)
+                        : e.type in ['plan.sent_back', 'step.external'] ? d.state in ['yourCall', 'waiting'] && inboxThreadShapeOk(d)
                         : o.state == 'done' && inboxPlanNextOk(d, p))));
         }
         function inboxThreadOwner(d, r) {
@@ -1300,7 +1303,7 @@ service cloud.firestore {
           let e = inboxEv(d.lastEventId);
           return inboxDocTracked(d, ['outcome.approved', 'outcome.rejected', 'thread.ignored', 'thread.closed', 'thread.restored',
                    'plan.approved', 'plan.rejected', 'plan.edited', 'plan.retried', 'plan.skipped', 'plan.stopped',
-                   'plan.sent_back'], me(), tid)
+                   'plan.sent_back', 'step.external'], me(), tid)
             && (e.data.data.get('planId', null) != null
               // A plan decision: the thread follows the plan (stopped: back to the agent).
               ? getAfter(inboxPlanDoc(e.data.data.planId)).data.threadId == tid
@@ -1438,7 +1441,7 @@ service cloud.firestore {
           return inboxDocTracked(d,
                  ['outcome.approved', 'outcome.rejected', 'outcome.done', 'outcome.failed', 'outcome.started',
                   'outcome.revise_requested', 'outcome.revised', 'plan.approved', 'plan.rejected', 'plan.edited',
-                  'plan.retried', 'plan.skipped', 'thread.woke', 'plan.sent_back', 'step.progress'],
+                  'plan.retried', 'plan.skipped', 'thread.woke', 'plan.sent_back', 'step.progress', 'step.external'],
                  r.memberUid, r.threadId)
             && (e.type in ['outcome.revise_requested', 'outcome.revised']
               // Ask for changes works on a step as on a single outcome.
@@ -1468,7 +1471,9 @@ service cloud.firestore {
           // who may); a person step is decided again.
           // Long steps (slice 6b): the executor's progress line and heartbeat on its running step;
           // Keep green (slice 6c) also re-checks when done (while Ship it? waits), with a check.
-          return (e.type == 'step.progress' && isActiveAgent(wid) && r.executor == me()
+          return (e.type == 'step.external' && r.type == 'their_reply' && turn
+              && p.state in ['proposed', 'active'] && inboxExt(d, r, e.data, p, pa))
+            || (e.type == 'step.progress' && isActiveAgent(wid) && r.executor == me()
               && (turn ? r.state == 'running' : r.type == 'keepgreen' && r.state == 'done')
               && r.type in outcomeLong() && p.state in ['proposed', 'active']
               && touched(['progress']) && d.progress.keys().hasOnly(['line', 'percent', 'at', 'check'])
@@ -1533,11 +1538,52 @@ service cloud.firestore {
                     : r.state in ['approved', 'running']
                       && (e.type == 'outcome.done'
                         ? d.state == 'done' && pa.cursor == p.cursor + 1
+                          && (r.type != 'their_reply' || inboxExtEvidence(r, e.data))
                         : d.state == 'failed' && pa.state == 'blocked')))
                 || (e.type == 'thread.woke' && r.type == 'snooze' && r.state == 'approved'
                   && d.state == 'done' && pa.cursor == p.cursor + 1
                   && get(inboxDoc('inboxThreads', r.threadId)).data.state == 'waiting'
                   && get(inboxDoc('inboxThreads', r.threadId)).data.waiting.until <= request.time)));
+        }
+
+        // Their reply (packages/shared/src/theirreply.ts): its executor drafts the next message
+        // (ask) and reports it sent; the member approves the draft (maybe edited) or marks the
+        // step done. Nothing is sent before the approval: sent only follows an approved draft.
+        function inboxExt(d, r, e, p, pa) {
+          let x = d.get('ext', null);
+          let q = r.get('ext', {'ask': null, 'outAt': null, 'sent': 0, 'reply': null});
+          let ag = isActiveAgent(wid) && r.executor == me();
+          return e.op == 'done'
+            ? inboxOwner(r) && r.state in ['approved', 'running'] && touched(['state'])
+              && d.state == 'done' && pa.cursor == p.cursor + 1
+            : touched(e.op == 'ask' ? ['state', 'ext'] : ['ext']) && d.state == 'running'
+              && exactKeys(x, ['ask', 'outAt', 'sent', 'reply'])
+              && exactKeys(x.ask, ['n', 'kind', 'text', 'state', 'by', 'at'])
+              && str(x.ask.text, 1, 20000) && x.ask.n == e.n
+              && (e.op == 'ask'
+                ? ag && (q.ask == null || q.ask.state != 'approved')
+                  && x.ask.n == (q.ask == null ? 1 : q.ask.n + 1) && x.ask.state == 'proposed'
+                  && x.ask.by == me() && x.ask.at == request.time
+                  && x.ask.kind in (q.sent > 0 ? ['ask', 'follow_up', 'nudge'] : ['ask'])
+                  && x.outAt == q.outAt && x.sent == q.sent
+                  && (x.reply == q.reply || (exactKeys(x.reply, ['messageDocId', 'quote'])
+                    && str(x.reply.quote, 1, 1000) && inboxExtIn(x.reply.messageDocId, r.threadId)))
+                : x.diff(q).affectedKeys().hasOnly(e.op == 'sent' ? ['ask', 'outAt', 'sent'] : ['ask'])
+                  && q.ask.state == (e.op == 'sent' ? 'approved' : 'proposed')
+                  && (e.op == 'sent'
+                    ? ag && x.ask.diff(q.ask).affectedKeys().hasOnly(['state']) && x.ask.state == 'sent'
+                      && x.outAt == request.time && x.sent == q.sent + 1
+                    : e.op == 'approve' && inboxOwner(r) && x.ask.state == 'approved'
+                      && x.ask.diff(q.ask).affectedKeys().hasOnly(['state', 'text'])));
+        }
+        function inboxExtIn(mid, tid) {
+          let m = get(inboxDoc('inboxMessages', mid)).data;
+          return m.threadId == tid && m.direction == 'in';
+        }
+        // Done only on their message, on this thread, newer than the last one sent to them.
+        function inboxExtEvidence(r, e) {
+          return r.ext.ask.state == 'sent' && inboxExtIn(e.evidence, r.threadId)
+            && get(inboxDoc('inboxMessages', e.evidence)).data.createdAt > r.ext.outAt;
         }
 
         function inboxProposalOk(d, t) {

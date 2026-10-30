@@ -21,6 +21,10 @@
   --agent: #2f5fd0;
   --agent-soft: #f2f5ff;
 
+  /* someone outside Hivenod (a Their reply step waits on them) */
+  --external: #6b3fc4;
+  --external-bg: #f4effd;
+
   --approve: #1e8e5a;
   --approve-solid: #187a4d;
   --approve-bg: #eaf7f0;
@@ -73,6 +77,9 @@
   --agent: #8ab0ff;
   --agent-soft: #172036;
 
+  --external: #c3a8ff;
+  --external-bg: #231a38;
+
   --approve: #4cc38a;
   --approve-solid: #187a4d;
   --approve-bg: #12261c;
@@ -120,6 +127,8 @@
   --color-gate-text: var(--gate-text);
   --color-agent: var(--agent);
   --color-agent-soft: var(--agent-soft);
+  --color-external: var(--external);
+  --color-external-bg: var(--external-bg);
   --color-approve: var(--approve);
   --color-approve-solid: var(--approve-solid);
   --color-approve-bg: var(--approve-bg);
