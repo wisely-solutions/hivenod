@@ -57,13 +57,13 @@ async function started(ref = 'r1', threadRef = 'thread-1') {
 }
 const thread = async (tid = 'itr1') => (await snap(T(tid))) as unknown as ThreadStateOf;
 
-// The design's example: reply → nudge → you approve → Build it → reply "done" (the booking step
-// went with Calendar, OE8Fm slice 5).
+// The design example: reply → nudge → you approve → hand over → reply "done" (the booking step
+// went with Calendar, OE8Fm slice 5; Build it with Projects, slice 11).
 const EXAMPLE: PlanStepInput[] = [
   { type: 'reply', fields: { text: 'Thursday works.' } },
   { type: 'nudge', fields: { text: 'Any news on Thursday?' } },
   { type: 'approval', fields: { what: 'The price-list change', detail: '€10 → €12' } },
-  { type: 'make_it_work', fields: { title: 'Update the price list', project: 'Website' } },
+  { type: 'handover', fields: { to: 'Website team', note: 'Update the price list' } },
   { type: 'reply', fields: { text: 'Done: the new prices are live.' } },
 ];
 const IDS = ['st1', 'st2', 'st3', 'st4', 'st5'];
@@ -398,24 +398,6 @@ describe('order', () => {
     await ok(a.run(s2));
     expect(await snap(T('itr1'))).toMatchObject({ state: 'yourCall' });
   });
-  it('Build it: started with its item, running, then done', async () => {
-    const a = await started();
-    await proposed();
-    const alice = as('alice');
-    await approvedAll(alice);
-    await done(a, 0);
-    await done(a, 1);
-    await ok(alice.run(approveOutcome(alice.ctx, await stepOf(2))));
-    // a reply step cannot be started
-    await done(a, 3, 'started');
-    expect(await snap(O('st4'))).toMatchObject({ state: 'running', result: { itemId: 'item9' } });
-    expect(await snap(T('itr1'))).toMatchObject({ state: 'waiting', waiting: { on: 'item' } });
-    expect(await snap(PL('pl1'))).toMatchObject({ cursor: 3 });
-    await done(a, 3);
-    expect(await snap(PL('pl1'))).toMatchObject({ cursor: 4 });
-    await done(a, 4);
-    expect(await snap(PL('pl1'))).toMatchObject({ cursor: 5, state: 'done' });
-  });
   it('a failed step blocks the plan: retry, skip or stop', async () => {
     const a = await started();
     await proposed();
@@ -498,13 +480,13 @@ describe('each invariant on its own', () => {
     const a = await started();
     await proposed();
     await approvedAll(as('alice'));
-    // Build it (step 4) while step 1 is at the cursor
+    // The hand over (step 4) while step 1 is at the cursor
     await denied(
       a.run(
         finishOutcome(a.ctx, {
           ...live(await stepOf(3), 3),
-          status: 'started',
-          result: { itemId: 'item9' },
+          status: 'done',
+          result: { permalink: 'https://teams.example.com/m/4' },
         }).ops,
       ),
     );

@@ -28,18 +28,10 @@ import {
 } from './actions';
 import {
   agentSchema,
-  attachmentSchema,
-  decisionSchema,
-  stepProposalSchema,
   eventSchema,
   groupSchema,
   inviteSchema,
-  itemSchema,
-  logLineSchema,
   memberProfileSchema,
-  messageSchema,
-  projectSchema,
-  runSchema,
   userSchema,
   workspaceSchema,
 } from './schema';
@@ -126,13 +118,5 @@ export const converters = {
   group: converter(groupSchema),
   member: converter(memberProfileSchema),
   agent: converter(agentSchema),
-  project: converter(projectSchema),
-  item: converter(itemSchema),
-  attachment: converter(attachmentSchema),
-  message: converter(messageSchema),
-  decision: converter(decisionSchema),
-  stepProposal: converter(stepProposalSchema),
-  run: converter(runSchema),
-  logLine: converter(logLineSchema),
   event: converter(eventSchema),
 };

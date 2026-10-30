@@ -8,7 +8,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  orderBy,
   query,
   setDoc,
   Timestamp,
@@ -29,24 +28,22 @@ import {
   setMemberRole,
 } from '../src/actions';
 import { paths } from '../src/schema';
-import { AGENTS, anon, as, denied, I, ok, P, put, snap, useEmulator, W } from './harness';
+import { AGENTS, anon, as, denied, LEGACY, ok, put, snap, useEmulator, W } from './harness';
 
 useEmulator();
 
 const inFuture = () => new Date(Date.now() + 86_400_000);
 
 describe('reading', () => {
-  it('allows members to read the workspace, projects and items', async () => {
+  it('allows members to read the workspace, not the removed projects', async () => {
     const d = as('dave');
     await ok(getDoc(doc(d.db, paths.workspace(W))));
-    await ok(getDoc(doc(d.db, P('p2'))));
-    await ok(getDoc(doc(d.db, I('i1'))));
+    await denied(getDoc(doc(d.db, LEGACY.project)));
   });
   it('denies outsiders and anonymous users everything', async () => {
     for (const db of [as('eve').db, anon()]) {
       await denied(getDoc(doc(db, paths.workspace(W))));
-      await denied(getDoc(doc(db, P('p1'))));
-      await denied(getDoc(doc(db, I('i1'))));
+      await denied(getDoc(doc(db, LEGACY.project)));
       await denied(getDoc(doc(db, paths.group(W, 'g1'))));
     }
   });
@@ -55,46 +52,13 @@ describe('reading', () => {
     await ok(getDoc(doc(as('dave').db, paths.agent(W, AGENTS.a))));
     await denied(getDoc(doc(as(AGENTS.star).db, paths.group(W, 'g1'))));
   });
-  it('allows organization-wide question/decision queries for admins only', async () => {
+  it('ATTACK: organization-wide question and decision queries are gone, for admins too', async () => {
     const q = (uid: string, group: string) =>
       getDocs(query(collectionGroup(as(uid).db, group), where('workspaceId', '==', W)));
-    await ok(q('owner', 'messages'));
-    await ok(q('owner', 'decisions'));
+    await denied(q('owner', 'messages'));
+    await denied(q('owner', 'decisions'));
     await denied(q('dave', 'messages'));
-    await denied(q('eve', 'messages'));
     await denied(q(AGENTS.star, 'decisions'));
-  });
-  it('lets a member query one of their projects, not an unrelated one', async () => {
-    const q = (uid: string, pid: string) =>
-      getDocs(
-        query(
-          collectionGroup(as(uid).db, 'decisions'),
-          where('workspaceId', '==', W),
-          where('projectId', '==', pid),
-        ),
-      );
-    await ok(q('dave', 'p1'));
-    await put({ [P('p9')]: { ...(await snap(P('p1'))), memberUids: ['alice'] } });
-    await denied(q('dave', 'p9'));
-    await ok(q('alice', 'p9'));
-  });
-  it('lets members and admins run the Needs-you questions query for a project they can see', async () => {
-    const q = (uid: string, pid: string) =>
-      getDocs(
-        query(
-          collectionGroup(as(uid).db, 'messages'),
-          where('workspaceId', '==', W),
-          where('projectId', '==', pid),
-          where('kind', '==', 'question'),
-          where('answered', '==', false),
-          orderBy('at', 'asc'),
-        ),
-      );
-    await ok(q('dave', 'p1'));
-    await ok(q('owner', 'p1'));
-    await denied(q('eve', 'p1'));
-    await put({ [P('p9')]: { ...(await snap(P('p1'))), memberUids: ['alice'] } });
-    await denied(q('dave', 'p9'));
   });
 });
 
@@ -330,13 +294,11 @@ describe('agents', () => {
   });
 });
 
-describe('projects', () => {
-  it('does not let anyone delete a project (archive only; see orgdelete.test.ts)', async () => {
-    await denied(deleteDoc(doc(as('alice').db, P('p2'))));
-    await denied(deleteDoc(doc(as('owner').db, P('p2'))));
-  });
-  it('denies an outsider creating a project in the workspace', async () => {
-    await denied(setDoc(doc(as('eve').db, P('p8')), { name: 'x' }));
+describe('projects (removed)', () => {
+  it('ATTACK: nobody deletes or creates one outside an organization delete', async () => {
+    await denied(deleteDoc(doc(as('alice').db, LEGACY.project)));
+    await denied(deleteDoc(doc(as('owner').db, LEGACY.project)));
+    await denied(setDoc(doc(as('eve').db, `workspaces/${W}/projects/p8`), { name: 'x' }));
   });
 });
 

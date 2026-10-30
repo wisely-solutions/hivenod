@@ -5,7 +5,7 @@
  */
 import { Timestamp, collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { describe, expect, it } from 'vitest';
-import { createItem, SERVER_TIME, type WriteOp } from '../src/actions';
+import { SERVER_TIME, type WriteOp } from '../src/actions';
 import {
   addInboxMessage,
   addThreadNote,
@@ -19,7 +19,6 @@ import {
   flagThread,
   ignoreThread,
   inboxPaths,
-  makeItemFromThread,
   mergeSubjects,
   moveThread,
   proposeOutcome,
@@ -37,20 +36,7 @@ import {
   type ThreadStateOf,
 } from '../src/inbox';
 import { paths } from '../src/schema';
-import {
-  AGENTS,
-  as,
-  denied,
-  now,
-  ok,
-  projectDoc,
-  put,
-  snap,
-  useEmulator,
-  W,
-  W2,
-  type As,
-} from './harness';
+import { AGENTS, as, denied, now, ok, put, snap, useEmulator, W, W2, type As } from './harness';
 
 useEmulator();
 
@@ -807,7 +793,7 @@ describe('outcomes: proposed by agents, decided by the member only', () => {
   });
 
   it('a failed outcome sends the thread back to investigating', async () => {
-    const oid = await approved('make_it_work', { title: 'Fix the export' });
+    const oid = await approved('handover', { to: 'Sam', note: 'Fix the export' });
     const a = as(AGENTS.a);
     await ok(
       a.run(
@@ -816,7 +802,7 @@ describe('outcomes: proposed by agents, decided by the member only', () => {
           outcome: await outcome(oid),
           thread: await thread(),
           status: 'failed',
-          result: { error: 'The project does not let agents create items.' },
+          result: { error: 'Sam is away until Monday.' },
         }),
       ),
     );
@@ -1375,61 +1361,28 @@ describe('inbox events', () => {
   });
 });
 
-describe('make it work (the member)', () => {
-  const make = async (who: As, itemId: string, threadOwner = 'alice') => {
-    const project = projectDoc() as unknown as Parameters<typeof createItem>[1]['project'];
-    const item = createItem(who.ctx, {
-      project,
-      projectId: 'p1',
-      itemId,
-      title: 'Fix the refund export',
-      type: 'task',
-    });
-    return makeItemFromThread(who.ctx, {
-      threadId: 'itr1',
-      thread: { memberUid: threadOwner, subjectId: null },
-      item,
-      projectId: 'p1',
-      title: 'Fix the refund export',
-    });
-  };
-  it('creates the item, linked on the thread, by the member only', async () => {
+describe('make it work (retired with Projects)', () => {
+  it('ATTACK: no thread.itemMade event any more, and no item with it', async () => {
     await started();
     const alice = as('alice');
-    const p = await make(alice, 'mw1');
-    await ok(alice.run(p));
-    expect((await snap(paths.item(W, 'p1', 'mw1'))).title).toBe('Fix the refund export');
-    const ev = await snap(inboxPaths.event(W, p.eventId));
-    expect(ev.type).toBe('thread.itemMade');
-    expect((ev.data as { itemId: string }).itemId).toBe('mw1');
-    // Another member of the project cannot link an item to alice's thread.
-    const bob = as('bob');
-    expect(() =>
-      makeItemFromThread(bob.ctx, {
+    const ev: WriteOp = {
+      kind: 'set',
+      path: inboxPaths.event(W, 'ev-z'),
+      data: {
+        actor: { type: 'human', id: 'alice', name: 'Alice' },
+        memberUid: 'alice',
         threadId: 'itr1',
-        thread: { memberUid: 'alice', subjectId: null },
-        item: { itemId: 'x', eventId: 'e', ops: [] },
-        projectId: 'p1',
-        title: 'x',
-      }),
-    ).toThrow();
-    await denied(bob.run(await make(bob, 'mw2', 'bob')));
-    // The item must be made in the same batch by the member: an event alone is refused.
+        subjectId: null,
+        type: 'thread.itemMade',
+        data: { projectId: 'p1', itemId: 'mw1', title: 'x' },
+        at: SERVER_TIME,
+      },
+    };
+    await denied(alice.run([ev]));
     await denied(
       alice.run([
-        {
-          kind: 'set',
-          path: inboxPaths.event(W, 'ev-z'),
-          data: {
-            actor: { type: 'human', id: 'alice', name: 'Alice' },
-            memberUid: 'alice',
-            threadId: 'itr1',
-            subjectId: null,
-            type: 'thread.itemMade',
-            data: { projectId: 'p1', itemId: 'nope', title: 'x' },
-            at: SERVER_TIME,
-          },
-        },
+        { kind: 'set', path: `workspaces/${W}/projects/p1/items/mw1`, data: { title: 'x' } },
+        ev,
       ]),
     );
   });

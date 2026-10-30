@@ -5,36 +5,22 @@ rules_version = '2';
 // Promises enforced here:
 //  1. Only organization members (humans) and non-revoked agents of the organization can read.
 //     (An organization lives at /workspaces/{wid}; the path predates the rename.)
-//  1b. Projects are private to their memberUids and to the organization's admins. A plain member
-//     sees no project, item, run, decision, message or project event until an admin adds them.
-//  2. Agents only touch projects in their projectIds (or all with '*').
-//  3. Agents cannot decide: no approvals, no decisions, never move an item out of a human step.
-//  4. Agents claim unclaimed or stale (10 min) items at agent steps, heartbeat/release only their
-//     own claim, and complete by moving exactly one step forward. A paused agent claims nothing,
-//     and a step limited to some agents (project.stepAgents) is claimable by those agents only.
-//  5. Humans decide at a gate only if they are in the step's deciderUids; an item passes a gate only
-//     when the approvals satisfy the step's rule; send back / stop obey the reject policy.
-//  5b. Only admins, a project's creator and a step's current deciders change who decides there.
-//  6. Only admins manage members, roles, groups, agents, project people and project deletion.
+//  2. Projects, items, runs, decisions and the calendar were removed (item OE8FmrTaIxFVGcaeGG3N,
+//     slice 11): no rule allows them, so an old CLI's item tools are refused. Their old data is
+//     deleted by scripts/delete-projects-data.mjs (Admin SDK) after the export.
+//  3. Agents cannot decide: only the member a thread is for approves its outcomes and plans.
+//  4. Only admins manage members, roles, groups and agents.
 //     Exception (item EJ2Cxq4k, `hivenod connect`): a member confirming a connect request creates
-//     an agent for at most 5 projects they are in (never all), and may revoke an agent they made.
+//     an agent with default settings, and may revoke an agent they made.
 //     The last admin can neither be demoted nor removed (adminUids is kept in step with memberRoles).
-//  5c. Per-item paths (card st5INNZj): an item with a path moves only along it; an agent never
-//      adds or drops a people step on a path (any one decider of that step does, or approves a
-//      request); nobody works on or decides an unshaped item; only approvers grow the library.
-//  5d. Agent send-back (card KLCTVnX8): the agent holding an item sends it back to an earlier
-//      agent step on its path, never across a people step, with a reason, at most 3 rounds until
-//      a person acts on the item (approve, send back, move, answer reset the rounds).
-//  5e. Inbox (item 4PEHrOW5IfXBQWgOK9wo, docs/INBOX.md): subjects, threads, messages, outcomes and
-//      inbox events are read only by the member they are for and the organization's agents; only
-//      that member decides; an agent carries out only an outcome the member approved.
-//  7. Every domain write carries one event in the same batch (existsAfter, actor == auth uid,
+//  5. Inbox (item 4PEHrOW5IfXBQWgOK9wo, docs/INBOX.md): subjects, threads, messages, outcomes and
+//     inbox events are read only by the member they are for and the organization's agents; only
+//     that member decides; an agent carries out only an outcome the member approved.
+//  6. Every domain write carries one event in the same batch (existsAfter, actor == auth uid,
 //     at == request.time). Events are create-only. Revoked agents are denied everything.
 //
-// Documented exceptions to (7), all of which carry no decision and no state change:
-//  - claim heartbeats (item.claim.heartbeatAt, run.heartbeatAt): coalesced, see the run rules;
-//  - agent presence (agents/{uid}.lastSeenAt); run log lines (create-only, immutable);
-//  - token usage reported with a heartbeat (run.tokensIn/Out/Cached, model): display only;
+// Documented exceptions to (6), all of which carry no decision and no state change:
+//  - agent presence (agents/{uid}.lastSeenAt);
 //  - a user's own profile document (users/{uid}) and their profile card in an org (members/{uid});
 //  - terminal pairing requests (pairings/{code}): outside any organization, no state change.
 service cloud.firestore {
@@ -53,16 +39,9 @@ service cloud.firestore {
 
     function wsPath(wid) { return /databases/$(database)/documents/workspaces/$(wid); }
     function agentPath(wid, uid) { return /databases/$(database)/documents/workspaces/$(wid)/agents/$(uid); }
-    function projPath(wid, pid) { return /databases/$(database)/documents/workspaces/$(wid)/projects/$(pid); }
-    function itemPath(wid, pid, iid) { return /databases/$(database)/documents/workspaces/$(wid)/projects/$(pid)/items/$(iid); }
-    function attPath(wid, pid, iid, aid) { return /databases/$(database)/documents/workspaces/$(wid)/projects/$(pid)/items/$(iid)/attachments/$(aid); }
-    function msgPath(wid, pid, iid, mid) { return /databases/$(database)/documents/workspaces/$(wid)/projects/$(pid)/items/$(iid)/messages/$(mid); }
-    function decisionPath(wid, pid, did) { return /databases/$(database)/documents/workspaces/$(wid)/projects/$(pid)/decisions/$(did); }
-    function runPath(wid, rid) { return /databases/$(database)/documents/workspaces/$(wid)/runs/$(rid); }
     function eventPath(wid, eid) { return /databases/$(database)/documents/workspaces/$(wid)/events/$(eid); }
     // The event the written document `d` names (written in this batch).
     function evOf(wid, d) { return getAfter(eventPath(wid, d.lastEventId)).data; }
-    function memberPath(wid, uid) { return /databases/$(database)/documents/workspaces/$(wid)/members/$(uid); }
     function invitePath(wid, code) { return /databases/$(database)/documents/workspaces/$(wid)/invites/$(code); }
 
     function isMember(wid) {
@@ -77,57 +56,12 @@ service cloud.firestore {
     // (scripts/migrate-orgs.mjs) has rewritten it, so releasing the rules first locks nobody out.
     function roleOf(wid) { return signedIn() ? get(wsPath(wid)).data.memberRoles.get(me(), '') : ''; }
     function isAdmin(wid) { return roleOf(wid) in ['admin', 'owner']; }
-    // A plain member sees only the projects that list them; admins see every project.
-    function isProjectMember(wid, pid) {
-      return roleOf(wid) == 'member' && me() in get(projPath(wid, pid)).data.memberUids;
-    }
-    function canProject(wid, pid) {
-      let r = roleOf(wid);
-      return r in ['admin', 'owner'] || (r == 'member' && me() in get(projPath(wid, pid)).data.memberUids);
-    }
-    // For events written in the same batch as the project itself (creation, deletion).
-    function canProjectAfter(wid, pid) {
-      return (signedIn() && getAfter(wsPath(wid)).data.memberRoles.get(me(), '') in ['admin', 'owner'])
-        || (isMemberAfter(wid) && existsAfter(projPath(wid, pid))
-            && me() in getAfter(projPath(wid, pid)).data.memberUids);
-    }
     // Agent docs are only created for uids that are not members, and members can only join if
     // they are not agents, so "member" and "agent" never overlap.
     function isActiveAgent(wid) {
       return signedIn() && activeAgentDoc(get(agentPath(wid, me())));
     }
     function activeAgentDoc(a) { return a != null && a.data.revokedAt == null; }
-    // An Inbox-only agent (scope 'inbox', item fJnu6) never works on development items,
-    // whatever its projectIds say. Mirrored by inboxOnly() in packages/shared/src/agents.ts.
-    function agentCanProject(wid, pid) {
-      let a = get(agentPath(wid, me())).data;
-      return a.get('scope', '') != 'inbox' && (a.projectIds == '*' || pid in a.projectIds);
-    }
-    function projectAgent(wid, pid) { return isActiveAgent(wid) && agentCanProject(wid, pid); }
-    function projectReader(wid, pid) { return canProject(wid, pid) || projectAgent(wid, pid); }
-
-
-    // Who may change which agents do a project's steps (card zSzW3LXy): admins and the
-    // project's creator. An agent's own settings (projects, guardrails, permissions, resume) are
-    // admin-only (agents rules below). THE ONE PLACE for this rule; mirrored by
-    // canEditAgentSettings() in packages/shared/src/agents.ts (the UI) — change both together.
-    function canSetStepAgents(wid, p) {
-      return isAdmin(wid) || p.createdBy == me();
-    }
-    // Who may stop an agent's work on an item and resume a held one (card BrK0r2FE): admins and
-    // the deciders of a gate of the project. The action names that gate (event data gateStepId) so
-    // no loop is needed. THE ONE PLACE for this rule; mirrored by stopGateFor() in
-    // packages/shared/src/stopwork.ts (the UI) — change both together.
-    function canStopWork(wid, p, g) {
-      return isAdmin(wid)
-        || (g is string && hasStep(p, g) && stepOf(p, g).kind == 'human'
-            && me() in stepOf(p, g).gate.deciderUids);
-    }
-    // The step `stepId` of project `p` may be done by me: it is not limited to other agents.
-    function agentAllowedAtStep(p, stepId) {
-      let only = p.get('stepAgents', {}).get(stepId, []);
-      return only.size() == 0 || me() in only;
-    }
 
     // ---------- tracking (SPEC §5.3) ----------
 
@@ -139,48 +73,11 @@ service cloud.firestore {
       return eid is string && e != null
         && e.data.actor.id == me() && e.data.at == request.time && e.data.type in types;
     }
-    // tracked() / trackedFor() for the event the written document `d` names (d.lastEventId).
+    // tracked() for the event the written document `d` names (d.lastEventId).
     function docTracked(wid, d, types) { return tracked(wid, d.lastEventId, types); }
-    function itemTracked(wid, d, types, pid, iid) {
-      let e = getAfter(eventPath(wid, d.lastEventId));
-      return d.lastEventId is string && e != null
-        && e.data.actor.id == me() && e.data.at == request.time && e.data.type in types
-        && e.data.projectId == pid && e.data.itemId == iid;
-    }
-    function trackedFor(wid, eid, types, pid, iid) {
-      let e = getAfter(eventPath(wid, eid));
-      return eid is string && e != null
-        && e.data.actor.id == me() && e.data.at == request.time && e.data.type in types
-        && e.data.projectId == pid && e.data.itemId == iid;
-    }
     // Hard deletes cannot carry a lastEventId, so they need a tombstone event at a fixed id.
     function trackedDelete(wid, kind, docId, type) {
       return tracked(wid, 'del-' + kind + '-' + docId, [type]);
-    }
-    // Erasing an item and its history for good. The caller is a person who can see the project (an
-    // agent has no role, so never), the item's creator or an admin, and nobody holds it. Its
-    // messages, files and runs go in the same batch and ride on this check (see eraseWith).
-    function mayEraseItem(wid, pid, iid) {
-      let it = get(itemPath(wid, pid, iid)).data;
-      return canProject(wid, pid)
-        && (isAdmin(wid) || it.createdBy == me_('human'))
-        && it.claim == null
-        && trackedDelete(wid, 'items', iid, 'item.deleted');
-    }
-    // A child of an item that is erased in this same batch.
-    function eraseWith(wid, pid, iid) {
-      return (!existsAfter(itemPath(wid, pid, iid)) && mayEraseItem(wid, pid, iid))
-        || erasingItem(wid, pid, iid);
-    }
-    // The item was flagged `erasing` (beginItemErase): its creator or an admin may now delete what
-    // hangs below it, log lines included, in as many batches as it takes (resumable). Never an
-    // agent, never while an agent holds it.
-    function erasingItem(wid, pid, iid) {
-      let it = get(itemPath(wid, pid, iid)).data;
-      return it.get('erasing', false) == true
-        && canProject(wid, pid)
-        && (isAdmin(wid) || it.createdBy == me_('human'))
-        && it.claim == null;
     }
     function changed(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
@@ -193,97 +90,6 @@ service cloud.firestore {
     function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
     function strOrNull(v, max) { return v == null || (v is string && v.size() <= max); }
     function me_(type) { return {'type': type, 'id': me()}; }
-
-    // ---------- process helpers ----------
-
-    // stepIndex is a denormalised {stepId: index}; every use re-checks steps[index].id == stepId,
-    // so a corrupt index can only cause denials, never grant anything.
-    function hasStep(p, stepId) {
-      return stepId is string && stepId in p.stepIndex
-        && p.stepIndex[stepId] < p.steps.size() && p.steps[p.stepIndex[stepId]].id == stepId;
-    }
-    function stepOf(p, stepId) { return p.steps[p.stepIndex[stepId]]; }
-
-    // The item state `d` is a correct arrival at step number `idx`.
-    function arrivesAt(d, p, idx) {
-      return idx < p.steps.size() && d.stepId == p.steps[idx].id && d.claim == null && (
-        (p.steps[idx].kind == 'human' && d.status == 'waiting'
-          && d.gate == {'stepId': p.steps[idx].id, 'approvals': {}, 'rejections': {}})
-        || (p.steps[idx].kind == 'agent' && d.status == 'queued' && d.gate == null));
-    }
-    // The item state `d` correctly leaves step number `idx` going forward (or finishes).
-    function movesForwardFrom(d, r, p, idx) {
-      return (idx + 1 < p.steps.size() && arrivesAt(d, p, idx + 1))
-        || (idx + 1 == p.steps.size() && d.stepId == r.stepId && d.status == 'done'
-            && d.claim == null && d.gate == null);
-    }
-
-    // Mirrors packages/shared/src/gates.ts gateSatisfied(). Only deciders count.
-    function gateSatisfied(g, approvedSet) {
-      let valid = approvedSet.intersection(g.deciderUids.toSet());
-      return valid.hasAll(g.mustInclude) && (
-        (g.rule == 'any' && valid.size() >= 1)
-        || (g.rule == 'atLeast' && valid.size() >= g.n)
-        || ((g.rule == 'all' || g.rule == 'specific') && g.deciderUids.size() > 0
-            && valid.hasAll(g.deciderUids)));
-    }
-    // Mirrors gates.ts rejectionsSuffice().
-    function rejectionsSuffice(g, rejectedSet) {
-      let valid = rejectedSet.intersection(g.deciderUids.toSet()).size();
-      return (g.rejectPolicy == 'one' && valid >= 1)
-        || (g.rejectPolicy == 'majority' && valid * 2 > g.deciderUids.size());
-    }
-
-    // ---------- per-item paths (card st5INNZj) ----------
-    // An item's path is the library minus the steps it skips: agent steps in `pathSkips`
-    // ({stepId: reason}; agents and people change them at once), people steps in `gateSkips`
-    // (only a decider of that step changes them). A people step listed in pathSkips is not
-    // skipped, so an agent can never skip a gate. Paths always keep library order. Absent maps =
-    // the full library (items from before paths). `shape == null` marks an item waiting to be
-    // shaped. Writes that touch the path fields bump `pathRev`, which routes them to the path
-    // rules (so other writes pay nothing). Moves only jump over skipped steps.
-
-    function unshaped(r) { return r.get('shape', 0) == null; }
-    // Step `s` is skipped: an agent step by k (pathSkips), a people step by g (gateSkips).
-    function skipped(s, k, g) { return s.id in (s.kind == 'agent' ? k : g); }
-    // Every library step strictly between positions i and j is skipped (as skipped() says).
-    function gapOk(p, i, j, k, g) {
-      let n = j - i;
-      let s = p.steps;
-      // Rules have no loops: the 30 positions are unrolled in three chains of 10 (one chain of 30
-      // is "too complex"), joined here rather than calling each other: a nested call is compiled
-      // again with its caller (docs/DEPLOY.md "Rules size and compile time"). A short jump stops at
-      // its first `n <= m`.
-      return j > i && (
-        (n <= 1 || (skipped(s[i + 1], k, g) && (n <= 2 || (skipped(s[i + 2], k, g) && (n <= 3 || (skipped(s[i + 3], k, g) && (n <= 4 || (skipped(s[i + 4], k, g) && (n <= 5 || (skipped(s[i + 5], k, g) && (n <= 6 || (skipped(s[i + 6], k, g) && (n <= 7 || (skipped(s[i + 7], k, g) && (n <= 8 || (skipped(s[i + 8], k, g) && (n <= 9 || (skipped(s[i + 9], k, g) && (n <= 10 || skipped(s[i + 10], k, g)))))))))))))))))))))
-        && (n <= 11 || (((n <= 11 || (skipped(s[i + 11], k, g) && (n <= 12 || (skipped(s[i + 12], k, g) && (n <= 13 || (skipped(s[i + 13], k, g) && (n <= 14 || (skipped(s[i + 14], k, g) && (n <= 15 || (skipped(s[i + 15], k, g) && (n <= 16 || (skipped(s[i + 16], k, g) && (n <= 17 || (skipped(s[i + 17], k, g) && (n <= 18 || (skipped(s[i + 18], k, g) && (n <= 19 || (skipped(s[i + 19], k, g) && (n <= 20 || skipped(s[i + 20], k, g))))))))))))))))))))) && (n <= 21 || ((n <= 21 || (skipped(s[i + 21], k, g) && (n <= 22 || (skipped(s[i + 22], k, g) && (n <= 23 || (skipped(s[i + 23], k, g) && (n <= 24 || (skipped(s[i + 24], k, g) && (n <= 25 || (skipped(s[i + 25], k, g) && (n <= 26 || (skipped(s[i + 26], k, g) && (n <= 27 || (skipped(s[i + 27], k, g) && (n <= 28 || (skipped(s[i + 28], k, g) && (n <= 29 || (skipped(s[i + 29], k, g) && (n <= 30 || skipped(s[i + 30], k, g))))))))))))))))))))))));
-    }
-    // A new item waiting to be shaped: at the first step, queued, nobody's, no gate.
-    function unshapedAt0(d, p) {
-      return d.shape == null && d.stepId == p.steps[0].id && d.status == 'queued'
-        && d.claim == null && d.gate == null;
-    }
-    // The item state `d` correctly leaves position i forward over skipped steps only, or
-    // finishes when every step after i is skipped.
-    // (One gapOk for both: the target position is the end of the list when it finishes.)
-    function movesOver(d, r, p, i, k, g) {
-      let done = d.stepId == r.stepId && d.status == 'done';
-      return gapOk(p, i, done ? p.steps.size() : p.stepIndex.get(d.stepId, -1), k, g)
-        && (done
-          ? d.claim == null && d.gate == null
-          : hasStep(p, d.stepId) && !skipped(stepOf(p, d.stepId), k, g)
-            && arrivesAt(d, p, p.stepIndex[d.stepId]));
-    }
-    // Forward from the current step: the next library step, or the next one the item does not skip.
-    function nextOk(d, r, p) {
-      return r.get('pathSkips', null) == null
-        ? movesForwardFrom(d, r, p, p.stepIndex[r.stepId])
-        : movesOver(d, r, p, p.stepIndex[r.stepId], r.pathSkips, r.get('gateSkips', {}));
-    }
-    // Moving or sending an item back never lands on a step it skips.
-    function notSkipped(d, r, p) {
-      return !skipped(stepOf(p, d.stepId), r.get('pathSkips', {}), r.get('gateSkips', {}));
-    }
 
     // ---------- pairing a terminal (card MkUwvyWs, packages/shared/src/pairing.ts) ----------
     // `hive run claude` without credentials creates pairings/{code} (no sign-in) holding only a
@@ -435,17 +241,6 @@ service cloud.firestore {
           && str(d.label, 0, 80)
           && d.createdAt is number;
         }
-      }
-
-      // ---------- busy store (Inbox item w9SAf; Calendar removed in OE8Fm slice 5) ----------
-      // Nothing reads or writes it now; the old blocks go with the deletion script (slice 11).
-      // An admin of an organization being deleted still clears its blocks in the members' stores
-      // (the organization id is the part of the block id before the first underscore).
-      match /busy/{bid} {
-        allow delete: if signedIn() && busyDeleting(bid.split('_')[0]) && isAdmin(bid.split('_')[0]);
-      }
-      function busyDeleting(w) {
-        return exists(wsPath(w)) && get(wsPath(w)).data.get('deletingAt', null) != null;
       }
 
       // The list of organizations only ever grows by one organization per write (appended), one the
@@ -732,8 +527,7 @@ service cloud.firestore {
           // Presence: the agent's `hive run` session stopped (shown offline at once).
           || (signedIn() && aid == me() && isActiveAgent(wid)
             && changed(['signedOutAt'])
-            && d.signedOutAt == request.time)
-          || (signedIn() && aid == me() && isActiveAgent(wid) && keepsStreak(d));
+            && d.signedOutAt == request.time);
         }
 
         // Removing a revoked agent for good (item 81P4s): an admin only, and only once it is revoked.
@@ -742,19 +536,13 @@ service cloud.firestore {
         allow delete: if isAdmin(wid) && resource.data.revokedAt != null
           && trackedDelete(wid, 'agents', aid, 'agent.removed');
 
-        // `hivenod connect` confirmed by a plain member (item EJ2Cxq4k): only projects they are
-        // in, at most 5 (no '*'), default guardrails and permissions. THE ONE PLACE for this rule;
-        // mirrored by MEMBER_CONNECT_MAX_PROJECTS in packages/shared/src/pairing.ts.
+        // `hivenod connect` confirmed by a plain member (item EJ2Cxq4k): default guardrails and
+        // permissions, never all projects. projectIds is legacy since Projects were removed (OE8Fm
+        // slice 11): at most 5 ids, never checked (MEMBER_CONNECT_MAX_PROJECTS in pairing.ts).
         function memberConnects(d) {
           return roleOf(wid) == 'member'
             && !('guardrails' in d) && !('permissions' in d)
-            && d.projectIds is list && d.projectIds.size() >= 1 && d.projectIds.size() <= 5
-            && inProject(d.projectIds, 0) && inProject(d.projectIds, 1) && inProject(d.projectIds, 2)
-            && inProject(d.projectIds, 3) && inProject(d.projectIds, 4);
-        }
-        function inProject(ids, i) {
-          return ids.size() <= i
-            || (ids[i] is string && me() in get(projPath(wid, ids[i])).data.memberUids);
+            && d.projectIds is list && d.projectIds.size() <= 5;
         }
         // scope (item fJnu6): absent, or 'inbox' with no projects. It is set at creation and never
         // changes (agent updates list the fields they may change; scope is not one of them).
@@ -777,41 +565,14 @@ service cloud.firestore {
                 || (g.maxTokensPerItem is int && g.maxTokensPerItem >= 1000
                     && g.maxTokensPerItem <= 100000000));
         }
-
-        // The failure streak (card zSzW3LXy), written by the agent in the batch that ends one of
-        // its runs: a done run resets it; a failed run adds exactly one, and when that reaches the
-        // agent's limit (default 3) the agent pauses itself. A released run does not count.
-        function keepsStreak(d) {
-          let b = resource.data;
-          let e = evOf(wid, d);
-          let run = getAfter(runPath(wid, e.runId)).data;
-          let before = b.get('failStreak', 0);
-          let after = d.get('failStreak', 0);
-          let max = b.get('guardrails', {}).get('maxFailedRuns', 3);
-          let pauseKept = d.get('pausedAt', null) == b.get('pausedAt', null)
-            && d.get('pausedReason', null) == b.get('pausedReason', null);
-          return changed(['failStreak', 'pausedAt', 'pausedReason', 'lastEventId'])
-            && docTracked(wid, d, ['run.ended', 'item.released', 'item.completed', 'item.shaped', 'item.sentBack'])
-            && e.runId is string
-            && run.agentUid == me() && run.endedAt == request.time
-            && ((run.status == 'done' && pauseKept
-                && after == (b.get('pausedAt', null) != null ? before : 0))
-                || (run.status == 'failed' && after is int && after == before + 1
-                    && (b.get('pausedAt', null) != null || after < max
-                        ? pauseKept
-                        : d.get('pausedAt', null) == request.time
-                          && str(d.get('pausedReason', ''), 1, 200))));
-        }
       }
 
       // ---------- events (append-only) ----------
 
       match /events/{eid} {
-        allow read: if isAdmin(wid)
-          || (resource.data.projectId == null && isMember(wid))
-          || (resource.data.projectId != null && isProjectMember(wid, resource.data.projectId))
-          || (isActiveAgent(wid) && resource.data.projectId != null
-              && agentCanProject(wid, resource.data.projectId));
+        // Project events (projectId set) are gone with Projects (OE8Fm slice 11): only admins still
+        // read the old ones until the deletion script removes them.
+        allow read: if isAdmin(wid) || (resource.data.projectId == null && isMember(wid));
         allow create: if eventsCreateOk();
         function eventsCreateOk() {
           let d = request.resource.data;
@@ -822,255 +583,18 @@ service cloud.firestore {
           && str(d.actor.name, 0, 200)
           && d.at == request.time
           && d.data is map
-          && strOrNull(d.projectId, 128)
-          && strOrNull(d.itemId, 128)
-          && strOrNull(d.runId, 128)
+          && d.projectId == null && d.itemId == null && d.runId == null
           && ((d.actor.type == 'human' && isMemberAfter(wid)
-                && (d.projectId == null
-                    || canProjectAfter(wid, d.projectId))
                 && d.type in [
-                  'item.created', 'item.moved', 'item.updated', 'item.deleted', 'item.released', 'item.archived', 'item.restored', 'item.erasing', 'attachment.added', 'message.posted',
-                  'decision.approved', 'decision.sentBack', 'decision.stopped', 'decision.answered',
-                  'finding.triaged', 'agent.created', 'agent.revoked', 'agent.removed', 'agent.renamed', 'agent.rotated', 'agent.updated',
-                  'project.created', 'project.updated', 'project.processChanged', 'project.archived',
-                  'project.deleted', 'project.membersChanged', 'workspace.created', 'workspace.updated', 'workspace.deleting', 'member.invited',
+                  'agent.created', 'agent.revoked', 'agent.removed', 'agent.renamed', 'agent.rotated', 'agent.updated',
+                  'workspace.created', 'workspace.updated', 'workspace.deleting', 'member.invited',
                   'member.joined', 'member.roleChanged', 'member.removed', 'member.inviteRevoked',
-                  'group.created', 'group.updated', 'group.deleted',
-                  'item.shaped', 'item.pathChanged', 'item.pathChangeDecided', 'step.accepted',
-                  'step.rejected'])
-            // Stop work / Resume (card BrK0r2FE), on a project item. A branch of their own so the
-            // other events do not pay for it (the rules' expression budget is tight on decisions).
-            || (d.actor.type == 'human'
-                && d.type in ['item.workStopped', 'item.resumed']
-                && d.projectId != null && isMemberAfter(wid)
-                && canProjectAfter(wid, d.projectId))
+                  'group.created', 'group.updated', 'group.deleted'])
             // Leaving: the actor is no longer a member after the batch, so check before it.
             || (d.actor.type == 'human' && isMember(wid)
-                && d.projectId == null
-                && d.type == 'member.left')
-            || (d.actor.type == 'agent'
-                && d.projectId != null
-                && projectAgent(wid, d.projectId)
-                && d.type in [
-                  'item.claimed', 'item.released', 'item.completed', 'item.updated',
-                  'item.created', 'attachment.added', 'message.posted', 'finding.raised',
-                  'run.started', 'run.heartbeat', 'run.ended',
-                  'item.shaped', 'item.pathChanged', 'step.proposed', 'item.sentBack']));
+                && d.type == 'member.left'));
         }
         allow update, delete: if false;
-      }
-
-      // ---------- calendar (Inbox item w9SAf; removed in OE8Fm slice 5) ----------
-      // No writes any more. Admins read the old events for the export (slice 7) until the
-      // deletion script removes them (slice 11).
-      match /calendar/{eid} {
-        allow read: if isAdmin(wid);
-      }
-
-      // ---------- runs ----------
-
-      match /runs/{rid} {
-        allow read: if isAdmin(wid) || projectAgent(wid, resource.data.projectId)
-          || isProjectMember(wid, resource.data.projectId);
-
-        // Created by the claiming agent in the same batch as the claim.
-        allow create: if runsCreateOk();
-        function runsCreateOk() {
-          let d = request.resource.data;
-          return projectAgent(wid, d.projectId)
-          && (exactKeys(d, ['agentUid', 'projectId', 'itemId', 'stepId', 'startedAt',
-               'heartbeatAt', 'heartbeatEventAt', 'endedAt', 'status', 'costEur', 'tokensIn',
-               'tokensOut', 'model', 'summary', 'lastEventId'])
-              // A shaping run (card st5INNZj).
-              || (exactKeys(d, ['agentUid', 'projectId', 'itemId', 'stepId', 'startedAt',
-               'heartbeatAt', 'heartbeatEventAt', 'endedAt', 'status', 'costEur', 'tokensIn',
-               'tokensOut', 'model', 'summary', 'job', 'lastEventId'])
-                  && d.job == 'shape'))
-          && d.agentUid == me()
-          && d.status == 'running'
-          && d.startedAt == request.time
-          && d.heartbeatAt == request.time
-          && d.heartbeatEventAt == request.time
-          && d.endedAt == null
-          && d.costEur == 0
-          && d.tokensIn == 0
-          && d.tokensOut == 0
-          && d.model == null
-          && d.summary == null
-          && runMatchesClaim(d)
-          && docTracked(wid, d, ['item.claimed', 'run.started'])
-          && evOf(wid, d).runId == rid;
-        }
-
-        // Only the run's own agent, only while the run is open, never its identity fields.
-        allow update: if isActiveAgent(wid)
-          && resource.data.agentUid == me()
-          && resource.data.endedAt == null
-          && agentCanProject(wid, resource.data.projectId)
-          && (heartbeatQuiet() || heartbeatTracked() || endRun() || remoteLink());
-
-        // Stop work (card BrK0r2FE): a person ends the open run as stopped (not failed), in the
-        // batch that clears the item's claim with the same event; the item rules check who may.
-        allow update: if runsUpdateOk();
-        function runsUpdateOk() {
-          let d = request.resource.data;
-          let r = resource.data;
-          return d.status == 'stopped'
-          && canProject(wid, r.projectId)
-          && r.endedAt == null
-          && changed(['status', 'endedAt', 'stoppedBy', 'summary', 'lastEventId'])
-          && d.status == 'stopped'
-          && d.endedAt == request.time
-          && d.stoppedBy is map
-          && exactKeys(d.stoppedBy, ['uid', 'name'])
-          && d.stoppedBy.uid == me()
-          && str(d.stoppedBy.name, 0, 200)
-          && strOrNull(d.summary, 4000)
-          && docTracked(wid, d, ['item.workStopped'])
-          && evOf(wid, d).runId == rid
-          && stoppedWithItem(r, d.lastEventId);
-        }
-
-        // An admin releases a stalled run (no heartbeat for 10 minutes), with the item's release.
-        allow update: if runsUpdateOk4();
-        function runsUpdateOk4() {
-          let d = request.resource.data;
-          let r = resource.data;
-          return isAdmin(wid)
-          && r.endedAt == null && r.status == 'running'
-          && r.heartbeatAt < request.time - duration.value(10, 'm')
-          && changed(['status', 'endedAt', 'lastEventId'])
-          && d.status == 'released'
-          && d.endedAt == request.time
-          && (getAfter(itemPath(wid, r.projectId, r.itemId)).data.claim == null
-              || getAfter(itemPath(wid, r.projectId, r.itemId)).data.claim.runId != rid)
-          && docTracked(wid, d, ['item.released'])
-          && evOf(wid, d).runId == rid;
-        }
-
-        // Revoking (or rotating) an agent ends its open runs in the same batch: the CLI was cut
-        // off and can no longer write, so its run would otherwise stay "running" forever.
-        allow update: if runsUpdateOk3();
-        function runsUpdateOk3() {
-          let d = request.resource.data;
-          let r = resource.data;
-          return isAdmin(wid)
-          && r.endedAt == null
-          && getAfter(agentPath(wid, r.agentUid)).data.revokedAt != null
-          && changed(['status', 'endedAt', 'summary', 'lastEventId'])
-          && d.status == 'failed'
-          && d.endedAt == request.time
-          && strOrNull(d.summary, 4000)
-          && docTracked(wid, d, ['agent.revoked', 'agent.rotated']);
-        }
-
-        // An agent taking over a stale claim (no heartbeat for 10 minutes) ends the old run, in
-        // the batch of its own claim, as released.
-        allow update: if runsUpdateOk2();
-        function runsUpdateOk2() {
-          let d = request.resource.data;
-          let r = resource.data;
-          return isActiveAgent(wid)
-          && r.agentUid != me()
-          && r.endedAt == null
-          && agentCanProject(wid, r.projectId)
-          && r.heartbeatAt < request.time - duration.value(10, 'm')
-          && changed(['status', 'endedAt', 'summary', 'lastEventId'])
-          && d.status == 'released'
-          && d.endedAt == request.time
-          && strOrNull(d.summary, 4000)
-          && getAfter(itemPath(wid, r.projectId, r.itemId)).data.claim.agentUid == me()
-          && getAfter(itemPath(wid, r.projectId, r.itemId)).data.claim.runId != rid
-          && docTracked(wid, d, ['item.claimed']);
-        }
-
-        // Erased together with its item (Delete from the item menu).
-        allow delete: if eraseWith(wid, resource.data.projectId, resource.data.itemId);
-
-        function stoppedWithItem(r, eid) {
-          let it = getAfter(itemPath(wid, r.projectId, r.itemId)).data;
-          return it.lastEventId == eid && it.get('workStopped', null) != null
-            && it.workStopped.runId == rid && it.claim == null;
-        }
-        function runMatchesClaim(d) {
-          let it = getAfter(itemPath(wid, d.projectId, d.itemId)).data;
-          return it.claim.runId == rid && it.claim.agentUid == me() && it.stepId == d.stepId;
-        }
-        // Heartbeats are coalesced (SPEC §5.3): within 6 min of the last run.heartbeat event a
-        // heartbeat needs no event; after 5 min one may (and after 6 min one must) carry an event.
-        // The 1-minute overlap absorbs client clock skew.
-        // A heartbeat may carry the run's token usage so far (card zSzW3LXy). Counters only grow;
-        // cache reads are part of tokensIn. Agent-reported, display only.
-        function heartbeatQuiet() {
-          return changed(['heartbeatAt', 'tokensIn', 'tokensOut', 'tokensCached', 'model', 'costEur'])
-            && usageGrows()
-            && request.resource.data.heartbeatAt == request.time
-            && request.time < resource.data.heartbeatEventAt + duration.value(6, 'm');
-        }
-        function usageGrows() {
-          let d = request.resource.data;
-          let r = resource.data;
-          return d.tokensIn is int && d.tokensIn >= r.tokensIn
-            && d.tokensOut is int && d.tokensOut >= r.tokensOut
-            && d.get('tokensCached', 0) is int && d.get('tokensCached', 0) >= r.get('tokensCached', 0)
-            && d.get('tokensCached', 0) <= d.tokensIn
-            && d.get('costEur', r.costEur) is number && d.get('costEur', r.costEur) >= r.costEur
-            && strOrNull(d.model, 80);
-        }
-        // The Remote Control link of the interactive Claude session on this run (card OPpbi0MS):
-        // set once, only a claude.ai/code session link, so a run cannot carry any other link.
-        function remoteLink() {
-          let r = request.resource.data.remote;
-          return changed(['remote'])
-            && !('remote' in resource.data)
-            && r is map && exactKeys(r, ['url', 'sessionId'])
-            && r.url is string && r.url.matches('https://claude[.]ai/code/session_[A-Za-z0-9]{8,64}')
-            && str(r.sessionId, 1, 80);
-        }
-        function heartbeatTracked() {
-          let d = request.resource.data;
-          return changed(['heartbeatAt', 'heartbeatEventAt', 'tokensIn', 'tokensOut', 'tokensCached',
-                          'model', 'costEur', 'lastEventId'])
-            && usageGrows()
-            && d.heartbeatAt == request.time
-            && d.heartbeatEventAt == request.time
-            && request.time >= resource.data.heartbeatEventAt + duration.value(5, 'm')
-            && docTracked(wid, d, ['run.heartbeat'])
-            && evOf(wid, d).runId == rid;
-        }
-        function endRun() {
-          let d = request.resource.data;
-          return changed(['status', 'endedAt', 'heartbeatAt', 'costEur', 'tokensIn', 'tokensOut',
-                          'tokensCached', 'model', 'summary', 'lastEventId'])
-            && d.status in ['done', 'failed', 'released']
-            && d.endedAt == request.time
-            && d.costEur is number && d.costEur >= 0
-            && d.tokensIn is int && d.tokensIn >= 0
-            && d.tokensOut is int && d.tokensOut >= 0
-            && d.get('tokensCached', 0) is int && d.get('tokensCached', 0) >= 0
-            && d.get('tokensCached', 0) <= d.tokensIn
-            && strOrNull(d.model, 80) && strOrNull(d.summary, 4000)
-            && docTracked(wid, d, ['run.ended', 'item.released', 'item.completed', 'item.shaped', 'item.sentBack'])
-            && evOf(wid, d).runId == rid;
-        }
-
-        // Agent log lines: ids 0..499 (max 500 per run), create-only, by the run's agent.
-        match /log/{n} {
-          allow read: if canProject(wid, get(runPath(wid, rid)).data.projectId)
-            || projectAgent(wid, get(runPath(wid, rid)).data.projectId);
-          allow create: if isActiveAgent(wid)
-            && n.matches('^(0|[1-9][0-9]{0,2})$') && int(n) < 500
-            && get(runPath(wid, rid)).data.agentUid == me()
-            && get(runPath(wid, rid)).data.endedAt == null
-            && exactKeys(request.resource.data, ['at', 'level', 'text'])
-            && request.resource.data.at == request.time
-            && request.resource.data.level in ['info', 'warn', 'error']
-            && str(request.resource.data.text, 0, 4000);
-          allow update: if false;
-          // Only while the run's item is being erased (see erasingItem).
-          allow delete: if erasingItem(wid, get(runPath(wid, rid)).data.projectId,
-                                       get(runPath(wid, rid)).data.itemId);
-        }
       }
 
       // ---------- inbox (item 4PEHrOW5IfXBQWgOK9wo, packages/shared/src/inbox.ts) ----------
@@ -1132,15 +656,15 @@ service cloud.firestore {
       // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by
       // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)
       function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'release', 'approval']; }
-      function outcomeSingle() { return ['reply', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore']; }
-      function outcomePlanTypes() { return ['reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'shape', 'build', 'release', 'approval']; }
+      function outcomeSingle() { return ['reply', 'no_reply', 'handover', 'snooze', 'nudge', 'ignore']; }
+      function outcomePlanTypes() { return ['reply', 'handover', 'snooze', 'nudge', 'shape', 'build', 'release', 'approval']; }
       function outcomeHuman() { return ['approval']; }
       function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval']; }
       function outcomeLong() { return ['build', 'release']; }
       function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'release': 'done', 'approval': 'done'}; }
       function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'release': null, 'approval': null}; }
-      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'release': ['notes'], 'approval': ['what', 'detail', 'link']}; }
-      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'release': [], 'approval': ['what']}; }
+      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'release': ['notes'], 'approval': ['what', 'detail', 'link']}; }
+      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'release': [], 'approval': ['what']}; }
       // END outcome registry
 
       // ---------- summaries (item OE8FmrTaIxFVGcaeGG3N, packages/shared/src/summary.ts) ----------
@@ -1439,14 +963,6 @@ service cloud.firestore {
         }
       }
 
-      // The member's own "Make it work": the item is created in the same batch, by them, and the
-      // thread is theirs.
-      function inboxItemMade(e) {
-        return e.threadId is string && e.data.projectId is string && e.data.itemId is string
-          && get(inboxDoc('inboxThreads', e.threadId)).data.memberUid == me()
-          && getAfter(/databases/$(database)/documents/workspaces/$(wid)/projects/$(e.data.projectId)/items/$(e.data.itemId)).data.createdBy.id == me();
-      }
-
       match /inboxEvents/{eid} {
         allow read: if inboxReader(resource.data);
         allow create: if inboxEventsCreateOk();
@@ -1464,13 +980,12 @@ service cloud.firestore {
           && ((d.actor.type == 'human' && isMember(wid)
                 && d.memberUid == me()
                 && d.type in ['thread.titled', 'thread.answered', 'thread.ignored',
-                  'thread.closed', 'thread.restored', 'thread.moved', 'thread.itemMade', 'outcome.approved',
+                  'thread.closed', 'thread.restored', 'thread.moved', 'outcome.approved',
                   'outcome.rejected', 'outcome.revise_requested', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area', 'subject.label',
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged', 'thread.due', 'plan.approved', 'plan.rejected', 'plan.edited',
                   'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
                   'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back'])
-                && (d.type != 'thread.itemMade' || inboxItemMade(d))
             || (d.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(d.memberUid)
                 && d.type in ['inbox.added', 'thread.filed', 'thread.note',
@@ -2281,1018 +1796,6 @@ service cloud.firestore {
             : r.state == 'related' && d.state == 'rejected' && d.note == r.note;
         }
       }
-
-      // ---------- projects ----------
-
-      match /projects/{pid} {
-        // Lists must be queried with where('memberUids', 'array-contains', uid) by plain members.
-        allow read: if isAdmin(wid) || projectAgent(wid, pid)
-          || (isMember(wid) && me() in resource.data.memberUids);
-
-        // Admins create projects for anyone; a member can create one only for themselves.
-        allow create: if projectsCreateOk();
-        function projectsCreateOk() {
-          let d = request.resource.data;
-          return isMember(wid)
-          && keysOk(d, ['name', 'emoji', 'color', 'templateId',
-               'steps', 'stepIndex', 'memberUids', 'createdBy', 'createdAt', 'archivedAt', 'lastEventId'],
-          // shapeNewItems (card st5INNZj): new items wait to be shaped by an agent.
-               ['shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter'])
-          && d.get('shapeNewItems', false) is bool
-          && d.get('agentsMayCreateItems', false) is bool
-          && d.get('statusEvery', 0) in [0, 15, 30, 60]
-          && d.get('silenceAfter', 40) in [0, 20, 40, 60, 120]
-          && validProject(d)
-          && (isAdmin(wid) || d.memberUids == [me()])
-          && d.createdBy == me()
-          && d.createdAt == request.time
-          && d.archivedAt == null
-          && itemTracked(wid, d, ['project.created'], pid, null);
-        }
-
-        allow update: if (canProject(wid, pid)
-            && changed(['name', 'emoji', 'description', 'color', 'templateId', 'steps', 'stepIndex',
-                        'archivedAt', 'memberUids', 'stepAgents', 'shapeNewItems',
-                        'agentsMayCreateItems', 'statusEvery', 'silenceAfter', 'lastEventId'])
-            && validProject(request.resource.data)
-            // Shaping new items (card st5INNZj), "Agents may create items" (item DhsO9), the status
-            // interval and the silence threshold (item AzveC) are switched by admins and the
-            // project's creator. One check for all: long processes are close to the rules budget.
-            && (!request.resource.data.diff(resource.data).affectedKeys()
-                  .hasAny(['shapeNewItems', 'agentsMayCreateItems', 'statusEvery', 'silenceAfter'])
-                || (canSetStepAgents(wid, resource.data)
-                    && request.resource.data.get('shapeNewItems', false) is bool
-                    && request.resource.data.get('agentsMayCreateItems', false) is bool
-                    && request.resource.data.get('statusEvery', 0) in [0, 15, 30, 60]
-                    && request.resource.data.get('silenceAfter', 40) in [0, 20, 40, 60, 120]))
-            && gatesAllowed(resource.data, request.resource.data)
-            // Unchanged per-step agents cost little: long processes are close to the rules budget.
-            && (request.resource.data.get('stepAgents', {}) == resource.data.get('stepAgents', {})
-                || stepAgentsAllowed(resource.data, request.resource.data))
-            // Only an admin archives or restores.
-            && (request.resource.data.archivedAt == resource.data.archivedAt
-                || (isAdmin(wid)
-                    && (request.resource.data.archivedAt == null
-                        || request.resource.data.archivedAt == request.time)))
-            && (itemTracked(wid, request.resource.data,
-                 ['project.updated', 'project.processChanged', 'project.archived'], pid, null)
-                // An approver adds an agent's proposed step (card st5INNZj); the event names the item.
-                || (docTracked(wid, request.resource.data, ['step.accepted'])
-                    && canSetStepAgents(wid, resource.data)
-                    && evOf(wid, request.resource.data).projectId == pid))
-            && membersOnlyGainDeciders(resource.data, request.resource.data))
-          // Only an admin decides who is on a project.
-          || (isAdmin(wid)
-            && changed(['memberUids', 'lastEventId'])
-            && validProject(request.resource.data)
-            && itemTracked(wid, request.resource.data, ['project.membersChanged'], pid, null));
-
-        // Projects are archived, never deleted in normal use; only an organization delete removes them.
-        allow delete: if false;
-
-        // ----- who decides (card 5NpuPujd) -----
-        // Members may edit steps, but a step's gate (deciders, rule, must-include, reject policy)
-        // changes only by an admin, the project's creator, or a current decider of that step. A
-        // step that is new in this save may only carry an empty gate (nobody decides yet).
-        // Rules have no loops, so the 30 possible step positions are unrolled, in nested chunks of 5
-        // so a small process does not pay for the empty positions.
-        function gatesAllowed(b, a) {
-          let n = a.steps.size();
-          let x = a.steps;
-          let y = b.steps;
-          return x == y || isAdmin(wid) || b.createdBy == me()
-            || ((n <= 0 || x[0] == y[0] || gateMoved(b, x[0], y[0])) && (n <= 1 || x[1] == y[1] || gateMoved(b, x[1], y[1])) && (n <= 2 || x[2] == y[2] || gateMoved(b, x[2], y[2])) && (n <= 3 || x[3] == y[3] || gateMoved(b, x[3], y[3])) && (n <= 4 || x[4] == y[4] || gateMoved(b, x[4], y[4]))
-            && (n <= 5 || ((n <= 5 || x[5] == y[5] || gateMoved(b, x[5], y[5])) && (n <= 6 || x[6] == y[6] || gateMoved(b, x[6], y[6])) && (n <= 7 || x[7] == y[7] || gateMoved(b, x[7], y[7])) && (n <= 8 || x[8] == y[8] || gateMoved(b, x[8], y[8])) && (n <= 9 || x[9] == y[9] || gateMoved(b, x[9], y[9]))
-            && (n <= 10 || ((n <= 10 || x[10] == y[10] || gateMoved(b, x[10], y[10])) && (n <= 11 || x[11] == y[11] || gateMoved(b, x[11], y[11])) && (n <= 12 || x[12] == y[12] || gateMoved(b, x[12], y[12])) && (n <= 13 || x[13] == y[13] || gateMoved(b, x[13], y[13])) && (n <= 14 || x[14] == y[14] || gateMoved(b, x[14], y[14]))
-            && (n <= 15 || ((n <= 15 || x[15] == y[15] || gateMoved(b, x[15], y[15])) && (n <= 16 || x[16] == y[16] || gateMoved(b, x[16], y[16])) && (n <= 17 || x[17] == y[17] || gateMoved(b, x[17], y[17])) && (n <= 18 || x[18] == y[18] || gateMoved(b, x[18], y[18])) && (n <= 19 || x[19] == y[19] || gateMoved(b, x[19], y[19]))
-            && (n <= 20 || ((n <= 20 || x[20] == y[20] || gateMoved(b, x[20], y[20])) && (n <= 21 || x[21] == y[21] || gateMoved(b, x[21], y[21])) && (n <= 22 || x[22] == y[22] || gateMoved(b, x[22], y[22])) && (n <= 23 || x[23] == y[23] || gateMoved(b, x[23], y[23])) && (n <= 24 || x[24] == y[24] || gateMoved(b, x[24], y[24]))
-            && (n <= 25 || ((n <= 25 || x[25] == y[25] || gateMoved(b, x[25], y[25])) && (n <= 26 || x[26] == y[26] || gateMoved(b, x[26], y[26])) && (n <= 27 || x[27] == y[27] || gateMoved(b, x[27], y[27])) && (n <= 28 || x[28] == y[28] || gateMoved(b, x[28], y[28])) && (n <= 29 || x[29] == y[29] || gateMoved(b, x[29], y[29])))))))))))));
-        }
-        // Step s, now at position i, differs from what was there (o = the step there before): it
-        // keeps its gate, or may change it (gateOk). The plain x[i] == y[i] check stays inline, so
-        // an unchanged step costs no call (the expression budget, see gateOk).
-        function gateMoved(b, s, o) {
-          return s.get('gate', null) == o.get('gate', null) || gateOk(b, s);
-        }
-        // A position whose gate is the same as it was needs no check (that gate already existed; an
-        // out-of-range read errors, which falls through to the full check). Only a changed gate
-        // pays for gateOk. Budget: a plain member's save is evaluated in full for ~10 shifted steps
-        // (a front-of-list insert or delete in a long process may be denied; admins and creators skip this).
-        function gateOk(b, s) {
-          let o = s.id in b.stepIndex && hasStep(b, s.id) ? b.steps[b.stepIndex[s.id]] : null;
-          return s.id in b.stepIndex
-            ? (o != null && (s.get('gate', null) == o.get('gate', null)
-                || request.auth.uid in o.get('gate', {'deciderUids': []}).deciderUids
-                // a step that has nobody deciding yet may gain an (empty) gate or lose it
-                || (s.get('gate', {'deciderUids': []}).deciderUids.size() == 0
-                    && o.get('gate', {'deciderUids': []}).deciderUids.size() == 0)))
-            : (s.get('gate', null) == null || s.gate.deciderUids.size() == 0);
-        }
-
-        // Which agents may do a step (card zSzW3LXy) changes only by canSetStepAgents(). Anyone who
-        // may edit the process may still drop the limit of a step that this save removes.
-        function stepAgentsAllowed(b, a) {
-          return (canSetStepAgents(wid, b)
-              && a.stepAgents is map && a.stepAgents.size() <= 30)
-            || onlyDropsRemovedSteps(b.get('stepAgents', {}), a.get('stepAgents', {}), a);
-        }
-        function onlyDropsRemovedSteps(before, after, a) {
-          return after.diff(before).addedKeys().size() == 0
-            && after.diff(before).changedKeys().size() == 0
-            && after.diff(before).removedKeys().intersection(a.stepIndex.keys().toSet()).size() == 0;
-        }
-
-        // A save may add people to the project, but only people it makes deciders (card 1QYP6KpI):
-        // nobody is removed, and everyone added must decide on some step of the saved process.
-        function deciders(x, i) {
-          return x.size() > i ? x[i].get('gate', {'deciderUids': []}).deciderUids.toSet() : [].toSet();
-        }
-        function membersOnlyGainDeciders(b, a) {
-          let n = a.steps.size();
-          let x = a.steps;
-          return a.memberUids == b.memberUids
-            || (a.memberUids.toSet().hasAll(b.memberUids)
-                && (n > 0 ? deciders(x, 0).union(deciders(x, 1)).union(deciders(x, 2)).union(deciders(x, 3)).union(deciders(x, 4)).union((n > 5 ? deciders(x, 5).union(deciders(x, 6)).union(deciders(x, 7)).union(deciders(x, 8)).union(deciders(x, 9)).union((n > 10 ? deciders(x, 10).union(deciders(x, 11)).union(deciders(x, 12)).union(deciders(x, 13)).union(deciders(x, 14)).union((n > 15 ? deciders(x, 15).union(deciders(x, 16)).union(deciders(x, 17)).union(deciders(x, 18)).union(deciders(x, 19)).union((n > 20 ? deciders(x, 20).union(deciders(x, 21)).union(deciders(x, 22)).union(deciders(x, 23)).union(deciders(x, 24)).union((n > 25 ? deciders(x, 25).union(deciders(x, 26)).union(deciders(x, 27)).union(deciders(x, 28)).union(deciders(x, 29)).union([].toSet()) : [].toSet())) : [].toSet())) : [].toSet())) : [].toSet())) : [].toSet())) : [].toSet()).hasAll(a.memberUids.toSet().difference(b.memberUids.toSet())));
-        }
-
-        function validProject(d) {
-          return str(d.name, 1, 120) && str(d.emoji, 0, 16) && str(d.color, 0, 32)
-            && str(d.get('description', ''), 0, 500)
-            && str(d.templateId, 0, 40)
-            && d.steps is list && d.steps.size() >= 1 && d.steps.size() <= 30
-            && d.stepIndex is map && d.stepIndex.size() == d.steps.size()
-            && d.memberUids is list && d.memberUids.size() <= 200;
-        }
-
-        // ---------- step proposals (card st5INNZj) ----------
-        // An agent working an item proposes a new library step; an approver (admins and the
-        // project's creator) accepts it, in the batch that adds it to the library, or rejects it
-        // with a reason agents can read.
-        match /stepProposals/{sid} {
-          allow read: if projectReader(wid, pid);
-          allow create: if stepProposalsCreateOk();
-          function stepProposalsCreateOk() {
-            let d = request.resource.data;
-            return projectAgent(wid, pid)
-            && exactKeys(d, ['name', 'kind', 'description', 'instructions', 'outputs',
-                 'afterStepId', 'deciderUids', 'reason', 'itemId', 'by', 'at', 'status', 'decision',
-                 'lastEventId'])
-            && (str(d.name, 1, 60) && d.kind in ['agent', 'human']
-              && str(d.description, 0, 2000) && str(d.instructions, 0, 20000)
-              && d.outputs is list && d.outputs.size() <= 20
-              && d.afterStepId is string
-              && (d.afterStepId == '' || hasStep(get(projPath(wid, pid)).data, d.afterStepId))
-              && d.deciderUids is list && d.deciderUids.size() <= 100
-              && str(d.reason, 10, 1000) && d.itemId is string)
-            && d.by == me_('agent')
-            && d.at == request.time
-            && d.status == 'open' && d.decision == null
-            && get(itemPath(wid, pid, d.itemId)).data.claim.agentUid == me()
-            && itemTracked(wid, d, ['step.proposed'], pid,
-                 d.itemId);
-          }
-          allow update: if isMember(wid) && canSetStepAgents(wid, get(projPath(wid, pid)).data)
-            && resource.data.status == 'open'
-            && changed(['status', 'decision', 'lastEventId'])
-            && decidedProposal(request.resource.data);
-          allow delete: if false;
-
-          function decidedProposal(d) {
-            let x = d.decision;
-            return x is map && exactKeys(x, ['byUid', 'at', 'reason', 'stepId'])
-              && x.byUid == me() && x.at == request.time
-              && ((d.status == 'rejected' && str(x.reason, 10, 2000) && x.stepId == null
-                    && docTracked(wid, d, ['step.rejected']))
-                || (d.status == 'accepted' && str(x.reason, 0, 2000) && x.stepId is string
-                    && !hasStep(get(projPath(wid, pid)).data, x.stepId)
-                    && hasStep(getAfter(projPath(wid, pid)).data, x.stepId)
-                    && docTracked(wid, d, ['step.accepted'])))
-              && evOf(wid, d).projectId == pid;
-          }
-        }
-
-        // ---------- decisions (humans only, immutable; id == event id) ----------
-
-        match /decisions/{did} {
-          allow read: if projectReader(wid, pid);
-          allow create: if decisionsCreateOk();
-          function decisionsCreateOk() {
-            let d = request.resource.data;
-            return canProject(wid, pid)
-            && (exactKeys(d, ['workspaceId', 'projectId', 'itemId', 'itemTitle',
-                 'stepId', 'outcome', 'toStepId', 'byUid', 'rationale', 'tags', 'at', 'lastEventId'])
-                || (exactKeys(d, ['workspaceId', 'projectId', 'itemId', 'itemTitle',
-                 'stepId', 'outcome', 'toStepId', 'byUid', 'rationale', 'tags', 'waitMs', 'at',
-                 'lastEventId'])
-                    && d.waitMs is int && d.waitMs >= 0))
-            && d.workspaceId == wid
-            && d.projectId == pid
-            && d.lastEventId == did
-            && d.byUid == me()
-            && d.at == request.time
-            && str(d.itemTitle, 0, 300)
-            && str(d.rationale, 0, 4000)
-            && d.tags is list && d.tags.size() <= 20
-            && strOrNull(d.toStepId, 40)
-            && trackedFor(wid, did, ['decision.' + d.outcome], pid,
-                 d.itemId)
-            && (gateDecision(d)
-                || answerDecision(d));
-          }
-          allow update, delete: if false;
-
-          // approved / sentBack / stopped: made by a decider of the item's current human step,
-          // in the same batch as the item change it causes (checked by the item rules).
-          function gateDecision(d) {
-            let p = get(projPath(wid, pid)).data;
-            let before = get(itemPath(wid, pid, d.itemId)).data;
-            return d.outcome in ['approved', 'sentBack', 'stopped']
-              && before.stepId == d.stepId && hasStep(p, d.stepId)
-              && stepOf(p, d.stepId).kind == 'human'
-              && me() in stepOf(p, d.stepId).gate.deciderUids
-              && getAfter(itemPath(wid, pid, d.itemId)).data.lastEventId == did
-              && (d.outcome == 'approved' || d.rationale.size() >= 10);
-          }
-          // answered: accompanies the answer message (whose id is the same event id).
-          function answerDecision(d) {
-            let m = getAfter(msgPath(wid, pid, d.itemId, did));
-            return d.outcome == 'answered' && m != null && m.data.kind == 'answer'
-              && m.data.by == me_('human');
-          }
-        }
-
-        // ---------- items ----------
-
-        match /items/{iid} {
-          allow read: if projectReader(wid, pid);
-
-          // attachmentCount (card 05PEkpwG) starts at 0; clients from before it omit it (read as 0).
-          allow create: if itemsCreateOk();
-          function itemsCreateOk() {
-            let d = request.resource.data;
-            return keysOk(d, ['title', 'type', 'stepId', 'status',
-                 'summary', 'source', 'createdBy', 'parentItemId', 'sourceRunId', 'claim', 'progress',
-                 'gate', 'triage', 'sendBackCount', 'costEur', 'order', 'updatedAt', 'lastEventId'],
-                 ['attachmentCount', 'shape', 'stepAt'])
-            && d.get('attachmentCount', 0) == 0
-            && d.get('stepAt', request.time) == request.time
-            && validItemText(d)
-            && d.updatedAt == request.time
-            && d.sendBackCount == 0
-            && d.costEur == 0
-            && d.triage == null
-            && d.progress == null
-            && ('shape' in d
-                // A new item waiting to be shaped (card st5INNZj).
-                ? unshapedAt0(d, get(projPath(wid, pid)).data)
-                  && newItemBy()
-                : ((arrivesAt(d, get(projPath(wid, pid)).data, 0)
-                    && newItemBy())
-                  || agentRaiseFinding(d)));
-          }
-
-          allow update: if validItemText(request.resource.data)
-            && request.resource.data.createdBy == resource.data.createdBy
-            // stepAt (item QjTTL): when the item reached its step, only ever set to now. The
-            // writes that may change it (moves) list it; clients from before it leave it alone.
-            && (request.resource.data.get('stepAt', null) == resource.data.get('stepAt', null)
-              || request.resource.data.stepAt == request.time)
-            // People and agents never overlap (see isActiveAgent), and every human path needs a
-            // role: the role routes the write, so neither side pays for the other's checks.
-            && (roleOf(wid) == '' ? agentUpdate() : humanUpdate(roleOf(wid)));
-
-          // Delete for good (item.deleted; also the Undo of quick capture): the item's creator or an
-          // organization admin, never an agent, and only while no agent holds it (Stop work first).
-          allow delete: if mayEraseItem(wid, pid, iid);
-
-          function validItemText(d) {
-            return str(d.title, 1, 300) && str(d.summary, 0, 20000)
-              && d.type in ['idea', 'request', 'bug', 'finding', 'task'] && d.order is number;
-          }
-
-          function humanCreate() {
-            let d = request.resource.data;
-            return canProject(wid, pid) && d.createdBy == me_('human') && d.type != 'finding'
-              && d.sourceRunId == null && strOrNull(d.parentItemId, 128)
-              && itemTracked(wid, d, ['item.created'], pid, iid);
-          }
-          // New work at the first step: a person's quick-add, or an agent's create_item (item
-          // DhsO9). createdBy routes it, so neither side pays for the other's checks.
-          function newItemBy() {
-            return request.resource.data.createdBy.type == 'agent'
-              ? agentCreate()
-              : humanCreate();
-          }
-          // An agent creates ordinary work only in a project of its own workspace that it may use
-          // (its projectIds) and that allows it (agentsMayCreateItems, off when absent). Its rate
-          // limit lives in the agent's session code.
-          function agentCreate() {
-            let d = request.resource.data;
-            return projectAgent(wid, pid)
-              && get(projPath(wid, pid)).data.get('agentsMayCreateItems', false) == true
-              && d.createdBy == me_('agent') && d.type != 'finding'
-              && d.sourceRunId == null && strOrNull(d.parentItemId, 128)
-              && itemTracked(wid, d, ['item.created'], pid, iid);
-          }
-          // Findings are suggestions (card TU5pDmzE): any agent allowed on the project raises one
-          // about an item of this project, holding it or not. It waits at the first step as
-          // `suggested` (no claim, no gate), so it is never work. sourceRunId is the agent's own
-          // current run on that item, or null when it does not hold it.
-          function agentRaiseFinding(d) {
-            let p = get(projPath(wid, pid)).data;
-            return projectAgent(wid, pid) && d.createdBy == me_('agent') && d.type == 'finding'
-              && d.status == 'suggested' && d.stepId == p.steps[0].id
-              && d.claim == null && d.gate == null
-              && d.parentItemId is string && exists(itemPath(wid, pid, d.parentItemId))
-              && (d.sourceRunId == null
-                  || (get(itemPath(wid, pid, d.parentItemId)).data.claim != null
-                      && get(itemPath(wid, pid, d.parentItemId)).data.claim.agentUid == me()
-                      && get(itemPath(wid, pid, d.parentItemId)).data.claim.runId == d.sourceRunId))
-              && itemTracked(wid, d, ['finding.raised'], pid, iid);
-          }
-
-          // ----- agent updates: only at agent steps -----
-
-          function agentUpdate() {
-            let d = request.resource.data;
-            let p = get(projPath(wid, pid)).data;
-            let r = resource.data;
-            let sh = unshaped(r);
-            // Each helper appears once (compile time grows with every inlined copy, see
-            // docs/DEPLOY.md "Rules size and compile time"): the routes below fold the shaping
-            // (unshaped, card st5INNZj, at any first step) and agent-step cases together.
-            return projectAgent(wid, pid) && hasStep(p, r.stepId)
-              // An attachment changes neither claim nor path: the files of an item the agent
-              // created (item DhsO9), right after create_item, while nobody holds it, at any step
-              // (the first step may be a people step); or a file on shaping or agent-step work.
-              && ((attachCounted(r)
-                  && ((r.claim == null && r.createdBy == me_('agent'))
-                    || (d.get('pathRev', 0) == r.get('pathRev', 0)
-                      && (sh || (stepOf(p, r.stepId).kind == 'agent'
-                        && (d.get('claim', null) != null
-                          || d.get('agentSendBacks', 0) == r.get('agentSendBacks', 0)))))))
-              || (d.get('pathRev', 0) != r.get('pathRev', 0)
-                ? agentPathUpdate(r, p, d)
-                : (sh || stepOf(p, r.stepId).kind == 'agent')
-                  // Releasing and completing clear the claim; claiming, heartbeats and progress
-                  // keep one (the expression budget, see humanUpdate).
-                  && (d.get('claim', null) == null
-                    // Only an agent send-back (card KLCTVnX8) changes the agent rounds.
-                    ? (!sh && d.get('agentSendBacks', 0) != r.get('agentSendBacks', 0)
-                      ? agentSendBackIt(r, p, d)
-                      : ((ownsClaim(r)
-              && touched(['claim', 'status', 'awaitingAnswer', 'costEur'])
-              && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
-              && d.costEur is number && d.costEur >= r.costEur
-              && (d.get('awaitingAnswer', null) == r.get('awaitingAnswer', null)
-                  || holdsForMyQuestion(d.get('awaitingAnswer', null)))
-              && itemTracked(wid, d, ['item.released'], pid, iid)) || (!sh && completeIt(r, p, d))))
-                    : (claimIt(r, p, sh, d) || heartbeatIt(r, d) || (
-                      // Park / unpark (item QjTTL): only the agent holding the item, under its current claim.
-                      // A park names that claim's run, so it is void once the claim moves on.
-                      ownsClaim(r) && touched(['parked'])
-              && d.updatedAt == request.time
-              && (d.parked == null
-                || (exactKeys(d.parked, ['runId', 'reason', 'at'])
-                  && d.parked.runId == r.claim.runId && str(d.parked.reason, 1, 200)
-                  && d.parked.at == request.time))
-              && itemTracked(wid, d, ['item.updated'], pid, iid))
-                      || statusIt(r, d) || (!sh && (ownsClaim(r) && touched(['progress', 'costEur'])
-              && d.updatedAt == request.time
-              && (d.progress == null || (exactKeys(d.progress, ['done', 'total'])
-                  && d.progress.done is int && d.progress.total is int
-                  && d.progress.done >= 0 && d.progress.total >= d.progress.done))
-              && d.costEur is number && d.costEur >= r.costEur
-              && itemTracked(wid, d, ['item.updated'], pid, iid)))))));
-          }
-          // Path writes by an agent (card st5INNZj): shaping the unshaped item it holds, or, on
-          // the item it holds at an agent step, changing agent steps ahead, asking for a people
-          // step change, or dropping a step the library no longer has.
-          function agentPathUpdate(r, p, d) {
-            let e = evOf(wid, d);
-            return d.get('pathRev', 0) == r.get('pathRev', 0) + 1 && ownsClaim(r)
-              && (unshaped(r)
-                // Shaping: the asks for people steps first, then the shape itself.
-                ? (e.type == 'item.shaped' ? shapeIt(r, p, 'agent', d)
-                  : e.type == 'item.pathChanged' && e.data.get('change', '') == 'ask'
-                    && pathAskIt(r, p, 'agent', e, d))
-                : stepOf(p, r.stepId).kind == 'agent' && e.type == 'item.pathChanged'
-                  && (e.data.get('change', '') == 'ask'
-                    ? pathAskIt(r, p, 'agent', e, d)
-                    : skipEditIt(r, p, 'agent', e, d)));
-          }
-          // An attachment was added in this same batch: the item's counter goes up by exactly one.
-          function attachCounted(r) {
-            let d = request.resource.data;
-            return changed(['attachmentCount', 'lastEventId'])
-              && d.attachmentCount is int && d.attachmentCount == r.get('attachmentCount', 0) + 1
-              && itemTracked(wid, d, ['attachment.added'], pid, iid)
-              && existsAfter(attPath(wid, pid, iid,
-                   evOf(wid, d).data.attachmentId));
-          }
-          function ownsClaim(r) { return r.claim != null && r.claim.agentUid == me(); }
-
-          // A paused agent claims nothing; a step limited to some agents is theirs alone.
-          // Shaping (card st5INNZj) is open to any agent on the project, as a 'shape' run.
-          function claimIt(r, p, shaping, d) {
-            let run = getAfter(runPath(wid, d.claim.runId));
-            return touched(['claim', 'status'])
-              && (shaping ? run.data.get('job', '') == 'shape' : agentAllowedAtStep(p, r.stepId))
-              && get(agentPath(wid, me())).data.get('pausedAt', null) == null
-              && r.status in ['queued', 'working']
-              && r.get('awaitingAnswer', null) == null
-              // On hold after Stop work, Go back (card BrK0r2FE) until someone presses Resume.
-              && r.get('workStopped', null) == null
-              && !(r.type == 'finding' && r.triage == null)
-              && (r.claim == null || r.claim.heartbeatAt < request.time - duration.value(10, 'm')
-                  || (r.claim.agentUid == me() && get(runPath(wid, r.claim.runId)).data.endedAt != null))
-              && exactKeys(d.claim, ['runId', 'agentUid', 'heartbeatAt'])
-              && d.claim.agentUid == me() && d.claim.heartbeatAt == request.time
-              && d.status == 'working' && d.updatedAt == request.time
-              && run != null && run.data.agentUid == me() && run.data.itemId == iid
-              && run.data.projectId == pid && run.data.stepId == r.stepId
-              && run.data.status == 'running'
-              && itemTracked(wid, d, ['item.claimed'], pid, iid);
-          }
-          // No event of its own: it must ride along with a run heartbeat (coalesced there).
-          function heartbeatIt(r, d) {
-            return ownsClaim(r) && changed(['claim'])
-              && exactKeys(d.claim, ['runId', 'agentUid', 'heartbeatAt'])
-              && d.claim.runId == r.claim.runId && d.claim.agentUid == me()
-              && d.claim.heartbeatAt == request.time
-              && getAfter(runPath(wid, r.claim.runId)).data.heartbeatAt == request.time;
-          }
-          // Released while waiting for people's answer (card zSzW3LXy): the hold names an open
-          // question this agent asked on this item. Until it is answered nobody claims the item.
-          function holdsForMyQuestion(h) {
-            let q = h == null ? null : getAfter(msgPath(wid, pid, iid, h.questionId));
-            return h is map
-              && (exactKeys(h, ['questionId', 'agentUid', 'at'])
-                  || (exactKeys(h, ['questionId', 'agentUid', 'at', 'reason'])
-                      && h.reason in ['tokenLimit']))
-              && h.questionId is string && h.agentUid == me() && h.at == request.time
-              && q != null && q.data.kind == 'question' && q.data.by == me_('agent')
-              && q.data.answered == false;
-          }
-          // Status (item AzveC): only the agent holding the item, under its current claim, at the
-          // server time; it replaces the previous status.
-          function statusIt(r, d) {
-            let s = d.statusUpdate;
-            return ownsClaim(r) && touched(['statusUpdate'])
-              && d.updatedAt == request.time
-              && exactKeys(s, ['runId', 'text', 'pct', 'at', 'by'])
-              && s.runId == r.claim.runId && s.by == me() && s.at == request.time
-              && str(s.text, 1, 200)
-              && (s.pct == null || (s.pct is int && s.pct >= 0 && s.pct <= 100))
-              && itemTracked(wid, d, ['item.updated'], pid, iid);
-          }
-          // Exactly one step forward; arriving at a human step opens a fresh gate.
-          function completeIt(r, p, d) {
-            return ownsClaim(r)
-              && touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur'])
-              && d.updatedAt == request.time
-              && d.costEur is number && d.costEur >= r.costEur
-              && nextOk(d, r, p)
-              && itemTracked(wid, d, ['item.completed'], pid, iid);
-          }
-
-          // Agent send-back (card KLCTVnX8, packages/shared/src/sendback.ts): the agent holding
-          // the item sends it back to an earlier agent step on its path, never across a people
-          // step on the path, at most 3 rounds until a person acts (resetRounds), with a reason
-          // (in the event; the action also leaves it as a note). Its run ends now. At most 12
-          // steps may lie between the target and the sender (the expression budget, see noGate).
-          function agentSendBackIt(r, p, d) {
-            let i = p.stepIndex.get(d.stepId, 99);
-            let j = p.stepIndex[r.stepId];
-            let between = p.steps[i + 1:j];
-            let n = j - i - 1;
-            return ownsClaim(r) && n <= 12
-              && touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'agentSendBacks'])
-              && d.agentSendBacks == r.get('agentSendBacks', 0) + 1 && d.agentSendBacks <= 3
-              && i < j && p.steps[i].id == d.stepId && p.steps[i].kind == 'agent'
-              && !(d.stepId in r.get('pathSkips', {}))
-              && d.status == 'queued' && d.claim == null && d.gate == null
-              && d.updatedAt == request.time && d.get('progress', null) == null
-              && d.costEur is number && d.costEur >= r.costEur
-              && noGate(between, n, r.get('gateSkips', {}))
-              && itemTracked(wid, d, ['item.sentBack'], pid, iid)
-              && str(evOf(wid, d).data.get('reason', ''), 1, 2000)
-              && getAfter(runPath(wid, r.claim.runId)).data.endedAt == request.time;
-          }
-          // Every step of the list `l` (n steps, n <= 12) is an agent step or a people step in g
-          // (skipped). Unrolled: rules have no loops. Each step costs ~17 expressions of the
-          // 1000-expression budget (rules/headroom.test.ts), hence the cap of 12 steps between.
-          function noGate(l, n, g) { return n <= 0 || (open1(l[0], g) && ((n <= 1 || (open1(l[1], g) && (n <= 2 || (open1(l[2], g) && (n <= 3 || (open1(l[3], g) && (n <= 4 || (open1(l[4], g) && (n <= 5 || (open1(l[5], g) && (n <= 6 || (open1(l[6], g) && ((n <= 7 || (open1(l[7], g) && (n <= 8 || (open1(l[8], g) && (n <= 9 || (open1(l[9], g) && (n <= 10 || (open1(l[10], g) && (n <= 11 || (open1(l[11], g) && true))))))))))))))))))))))))); }
-          function open1(s, g) { return s.kind == 'agent' || s.id in g; }
-
-          // ----- human updates -----
-
-          // The expression budget (card CZwdWD3H): Firestore stops evaluating a document's rules
-          // after 1000 expressions, shared by all its allow statements, and the paths of a ||
-          // chain are tried in order. So each write is routed, by a cheap test that every path of
-          // the other routes fails anyway, to the few paths that can match it; a path never pays
-          // for the ones it cannot be. Headroom is measured in rules/headroom.test.ts.
-          function humanUpdate(role) {
-            let d = request.resource.data;
-            let p = get(projPath(wid, pid)).data;
-            let r = resource.data;
-            // canProject(), with the role already read.
-            return (role in ['admin', 'owner'] || (role == 'member' && me() in p.memberUids))
-              // Path writes (card st5INNZj) bump pathRev; no other path below changes the path.
-              && (d.get('pathRev', 0) != r.get('pathRev', 0)
-                ? humanPathUpdate(r, p, d)
-              // Stop work / Resume are the only writes that change workStopped.
-              : d.get('workStopped', null) != r.get('workStopped', null)
-                ? (stopWorkIt(r, p, d) || (
-                  // Resume: the hold of Go back ends; agents may take the item again.
-                  d.get('workStopped', 'missing') == null
-              && r.get('workStopped', null) != null && r.workStopped.mode == 'back'
-              && r.status != 'stopped'
-              && touched(['workStopped'])
-              && d.updatedAt == request.time
-              && itemTracked(wid, d, ['item.resumed'], pid, iid)
-              && canStopWork(wid, p,
-                   evOf(wid, d).data.get('gateStepId', ''))))
-                // Only an item waiting at a gate can be decided on. A gate decision is the only
-                // write whose event has an approved / sentBack / stopped decision doc (same id: see
-                // the decisions rules); every other path needs an event of another type.
-                : r.status == 'waiting' && decisionOutcome() in ['approved', 'sentBack', 'stopped']
-                  ? decideIt(r, p, decisionOutcome())
-                  // "Ask for status" (item AzveC) is the only write that changes statusAsk; only
-                  // a worked item can be asked, so gate writes never pay for this check.
-                  : r.status != 'waiting' && d.get('statusAsk', null) != r.get('statusAsk', null)
-                    ? askStatusIt(r)
-                    : (humanEdit(r)
-              || (
-                // Add a suggestion to the first step (it arrives there like a new item), add it to its
-                // parent item, or dismiss it with a reason. Only canTriage() people.
-                r.type == 'finding' && r.triage == null && r.status == 'suggested'
-              && (
-                // Who may triage agent suggestions (card TU5pDmzE): admins, the project's creator, and the
-                // deciders of the first step when it is a gate. THE ONE PLACE for this rule; mirrored by
-                // canTriage() in packages/shared/src/suggestions.ts (the UI) — change both together.
-                isAdmin(wid) || p.createdBy == me()
-        || (p.steps[0].kind == 'human' && me() in p.steps[0].gate.deciderUids))
-              && touched(['triage', 'type', 'stepId', 'stepAt', 'status', 'gate', 'claim', 'shape'])
-              && d.updatedAt == request.time
-              && exactKeys(d.triage, ['outcome', 'reason', 'byUid', 'at'])
-              && d.triage.byUid == me() && d.triage.at == request.time
-              && str(d.triage.reason, 0, 2000)
-              && ((d.triage.outcome == 'intake' && d.type in ['idea', 'request', 'bug', 'task']
-                    && ('shape' in d ? unshapedAt0(d, p) : arrivesAt(d, p, 0)))
-                  || (d.triage.outcome in ['addedToItem', 'dismissed'] && d.type == 'finding'
-                    && d.status == 'stopped' && d.stepId == r.stepId
-                    && d.gate == null && d.claim == null && !('shape' in d)
-                    && (d.triage.outcome == 'addedToItem' || d.triage.reason.size() >= 10)))
-              && itemTracked(wid, d, ['finding.triaged'], pid, iid)) || relocateIt(r, p)
-              || releaseStaleIt(r) || unholdIt(r)
-              || (
-                // Revoking an agent gives back the items it held (same batch; see the runs rules).
-                isAdmin(wid) && r.claim != null
-              && getAfter(agentPath(wid, r.claim.agentUid)).data.revokedAt != null
-              && touched(['claim', 'status'])
-              && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
-              && docTracked(wid, d, ['agent.revoked', 'agent.rotated'])) || attachCounted(r)
-              || (
-                // Move to step (card O2Ehb9CG): an open item nobody holds goes to another step, arriving
-                // like a new item. Anyone on the project may send it back to an earlier step; only an
-                // admin may move it forward (that skips the gates in between).
-                touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'agentSendBacks'])
-              && roundsReset(r)
-              && d.updatedAt == request.time
-              && r.status in ['queued', 'waiting'] && r.claim == null
-              && r.get('workStopped', null) == null
-              && hasStep(p, r.stepId) && hasStep(p, d.stepId) && d.stepId != r.stepId
-              && arrivesAt(d, p, p.stepIndex[d.stepId])
-              && notSkipped(d, r, p)
-              && (p.stepIndex[d.stepId] < p.stepIndex[r.stepId] || isAdmin(wid))
-              && itemTracked(wid, d, ['item.moved'], pid, iid)) || (
-                // Archive: the item's creator or an admin stops an open item nobody holds, without a
-                // decision. Restore (Undo) is the same people, back to a fresh arrival at the same step.
-                touched(['status', 'claim', 'gate', 'archivedAt'])
-              && d.updatedAt == request.time
-              && r.status in ['queued', 'waiting'] && r.claim == null
-              && r.get('archivedAt', null) == null
-              && d.status == 'stopped' && d.claim == null && d.gate == null
-              && d.archivedAt == request.time
-              && (r.createdBy == me_('human') || isAdmin(wid))
-              && itemTracked(wid, d, ['item.archived'], pid, iid))
-              || (touched(['status', 'claim', 'gate', 'archivedAt', 'stepAt'])
-              && d.updatedAt == request.time
-              // Any stopped item: archived in bulk, or rejected at a gate (card lvPPSnV2).
-              && r.status == 'stopped' && r.get('workStopped', null) == null
-              && r.get('erasing', false) != true
-              && d.archivedAt == null
-              && hasStep(p, r.stepId) && arrivesAt(d, p, p.stepIndex[r.stepId])
-              && d.stepId == r.stepId
-              && (r.createdBy == me_('human') || isAdmin(wid))
-              && itemTracked(wid, d, ['item.restored'], pid, iid)) || (
-                // Delete for good, step 1: flag the item (stopped, archived) so its history can be erased
-                // in chunks. The creator or an admin, nobody holding it. Idempotent.
-                touched(['erasing', 'status', 'claim', 'gate', 'archivedAt'])
-              && d.updatedAt == request.time
-              && r.claim == null
-              && d.erasing == true
-              && d.status == 'stopped' && d.claim == null && d.gate == null
-              && d.archivedAt == request.time
-              && (r.createdBy == me_('human') || isAdmin(wid))
-              && itemTracked(wid, d, ['item.erasing'], pid, iid))));
-          }
-          // Ask for status (item AzveC): anyone on the project, on an item an agent is actively
-          // working (claimed with a recent heartbeat, not parked, not waiting for an answer), at
-          // most once per 2 minutes. It names the claim's run, so it is void once the claim moves.
-          function askStatusIt(r) {
-            let a = request.resource.data.statusAsk;
-            let prev = r.get('statusAsk', null);
-            return changed(['statusAsk', 'lastEventId'])
-              && r.status == 'working' && r.claim != null
-              && r.claim.heartbeatAt > request.time - duration.value(10, 'm')
-              && (r.get('parked', null) == null || r.parked.runId != r.claim.runId)
-              && r.get('awaitingAnswer', null) == null && r.get('workStopped', null) == null
-              && exactKeys(a, ['runId', 'byUid', 'at'])
-              && a.runId == r.claim.runId && a.byUid == me() && a.at == request.time
-              && (prev == null || prev.runId != r.claim.runId
-                  || prev.at < request.time - duration.value(2, 'm'))
-              && trackedFor(wid, request.resource.data.lastEventId, ['item.updated'], pid, iid);
-          }
-          // The outcome of the decision doc written in this batch under the event's id, or ''.
-          function decisionOutcome() {
-            let dec = getAfter(decisionPath(wid, pid, request.resource.data.lastEventId));
-            return dec == null ? '' : dec.data.outcome;
-          }
-          // Stop work (card BrK0r2FE): someone canStopWork() ends the agent's work on an item at
-          // an agent step. The claim is cleared and the claimed run ends as stopped in the same
-          // batch (or had already ended). Go back: the item stays queued at its step, on hold
-          // (workStopped) until Resume; cancel: the item is stopped for good.
-          function stopWorkIt(r, p, d) {
-            let w = d.get('workStopped', null);
-            return w != null && r.get('workStopped', null) == null && r.claim != null
-              // A shaping run (card st5INNZj) may sit at a first step that is a people step.
-              && hasStep(p, r.stepId) && (unshaped(r) || stepOf(p, r.stepId).kind == 'agent')
-              && r.status in ['queued', 'working']
-              && touched(['claim', 'status', 'workStopped', 'costEur'])
-              && d.claim == null && d.updatedAt == request.time
-              && d.costEur is number && d.costEur >= r.costEur
-              && w is map && exactKeys(w, ['mode', 'byUid', 'at', 'reason', 'runId'])
-              && w.byUid == me() && w.at == request.time && str(w.reason, 0, 500)
-              && w.runId == r.claim.runId
-              && ((w.mode == 'back' && d.status == 'queued')
-                  || (w.mode == 'cancel' && d.status == 'stopped'))
-              && itemTracked(wid, d, ['item.workStopped'], pid, iid)
-              && stopEventOk(p, evOf(wid, d), w, r.claim.runId)
-              && getAfter(runPath(wid, r.claim.runId)).data.endedAt != null;
-          }
-          function stopEventOk(p, e, w, runId) {
-            return e.runId == runId && e.data.get('mode', '') == w.mode
-              && canStopWork(wid, p, e.data.get('gateStepId', ''));
-          }
-          // The hold ends when its question is answered (in the answer's batch), or when an
-          // admin lets agents take the item anyway (the question stays open).
-          function unholdIt(r) {
-            let d = request.resource.data;
-            let h = r.get('awaitingAnswer', null);
-            let a = getAfter(msgPath(wid, pid, iid, d.lastEventId));
-            return d.get('awaitingAnswer', 'missing') == null
-              && ((changed(['awaitingAnswer', 'agentSendBacks', 'lastEventId']) && roundsReset(r)
-                    && itemTracked(wid, d, ['decision.answered'], pid, iid)
-                    && a != null && a.data.kind == 'answer'
-                    && (h == null || a.data.replyTo == h.questionId))
-                  || (isAdmin(wid) && h != null
-                    && touched(['awaitingAnswer'])
-                    && d.updatedAt == request.time
-                    && itemTracked(wid, d, ['item.updated'], pid, iid)));
-          }
-          // An admin clears a claim that has had no heartbeat for 10 minutes. The run is ended
-          // in the same batch (see the runs rules).
-          function releaseStaleIt(r) {
-            let d = request.resource.data;
-            return isAdmin(wid) && r.claim != null
-              && r.claim.heartbeatAt < request.time - duration.value(10, 'm')
-              && touched(['claim', 'status'])
-              && d.claim == null && d.status == 'queued' && d.updatedAt == request.time
-              && getAfter(runPath(wid, r.claim.runId)).data.status == 'released'
-              && itemTracked(wid, d, ['item.released'], pid, iid);
-          }
-          // The process editor removed this item's step in the same batch: the item lands on an
-          // earlier step (it redoes work, no decision is skipped), or on the next one when the
-          // removed step was an agent step. Arriving at a human step opens a fresh gate.
-          function relocateIt(r, p) {
-            let d = request.resource.data;
-            let pa = getAfter(projPath(wid, pid)).data;
-            return touched(['stepId', 'stepAt', 'status', 'claim', 'gate'])
-              && d.updatedAt == request.time
-              && r.status in ['queued', 'working', 'waiting']
-              && hasStep(p, r.stepId) && !hasStep(pa, r.stepId)
-              && hasStep(p, d.stepId) && hasStep(pa, d.stepId)
-              && (p.stepIndex[d.stepId] < p.stepIndex[r.stepId]
-                  || (stepOf(p, r.stepId).kind == 'agent'
-                      && (p.stepIndex[d.stepId] == p.stepIndex[r.stepId] + 1
-                        // past steps the item skips (card st5INNZj)
-                        || gapOk(p, p.stepIndex[r.stepId], p.stepIndex[d.stepId], r.get('pathSkips', {}), r.get('gateSkips', {})))))
-              && notSkipped(d, r, p)
-              && arrivesAt(d, pa, pa.stepIndex[d.stepId])
-              && itemTracked(wid, d, ['item.moved'], pid, iid);
-          }
-          // A person acting on the item may reset the agent send-back rounds (card KLCTVnX8).
-          function roundsReset(r) {
-            return request.resource.data.get('agentSendBacks', 0) in [0, r.get('agentSendBacks', 0)];
-          }
-          // Text and priority only. Never the step, status, gate, claim or counters.
-          function humanEdit(r) {
-            let d = request.resource.data;
-            return touched(['title', 'summary', 'type', 'order'])
-              && d.updatedAt == request.time
-              && (d.type == 'finding') == (r.type == 'finding')
-              // Edit after adding (card mpWuccjl): the wording (title, summary, type) is changed by
-              // the item's creator or an admin; moving it in the list (order) is any member's.
-              && (d.title == r.title && d.summary == r.summary && d.type == r.type
-                  || r.createdBy == me_('human') || isAdmin(wid))
-              && (itemTracked(wid, d, ['item.updated'], pid, iid)
-                  || addFindingToItem(d));
-          }
-          // "Add to this item": the triage event of a finding may also append to its parent.
-          function addFindingToItem(d) {
-            let e = evOf(wid, d);
-            return touched(['summary'])
-              && docTracked(wid, d, ['finding.triaged'])
-              && e.projectId == pid && e.data.parentItemId == iid;
-          }
-
-          // ----- per-item paths (card st5INNZj) -----
-
-          // A person's path write, routed by its event.
-          function humanPathUpdate(r, p, d) {
-            let e = evOf(wid, d);
-            return d.get('pathRev', 0) == r.get('pathRev', 0) + 1
-              && (e.type == 'item.shaped'
-                ? unshaped(r) && r.claim == null && shapeIt(r, p, 'human', d)
-                : e.type == 'item.pathChanged'
-                  ? (e.data.get('change', '') == 'ask'
-                    ? pathAskIt(r, p, 'human', e, d)
-                    : skipEditIt(r, p, 'human', e, d))
-                  : pathDecideIt(r, p, e, d));
-          }
-          function openItem(r) { return r.status in ['queued', 'working', 'waiting']; }
-          // Shaping: only agent steps are skipped (gateSkips is not among the changed keys). A
-          // people step's skip is a pending request, asked in its own write before the shape
-          // (pathAskIt): it stays on the path until a decider approves. The item arrives at the
-          // first step of its path.
-          function shapeIt(r, p, type, d) {
-            let s = d.get('shape', null);
-            let k = d.get('pathSkips', null);
-            return touched(['stepId', 'stepAt', 'status', 'claim', 'gate', 'progress', 'costEur', 'shape',
-                            'pathSkips', 'pathRev'])
-              && d.updatedAt == request.time && openItem(r) && r.get('archivedAt', null) == null
-              && s is map && exactKeys(s, ['by', 'at', 'note']) && s.by == me_(type)
-              && s.at == request.time && str(s.note, 0, 300)
-              && k is map && k.size() <= 30
-              && hasStep(p, d.stepId) && !skipped(stepOf(p, d.stepId), k, {})
-              && gapOk(p, -1, p.stepIndex[d.stepId], k, {})
-              && arrivesAt(d, p, p.stepIndex[d.stepId])
-              && d.costEur is number && d.costEur >= r.costEur && (type == 'agent' || d.costEur == r.costEur)
-              && d.get('progress', null) == null
-              && itemTracked(wid, d, ['item.shaped'], pid, iid)
-              && (type == 'human'
-                || getAfter(runPath(wid, r.claim.runId)).data.endedAt == request.time);
-          }
-          // One step ahead is skipped (with a reason) or put back. An agent step (pathSkips) by
-          // the agent holding the item or any person; a people step (gateSkips) only by one of
-          // its deciders. The other map stays as it is (an item from before paths gets an empty
-          // pathSkips with its first change).
-          function skipEditIt(r, p, type, e, d) {
-            let st = e.data.get('stepId', '');
-            let gate = stepOf(p, st).kind == 'human';
-            let after = gate ? d.get('gateSkips', {}) : d.get('pathSkips', {});
-            return touched(['pathSkips', 'gateSkips', 'pathRev'])
-              && d.updatedAt == request.time && openItem(r) && !unshaped(r)
-              && hasStep(p, st) && p.stepIndex[st] > p.stepIndex[r.stepId]
-              && d.get('pathSkips', null) is map
-              && after is map
-              && after.diff(gate ? r.get('gateSkips', {}) : r.get('pathSkips', {})).affectedKeys() == [st].toSet()
-              && (gate
-                ? type == 'human' && me() in stepOf(p, st).gate.deciderUids
-                  && d.pathSkips == r.get('pathSkips', {})
-                : d.get('gateSkips', {}) == r.get('gateSkips', {}))
-              && (e.data.get('change', '') == 'skip'
-                ? st in after && str(after[st], 0, 300)
-                : e.data.get('change', '') == 'unskip' && !(st in after))
-              && itemTracked(wid, d, ['item.pathChanged'], pid, iid);
-          }
-          // A pending request to put one people step ahead on the path or skip it. An agent may
-          // not ask again after a decider refused that step on this item.
-          function pathAskIt(r, p, type, e, d) {
-            let st = e.data.get('stepId', '');
-            let before = r.get('pathRequests', {});
-            let q = d.get('pathRequests', {}).get(st, null);
-            return touched(['pathRequests', 'pathRev'])
-              && d.updatedAt == request.time && openItem(r)
-              && d.pathRequests is map && d.pathRequests.diff(before).affectedKeys() == [st].toSet()
-              && !(st in before)
-              && hasStep(p, st) && stepOf(p, st).kind == 'human'
-              && p.stepIndex[st] > p.stepIndex[r.stepId]
-              && q is map && exactKeys(q, ['op', 'by', 'reason', 'at'])
-              && q.by == me_(type) && q.at == request.time && str(q.reason, 10, 1000)
-              && q.op == (st in r.get('gateSkips', {}) ? 'add' : 'drop')
-              && (type == 'human' || !(st in r.get('pathRefused', [])))
-              && itemTracked(wid, d, ['item.pathChanged'], pid, iid);
-          }
-          // Any one decider of the step settles a request: refuse (kept; agents may not ask
-          // again), approve a skip or an addition of a step ahead, or approve the skip of the
-          // gate the item waits at (it moves on along its path).
-          function pathDecideIt(r, p, e, d) {
-            let st = e.data.get('stepId', '');
-            let q = r.get('pathRequests', {}).get(st, null);
-            let refused = r.get('pathRefused', []);
-            let before = r.get('gateSkips', {});
-            let after = d.get('gateSkips', {});
-            return q != null && hasStep(p, st) && stepOf(p, st).kind == 'human'
-              && me() in stepOf(p, st).gate.deciderUids
-              && d.get('pathRequests', {}).diff(r.pathRequests).affectedKeys() == [st].toSet()
-              && !(st in d.get('pathRequests', {}))
-              && d.updatedAt == request.time
-              && itemTracked(wid, d, ['item.pathChangeDecided'], pid, iid)
-              && (e.data.get('outcome', '') == 'refused'
-                ? touched(['pathRequests', 'pathRefused', 'pathRev'])
-                  && d.get('pathRefused', []) == (st in refused ? refused : refused.concat([st]))
-                : e.data.get('outcome', '') == 'approved' && openItem(r)
-                  && d.get('pathSkips', null) is map && d.pathSkips == r.get('pathSkips', {})
-                  && after is map && after.diff(before).affectedKeys() == [st].toSet()
-                  && (q.op == 'drop' ? st in after && str(after[st], 0, 300) : !(st in after))
-                  && (p.stepIndex[st] > p.stepIndex[r.stepId]
-                    ? touched(['pathSkips', 'gateSkips', 'pathRequests', 'pathRev'])
-                    : q.op == 'drop' && st == r.stepId && r.status == 'waiting'
-                      && touched(['stepId', 'stepAt', 'status', 'gate', 'claim', 'pathSkips', 'gateSkips',
-                                  'pathRequests', 'pathRev'])
-                      && movesOver(d, r, p, p.stepIndex[r.stepId], d.pathSkips, after)));
-          }
-
-          // ----- decisions at a human gate -----
-
-          // `outcome` is the decision doc's (waitingUpdate): each path checks it again
-          // (decisionWritten), so it only picks the paths that can match.
-          function decideIt(r, p, outcome) {
-            let d = request.resource.data;
-            return hasStep(p, r.stepId) && stepOf(p, r.stepId).kind == 'human'
-              && r.status == 'waiting' && r.gate != null && r.gate.stepId == r.stepId
-              // Nobody decides an item before it is shaped (card st5INNZj).
-              && !unshaped(r)
-              && me() in stepOf(p, r.stepId).gate.deciderUids
-              && !(me() in r.gate.approvals) && !(me() in r.gate.rejections)
-              && request.resource.data.updatedAt == request.time
-              && (outcome == 'approved'
-                ? ((
-                  // Record an approval without moving (the rule is not yet satisfied, or not chosen).
-                  touched(['gate'])
-              && exactKeys(d.gate, ['stepId', 'approvals', 'rejections'])
-              && d.gate.stepId == r.gate.stepId && d.gate.rejections == r.gate.rejections
-              && addsOnlyMe(d.gate.approvals, r.gate.approvals)
-              && myMark(d.gate.approvals[me()], 0)
-              && decisionWritten('approved')) || (
-                  // Pass the gate: approvals so far plus mine must satisfy the step's rule.
-                  touched(['stepId', 'stepAt', 'status', 'gate', 'claim', 'agentSendBacks'])
-              && roundsReset(r)
-              && gateSatisfied(stepOf(p, r.stepId).gate,
-                   r.gate.approvals.keys().toSet().union([me()].toSet()))
-              && nextOk(d, r, p)
-              && decisionWritten('approved')))
-                : ((
-                  // Record a rejection without moving (majority policy, not yet a majority).
-                  touched(['gate'])
-              && exactKeys(d.gate, ['stepId', 'approvals', 'rejections'])
-              && d.gate.stepId == r.gate.stepId && d.gate.approvals == r.gate.approvals
-              && addsOnlyMe(d.gate.rejections, r.gate.rejections)
-              && myMark(d.gate.rejections[me()], 10)
-              && (decisionWritten('sentBack') || decisionWritten('stopped')))
-                  || (outcome == 'sentBack'
-                    ? sendBackMove(r, p)
-                    : (touched(['status', 'gate', 'claim'])
-              && rejectionsOk(r, p)
-              && d.status == 'stopped' && d.gate == null && d.claim == null
-              && decisionWritten('stopped')))));
-          }
-          function decisionWritten(outcome) {
-            let dec = getAfter(decisionPath(wid, pid, request.resource.data.lastEventId));
-            return dec != null && dec.data.itemId == iid && dec.data.outcome == outcome
-              && dec.data.byUid == me()
-              && trackedFor(wid, request.resource.data.lastEventId, ['decision.' + outcome], pid, iid);
-          }
-          function myMark(m, minReason) {
-            return exactKeys(m, ['at', 'rationale']) && m.at == request.time
-              && str(m.rationale, minReason, 4000);
-          }
-          function addsOnlyMe(after, before) {
-            return after.diff(before).affectedKeys() == [me()].toSet();
-          }
-
-          function rejectionsOk(r, p) {
-            return rejectionsSuffice(stepOf(p, r.stepId).gate,
-                     r.gate.rejections.keys().toSet().union([me()].toSet()));
-          }
-          // Send back to an earlier step; the claim is cleared and sendBackCount increments.
-          function sendBackMove(r, p) {
-            let d = request.resource.data;
-            return touched(['stepId', 'stepAt', 'status', 'gate', 'claim', 'sendBackCount', 'agentSendBacks'])
-              && roundsReset(r)
-              && rejectionsOk(r, p)
-              && hasStep(p, d.stepId) && p.stepIndex[d.stepId] < p.stepIndex[r.stepId]
-              && arrivesAt(d, p, p.stepIndex[d.stepId])
-              && notSkipped(d, r, p)
-              && d.sendBackCount == r.sendBackCount + 1
-              && decisionWritten('sentBack');
-          }
-
-          // ---------- attachments (immutable) ----------
-
-          match /attachments/{aid} {
-            allow read: if projectReader(wid, pid);
-            allow create: if attachmentsCreateOk();
-            function attachmentsCreateOk() {
-              let d = request.resource.data;
-              return exactKeys(d, ['kind', 'name', 'content', 'url', 'bytes',
-                   'runId', 'by', 'at', 'lastEventId'])
-              && str(d.name, 1, 200)
-              && d.at == request.time
-              && d.bytes is int
-              && d.bytes >= 0 && d.bytes <= 921600
-              && ((d.kind == 'link' && d.content == null
-                    && str(d.url, 8, 2048)
-                    && d.url.matches('^https?://.+'))
-                  || (d.kind in ['html', 'markdown', 'text', 'image', 'pdf']
-                    && d.url == null
-                    && str(d.content, 0, 921600)))
-              && itemTracked(wid, d, ['attachment.added'], pid, iid)
-              && ((canProject(wid, pid) && d.by == me_('human')
-                    && d.runId == null)
-                  || (projectAgent(wid, pid) && d.by == me_('agent')
-                    && (d.runId == null
-                      // An item the agent created (item DhsO9), while nobody holds it.
-                      ? get(itemPath(wid, pid, iid)).data.createdBy == me_('agent')
-                        && get(itemPath(wid, pid, iid)).data.claim == null
-                      : get(itemPath(wid, pid, iid)).data.claim.agentUid == me()
-                        && get(itemPath(wid, pid, iid)).data.claim.runId == d.runId)));
-            }
-            allow update: if false;
-            // Erased together with its item.
-            allow delete: if eraseWith(wid, pid, iid);
-          }
-
-          // ---------- messages ----------
-
-          match /messages/{mid} {
-            allow read: if projectReader(wid, pid);
-            allow create: if messagesCreateOk();
-            function messagesCreateOk() {
-              let d = request.resource.data;
-              return exactKeys(d, ['workspaceId', 'projectId', 'itemId', 'by',
-                   'kind', 'text', 'at', 'answered', 'replyTo', 'lastEventId'])
-              && d.workspaceId == wid
-              && d.projectId == pid
-              && d.itemId == iid
-              && d.at == request.time
-              && d.answered == false
-              && str(d.text, 1, 8000)
-              && ((canProject(wid, pid) && d.by == me_('human')
-                && ((d.kind == 'note' && d.replyTo == null
-                      && itemTracked(wid, d,
-                           ['message.posted', 'decision.sentBack', 'decision.stopped'], pid, iid))
-                    || (d.kind == 'note' && d.replyTo == null
-                      && itemTracked(wid, d, ['item.workStopped'], pid, iid))
-                    || (d.kind == 'answer' && mid == d.lastEventId && d.replyTo is string
-                      && get(msgPath(wid, pid, iid, d.replyTo)).data.kind == 'question'
-                      && getAfter(msgPath(wid, pid, iid, d.replyTo)).data.answered == true
-                      && itemTracked(wid, d, ['decision.answered'], pid, iid)))) || (projectAgent(wid, pid) && d.by == me_('agent')
-                && d.kind in ['question', 'note'] && d.replyTo == null
-                && get(itemPath(wid, pid, iid)).data.claim.agentUid == me()
-                && itemTracked(wid, d, ['message.posted', 'item.sentBack'], pid, iid)));
-            }
-            // Marking a question answered happens in the answer's batch.
-            allow update: if canProject(wid, pid)
-              && resource.data.kind == 'question' && resource.data.answered == false
-              && changed(['answered', 'lastEventId'])
-              && request.resource.data.answered == true
-              && trackedFor(wid, request.resource.data.lastEventId, ['decision.answered'], pid, iid)
-              && getAfter(msgPath(wid, pid, iid, request.resource.data.lastEventId)).data.replyTo == mid;
-            // Erased together with its item.
-            allow delete: if eraseWith(wid, pid, iid);
-
-          }
-        }
-      }
-    }
-
-    // ---------- cross-project queries (admins; members one project at a time) ----------
-    // "Needs you" questions and decision insights query across projects with
-    // where('workspaceId', '==', wid). workspaceId is pinned to the path on create.
-
-    // Admins may query the whole organization; a member must also pin projectId to one project
-    // they are on.
-    match /{path=**}/messages/{mid} {
-      allow read: if isAdmin(resource.data.workspaceId)
-        || isProjectMember(resource.data.workspaceId, resource.data.projectId);
-    }
-    match /{path=**}/decisions/{did} {
-      allow read: if isAdmin(resource.data.workspaceId)
-        || isProjectMember(resource.data.workspaceId, resource.data.projectId);
     }
   }
 }

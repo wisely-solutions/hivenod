@@ -16,7 +16,8 @@ import { db } from '../lib/db';
  * Export of one organization as a single JSON file (Inbox item OE8Fm, slice 7), built in the
  * admin's browser from what the rules let an admin read, so the Projects and Calendar data can be
  * kept before it is deleted (slices 10-11). `scripts/export-org.mjs` writes the same format with the
- * Admin SDK and also covers what no browser may read (busy blocks, agentHomes).
+ * Admin SDK and also covers what no browser may read (projects, runs, calendar, busy blocks,
+ * agentHomes).
  *
  * Streaming: the file is written document by document into a list of text parts (never one big
  * string), collections are read in pages, and the page reports progress.
@@ -45,22 +46,16 @@ interface Node {
 }
 const leaf = (name: string): Node => ({ name, children: [] });
 
-/** The tree, in the order the file lists it. Mirrored by scripts/export-org.mjs. */
+/**
+ * The tree, in the order the file lists it. Projects, runs and the calendar were removed (OE8Fm
+ * slice 11): no browser may read them any more, so only scripts/export-org.mjs (Admin SDK) still
+ * exports their old data.
+ */
 export const EXPORT_TREE: Node[] = [
   leaf('members'),
   leaf('groups'),
   leaf('agents'),
   leaf('events'),
-  { name: 'runs', children: [leaf('log')] },
-  {
-    name: 'projects',
-    children: [
-      { name: 'items', children: [leaf('attachments'), leaf('messages')] },
-      leaf('decisions'),
-      leaf('stepProposals'),
-    ],
-  },
-  leaf('calendar'),
 ];
 
 export interface ExportProgress {
@@ -134,7 +129,7 @@ export async function exportOrg(
   // Not readable in a browser: the operator script covers them.
   w(',"busy":null,"agentHomes":null');
   w(
-    `,"notes":["busy blocks and agentHomes are not readable by a browser; scripts/export-org.mjs exports them"]`,
+    `,"notes":["projects, runs, calendar, busy blocks and agentHomes are not readable by a browser; scripts/export-org.mjs exports them"]`,
   );
   w(`,"counts":${JSON.stringify(counts)}}`);
   return { parts, counts, total };

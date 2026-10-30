@@ -19,17 +19,14 @@ function fakeStore(
 
 describe('exportOrg', () => {
   const base = 'workspaces/w1';
-  it('writes a valid JSON file with header, nested documents and counts', async () => {
+  it('writes a valid JSON file with header, documents and counts; never the removed Projects data', async () => {
     const store = fakeStore(
       {
+        [`${base}/members`]: [{ id: 'u1', data: { name: 'Ana' } }],
+        [`${base}/agents`]: [{ id: 'a1', data: { name: 'Hive' } }],
+        [`${base}/events`]: [{ id: 'e1', data: { type: 'agent.created' } }],
         [`${base}/projects`]: [{ id: 'p1', data: { name: 'Hive' } }],
-        [`${base}/projects/p1/items`]: [{ id: 'i1', data: { title: 'A' } }],
-        [`${base}/projects/p1/items/i1/attachments`]: [
-          { id: 'a1', data: { kind: 'html', content: '<p>x</p>' } },
-        ],
-        [`${base}/projects/p1/decisions`]: [{ id: 'd1', data: { outcome: 'approved' } }],
         [`${base}/runs`]: [{ id: 'r1', data: { status: 'done' } }],
-        [`${base}/runs/r1/log`]: [{ id: '0', data: { text: 'hi' } }],
         [`${base}/calendar`]: [{ id: 'u_google_e1', data: { title: 'Call' } }],
       },
       { name: 'Org' },
@@ -40,19 +37,13 @@ describe('exportOrg', () => {
     expect(json.version).toBe(1);
     expect(json.workspaceId).toBe('w1');
     expect(json.exportedAt).toBe('2026-10-30T10:00:00.000Z');
-    expect(json.projects[0].items[0].attachments[0].data.content).toBe('<p>x</p>');
-    expect(json.projects[0].decisions[0].id).toBe('d1');
-    expect(json.runs[0].log[0].data.text).toBe('hi');
-    expect(json.calendar).toHaveLength(1);
+    expect(json.members[0].data.name).toBe('Ana');
+    expect(json.projects).toBeUndefined();
+    expect(json.runs).toBeUndefined();
+    expect(json.calendar).toBeUndefined();
     expect(json.busy).toBeNull();
-    expect(json.counts).toMatchObject({
-      projects: 1,
-      items: 1,
-      attachments: 1,
-      calendar: 1,
-      log: 1,
-    });
-    expect(r.total).toBe(1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 0);
+    expect(json.counts).toEqual({ workspace: 1, members: 1, agents: 1, events: 1 });
+    expect(r.total).toBe(4);
   });
 
   it('pages through large collections and reports progress', async () => {

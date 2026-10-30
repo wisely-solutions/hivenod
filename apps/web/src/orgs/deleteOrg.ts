@@ -43,24 +43,6 @@ async function empty(
   }
 }
 
-/**
- * Empties the organization's calendar and, with each event, its busy block in the member's own
- * store (users/{uid}/busy/{wid}_{eventId}): the rules let the deleting admin remove those while the
- * organization is flagged (Calendar itself was removed in slice 5; its old data still goes with
- * the organization). An event id starts with its member's uid (no underscore in a uid). A
- * block that is already gone is deleted again harmlessly, so a resumed walk is safe.
- */
-async function purgeCalendar(store: TreeStore, wid: string, count: { n: number }) {
-  const col = `${paths.workspace(wid)}/calendar`;
-  for (;;) {
-    const ids = await store.list(col, BATCH / 2);
-    if (ids.length === 0) return;
-    const blocks = ids.map((id) => `users/${id.split('_')[0]}/busy/${wid}_${id}`);
-    await store.remove([...blocks, ...ids.map((id) => `${col}/${id}`)]);
-    count.n += ids.length;
-  }
-}
-
 /** Deletes everything in the organization, then its document. Returns how many documents went. */
 export async function purgeOrg(store: TreeStore, wid: string): Promise<number> {
   const base = paths.workspace(wid);
@@ -68,26 +50,8 @@ export async function purgeOrg(store: TreeStore, wid: string): Promise<number> {
   const flat = (name: string) => empty(store, `${base}/${name}`, undefined, count);
 
   await flat('agents');
-  await empty(store, `${base}/runs`, (run) => empty(store, `${run}/log`, undefined, count), count);
-  await empty(
-    store,
-    `${base}/projects`,
-    async (project) => {
-      await empty(
-        store,
-        `${project}/items`,
-        async (item) => {
-          await empty(store, `${item}/attachments`, undefined, count);
-          await empty(store, `${item}/messages`, undefined, count);
-        },
-        count,
-      );
-      await empty(store, `${project}/decisions`, undefined, count);
-      await empty(store, `${project}/stepProposals`, undefined, count);
-    },
-    count,
-  );
-  await purgeCalendar(store, wid, count);
+  // Projects, runs and the calendar were removed (OE8Fm slice 11): no rule lets a browser read
+  // them any more, and scripts/delete-projects-data.mjs deletes their old data.
   for (const name of ['events', 'groups', 'invites', 'notified', 'members']) await flat(name);
   await store.remove([base]);
   return count.n + 1;
@@ -107,25 +71,17 @@ export const firestoreStore: TreeStore = {
 /** What will go, for the confirm screen. */
 export interface OrgCounts {
   members: number;
-  projects: number;
-  items: number;
   /** Agents that can still connect: their tokens stop working. */
   agents: number;
 }
 
 export async function countOrg(wid: string, members: number): Promise<OrgCounts> {
   const base = paths.workspace(wid);
-  const projects = await getDocs(collection(db, `${base}/projects`));
-  const perProject = await Promise.all(
-    projects.docs.map((p) => getCountFromServer(collection(db, `${base}/projects/${p.id}/items`))),
-  );
   const agents = await getCountFromServer(
     query(collection(db, `${base}/agents`), where('revokedAt', '==', null)),
   );
   return {
     members,
-    projects: projects.size,
-    items: perProject.reduce((sum, c) => sum + c.data().count, 0),
     agents: agents.data().count,
   };
 }

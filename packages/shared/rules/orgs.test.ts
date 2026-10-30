@@ -1,115 +1,26 @@
 /**
- * Organizations (card aZYPm9bf): roles, the last-admin guard, many orgs per person, and project
- * privacy. A plain member sees no project until an admin adds them; admins see everything.
+ * Organizations (card aZYPm9bf): roles, the last-admin guard, many orgs per person.
  */
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  setDoc,
-  updateDoc,
-  where,
-} from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { describe, expect, it } from 'vitest';
 import {
   acceptInvite,
   createInvite,
-  createProject,
-  createItem,
   createWorkspace,
   leaveOrganization,
   memberProfileOp,
   removeMember,
-  saveProcess,
   renameWorkspace,
   setMemberRole,
-  setProjectMembers,
-  updateItem,
 } from '../src/actions';
 import { paths } from '../src/schema';
-import { stepsFor, templateById } from '../src/templates';
-import {
-  AGENTS,
-  as,
-  denied,
-  eventOp,
-  I,
-  itemDoc,
-  now,
-  ok,
-  P,
-  projectDoc,
-  put,
-  snap,
-  useEmulator,
-  W,
-} from './harness';
+import { as, denied, eventOp, now, ok, put, snap, useEmulator, W } from './harness';
 
 useEmulator();
 
 const inFuture = () => new Date(Date.now() + 86_400_000);
 const roles = async () => (await snap(paths.workspace(W))).memberRoles as Record<string, string>;
 const admins = async () => (await snap(paths.workspace(W))).adminUids as string[];
-
-/** A private project only alice is on, with an item, a run, a message and a decision. */
-async function seedPrivate() {
-  await put({
-    [P('priv')]: projectDoc({}, { memberUids: ['alice'] }),
-    [I('x1', 'priv')]: itemDoc(),
-    [paths.run(W, 'r1')]: {
-      agentUid: AGENTS.star,
-      projectId: 'priv',
-      itemId: 'x1',
-      stepId: 'draft',
-      startedAt: now(),
-      heartbeatAt: now(),
-      heartbeatEventAt: now(),
-      endedAt: null,
-      status: 'running',
-      costEur: 0,
-      tokensIn: 0,
-      tokensOut: 0,
-      model: null,
-      summary: null,
-      lastEventId: 'seed',
-    },
-    [paths.message(W, 'priv', 'x1', 'm1')]: {
-      workspaceId: W,
-      projectId: 'priv',
-      itemId: 'x1',
-      by: { type: 'human', id: 'alice' },
-      kind: 'note',
-      text: 'secret',
-      at: now(),
-      answered: false,
-      replyTo: null,
-      lastEventId: 'seed',
-    },
-    [paths.event(W, 'ev-priv')]: {
-      actor: { type: 'human', id: 'alice', name: 'Alice' },
-      projectId: 'priv',
-      itemId: null,
-      runId: null,
-      type: 'project.created',
-      data: {},
-      at: now(),
-    },
-    [paths.event(W, 'ev-org')]: {
-      actor: { type: 'human', id: 'owner', name: 'Owner' },
-      projectId: null,
-      itemId: null,
-      runId: null,
-      type: 'workspace.updated',
-      data: {},
-      at: now(),
-    },
-  });
-}
 
 describe('roles and the last admin', () => {
   it('lets an admin promote a member, then lets the new admin demote the first', async () => {
@@ -251,8 +162,7 @@ describe('roles and the last admin', () => {
       },
     });
     const o = as('owner');
-    await ok(getDoc(doc(o.db, P('p1'))));
-    await ok(getDocs(collection(o.db, `workspaces/${W}/projects`)));
+    await ok(getDocs(collection(o.db, `workspaces/${W}/events`)));
     await ok(getDocs(collection(o.db, `workspaces/${W}/agents`)));
   });
 });
@@ -389,164 +299,5 @@ describe('many organizations per person', () => {
         memberProfileOp(W, 'eve', { name: 'Eve', email: 'e@x.com', photoURL: null, color: 'c1' }),
       ]),
     );
-  });
-});
-
-describe('project privacy', () => {
-  it('shows a member only the projects that list them (query by memberUids)', async () => {
-    await seedPrivate();
-    const dave = as('dave');
-    const mine = await ok(
-      getDocs(
-        query(
-          collection(dave.db, `workspaces/${W}/projects`),
-          where('memberUids', 'array-contains', 'dave'),
-        ),
-      ),
-    );
-    expect(mine.docs.map((d) => d.id).sort()).toEqual(['p1', 'p2']);
-    // the unfiltered list is refused for a member and fine for an admin
-    await denied(getDocs(collection(dave.db, `workspaces/${W}/projects`)));
-    const all = await ok(getDocs(collection(as('owner').db, `workspaces/${W}/projects`)));
-    expect(all.docs.map((d) => d.id).sort()).toEqual(['p1', 'p2', 'priv']);
-  });
-
-  it('hides a private project and everything under it from a member who is not on it', async () => {
-    await seedPrivate();
-    const d = as('dave');
-    for (const path of [
-      P('priv'),
-      I('x1', 'priv'),
-      paths.run(W, 'r1'),
-      paths.message(W, 'priv', 'x1', 'm1'),
-      paths.event(W, 'ev-priv'),
-    ]) {
-      await denied(getDoc(doc(d.db, path)));
-      await ok(getDoc(doc(as('alice').db, path)));
-      await ok(getDoc(doc(as('owner').db, path)));
-    }
-    // organization-level events stay visible to every member
-    await ok(getDoc(doc(d.db, paths.event(W, 'ev-org'))));
-  });
-
-  it('lets a member query runs and events of a project they are on, one project at a time', async () => {
-    await seedPrivate();
-    const d = as('dave');
-    const runsOf = (pid: string) =>
-      getDocs(query(collection(d.db, `workspaces/${W}/runs`), where('projectId', '==', pid)));
-    await denied(runsOf('priv'));
-    await ok(runsOf('p1'));
-    await denied(getDocs(collection(d.db, `workspaces/${W}/runs`)));
-    const eventsOf = (pid: string) =>
-      getDocs(
-        query(
-          collection(d.db, `workspaces/${W}/events`),
-          where('projectId', '==', pid),
-          orderBy('at', 'desc'),
-          limit(20),
-        ),
-      );
-    await denied(eventsOf('priv'));
-    await ok(eventsOf('p1'));
-    await ok(
-      getDocs(
-        query(
-          collection(as('owner').db, `workspaces/${W}/events`),
-          orderBy('at', 'desc'),
-          limit(20),
-        ),
-      ),
-    );
-  });
-
-  it('denies a member working in a project they are not on, allows it once added', async () => {
-    await seedPrivate();
-    const d = as('dave');
-    const project = { steps: projectDoc().steps };
-    const make = () =>
-      createItem(d.ctx, { project, projectId: 'priv', title: 'Sneaky', type: 'idea' });
-    await denied(d.run(make()));
-    await denied(
-      d.run(updateItem(d.ctx, { projectId: 'priv', itemId: 'x1', changes: { title: 'Mine' } })),
-    );
-
-    const o = as('owner');
-    await ok(
-      o.run(
-        setProjectMembers(o.ctx, {
-          projectId: 'priv',
-          name: 'Blog',
-          memberUids: ['alice', 'dave'],
-        }),
-      ),
-    );
-    await ok(d.run(make()));
-    await ok(getDoc(doc(d.db, P('priv'))));
-    // and removing them hides it again
-    await ok(
-      o.run(setProjectMembers(o.ctx, { projectId: 'priv', name: 'Blog', memberUids: ['alice'] })),
-    );
-    await denied(getDoc(doc(d.db, P('priv'))));
-  });
-
-  it('lets only admins change who is on a project', async () => {
-    const a = as('alice');
-    await denied(
-      a.run(
-        setProjectMembers(a.ctx, { projectId: 'p1', name: 'Blog', memberUids: ['alice', 'eve'] }),
-      ),
-    );
-    await denied(updateDoc(doc(a.db, P('p1')), { memberUids: ['alice', 'eve'] }));
-    // a project member can still change the process, without touching its people
-    const b = as('bob');
-    await ok(b.run(saveProcess(b.ctx, { projectId: 'p1', steps: projectDoc().steps })));
-  });
-
-  it('lets an admin create a project for a team; a member only for themselves', async () => {
-    const steps = stepsFor(templateById('content-pipeline')!, 'owner');
-    const base = {
-      name: 'New',
-      emoji: '🐝',
-      color: 'agent-1',
-      templateId: 'content-pipeline',
-      steps,
-    };
-    const o = as('owner');
-    await ok(
-      o.run(createProject(o.ctx, { ...base, projectId: 'n1', memberUids: ['owner', 'alice'] })),
-    );
-    const d = as('dave');
-    await ok(d.run(createProject(d.ctx, { ...base, projectId: 'n2' })));
-    await denied(
-      d.run(createProject(d.ctx, { ...base, projectId: 'n3', memberUids: ['dave', 'alice'] })),
-    );
-    await denied(d.run(createProject(d.ctx, { ...base, projectId: 'n4', memberUids: [] })));
-    expect((await snap(P('n2'))).memberUids).toEqual(['dave']);
-    // a project made by a member is invisible to other members, visible to admins
-    await denied(getDoc(doc(as('bob').db, P('n2'))));
-    await ok(getDoc(doc(o.db, P('n2'))));
-  });
-
-  it('keeps agents working per project, private or not', async () => {
-    await seedPrivate();
-    const star = as(AGENTS.star);
-    await ok(getDoc(doc(star.db, P('priv'))));
-    await ok(getDoc(doc(star.db, I('x1', 'priv'))));
-    const one = as(AGENTS.a);
-    await denied(getDoc(doc(one.db, P('priv'))));
-    await ok(getDoc(doc(one.db, P('p1'))));
-  });
-
-  it('ATTACK: denies a member planting events into a project they cannot see', async () => {
-    await seedPrivate();
-    const d = as('dave');
-    await denied(d.run([eventOp(d, 'forged', { projectId: 'priv', type: 'item.updated' })]));
-    await ok(d.run([eventOp(d, 'fine', { projectId: 'p1', type: 'item.updated' })]));
-  });
-
-  it('lets nobody delete a project outside an organization delete', async () => {
-    await seedPrivate();
-    await denied(deleteDoc(doc(as('alice').db, P('priv'))));
-    await denied(deleteDoc(doc(as('owner').db, P('priv'))));
   });
 });

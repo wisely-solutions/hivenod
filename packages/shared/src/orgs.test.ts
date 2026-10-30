@@ -2,16 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   acceptInvite,
   arrayUnion,
-  createProject,
   createWorkspace,
   leaveOrganization,
   removeMember,
   setMemberRole,
-  setProjectMembers,
   type ActionContext,
 } from './actions';
 import { toFirestoreValue } from './firestore';
-import { projectSchema, userSchema, workspaceSchema } from './schema';
+import { userSchema, workspaceSchema } from './schema';
 
 let n = 0;
 const ctx: ActionContext = {
@@ -71,26 +69,6 @@ describe('organizations', () => {
     expect(data(asMember, 'workspaces/w1')).not.toHaveProperty('adminUids');
   });
 
-  it('puts the creator on a new project unless told otherwise', () => {
-    const base = { name: 'P', emoji: 'x', color: 'c', templateId: 't', steps: [] };
-    expect(
-      data(createProject(ctx, { ...base, projectId: 'p1' }), 'workspaces/w1/projects/p1')
-        .memberUids,
-    ).toEqual(['ana']);
-    expect(
-      data(
-        createProject(ctx, { ...base, projectId: 'p2', memberUids: ['x', 'y'] }),
-        'workspaces/w1/projects/p2',
-      ).memberUids,
-    ).toEqual(['x', 'y']);
-  });
-
-  it('plans a project people change with its own event', () => {
-    const plan = setProjectMembers(ctx, { projectId: 'p1', name: 'P', memberUids: ['bob'] });
-    expect(data(plan, 'workspaces/w1/projects/p1').memberUids).toEqual(['bob']);
-    expect(plan.ops.at(-1)!.path).toMatch(/events/);
-  });
-
   it('turns the arrayUnion placeholder into a Firestore sentinel', () => {
     const v = toFirestoreValue({ adminUids: arrayUnion('cy') }) as { adminUids: object };
     expect(v.adminUids).not.toEqual(arrayUnion('cy'));
@@ -119,20 +97,5 @@ describe('older documents still parse', () => {
       theme: null,
     });
     expect(user.workspaceIds).toEqual([]);
-    const project = projectSchema.parse({
-      name: 'P',
-      emoji: '',
-      color: '',
-      budgetEur: 0, // older projects store a budget: still parses, and is dropped
-      templateId: '',
-      steps: [{ id: 'a', name: 'A', kind: 'agent', description: '' }],
-      stepIndex: { a: 0 },
-      createdBy: 'jo',
-      createdAt: ts,
-      archivedAt: null,
-      lastEventId: 'e',
-    });
-    expect(project.memberUids).toEqual([]);
-    expect(project).not.toHaveProperty('budgetEur');
   });
 });

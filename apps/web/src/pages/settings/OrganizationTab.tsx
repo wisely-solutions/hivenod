@@ -156,7 +156,7 @@ function plural(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/** Admins only: the organization's data as one JSON file (projects, items, runs, calendar). */
+/** Admins only: the organization's data as one JSON file (members, groups, agents, events). */
 function ExportCard() {
   const { session } = useReady();
   const { workspace, workspaceId } = session;
@@ -184,8 +184,8 @@ function ExportCard() {
         Export organization data (JSON)
       </h3>
       <p className="mt-1 text-14 text-text-2">
-        One file with the projects, items, processes, decisions, attachments, runs, events and old
-        calendar data of {workspace.name}. Keep it before the old project data is deleted.
+        One file with the members, groups, agents and events of {workspace.name}. Projects and the
+        calendar were removed: the operator export (scripts/export-org.mjs) holds their old data.
       </p>
       <Button
         variant="secondary"
@@ -312,8 +312,6 @@ function DeleteOrgDialog({ onClose }: { onClose: () => void }) {
               {plural(counts.members, 'member loses', 'members lose')} access
               {counts.members > 1 ? ' (they move to another organization)' : ''}
             </li>
-            <li>{plural(counts.projects, 'project', 'projects')}</li>
-            <li>{plural(counts.items, 'item', 'items')}</li>
             <li>
               {plural(counts.agents, 'agent', 'agents')} disconnected: their tokens stop working
             </li>

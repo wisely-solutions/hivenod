@@ -7,7 +7,7 @@ import { deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { describe, it } from 'vitest';
 import { beginOrgDelete, renameWorkspace } from '../src/actions';
 import { paths } from '../src/schema';
-import { AGENTS, as, denied, eventOp, I, ok, P, put, useEmulator, W } from './harness';
+import { AGENTS, as, denied, eventOp, LEGACY, ok, put, useEmulator, W } from './harness';
 
 useEmulator();
 
@@ -64,8 +64,6 @@ describe('starting the delete', () => {
 
 describe('before the flag nothing under the organization can be deleted', () => {
   for (const [what, path] of [
-    ['project', P('p1')],
-    ['item', I('i1')],
     ['event', paths.event(W, 'seed')],
     ['agent', paths.agent(W, AGENTS.a)],
     ['member card', paths.member(W, 'alice')],
@@ -80,18 +78,16 @@ describe('before the flag nothing under the organization can be deleted', () => 
 describe('after the flag', () => {
   it('lets an admin delete every kind of document, the organization last', async () => {
     await flag();
-    await put({
-      [paths.logLine(W, 'r1', 1)]: { text: 'x' },
-      [paths.run(W, 'r1')]: { projectId: 'p1' },
-    });
+    await put({ [`${LEGACY.run}/log/1`]: { text: 'x' } });
+    // Old Projects data still under the organization can go too (the deletion script normally
+    // removes it first).
     for (const path of [
-      paths.logLine(W, 'r1', 1),
-      paths.run(W, 'r1'),
-      I('i1'),
-      I('i1', 'p2'),
-      I('gated'),
-      P('p1'),
-      P('p2'),
+      `${LEGACY.run}/log/1`,
+      LEGACY.run,
+      LEGACY.item,
+      LEGACY.project,
+      LEGACY.calendar,
+      LEGACY.projectEvent,
       paths.group(W, 'g1'),
       paths.agent(W, AGENTS.a),
       paths.event(W, 'seed'),
@@ -102,8 +98,8 @@ describe('after the flag', () => {
   it('refuses members, outsiders and agents', async () => {
     await flag();
     for (const uid of ['alice', 'dave', 'eve', AGENTS.star, AGENTS.a]) {
-      await denied(del(uid, I('i1')));
-      await denied(del(uid, P('p1')));
+      await denied(del(uid, LEGACY.item));
+      await denied(del(uid, LEGACY.project));
       await denied(del(uid, paths.agent(W, AGENTS.a)));
       await denied(del(uid, paths.workspace(W)));
     }
@@ -115,7 +111,7 @@ describe('after the flag', () => {
   it('refuses every new event, so no other write goes through', async () => {
     await flag();
     const a = as('alice');
-    await denied(a.run([eventOp(a, 'late', { projectId: 'p1' })]));
+    await denied(a.run([eventOp(a, 'late')]));
     const o = as('owner');
     await denied(o.run(renameWorkspace(o.ctx, { name: 'Late' })));
   });

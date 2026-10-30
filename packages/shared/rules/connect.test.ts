@@ -9,7 +9,7 @@ import { createAgent, revokeAgent, updateAgentSettings } from '../src/actions';
 import { toFirestoreValue } from '../src/firestore';
 import { pairingCompletion, pairingPath, pairingRequest } from '../src/pairing';
 import { paths } from '../src/schema';
-import { anon, as, denied, ok, P, projectDoc, put, useEmulator, W } from './harness';
+import { anon, as, denied, ok, put, useEmulator, W } from './harness';
 
 useEmulator();
 
@@ -64,7 +64,7 @@ const completion = (by: string, over: Record<string, unknown> = {}) =>
     ...over,
   }) as Record<string, unknown>;
 
-/** Alice (a plain member of p1 and p2) creates the agent the way the confirm page does. */
+/** Alice (a plain member) creates the agent the way the confirm page does. */
 async function alicesAgent(over: Record<string, unknown> = {}) {
   const alice = as('alice');
   await alice.run(createAgent(alice.ctx, agentInput(over)));
@@ -81,20 +81,14 @@ describe('connect: the terminal', () => {
 });
 
 describe('connect: a member creates the agent', () => {
-  it('for projects they are in', async () => {
-    await ok(alicesAgent({ projectIds: ['p1', 'p2'] }));
+  it('with no projects, or legacy project ids that are no longer checked (Projects removed)', async () => {
+    await ok(alicesAgent({ projectIds: [] }));
+    await ok(alicesAgent({ agentUid: 'agentNew2', projectIds: ['p1', 'missing'] }));
   });
-  it('not for a project they are not in (rules check every one of up to 5)', async () => {
-    await put({ [P('p3')]: projectDoc({}, { memberUids: ['bob'] }) });
-    await denied(alicesAgent({ projectIds: ['p3'] }));
-    await denied(alicesAgent({ projectIds: ['p1', 'p3'] }));
-    await denied(alicesAgent({ projectIds: ['p1', 'p2', 'p1', 'p2', 'p3'] }));
-    await denied(alicesAgent({ projectIds: ['missing'] }));
-  });
-  it('not for all projects, no projects, or more than 5', async () => {
-    await denied(alicesAgent({ projectIds: '*' }));
-    await denied(alicesAgent({ projectIds: [] }));
-    await denied(alicesAgent({ projectIds: ['p1', 'p2', 'p1', 'p2', 'p1', 'p2'] }));
+  it('not for all projects, more than 5 ids, or an Inbox scope (admins only)', async () => {
+    await denied(alicesAgent({ agentUid: 'agentX', projectIds: '*' }));
+    await denied(alicesAgent({ agentUid: 'agentX', projectIds: ['a', 'b', 'c', 'd', 'e', 'f'] }));
+    await denied(alicesAgent({ agentUid: 'agentX', projectIds: [], scope: 'inbox' }));
   });
   it('not with its own guardrails, and not before confirming their email', async () => {
     await denied(alicesAgent({ guardrails: { maxFailedRuns: 20 } }));

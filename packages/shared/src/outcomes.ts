@@ -168,10 +168,10 @@ export const OUTCOMES = {
     batchable: true,
   },
   make_it_work: {
-    label: 'Make it work',
-    approve: 'Create item',
+    label: 'Make it work (retired)',
+    approve: 'Retired',
     description:
-      'It needs real work: a Hivenod item. When the item is done, propose a reply saying so.',
+      'Retired with Projects (2026-10-30): never propose it. Propose a Development plan (plan_propose template dev) instead.',
     fields: {
       title: line('Item title', 'The work, as an item title'),
       brief: text('Brief', 'What is asked, by whom, and what done looks like', false),
@@ -179,7 +179,8 @@ export const OUTCOMES = {
     },
     executor: 'agent',
     after: { state: 'waiting', waitingOn: 'item' },
-    plan: true,
+    planOnly: true,
+    retired: true,
   },
   handover: {
     label: 'Hand over',

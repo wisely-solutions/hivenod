@@ -28,7 +28,7 @@ import { createAgentIdentity, signInWithToken } from '../src/agentAuth';
 import { applyPlan } from '../src/firestore';
 import { paths } from '../src/schema';
 import { decodeToken, tokenHint } from '../src/token';
-import { denied, getEnv, ok, P, put, projectDoc, useEmulator, W } from './harness';
+import { denied, getEnv, ok, put, useEmulator, W } from './harness';
 
 useEmulator();
 
@@ -78,8 +78,6 @@ async function realOwner() {
       createdAt: new Date(),
       lastEventId: 'seed',
     },
-    [P('p1')]: projectDoc(),
-    [P('p2')]: projectDoc(),
   });
   const ctx: ActionContext = { workspaceId: W, actor: { type: 'human', id: uid, name: 'Owner' } };
   return { ...c, uid, ctx };
@@ -90,7 +88,7 @@ async function wholeDatabase(): Promise<string> {
   let all = '';
   await getEnv().withSecurityRulesDisabled(async (c) => {
     const db = c.firestore() as unknown as Firestore;
-    for (const group of ['agents', 'events', 'projects', 'items', 'runs', 'groups']) {
+    for (const group of ['agents', 'events', 'groups']) {
       const snap = await getDocs(collectionGroup(db, group));
       snap.forEach((d) => (all += JSON.stringify([d.ref.path, d.data()])));
     }
@@ -100,10 +98,10 @@ async function wholeDatabase(): Promise<string> {
   return all;
 }
 
-/** Nothing in the database (agents, events, projects, runs...) contains a secret. */
+/** Nothing in the database (agents, events, groups, the organization) contains a secret. */
 async function expectNoSecrets(secrets: string[]) {
   const db = await wholeDatabase();
-  expect(db).toContain(P('p1').split('/')[1]!); // the scan really read documents
+  expect(db).toContain('Hive'); // the scan really read documents
   expect(db).toContain('agent.');
   for (const s of secrets) expect(db).not.toContain(s);
   expect(db).not.toContain('hive_agt_');
@@ -135,16 +133,16 @@ describe('agent identities end to end', () => {
     const bot = client('agent');
     const who = await signInWithToken(bot.auth, identity.token);
     expect(who).toEqual({ uid: identity.uid, workspaceId: W });
-    await ok(getDoc(doc(bot.db, P('p1'))));
-    await denied(getDoc(doc(bot.db, P('p2'))));
+    await ok(getDoc(doc(bot.db, paths.workspace(W))));
+    await denied(getDoc(doc(bot.db, paths.workspace('w-other'))));
 
     // 3. Revoke: the same token, same session, is denied on the very next request.
     await ok(applyPlan(owner.db, revokeAgent(owner.ctx, { agentUid: identity.uid })));
-    await denied(getDoc(doc(bot.db, P('p1'))));
+    await denied(getDoc(doc(bot.db, paths.workspace(W))));
     // ...and signing in again with the token still works at the Auth level but reads nothing.
     const again = client('agent-again');
     await signInWithToken(again.auth, identity.token);
-    await denied(getDoc(doc(again.db, P('p1'))));
+    await denied(getDoc(doc(again.db, paths.workspace(W))));
     await denied(getDoc(doc(again.db, paths.workspace(W))));
     await expectNoSecrets(secrets);
     await signOut(owner.auth);
@@ -182,11 +180,10 @@ describe('agent identities end to end', () => {
 
     const oldBot = client('old');
     await signInWithToken(oldBot.auth, old.token);
-    await denied(getDoc(doc(oldBot.db, P('p1'))));
+    await denied(getDoc(doc(oldBot.db, paths.workspace(W))));
     const newBot = client('new');
     await signInWithToken(newBot.auth, fresh.token);
-    await ok(getDoc(doc(newBot.db, P('p1'))));
-    await ok(getDoc(doc(newBot.db, P('p2'))));
+    await ok(getDoc(doc(newBot.db, paths.workspace(W))));
 
     const snap = await getDoc(doc(owner.db, paths.agent(W, fresh.uid)));
     expect(snap.data()?.previousAgentUid).toBe(old.uid);

@@ -74,7 +74,6 @@ describe('the registry', () => {
   it('allows the design types in a plan, never no_reply or ignore', () => {
     expect(PLAN_TYPES).toEqual([
       'reply',
-      'make_it_work',
       'handover',
       'snooze',
       'nudge',
@@ -85,15 +84,7 @@ describe('the registry', () => {
     ]);
   });
   it('keeps approval and book out of single proposals', () => {
-    expect(SINGLE_TYPES).toEqual([
-      'reply',
-      'no_reply',
-      'make_it_work',
-      'handover',
-      'snooze',
-      'nudge',
-      'ignore',
-    ]);
+    expect(SINGLE_TYPES).toEqual(['reply', 'no_reply', 'handover', 'snooze', 'nudge', 'ignore']);
     for (const [k, t] of Object.entries(all))
       if (t.planOnly && !t.retired) expect(t.plan, k).toBe(true);
   });
@@ -106,7 +97,7 @@ describe('the registry', () => {
   it('the rules block carries the single, plan and human lists', () => {
     const b = outcomeRulesBlock();
     expect(b).toContain(
-      "function outcomeSingle() { return ['reply', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore']; }",
+      "function outcomeSingle() { return ['reply', 'no_reply', 'handover', 'snooze', 'nudge', 'ignore']; }",
     );
     // Retired types have no field lists: the rules refuse proposing, revising or approving them.
     expect(b).not.toMatch(/function outcomeFieldKeys\(\) \{[^\n]*'reply_book'/);
