@@ -26,6 +26,8 @@ import {
   type ScheduleInput,
   type ScheduleOf,
   stepProgress,
+  stepAsk,
+  stepSent,
   recheckDone,
   answerInstruction,
   suggestChips,
@@ -122,6 +124,9 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
       await run(p);
       return p.threadId;
     },
+    /** The message doc id `add` writes for (member, source, ref, id). */
+    messageDocId: (member: string, source: string, ref: string, id: string) =>
+      `im${h(inboxMessageKey(member, source, ref, id))}`,
     async file(tid: string, to: { newName?: string; subjectId?: string; area?: string }) {
       const p = assignSubject(ctx, { threadId: tid, thread: await thread(tid), ...to });
       await run(p);
@@ -334,6 +339,47 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
     async plansOf(tid: string) {
       const q = query(collection(db, `workspaces/${wid}/inboxPlans`), where('threadId', '==', tid));
       return (await getDocs(q)).docs.map((d) => d.id);
+    },
+    /**
+     * Their reply (theirreply.ts): drafts the next message of the step at the plan's turn
+     * (step_ask), or reports the approved one sent (step_sent).
+     */
+    async theirReply(
+      pid: string,
+      op:
+        | {
+            ask: 'ask' | 'follow_up' | 'nudge';
+            text: string;
+            reply?: { messageDocId: string; quote: string };
+          }
+        | { sent: true },
+    ) {
+      const plan = (await getDoc(doc(db, inboxPaths.plan(wid, pid)))).data() as PlanInput['plan'];
+      const outcomes: Record<string, OutcomeStateOf> = {};
+      for (const id of plan.steps)
+        outcomes[id] = (
+          await getDoc(doc(db, inboxPaths.outcome(wid, id)))
+        ).data() as OutcomeStateOf;
+      const oid = plan.steps[plan.cursor]!;
+      const base = {
+        outcomeId: oid,
+        outcome: outcomes[oid]!,
+        thread: await thread(plan.threadId),
+        plan: { planId: pid, plan, outcomes },
+      };
+      await run(
+        'sent' in op
+          ? stepSent(ctx, base)
+          : stepAsk(ctx, {
+              ...base,
+              kind: op.ask,
+              text: op.text,
+              ...(op.reply
+                ? { reply: op.reply, replyMessage: { threadId: plan.threadId, direction: 'in' } }
+                : {}),
+            }),
+      );
+      return oid;
     },
     /** A plan's step ids, in order. */
     async stepsOf(pid: string) {

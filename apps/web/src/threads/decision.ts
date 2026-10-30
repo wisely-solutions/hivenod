@@ -161,6 +161,16 @@ export function topState(i: TopInput): TopState {
       tone: 'gate',
       kicker: i.proposals > 1 ? `Your approval · ${i.proposals} proposals` : 'Your approval',
     };
+  // Their reply: a sent message waits on someone outside Hivenod, not on the agent.
+  const ext = v?.current?.type === 'their_reply' ? v.current.outcome : null;
+  if (ext && ext.state === 'running' && ext.ext?.ask?.state === 'sent') {
+    const who = typeof ext.fields.who === 'string' && ext.fields.who ? ext.fields.who : 'them';
+    return {
+      kind: 'waiting',
+      tone: 'neutral',
+      kicker: `Waiting on ${who} · step ${v!.current!.number} of ${v!.total}`,
+    };
+  }
   const running =
     v &&
     v.current &&
@@ -179,7 +189,11 @@ export function topState(i: TopInput): TopState {
   if (t.state === 'ignored') return { kind: 'done', tone: 'neutral', kicker: 'Ignored' };
   if (v?.state === 'done' || t.state === 'done')
     return { kind: 'done', tone: 'approve', kicker: `Done · ${dayMonth(t.updatedAt)}` };
-  return { kind: 'idle', tone: STATE_CHIP[t.state].tone, kicker: STATE_CHIP[t.state].label };
+  return {
+    kind: 'idle',
+    tone: STATE_CHIP[t.state].tone as TopTone,
+    kicker: STATE_CHIP[t.state].label,
+  };
 }
 
 // ---------- freshness ----------

@@ -81,6 +81,7 @@ describe('the registry', () => {
       'build',
       'keepgreen',
       'release',
+      'their_reply',
       'approval',
     ]);
   });

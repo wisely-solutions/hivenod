@@ -14,6 +14,7 @@
 import { z } from 'zod';
 import { timestamp } from './schema';
 import type { InboxOutcome, ThreadState } from './inbox';
+import type { ExtStateOf } from './theirreply';
 import {
   OUTCOME_CONFIDENCE,
   outcomeKind,
@@ -69,7 +70,10 @@ export type InboxPlan = z.infer<typeof inboxPlanSchema>;
 
 /** What the views need of a plan and of its steps (listener data). */
 export type PlanStateOf = Pick<InboxPlan, 'steps' | 'cursor' | 'state'>;
-export type PlanOutcomeOf = Pick<InboxOutcome, 'type' | 'fields' | 'state'>;
+export type PlanOutcomeOf = Pick<InboxOutcome, 'type' | 'fields' | 'state'> & {
+  /** Their reply (./theirreply.ts): only `ask.state` matters here. */
+  ext?: ExtStateOf | null;
+};
 
 /**
  * What a step shows (design table):
@@ -137,7 +141,8 @@ function stepUi(o: PlanOutcomeOf | null, atCursor: boolean, planState: PlanState
     case 'rejected':
       return planState === 'stopped' ? 'stopped' : 'skipped';
     case 'running':
-      return 'running';
+      // Their reply: a drafted message waits for the member's approval.
+      return o.ext?.ask?.state === 'proposed' ? 'waitingForYou' : 'running';
     case 'revising':
       return 'revising';
     case 'approved':
@@ -251,7 +256,13 @@ export function planThreadState(
   if (plan.cursor >= plan.steps.length) return before(plan.steps.length) ?? afterDone;
   const o = at(plan.cursor);
   if (!o) return YOUR_CALL;
-  if (o.state === 'running') return { state: 'waiting', waiting: { on: 'item', until: null } };
+  if (o.state === 'running') {
+    // Their reply (./theirreply.ts): a draft to approve, a message to send, or their answer.
+    const ask = o.type === 'their_reply' ? (o.ext?.ask?.state ?? null) : undefined;
+    if (ask === 'proposed') return YOUR_CALL;
+    if (ask === 'approved') return ON_AGENT;
+    return { state: 'waiting', waiting: { on: ask === undefined ? 'item' : 'them', until: null } };
+  }
   if (o.state !== 'approved' || outcomeKind(o.type) === 'human') return YOUR_CALL;
   const t = outcomeType(o.type);
   if (t?.executor === 'none' && t.after.waitingOn === 'date') return threadAfter(o.type, o.fields);

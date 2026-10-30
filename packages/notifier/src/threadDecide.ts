@@ -12,6 +12,9 @@ import {
   ActionError,
   answerQuestion,
   approveOutcome,
+  approveStepAsk,
+  EXT_ASK_LABEL,
+  markStepDone,
   approvePlan,
   askApproves,
   inboxOutcomeSchema,
@@ -57,6 +60,8 @@ export interface ThreadAction {
 
 export type ThreadDecision =
   | { kind: 'approve' }
+  /** Their reply: count the step as done (Mark done anyway). */
+  | { kind: 'markDone' }
   | { kind: 'notNow' }
   | { kind: 'changes'; text: string }
   | { kind: 'answer'; text: string }
@@ -108,7 +113,14 @@ async function load(db: Firestore, a: ThreadAction): Promise<Loaded | null> {
     .sort((x, y) => ms(y.data.createdAt) - ms(x.data.createdAt));
   const plan = live[0] ?? null;
   const q = t.data.question;
-  const open = outcomes.filter((o) => o.data.state === 'proposed' || o.data.state === 'revising');
+  // Their reply: a running step whose drafted message waits for approval asks too.
+  const draft = (o: { data: InboxOutcome }) =>
+    o.data.type === 'their_reply' &&
+    o.data.state === 'running' &&
+    o.data.ext?.ask?.state === 'proposed';
+  const open = outcomes.filter(
+    (o) => o.data.state === 'proposed' || o.data.state === 'revising' || draft(o),
+  );
   const ask = threadAsk({
     thread: {
       state: t.data.state,
@@ -122,6 +134,7 @@ async function load(db: Firestore, a: ThreadAction): Promise<Loaded | null> {
       planId: o.data.planId ?? null,
       createdAtMs: ms(o.data.createdAt),
       fields: o.data.fields,
+      ...(draft(o) ? { ext: { n: o.data.ext!.ask!.n, kind: o.data.ext!.ask!.kind } } : {}),
     })),
   });
   const tz = (prefs.data()?.quiet?.tz as string | undefined) || 'UTC';
@@ -251,6 +264,21 @@ export async function decideThread(
       return { ok: true, text: `Answered “${text.trim()}”: ${title}` };
     }
     if (!askApproves(ask)) return { ok: false, text: 'Open the thread to decide this one.' };
+    // Their reply (theirreply.ts): approve the drafted message, or count the step as done.
+    if (ask.kind === 'step' && ask.ext && (d.kind === 'approve' || d.kind === 'markDone')) {
+      const o = outcome(ask.outcomeId);
+      const pl = planInput(s);
+      if (!o || !pl) return { ok: false, text: 'I could not find that step any more.' };
+      const input = { outcomeId: ask.outcomeId, outcome: o, thread, plan: pl };
+      if (d.kind === 'markDone') {
+        await applyPlanAdmin(db, markStepDone(ctx, input));
+        return { ok: true, text: `Step ${ask.number} marked done: ${title}` };
+      }
+      await applyPlanAdmin(db, approveStepAsk(ctx, input));
+      const what = EXT_ASK_LABEL[ask.ext.kind] ?? 'Message';
+      return { ok: true, text: `${what} approved, the agent sends it: ${title}` };
+    }
+    if (d.kind === 'markDone') return { ok: false, text: 'Open the thread to decide this one.' };
     if (d.kind === 'approve') {
       if (ask.kind === 'approvePlan') {
         const pl = planInput(s)!;
