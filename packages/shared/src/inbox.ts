@@ -52,6 +52,12 @@ import {
 } from './plans';
 import { planTemplate, sendBackTarget, templateSendBack, templateSteps } from './planTemplates';
 import { timestamp } from './schema';
+import {
+  scheduleApprovalOps,
+  scheduleDeleteEventId,
+  schedulePaths,
+  type ScheduleOf,
+} from './scheduleDocs';
 
 // ---------- shapes ----------
 
@@ -157,6 +163,22 @@ export const INBOX_EVENT_TYPES = [
   'relation.accepted',
   'relation.rejected',
   'relation.removed',
+  // Scheduled tasks (./scheduleData.ts): the member's schedules and decisions, the Off switch;
+  // the scheduler (notifier, Admin SDK) writes the run.* events. A proposal and its approval are
+  // the outcome.proposed / outcome.approved events of the `schedule` outcome (data.scheduleId).
+  'schedule.created',
+  'schedule.updated',
+  'schedule.paused',
+  'schedule.resumed',
+  'schedule.deleted',
+  'run.fired',
+  'run.started',
+  'run.done',
+  'run.cantRun',
+  'run.decided',
+  'run.expired',
+  'agents.off',
+  'agents.on',
 ] as const;
 export type InboxEventType = (typeof INBOX_EVENT_TYPES)[number];
 
@@ -412,6 +434,8 @@ export const inboxThreadSchema = z.object({
    * `key` (threadAsk) out of Today until `until`; absent until the first one.
    */
   notNow: z.object({ until: timestamp, key: z.string(), at: timestamp }).nullable().optional(),
+  /** A scheduled run's thread (./scheduleData.ts): its schedule and run key. Absent otherwise. */
+  schedule: z.object({ scheduleId: z.string(), runKey: z.string() }).optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
@@ -544,7 +568,12 @@ export const inboxOutcomeSchema = z.object({
 export type InboxOutcome = z.infer<typeof inboxOutcomeSchema>;
 
 export const inboxEventSchema = z.object({
-  actor: z.object({ type: z.enum(['human', 'agent']), id: z.string(), name: z.string() }),
+  /** `system`: the scheduler (notifier, Admin SDK): runs it fires and tracks. */
+  actor: z.object({
+    type: z.enum(['human', 'agent', 'system']),
+    id: z.string(),
+    name: z.string(),
+  }),
   memberUid: z.string(),
   threadId: z.string().nullable(),
   subjectId: z.string().nullable(),
@@ -1167,6 +1196,10 @@ export function proposeOutcome(
     type!.planOnly !== true,
     `${input.type} is only a step of a plan (plan_propose). Types alone: ${SINGLE_TYPES.join(', ')}.`,
   );
+  need(
+    type!.ownTool === undefined,
+    `A ${input.type} is proposed with ${type!.ownTool}, not outcome_propose.`,
+  );
   let fields: Record<string, string | boolean>;
   try {
     fields = cleanOutcomeFields(input.type, input.fields);
@@ -1237,7 +1270,7 @@ function fromTemplate(id: string, over: readonly PlanStepInput[]): PlanStepInput
 }
 
 /** Plan steps checked and cleaned: plan types, fields, note, confidence, checks. */
-function cleanPlanSteps(input: readonly PlanStepInput[]) {
+export function cleanPlanSteps(input: readonly PlanStepInput[]) {
   need(
     input.length >= 1 && input.length <= PLAN_LIMITS.steps,
     `A plan has 1 to ${PLAN_LIMITS.steps} steps.`,
@@ -1893,6 +1926,11 @@ export function approveOutcome(
      * member's call any more); absent: the thread's state is left as it is.
      */
     othersPending?: boolean;
+    /**
+     * A `schedule` outcome (scheduled tasks): the proposed schedule it names, and for a change
+     * (`replaces`) the active schedule's version. Approving activates it in the same batch.
+     */
+    schedule?: { id: string; data: ScheduleOf; replaced?: { version: number } | null };
   },
 ): ActionPlan {
   const o = input.outcome;
@@ -1901,6 +1939,7 @@ export function approveOutcome(
     o.state === 'proposed' || o.state === 'revising',
     'Only a proposed outcome can be approved.',
   );
+  const sch = o.type === 'schedule' ? scheduleToApprove(input.outcomeId, o, input) : null;
   const sv = input.summaryVersion ?? null;
   need(
     sv === null || (Number.isInteger(sv) && sv >= 1),
@@ -1942,6 +1981,8 @@ export function approveOutcome(
   const edited = JSON.stringify(sorted(fields)) !== JSON.stringify(sorted(base));
   // In a plan only the gate takes effect on approval; a wait-until step waits for its turn.
   const immediate = pl ? gate : outcomeType(o.type)?.executor === 'none';
+  // A change of an active schedule deletes its proposal doc: tracked by the fixed delete event.
+  const eventId = sch?.data.replaces ? scheduleDeleteEventId(sch.id) : nid(ctx);
   const approval = inboxPlan(
     ctx,
     'outcome.approved',
@@ -1953,6 +1994,7 @@ export function approveOutcome(
       ...(edited ? { fields } : {}),
       ...(version !== null ? { version } : {}),
       ...(pl ? { planId: pl.planId } : {}),
+      ...(sch ? { scheduleId: sch.data.replaces ?? sch.id } : {}),
       ...decisionFacts({
         thread: input.thread,
         plan: pl?.plan,
@@ -1961,6 +2003,14 @@ export function approveOutcome(
       }),
     },
     (eventId) => [
+      ...(sch
+        ? scheduleApprovalOps(ctx.workspaceId, {
+            scheduleId: sch.id,
+            schedule: sch.data,
+            replaced: sch.replaced ?? null,
+            eventId,
+          })
+        : []),
       upd(
         inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
         {
@@ -2005,8 +2055,32 @@ export function approveOutcome(
             ]
           : []),
     ],
+    eventId,
   );
   return approval;
+}
+
+/** The proposed schedule a `schedule` outcome names, checked (approveOutcome). */
+function scheduleToApprove(
+  outcomeId: string,
+  o: OutcomeStateOf,
+  input: {
+    schedule?: { id: string; data: ScheduleOf; replaced?: { version: number } | null };
+    fields?: unknown;
+  },
+) {
+  const sc = input.schedule;
+  need(sc !== undefined && sc.id === o.fields.scheduleId, 'Give the schedule this proposal names.');
+  need(
+    sc!.data.state === 'proposed' && sc!.data.proposal?.outcomeId === outcomeId,
+    'This schedule is no longer waiting for your approval.',
+  );
+  need(
+    !sc!.data.replaces || sc!.replaced != null,
+    'Give the active schedule this change replaces.',
+  );
+  need(input.fields === undefined, 'Edit the schedule itself, not this proposal.');
+  return sc!;
 }
 
 /** The member turns a proposal down; with none left, the agent investigates again. */
@@ -2070,6 +2144,8 @@ export function rejectOutcome(
     );
   }
   const back = !input.othersPending && input.thread.state === 'yourCall';
+  // A schedule proposal turned down: its proposed schedule doc goes (fixed delete event id).
+  const sid = o.type === 'schedule' ? String(o.fields.scheduleId ?? '') : null;
   return inboxPlan(
     ctx,
     'outcome.rejected',
@@ -2078,9 +2154,13 @@ export function rejectOutcome(
       outcomeId: input.outcomeId,
       type: o.type,
       reason,
+      ...(sid ? { scheduleId: sid } : {}),
       ...decisionFacts({ thread: input.thread, outcome: o }),
     },
     (eventId) => [
+      ...(sid
+        ? [{ kind: 'delete', path: schedulePaths.schedule(ctx.workspaceId, sid) } satisfies WriteOp]
+        : []),
       upd(
         inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
         {
@@ -2099,6 +2179,7 @@ export function rejectOutcome(
           ]
         : []),
     ],
+    sid ? scheduleDeleteEventId(sid) : undefined,
   );
 }
 

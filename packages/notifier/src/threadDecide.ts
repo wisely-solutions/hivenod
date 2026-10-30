@@ -38,6 +38,9 @@ import {
   type PlanInput,
   type SendBackOf,
   type ThreadAsk,
+  scheduleSchema,
+  schedulePaths,
+  type Schedule,
 } from '@hive/shared';
 import type { Firestore } from 'firebase-admin/firestore';
 import { applyPlanAdmin } from './admin';
@@ -124,6 +127,24 @@ async function load(db: Firestore, a: ThreadAction): Promise<Loaded | null> {
   const tz = (prefs.data()?.quiet?.tz as string | undefined) || 'UTC';
   const name = (mSnap.data()?.name as string | undefined) ?? 'Someone';
   return { thread: t.data, plan, outcomes, name, tz, ask };
+}
+
+/** The proposed schedule a `schedule` outcome names (and the active one a change replaces). */
+async function scheduleOf(
+  db: Firestore,
+  wid: string,
+  o: InboxOutcome,
+): Promise<{ id: string; data: Schedule; replaced: { version: number } | null } | undefined> {
+  const id = String(o.fields.scheduleId ?? '');
+  if (!id) return undefined;
+  const snap = await db.doc(schedulePaths.schedule(wid, id)).get();
+  const p = scheduleSchema.safeParse(snap.data());
+  if (!p.success || p.data.state !== 'proposed') return undefined;
+  if (!p.data.replaces) return { id, data: p.data, replaced: null };
+  const r = scheduleSchema.safeParse(
+    (await db.doc(schedulePaths.schedule(wid, p.data.replaces)).get()).data(),
+  );
+  return r.success ? { id, data: p.data, replaced: { version: r.data.version } } : undefined;
 }
 
 /** "14:05" in the member's time zone. */
@@ -239,6 +260,10 @@ export async function decideThread(
       const oid = ask.kind === 'step' || ask.kind === 'proposal' ? ask.outcomeId : '';
       const o = outcome(oid);
       if (!o) return { ok: false, text: 'I could not find that proposal any more.' };
+      // A schedule proposal (scheduled tasks): approving it activates the schedule it names.
+      const schedule = o.type === 'schedule' ? await scheduleOf(db, a.wid, o) : undefined;
+      if (o.type === 'schedule' && !schedule)
+        return { ok: false, text: 'That schedule is no longer waiting for your approval.' };
       await applyPlanAdmin(
         db,
         approveOutcome(ctx, {
@@ -255,6 +280,7 @@ export async function decideThread(
               }),
           // A gate pins the summary version the person decided on (slice 6).
           ...(s.thread.summary ? { summaryVersion: s.thread.summary.version } : {}),
+          ...(schedule ? { schedule } : {}),
         }),
       );
       const what =

@@ -80,10 +80,11 @@ export function toRestWrites(base: string, ops: WriteOp[]): Field[] {
     const name = `${base}/${op.path}`;
     if (op.kind === 'delete') return { delete: name };
     const transforms: Field[] = [];
-    if (op.kind === 'set') {
+    if (op.kind === 'set' || op.kind === 'create') {
       const fields = encodeMap(op.data ?? {}, [], transforms);
       return {
         update: { name, fields },
+        ...(op.kind === 'create' && { currentDocument: { exists: false } }),
         ...(transforms.length && { updateTransforms: transforms }),
       };
     }
