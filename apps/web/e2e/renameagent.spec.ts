@@ -124,6 +124,9 @@ for (const theme of ['light', 'dark'] as const) {
       .fill('Pairpoint agent');
     await page.getByRole('button', { name: 'Rename', exact: true }).click();
     await expect(page.getByTestId('agent-name')).toHaveText('Pairpoint agent');
+    // The dialog and toast are still fading when the name lands; axe would sample mid-fade colours.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await settle(page);
     await axe(page);
     await expectNoHorizontalScroll(page);
   });
