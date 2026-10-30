@@ -40,8 +40,8 @@ export default function PrivacyPage() {
             in hashed form.
           </p>
           <p>
-            Your organization’s data: the projects, items, comments, attachments, decisions and
-            agent settings you and your agents put in, and who is a member.
+            Your organization’s data: the Inbox threads, messages, plans, summaries, attachments,
+            decisions and agent settings you and your agents put in, and who is a member.
           </p>
           <p>
             In your browser: a note that you are signed in, your theme choice and the app’s own

@@ -10,23 +10,24 @@ import {
 import { Logo } from '../components/Logo';
 import { GITHUB_LINKS, GITHUB_URL, PRIVACY_EMAIL } from '../lib/flags';
 import './landing.css';
-import desk1860 from './shots/desk-1860.webp';
-import desk930 from './shots/desk-930.webp';
-import phone250 from './shots/phone-250.webp';
-import phone500 from './shots/phone-500.webp';
+import decision1860 from './shots/decision-1860.webp';
+import decision930 from './shots/decision-930.webp';
+import decisionPhone250 from './shots/decision-phone-250.webp';
+import decisionPhone500 from './shots/decision-phone-500.webp';
 import thread1280 from './shots/thread-1280.webp';
 import thread640 from './shots/thread-640.webp';
 import today1860 from './shots/today-1860.webp';
 import today930 from './shots/today-930.webp';
 import todayPhone250 from './shots/today-phone-250.webp';
 import todayPhone500 from './shots/today-phone-500.webp';
-import { CALENDAR_SOURCES, MESSAGE_SOURCES } from './sources';
+import { MESSAGE_SOURCES } from './sources';
 import { formatStars, loadStars } from './stars';
 
-// The signed-out first page at https://hivenod.com/: the two main usages, Projects and Inbox and
-// Calendar (item x38DsNLjyh1rBTlkwMr5, layout B plus C's day timeline). The screenshots are real,
-// from demo data on the emulators: `pnpm shots:landing` remakes them. Without JavaScript,
-// index.html's <noscript> shows the same two usages as plain text.
+// The signed-out first page at https://hivenod.com/: the two usages, Inbox (threads with decision
+// pages) and Plans (steps with your approvals, incl. the Development plan); Projects and Calendar
+// were removed (Inbox rules, slice 12). The screenshots are real, from demo data on the emulators:
+// `pnpm shots:landing` remakes them. Without JavaScript, index.html's <noscript> shows the same
+// two usages as plain text.
 
 const INSTALL = 'curl -fsSL https://hivenod.com/install.sh | sh';
 const DOCS_URL = `${GITHUB_URL}#readme`;
@@ -52,9 +53,9 @@ function StarCount({ shown }: { shown: string | null }) {
   );
 }
 
-type UsageId = 'projects' | 'inbox';
-const USAGE_IDS: UsageId[] = ['projects', 'inbox'];
-const usageFromHash = (): UsageId => (window.location.hash === '#inbox' ? 'inbox' : 'projects');
+type UsageId = 'inbox' | 'plans';
+const USAGE_IDS: UsageId[] = ['inbox', 'plans'];
+const usageFromHash = (): UsageId => (window.location.hash === '#plans' ? 'plans' : 'inbox');
 
 function Nav({ stars, onUsage }: { stars: string | null; onUsage: (u: UsageId) => void }) {
   const go = (u: UsageId) => (e: MouseEvent) => {
@@ -71,11 +72,11 @@ function Nav({ stars, onUsage }: { stars: string | null; onUsage: (u: UsageId) =
           </span>
         </Link>
         <div className="lp-links">
-          <a href="#projects" onClick={go('projects')}>
-            Projects
-          </a>
           <a href="#inbox" onClick={go('inbox')}>
-            Inbox &amp; Calendar
+            Inbox
+          </a>
+          <a href="#plans" onClick={go('plans')}>
+            Plans
           </a>
           <a href="#how">How it works</a>
           {GITHUB_LINKS ? <a href={DOCS_URL}>Docs</a> : null}
@@ -216,20 +217,20 @@ function Phone({ src, srcSet, alt }: { src: string; srcSet: string; alt: string 
 const STAGE_SIZES =
   '(min-width: 1180px) 760px, (min-width: 900px) calc(100vw - 420px), calc(100vw - 32px)';
 
-const boardAlt =
-  'The Website project’s board: Shape, Go/no-go, Build, Test and Accept columns, with Hive and Tester at work.';
+const decisionAlt =
+  'A decision page: Ship release 175? with the recommendation Approve, a short summary, before and after screenshots, a chart of check times, and the plan steps from Shape to Accept on live.';
 const gateAlt =
-  'On a phone: the Pricing page rewrite waits at Go/no-go, with Approve, Send back and Reject.';
+  'On a phone: the decision page asks Ship release 175? with Approve, Ask for changes and Not now.';
 const todayAlt =
-  'Today: the morning brief, 4 decisions ranked with the urgent Q4 price list first, the day’s calendar and the agents at work.';
+  'Today: the morning brief, 4 decisions ranked with the urgent Q4 price list first, and the agents at work.';
 
-function ProjectsTag() {
+function PlansTag() {
   return (
-    <span className="lp-tag lp-t-proj">
+    <span className="lp-tag lp-t-plans">
       <span className="lp-ico" aria-hidden>
         ▦
       </span>
-      Projects
+      Plans
     </span>
   );
 }
@@ -239,7 +240,7 @@ function InboxTag() {
       <span className="lp-ico" aria-hidden>
         ✉
       </span>
-      Inbox and Calendar
+      Inbox
     </span>
   );
 }
@@ -249,7 +250,7 @@ function Sources() {
     <div className="lp-sources">
       <p className="lp-src-h">Your agents bring requests in from</p>
       <ul aria-label="Sources your agents can bring in">
-        {[...MESSAGE_SOURCES, ...CALENDAR_SOURCES].map((s) => (
+        {MESSAGE_SOURCES.map((s) => (
           <li key={s.id} className="lp-src">
             {s.label}
           </li>
@@ -272,57 +273,11 @@ const USAGES: Record<
     extra?: ReactNode;
   }
 > = {
-  projects: {
-    tab: 'Projects',
-    tag: <ProjectsTag />,
-    title: 'Agents build it. You approve it.',
-    text: 'Every project is a process: agents shape, build, test and ship, and hand work to each other. Each gate that needs a person waits for you.',
-    points: [
-      <>
-        <b>Many agents per step</b>, across machines
-      </>,
-      <>
-        <b>Status checks</b> before work moves on
-      </>,
-      <>
-        <b>Send back with a reason</b>; the agent reworks it
-      </>,
-    ],
-    cta: 'Start a project',
-    view: (
-      <>
-        <Browser
-          url="hivenod.com/p/website"
-          src={desk930}
-          srcSet={`${desk930} 930w, ${desk1860} 1860w`}
-          sizes={STAGE_SIZES}
-          width={930}
-          height={400}
-          alt={boardAlt}
-        />
-        <Phone src={phone250} srcSet={`${phone250} 250w, ${phone500} 500w`} alt={gateAlt} />
-        <ul className="lp-callouts" aria-hidden>
-          <li className="lp-callout lp-c1">
-            <span className="lp-dot" />
-            <span>
-              <b>Hive</b> is building “Pricing page”
-            </span>
-          </li>
-          <li className="lp-callout lp-c2">
-            <span className="lp-dot lp-h" />
-            <span>
-              Waiting for <b>you</b> · Go/no-go
-            </span>
-          </li>
-        </ul>
-      </>
-    ),
-  },
   inbox: {
-    tab: 'Inbox & Calendar',
+    tab: 'Inbox',
     tag: <InboxTag />,
     title: 'Agents answer it. You OK it.',
-    text: 'Your agents read every request, rank it, draft the reply and find a time in your calendar. Nothing is sent or booked without your OK.',
+    text: 'Your agents bring in every request, rank it, and propose what to do: the reply, a hand-over, a tidy-up. Every thread has a decision page you can read in seconds. Nothing is sent without your OK.',
     points: [
       <>
         <b>A morning brief</b>: what came in, what needs you
@@ -331,7 +286,8 @@ const USAGES: Record<
         <b>One decision at a time</b>, the proposal up front, with how sure the agent is
       </>,
       <>
-        <b>Bookings checked</b> against your calendar, made when you say so
+        <b>Decision pages</b>: a short summary, the recommendation, charts and before and after
+        screenshots
       </>,
     ],
     cta: 'Connect your inbox',
@@ -367,11 +323,61 @@ const USAGES: Record<
       </>
     ),
   },
+  plans: {
+    tab: 'Plans',
+    tag: <PlansTag />,
+    title: 'Agents build it. You approve it.',
+    text: 'A thread can become a plan: steps for agents, and approvals for you. The Development plan runs Shape, Approve idea, Build, Keep green, Ship it?, Release with a live check, and Accept on live. Each step that needs a person waits for you.',
+    points: [
+      <>
+        <b>Many agents per step</b>, across machines
+      </>,
+      <>
+        <b>Checks kept green</b> before Ship it? asks you
+      </>,
+      <>
+        <b>Ask for changes with a reason</b>; the agent reworks it
+      </>,
+    ],
+    cta: 'Start a plan',
+    view: (
+      <>
+        <Browser
+          url="hivenod.com/inbox"
+          src={decision930}
+          srcSet={`${decision930} 930w, ${decision1860} 1860w`}
+          sizes={STAGE_SIZES}
+          width={930}
+          height={581}
+          alt={decisionAlt}
+        />
+        <Phone
+          src={decisionPhone250}
+          srcSet={`${decisionPhone250} 250w, ${decisionPhone500} 500w`}
+          alt={gateAlt}
+        />
+        <ul className="lp-callouts" aria-hidden>
+          <li className="lp-callout lp-c1">
+            <span className="lp-dot" />
+            <span>
+              <b>Hive</b> keeps the checks green
+            </span>
+          </li>
+          <li className="lp-callout lp-c2">
+            <span className="lp-dot lp-h" />
+            <span>
+              Waiting for <b>you</b> · Ship it?
+            </span>
+          </li>
+        </ul>
+      </>
+    ),
+  },
 };
 
-/** Projects | Inbox & Calendar: ARIA tabs with arrow keys, Home and End. */
+/** Inbox | Plans: ARIA tabs with arrow keys, Home and End. */
 function Usages({ tab, setTab }: { tab: UsageId; setTab: (u: UsageId) => void }) {
-  const refs = useRef<Record<UsageId, HTMLButtonElement | null>>({ projects: null, inbox: null });
+  const refs = useRef<Record<UsageId, HTMLButtonElement | null>>({ inbox: null, plans: null });
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const i = USAGE_IDS.indexOf(tab);
     const n = USAGE_IDS.length;
@@ -415,7 +421,7 @@ function Usages({ tab, setTab }: { tab: UsageId; setTab: (u: UsageId) => void })
             onClick={() => setTab(id)}
           >
             <span className="lp-ico" aria-hidden>
-              {id === 'projects' ? '▦' : '✉'}
+              {id === 'plans' ? '▦' : '✉'}
             </span>
             {USAGES[id].tab}
           </button>
@@ -477,24 +483,24 @@ const needs: Array<{
     who: 'H',
     color: '#8a5d00',
     title: 'Pricing page rewrite',
-    sub: 'Website project · Hive shaped it · plan attached',
-    chip: 'Go/no-go',
+    sub: 'Development plan · Hive shaped it · plan attached',
+    chip: 'Approve idea',
     kind: 'g',
   },
   {
     who: 'SO',
     color: '#2f5fd0',
-    title: 'Move the payments review to Tuesday',
-    sub: 'Inbox · Reply and book Tue 10:00–11:00',
-    chip: 'Send and book',
+    title: 'Send the payments review numbers',
+    sub: 'Inbox · Reply with the Q3 numbers',
+    chip: 'Send',
     kind: 'd',
   },
   {
     who: 'T',
     color: '#17704a',
     title: 'Status page',
-    sub: 'Website project · Tester passed 9 of 9 · live',
-    chip: 'Accept',
+    sub: 'Development plan · checks 9 of 9 · live',
+    chip: 'Accept on live',
     kind: 'g',
   },
   {
@@ -520,8 +526,7 @@ function NeedsYou() {
           </h2>
           <p className="lp-sub">
             <b>Needs you</b> brings it all together: a pricing page waiting for approval, a reply
-            ready to send, a meeting to confirm. Approve a few at once, or send one back with a
-            reason.
+            ready to send, a release to ship. Approve a few at once, or send one back with a reason.
           </p>
           <ul className="lp-bul lp-mt">
             <li>
@@ -612,41 +617,39 @@ function Day() {
           <li className="lp-mom">
             <span className="lp-time">10:15</span>
             <div>
-              <ProjectsTag />
+              <PlansTag />
               <h3>A plan waits at your gate</h3>
               <p>
                 Hive shaped the pricing page rewrite: the plan, the copy draft and the open
                 questions. Nothing is built until you say go.
               </p>
               <p className="lp-you">
-                You: <b>Approve → Build</b>, from your phone
+                You: <b>Approve idea</b>, one tap
               </p>
             </div>
             <div className="lp-shot">
               <Browser
-                url="hivenod.com/p/website"
-                src={desk930}
-                srcSet={`${desk930} 930w, ${desk1860} 1860w`}
+                url="hivenod.com/inbox"
+                src={decision930}
+                srcSet={`${decision930} 930w, ${decision1860} 1860w`}
                 sizes="(min-width: 900px) 600px, calc(100vw - 62px)"
                 width={930}
-                height={400}
-                alt={boardAlt}
+                height={581}
+                alt={decisionAlt}
               />
-              <Phone src={phone250} srcSet={`${phone250} 250w, ${phone500} 500w`} alt={gateAlt} />
             </div>
           </li>
           <li className="lp-mom lp-mom-i">
             <span className="lp-time">13:00</span>
             <div>
               <InboxTag />
-              <h3>A meeting finds its slot</h3>
+              <h3>A reply, drafted and checked</h3>
               <p>
-                Sam asked to move the payments review. Your agent found Tuesday 10:00 free, checked
-                with Rita and drafted the reply and the booking. Nothing is booked until you
-                confirm.
+                Sam asked for the payments review numbers. Your agent found them, checked with Rita
+                and drafted the reply. Nothing is sent until you confirm.
               </p>
               <p className="lp-you">
-                You: <b>Send and book</b>, one tap
+                You: <b>Send</b>, one tap
               </p>
             </div>
             <div className="lp-shot">
@@ -657,18 +660,18 @@ function Day() {
                 sizes="(min-width: 900px) 600px, calc(100vw - 62px)"
                 width={640}
                 height={483}
-                alt="A thread: Sam Okafor asks to move the payments review to Tuesday; the agent proposes a reply and a booking at 10:00–11:00, with what it checked and what happens when you approve."
+                alt="A thread: Sam Okafor asks for the payments review numbers; the agent proposes a reply, with what it checked and what happens when you approve."
               />
             </div>
           </li>
           <li className="lp-mom lp-mom-ok">
             <span className="lp-time">17:40</span>
             <div>
-              <ProjectsTag />
-              <h3>Shipped, tested, live</h3>
+              <PlansTag />
+              <h3>Shipped, checked, live</h3>
               <p>
-                Hive built the page, the tester checked it on production, and status checks passed.
-                It waits for your final look.
+                Hive built the page, kept the checks green and released it, then checked it on
+                production. It waits for your final look.
               </p>
               <p className="lp-you">
                 You: <b>Accept</b>. Done.
@@ -697,12 +700,12 @@ function Day() {
                 <span className="lp-ck" aria-hidden>
                   ✓
                 </span>
-                Tester passed on production
+                Live check passed on production
               </li>
               <li>
                 <span className="lp-dot lp-h" aria-hidden />
                 <span>
-                  <b>Waiting for you</b> · Accept
+                  <b>Waiting for you</b> · Accept on live
                 </span>
               </li>
             </ul>
@@ -741,8 +744,8 @@ function How() {
             <span className="lp-n">02</span>
             <h3>Give it a job</h3>
             <p>
-              A step in a project, or your inbox and calendar. Run several agents per step, on as
-              many machines as you like.
+              A thread to answer, or a plan to build. Run several agents per step, on as many
+              machines as you like.
             </p>
             <div className="lp-mini lp-mono" aria-hidden>
               working 4 · waiting on you 2
@@ -755,7 +758,7 @@ function How() {
             <h3>Decide in one place</h3>
             <p>
               <b>Needs you</b> collects every decision from every workspace: approvals, replies to
-              send, bookings to confirm.
+              send, releases to ship.
             </p>
             <div className="lp-mini lp-mono" aria-hidden>
               <b>Approve 3</b> · Send back… · Undo
@@ -780,8 +783,8 @@ function Trust({ stars }: { stars: string | null }) {
             </span>
             <h3>Nothing goes out without your OK</h3>
             <p>
-              Agents draft the reply, the booking, the merge. Sending, booking and shipping wait for
-              your approval, and every decision is logged.
+              Agents draft the reply, the hand-over, the release. Sending and shipping wait for your
+              approval, and every decision is logged.
             </p>
           </li>
           <li className="lp-tc">
@@ -842,8 +845,8 @@ function OpenSource({ stars }: { stars: string | null }) {
           wisely-solutions / hivenod
         </p>
         <p className="lp-rd">
-          Agents do the work, people make the decisions: on your projects, your inbox and your
-          calendar.
+          Agents do the work, people make the decisions: on your inbox, with plans that stop at your
+          approvals.
         </p>
         <p className="lp-meta">
           <span className="lp-lang">TypeScript · Go</span>
@@ -874,7 +877,7 @@ export default function LandingPage() {
       window.removeEventListener('hashchange', onHash);
     };
   }, []);
-  /** The nav's Projects and Inbox & Calendar links: pick that tab and bring it into view. */
+  /** The nav's Inbox and Plans links: pick that tab and bring it into view. */
   const showUsage = (u: UsageId) => {
     setTab(u);
     history.replaceState(null, '', `#${u}`);
@@ -892,7 +895,7 @@ export default function LandingPage() {
           <div className="lp-combs" aria-hidden />
           <div className="lp-wrap lp-hero-in">
             <p className="lp-pill">
-              <span className="lp-new">New</span> Your inbox and calendar, run by your agents
+              <span className="lp-new">New</span> Your inbox, run by your agents
             </p>
             <h1>
               Agents do the work.
@@ -900,8 +903,9 @@ export default function LandingPage() {
               <span className="lp-hl">You make the calls.</span>
             </h1>
             <p className="lp-lead">
-              Put agents like Claude Code to work on your projects, your inbox and your calendar.
-              They pick up the work and stop at your gates. You decide from your desk or your phone.
+              Put agents like Claude Code to work on your inbox and your plans. They bring messages
+              in, propose what to do and stop at your gates. You decide from your desk or your
+              phone.
             </p>
             <InstallLine />
             <div className="lp-ctas">
