@@ -39,7 +39,7 @@ import {
 import { cliBinProblems } from './cli-bin-smoke.mjs';
 import { sweepPairings } from './pairing-sweep-lib.mjs';
 import { fetchStars, starsJson } from './stars-lib.mjs';
-import { RULES_COMPILED_LIMIT, parseCompiledSize, rulesSizeVerdict } from './rules-size-lib.mjs';
+import { parseCompiledSize, rulesSizeOutcome, rulesSizeVerdict } from './rules-size-lib.mjs';
 import { measureRulesSize } from './rules-size.mjs';
 import { measureCompileTime } from './rules-compile-time.mjs';
 
@@ -223,12 +223,20 @@ async function deployProd(
         return undefined;
       }
     };
-    let compiledSize = await probeSize();
-    if (compiledSize != null) {
-      console.log(`Deploy step 1/2: ${rulesSizeVerdict(compiledSize)}`);
-      if (compiledSize >= RULES_COMPILED_LIMIT)
-        die(`Deploy step 1/2 FAILED: ${rulesSizeVerdict(compiledSize)}. Nothing was deployed.`);
-    }
+    // An exact size, or undefined when the probe failed or only bounded it (its padding reached
+    // Google's source limit first: the rules fit, so that is a pass with a lower-bound message).
+    let compiledSize;
+    let probed = false;
+    const measure = async () => {
+      const m = await probeSize();
+      if (m == null) return;
+      probed = true;
+      const out = rulesSizeOutcome(m);
+      console.log(`Deploy step 1/2: ${out.message}`);
+      if (!out.pass) die(`Deploy step 1/2 FAILED: ${out.message}. Nothing was deployed.`);
+      compiledSize = out.size ?? undefined;
+    };
+    await measure();
     let retries503 = 0;
     let retries409 = 0;
     for (;;) {
@@ -241,8 +249,7 @@ async function deployProd(
         ? await liveRulesMatch({ project, localSource: rulesSource, getJson })
         : undefined;
       // A 409 that is not "already current" may hide the PATCH 400 "too big": measure again.
-      if (isRules409(r.output) && remoteMatches !== true && compiledSize == null)
-        compiledSize = await probeSize();
+      if (isRules409(r.output) && remoteMatches !== true && !probed) await measure();
       const d = rulesDeployDecision({
         output: r.output,
         retries503,

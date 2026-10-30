@@ -18640,7 +18640,7 @@
       "action": "cleanOutcomeFields",
       "input": { "type": "x", "fields": {} },
       "output": {
-        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, shape, build, keepgreen, release, their_reply, approval."
+        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, shape, build, keepgreen, release, their_reply, approval, schedule."
       }
     },
     {

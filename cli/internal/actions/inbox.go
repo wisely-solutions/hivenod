@@ -65,6 +65,9 @@ type OutcomeType struct {
 	Long bool `json:"long"`
 	// Retired (bookings, slice 5; make_it_work, slice 11): old records only, never proposed.
 	Retired bool `json:"retired"`
+	// OwnTool (scheduled tasks): proposed only through that tool (schedule_propose), never by
+	// outcome_propose and never as a plan step.
+	OwnTool string `json:"ownTool"`
 }
 
 // RetiredMessage is RETIRED_MESSAGE: the refusal for a retired outcome type.
@@ -152,7 +155,7 @@ func outcomeIDs() string {
 func SingleOutcomeTypes() []string {
 	var ids []string
 	for _, t := range Outcomes {
-		if !t.PlanOnly {
+		if !t.PlanOnly && t.OwnTool == "" {
 			ids = append(ids, t.ID)
 		}
 	}
@@ -1085,6 +1088,9 @@ func ProposeOutcome(ctx Ctx, in ProposeInput) (ProposeResult, error) {
 	}
 	if typ.PlanOnly {
 		return ProposeResult{}, fail(in.Type + " is only a step of a plan (plan_propose). Types alone: " + strings.Join(SingleOutcomeTypes(), ", ") + ".")
+	}
+	if typ.OwnTool != "" {
+		return ProposeResult{}, fail("A " + in.Type + " is proposed with " + typ.OwnTool + ", not outcome_propose.")
 	}
 	if in.Fields == nil {
 		in.Fields = map[string]any{}

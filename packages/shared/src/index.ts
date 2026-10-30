@@ -23,4 +23,6 @@ export * from './summary';
 export * from './threadattach';
 export * from './threadask';
 export * from './schedules';
+export * from './scheduleDocs';
+export * from './scheduleActions';
 export * from './theirreply';

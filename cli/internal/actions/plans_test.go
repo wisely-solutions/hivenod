@@ -27,6 +27,10 @@ func TestOutcomeKindsAndPlanTypes(t *testing.T) {
 	if got := SingleOutcomeTypes(); !reflect.DeepEqual(got, wantSingle) {
 		t.Errorf("single types %v, want %v", got, wantSingle)
 	}
+	// Scheduled tasks: a schedule is proposed only with schedule_propose (slice 5), never alone.
+	if s := OutcomeTypeOf("schedule"); s == nil || s.OwnTool != "schedule_propose" || s.Plan || s.Executor != "none" {
+		t.Errorf("schedule type %+v, want ownTool schedule_propose, no plan step, executor none", s)
+	}
 	// Bookings were retired with Calendar (item OE8FmrTaIxFVGcaeGG3N, slice 5).
 	// make_it_work (Build it) with Projects (slice 11).
 	for _, id := range []string{"reply_book", "book", "make_it_work"} {

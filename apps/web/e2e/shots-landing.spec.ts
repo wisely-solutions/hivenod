@@ -1,209 +1,18 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import {
-  adminPatch,
-  adminSetAll,
-  freezeClock,
-  projectFields,
-  settle,
-  signIn,
-  uidOf,
-  workspaceOf,
-} from './helpers';
-import { seedInbox } from './inboxSeed';
+import { adminUpdate, fastTimers, freezeClock, NOW, settle, signIn } from './helpers';
+import { at, seedInbox, type Seed } from './inboxSeed';
 
-// The real product screenshots on the landing page (item g17GWUkfKRFh4mgn0ciQ), from a clean demo
-// organization seeded on the emulators: made-up people, agents and work, never test or personal data.
+// The real product screenshots on the landing page (items g17GWUkfKRFh4mgn0ciQ, x38DsNLjyh1rBTlkwMr5),
+// from a clean demo organization seeded on the emulators (the Inbox e2e seed, inboxSeed.ts): made-up
+// people, agents and work, never test or personal data. Shots: Today, a thread with a proposed
+// reply, and a decision page (Ship it? with before/after screenshots and a chart).
 // Run with `pnpm shots:landing`; it rewrites apps/web/src/landing/shots/*.webp (commit them).
-// The Inbox and Calendar shots (item x38DsNLjyh1rBTlkwMr5) come from the shipped Today and thread
-// pages, with the Inbox e2e seed (inboxSeed.ts): made-up people and organizations only.
 // SHOTS_PREVIEW=<dir> also keeps the full-size PNGs there, to look at before committing.
 test.skip(!process.env.SHOTS_LANDING, 'pnpm shots:landing makes the landing screenshots');
 
 const OUT = join(import.meta.dirname, '../src/landing/shots');
-const MIN = 60_000;
-const ago = (m: number) => new Date(Date.now() - m * MIN);
-
-/** The demo person: a fixed made-up name; the email is never shown in the shots. */
-const demo = {
-  name: 'Sam Rivera',
-  email: `sam.rivera.${Math.random().toString(36).slice(2, 8)}@example.com`,
-};
-
-const PID = 'website';
-
-async function seedDemo(page: Page) {
-  await page.goto('/');
-  await signIn(page, demo);
-  await expect(
-    page.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
-  ).toBeVisible({ timeout: 20_000 });
-  await expect
-    .poll(() => workspaceOf(demo.email).catch(() => ''), { timeout: 20_000 })
-    .not.toBe('');
-  const wid = await workspaceOf(demo.email);
-  const uid = await uidOf(demo.email);
-  const base = `workspaces/${wid}`;
-  await adminPatch(base, { name: 'Northwind Studio' });
-  const gate = () => ({
-    deciderUids: [uid],
-    groupIds: [],
-    rule: 'any',
-    n: 1,
-    mustInclude: [],
-    rejectPolicy: 'one',
-    remindAfterHours: 24,
-  });
-  const steps = [
-    { id: 'shape', name: 'Shape', kind: 'agent', description: 'Turn the idea into a plan' },
-    { id: 'gonogo', name: 'Go/no-go', kind: 'human', description: 'Go or no-go', gate: gate() },
-    { id: 'build', name: 'Build', kind: 'agent', description: 'Code, tests, pull request' },
-    { id: 'test', name: 'Test', kind: 'agent', description: 'Check it, send it back if wrong' },
-    {
-      id: 'accept',
-      name: 'Accept',
-      kind: 'human',
-      description: 'Live, checked, done',
-      gate: gate(),
-    },
-  ];
-  const docs: Array<[string, Record<string, unknown>]> = [];
-  const put = (path: string, data: Record<string, unknown>) => docs.push([path, data]);
-  put(`${base}/projects/${PID}`, {
-    ...projectFields('Website', uid),
-    emoji: '🌐',
-    templateId: 'software',
-    steps,
-    stepIndex: Object.fromEntries(steps.map((s, i) => [s.id, i])),
-  });
-  for (const [id, name, color] of [
-    ['hive', 'Hive', 'agent-1'],
-    ['tester', 'Tester', 'agent-6'],
-  ] as const)
-    put(`${base}/agents/${id}`, {
-      name,
-      color,
-      projectIds: '*',
-      createdBy: uid,
-      createdAt: ago(5000),
-      revokedAt: null,
-      lastSeenAt: ago(0.2),
-      tokenHint: 'demo',
-      previousAgentUid: null,
-      lastEventId: 'seed',
-    });
-  let order = 0;
-  const item = (id: string, over: Record<string, unknown>) => {
-    order += 1;
-    put(`${base}/projects/${PID}/items/${id}`, {
-      title: 'Item',
-      type: 'task',
-      stepId: 'shape',
-      status: 'queued',
-      summary: '',
-      source: { kind: 'manual', label: 'Sam Rivera' },
-      createdBy: { type: 'human', id: uid },
-      parentItemId: null,
-      sourceRunId: null,
-      claim: null,
-      progress: null,
-      gate: null,
-      triage: null,
-      sendBackCount: 0,
-      costEur: 0,
-      order,
-      updatedAt: ago(30 + order * 7),
-      lastEventId: 'seed',
-      ...over,
-    });
-  };
-  const waiting = (stepId: string) => ({
-    status: 'waiting',
-    gate: { stepId, approvals: {}, rejections: {} },
-  });
-  const working = (agent: string, run: string, done: number, total: number) => ({
-    status: 'working',
-    claim: { runId: run, agentUid: agent, heartbeatAt: ago(0.2) },
-    progress: { done, total },
-  });
-  item('referral', {
-    title: 'Referral program',
-    type: 'idea',
-    summary: 'Give customers a link to invite a friend.',
-  });
-  item('changelog', { title: 'Public changelog page', type: 'idea' });
-  item('rewrite', {
-    title: 'Pricing page rewrite',
-    stepId: 'gonogo',
-    ...waiting('gonogo'),
-    summary:
-      'Rewrite the pricing page around the three plans customers actually pick. Shaped plan, copy draft and the open questions are attached.',
-    costEur: 0.42,
-  });
-  item('onboarding', {
-    title: 'Onboarding emails',
-    stepId: 'gonogo',
-    ...waiting('gonogo'),
-    summary: 'Three short emails for the first week.',
-    costEur: 0.18,
-  });
-  item('pricing', {
-    title: 'Pricing page',
-    stepId: 'build',
-    ...working('hive', 'r1', 3, 5),
-    summary: 'Build the new pricing page from the approved plan.',
-    costEur: 1.1,
-  });
-  item('signup', { title: 'Fix the sign-up redirect', type: 'bug', stepId: 'build' });
-  item('checkout', {
-    title: 'Checkout copy',
-    stepId: 'test',
-    ...working('tester', 'r2', 6, 9),
-    costEur: 0.35,
-  });
-  item('status', {
-    title: 'Status page',
-    stepId: 'accept',
-    ...waiting('accept'),
-    summary: 'Live on the site. Tester passed 9 of 9 checks.',
-    costEur: 0.9,
-  });
-  for (const [run, agent, itemId, stepId] of [
-    ['r1', 'hive', 'pricing', 'build'],
-    ['r2', 'tester', 'checkout', 'test'],
-  ] as const)
-    put(`${base}/runs/${run}`, {
-      agentUid: agent,
-      projectId: PID,
-      itemId,
-      stepId,
-      startedAt: ago(12),
-      heartbeatAt: ago(0.2),
-      heartbeatEventAt: ago(1),
-      endedAt: null,
-      status: 'running',
-      costEur: 0.3,
-      tokensIn: 0,
-      tokensOut: 0,
-      model: null,
-      summary: null,
-      lastEventId: 'seed',
-    });
-  put(`${base}/projects/${PID}/items/rewrite/attachments/plan`, {
-    kind: 'markdown',
-    name: 'Plan.md',
-    content: '# Pricing page rewrite\n\nThree plans, one comparison table, a short FAQ.',
-    url: null,
-    bytes: 70,
-    runId: null,
-    by: { type: 'agent', id: 'hive' },
-    at: ago(40),
-    lastEventId: 'seed',
-  });
-  await adminSetAll(docs);
-  return uid;
-}
 
 /** Encodes a PNG screenshot as WebP at the given widths, in the browser (no image tools needed). */
 async function toWebp(browser: Browser, png: Buffer, widths: number[]) {
@@ -244,61 +53,157 @@ async function save(browser: Browser, name: string, png: Buffer, widths: number[
   }
 }
 
-test('landing screenshots from the demo organization', async ({ browser }, info) => {
-  test.skip(info.project.name !== 'desktop-1440', 'one run makes both shots');
-  test.setTimeout(120_000);
-  const ctx = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    deviceScaleFactor: 2,
-    colorScheme: 'dark',
+/** A mock screenshot of the Inbox card, before or after the change (the same size). */
+async function mock(page: Page, after: boolean): Promise<string> {
+  const p = await page.context().newPage();
+  await p.setViewportSize({ width: 420, height: 300 });
+  await p.setContent(`<!doctype html><html><body style="margin:0;font:18px system-ui;background:#f6f5f2">
+    <div style="margin:14px;padding:18px;min-height:220px;border:1px solid #ddd;border-radius:12px;background:#fff">
+      <div style="font-size:12px;color:#888;letter-spacing:.08em">INBOX · RELEASES</div>
+      <div style="margin-top:8px;font-size:24px;font-weight:600;line-height:1.2">${
+        after ? 'Ship release 175 to hivenod.com?' : 'Release 175: Inbox summaries'
+      }</div>
+      <div style="margin-top:8px;color:#555">${
+        after
+          ? 'Everything passed: 612 of 612 checks. Desk agent recommends Approve.'
+          : 'Release bot: PR #86 is ready: every thread gets a summary and Today…'
+      }</div>
+      ${
+        after
+          ? '<div style="margin-top:16px;display:flex;gap:8px"><span style="padding:8px 14px;border-radius:8px;background:#1f6f43;color:#fff">Approve</span><span style="padding:8px 14px;border-radius:8px;border:1px solid #ccc">Not now</span></div>'
+          : '<div style="margin-top:16px;color:#888">3 messages · open the thread to read them</div>'
+      }
+    </div></body></html>`);
+  const png = await p.screenshot({ type: 'png' });
+  await p.close();
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
+const bar = {
+  kind: 'bar',
+  title: 'Check time, last 6 releases (min)',
+  caption: 'Release 175 ran the checks in 10.8 min, the fastest of the last six.',
+  unit: 'min',
+  x: ['170', '171', '172', '173', '174', '175'],
+  series: [{ name: 'Minutes', values: [14.2, 16.1, 13.4, 12.6, 12.1, 10.8] }],
+  highlight: 5,
+  better: 'down',
+};
+
+/** A reply thread without a calendar: Sam asks for the numbers, the agent drafts and checks. */
+async function seedReply(s: Seed) {
+  const tid = await s.agent.add(s.uid, {
+    source: 'teams',
+    from: 'Sam Okafor',
+    text: 'Payments review: can you send the numbers?\nCould you send me the Q3 payments numbers before the review?',
+    ref: 'numbers',
+    id: 'sn1',
+    at: at(0, 9),
   });
-  await ctx.addInitScript(() => localStorage.setItem('hive-theme', 'dark'));
-  const page = await ctx.newPage();
-  const uid = await seedDemo(page);
-  // Every agent step open, so the board shows the agents at work.
-  await page.evaluate(
-    ([key]) => localStorage.setItem(key!, JSON.stringify(['shape', 'build', 'test'])),
-    [`hive.board.open.${uid}.${PID}`],
+  await s.agent.file(tid, { subjectId: s.subjects.review });
+  await s.agent.propose(
+    tid,
+    'reply',
+    {
+      text: 'Hi Sam, the Q3 payments numbers are in the shared folder. Shout if anything looks off.',
+    },
+    'Sam asked for the Q3 numbers; they are final and Rita has nothing to add.',
+    {
+      confidence: 'high',
+      checks: ['The Q3 numbers: final, in the shared folder', 'Asked Rita by mail: nothing to add'],
+    },
   );
+  await s.agent.summary(tid, {
+    headline: 'Sam wants the Q3 payments numbers before the review',
+    ask: 'Send Sam the numbers?',
+    answer: 'The numbers are final and in the shared folder.',
+    recommendation: { action: 'Send', why: 'Rita has nothing to add' },
+    confidence: 'high',
+    bullets: [
+      { text: 'Sam asked on Teams, before the payments review.' },
+      { text: 'Q3 numbers: final, in the shared folder.' },
+      { text: 'Rita checked by mail: nothing to add.' },
+    ],
+    visuals: [],
+    noVisualWhy: 'A short reply with no data behind it.',
+  });
+  return tid;
+}
 
-  // Desktop: the project's board, agents at work and gates waiting.
-  await page.goto(`/p/${PID}`);
-  await expect(page.getByText('Pricing page rewrite').first()).toBeVisible({ timeout: 20_000 });
-  await settle(page);
-  // The top of the page: the board ends above 620 px, the rest is empty canvas.
-  await save(
-    browser,
-    'desk',
-    await page.screenshot({ clip: { x: 0, y: 0, width: 1440, height: 620 } }),
-    [930, 1860],
+/** A release thread waiting at Ship it?, with before/after screenshots attached at Build. */
+async function seedDecision(page: Page, s: Seed) {
+  const tid = await s.agent.add(s.uid, {
+    source: 'mail',
+    from: 'Release bot',
+    text: 'Release 175: Inbox summaries\nPR #86 is ready: the Inbox card shows the summary.',
+    ref: 'rel175',
+    id: 'gi1',
+    at: at(0, 8),
+  });
+  await s.agent.file(tid, { newName: 'Releases', area: 'Hivenod' });
+  const { planId, stepIds } = await s.agent.plan(
+    tid,
+    [
+      { type: 'reply', fields: { text: 'Build: PR #86.' } },
+      { type: 'approval', fields: { what: 'Ship it?', detail: '612 of 612 checks passed.' } },
+      { type: 'approval', fields: { what: 'Accept on live' } },
+    ],
+    'Build, then ask before shipping.',
   );
-
-  // Phone: the item waiting at Go/no-go, with the decision bar.
-  const phone = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    deviceScaleFactor: 2,
-    isMobile: true,
-    hasTouch: true,
-    colorScheme: 'dark',
+  await adminUpdate(`workspaces/${s.wid}/inboxOutcomes/${stepIds[0]!}`, {
+    state: 'done',
+    result: {
+      text: 'PR #86 open, checks green.',
+      permalink: null,
+      itemId: null,
+      error: null,
+      by: s.agent.aid,
+      at: new Date(NOW),
+    },
   });
-  await phone.addInitScript(() => localStorage.setItem('hive-theme', 'dark'));
-  const p2 = await phone.newPage();
-  await p2.goto('/');
-  await signIn(p2, demo);
-  await expect(
-    p2.getByRole('heading', { name: /^Good (morning|afternoon|evening), / }),
-  ).toBeVisible({ timeout: 20_000 });
-  await p2.goto(`/p/${PID}?item=rewrite`);
-  await expect(p2.getByRole('heading', { name: 'Pricing page rewrite' })).toBeVisible({
-    timeout: 20_000,
+  await adminUpdate(`workspaces/${s.wid}/inboxPlans/${planId}`, { state: 'active', cursor: 1 });
+  const before = await s.agent.attach(tid, {
+    kind: 'image',
+    name: 'inbox-card-before.png',
+    content: await mock(page, false),
   });
-  await settle(p2);
-  await save(browser, 'phone', await p2.screenshot(), [250, 500]);
-  await phone.close();
-  await ctx.close();
-});
+  const after = await s.agent.attach(tid, {
+    kind: 'image',
+    name: 'inbox-card-after.png',
+    content: await mock(page, true),
+  });
+  await s.agent.summary(
+    tid,
+    {
+      headline: 'Release 175: the Inbox card shows the summary',
+      ask: 'Ship release 175 to hivenod.com?',
+      answer: 'Everything passed: 612 of 612 checks, one screen changed.',
+      recommendation: { action: 'Approve', why: 'rollback takes 1 min if needed' },
+      confidence: 'high',
+      bullets: [
+        { text: 'The Inbox card leads with the ask and the recommendation.' },
+        { text: 'Checks: 612 of 612 passed.' },
+        { text: 'Check time down to 10.8 min.' },
+      ],
+      visuals: [
+        {
+          kind: 'image_pair',
+          title: 'Inbox card, before and after',
+          caption: 'The card now asks the question and shows Approve and Not now.',
+          before,
+          after,
+        },
+        bar,
+      ],
+    },
+    { [before]: 'image', [after]: 'image' },
+  );
+  return tid;
+}
 
-test('landing screenshots of Inbox and Calendar: Today and a thread', async ({ browser }, info) => {
+test('landing screenshots of Inbox and Plans: Today, a thread and a decision page', async ({
+  browser,
+}, info) => {
   test.skip(info.project.name !== 'desktop-1440', 'one run makes every shot');
   test.setTimeout(150_000);
   const ctx = await browser.newContext({
@@ -308,9 +213,14 @@ test('landing screenshots of Inbox and Calendar: Today and a thread', async ({ b
   });
   await ctx.addInitScript(() => localStorage.setItem('hive-theme', 'dark'));
   const page = await ctx.newPage();
+  await fastTimers(page);
   await freezeClock(page);
   const s = await seedInbox(page);
   try {
+    // Bookings and calendars are gone: the demo reply just agrees on Tuesday.
+    await adminUpdate(`workspaces/${s.wid}/inboxOutcomes/${s.outcomes.book}`, {
+      fields: { text: 'Tuesday works for us. See you then.' },
+    });
     // Desktop: Today, the brief, the ranked decisions and the first decision card.
     await page.goto('/');
     await expect(page.locator('[data-decision-card]')).toBeVisible({ timeout: 20_000 });
@@ -323,10 +233,15 @@ test('landing screenshots of Inbox and Calendar: Today and a thread', async ({ b
       [930, 1860],
     );
 
-    // Desktop: the payments review thread, a reply and a booking proposed with its checks (without
-    // the sidebar: the shot sits in a narrower frame on the landing page).
-    await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
-    await expect(page.getByText(/Tuesday works/).first()).toBeVisible({ timeout: 20_000 });
+    // Desktop: a thread with a proposed reply and what the agent checked (without the sidebar:
+    // the shot sits in a narrower frame on the landing page).
+    const reply = await seedReply(s);
+    await page.goto(`/inbox/${s.wid}/t/${reply}`);
+    await expect(
+      page.getByText(/Q3 payments numbers are in the shared folder/).first(),
+    ).toBeVisible({
+      timeout: 20_000,
+    });
     await settle(page);
     await page.waitForTimeout(400);
     await save(
@@ -334,6 +249,19 @@ test('landing screenshots of Inbox and Calendar: Today and a thread', async ({ b
       'thread',
       await page.screenshot({ clip: { x: 276, y: 30, width: 1112, height: 840 } }),
       [640, 1280],
+    );
+
+    // Desktop: the decision page at Ship it?, with the plan, before/after and a chart.
+    const dec = await seedDecision(page, s);
+    await page.goto(`/inbox/${s.wid}/t/${dec}`);
+    await expect(page.locator('[data-visual="image_pair"]')).toBeVisible({ timeout: 20_000 });
+    await settle(page);
+    await page.waitForTimeout(400);
+    await save(
+      browser,
+      'decision',
+      await page.screenshot({ clip: { x: 0, y: 0, width: 1440, height: 900 } }),
+      [930, 1860],
     );
 
     // Phone: Today at 390.
@@ -353,6 +281,11 @@ test('landing screenshots of Inbox and Calendar: Today and a thread', async ({ b
     await settle(p2);
     await p2.waitForTimeout(400);
     await save(browser, 'today-phone', await p2.screenshot(), [250, 500]);
+    await p2.goto(`/inbox/${s.wid}/t/${dec}`);
+    await expect(p2.locator('[data-visual="image_pair"]')).toBeVisible({ timeout: 20_000 });
+    await settle(p2);
+    await p2.waitForTimeout(400);
+    await save(browser, 'decision-phone', await p2.screenshot(), [250, 500]);
     await phone.close();
   } finally {
     await s.stop();

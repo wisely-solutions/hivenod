@@ -78,6 +78,11 @@ export interface OutcomeType {
    * (Build, Release), reported started, with progress, then done.
    */
   long?: boolean;
+  /**
+   * Proposed only through its own agent tool (scheduled tasks: `schedule_propose`, which writes
+   * the schedule doc in the same batch): never by outcome_propose alone, never a plan step.
+   */
+  ownTool?: string;
 }
 export type OutcomeKind = 'agent' | 'human';
 
@@ -337,6 +342,22 @@ export const OUTCOMES = {
     plan: true,
     planOnly: true,
   },
+  // Scheduled tasks (design ~/drafts/schedules, slice 2, ./scheduleDocs.ts): the agent proposes a
+  // schedule (a `proposed` schedules/{sid} doc); the member's approval activates it in the same
+  // batch (approveOutcome). Nothing to carry out.
+  schedule: {
+    label: 'Schedule',
+    approve: 'Set up schedule',
+    description:
+      'A recurring or later task the member asked for: proposed with schedule_propose (never outcome_propose), with the plan each run follows.',
+    fields: {
+      scheduleId: line('Schedule', 'The proposed schedule (set by schedule_propose)'),
+      sentence: line('When', 'The rule in words, e.g. "Monthly · day 1 · 09:00 Lisbon"'),
+    },
+    executor: 'none',
+    after: { state: 'done' },
+    ownTool: 'schedule_propose',
+  },
 } as const satisfies Record<string, OutcomeType>;
 
 export type OutcomeTypeId = keyof typeof OUTCOMES;
@@ -353,7 +374,9 @@ export const PLAN_TYPES = OUTCOME_TYPES.filter(
 );
 /** The types an agent may propose alone (outcome_propose). */
 export const SINGLE_TYPES = OUTCOME_TYPES.filter(
-  (k) => (OUTCOMES as Record<string, OutcomeType>)[k]!.planOnly !== true,
+  (k) =>
+    (OUTCOMES as Record<string, OutcomeType>)[k]!.planOnly !== true &&
+    (OUTCOMES as Record<string, OutcomeType>)[k]!.ownTool === undefined,
 );
 /** Retired types (bookings, slice 5): old records only. */
 export function isRetiredOutcome(id: string): boolean {
@@ -433,7 +456,7 @@ export function outcomeRulesBlock(): string {
     '      // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by',
     '      // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)',
     `      function outcomeTypes() { return ${list(entries.map(([k]) => k))}; }`,
-    `      function outcomeSingle() { return ${list(entries.filter(([, t]) => !t.planOnly).map(([k]) => k))}; }`,
+    `      function outcomeSingle() { return ${list(entries.filter(([, t]) => !t.planOnly && !t.ownTool).map(([k]) => k))}; }`,
     `      function outcomePlanTypes() { return ${list(entries.filter(([, t]) => t.plan).map(([k]) => k))}; }`,
     `      function outcomeHuman() { return ${list(entries.filter(([, t]) => t.kind === 'human').map(([k]) => k))}; }`,
     `      function outcomeImmediate() { return ${list(entries.filter(([, t]) => t.executor === 'none').map(([k]) => k))}; }`,
@@ -461,7 +484,9 @@ export function outcomeRulesBlock(): string {
  */
 export function outcomeGuide(which: 'single' | 'plan' = 'single'): string {
   return Object.entries(OUTCOMES as Record<string, OutcomeType>)
-    .filter(([, t]) => (which === 'plan' ? t.plan === true : t.planOnly !== true))
+    .filter(([, t]) =>
+      which === 'plan' ? t.plan === true : t.planOnly !== true && t.ownTool === undefined,
+    )
     .map(([k, t]) => {
       const fs = Object.entries(t.fields)
         .map(([n, f]) => `${n}${f.required ? '' : '?'} (${f.kind}: ${f.help})`)

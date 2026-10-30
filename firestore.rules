@@ -655,16 +655,16 @@ service cloud.firestore {
 
       // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by
       // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)
-      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'keepgreen', 'release', 'their_reply', 'approval']; }
+      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'keepgreen', 'release', 'their_reply', 'approval', 'schedule']; }
       function outcomeSingle() { return ['reply', 'no_reply', 'handover', 'snooze', 'nudge', 'ignore']; }
       function outcomePlanTypes() { return ['reply', 'handover', 'snooze', 'nudge', 'shape', 'build', 'keepgreen', 'release', 'their_reply', 'approval']; }
       function outcomeHuman() { return ['approval']; }
-      function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval']; }
+      function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval', 'schedule']; }
       function outcomeLong() { return ['build', 'keepgreen', 'release']; }
-      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'keepgreen': 'waiting', 'release': 'done', 'their_reply': 'waiting', 'approval': 'done'}; }
-      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'keepgreen': 'item', 'release': null, 'their_reply': 'them', 'approval': null}; }
-      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'keepgreen': [], 'release': ['notes'], 'their_reply': ['who', 'org', 'channel', 'address', 'need', 'remindAfterDays'], 'approval': ['what', 'detail', 'link']}; }
-      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'keepgreen': [], 'release': [], 'their_reply': ['who', 'channel', 'address', 'need'], 'approval': ['what']}; }
+      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'keepgreen': 'waiting', 'release': 'done', 'their_reply': 'waiting', 'approval': 'done', 'schedule': 'done'}; }
+      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'keepgreen': 'item', 'release': null, 'their_reply': 'them', 'approval': null, 'schedule': null}; }
+      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'keepgreen': [], 'release': ['notes'], 'their_reply': ['who', 'org', 'channel', 'address', 'need', 'remindAfterDays'], 'approval': ['what', 'detail', 'link'], 'schedule': ['scheduleId', 'sentence']}; }
+      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'keepgreen': [], 'release': [], 'their_reply': ['who', 'channel', 'address', 'need'], 'approval': ['what'], 'schedule': ['scheduleId', 'sentence']}; }
       // END outcome registry
 
       // ---------- summaries (item OE8FmrTaIxFVGcaeGG3N, packages/shared/src/summary.ts) ----------
@@ -989,7 +989,9 @@ service cloud.firestore {
                   'relation.created', 'relation.accepted', 'relation.rejected', 'relation.removed',
                   'thread.flagged', 'thread.due', 'plan.approved', 'plan.rejected', 'plan.edited',
                   'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
-                  'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back', 'step.external'])
+                  'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back',
+                  'schedule.created', 'schedule.updated', 'schedule.paused', 'schedule.resumed',
+                  'schedule.deleted', 'run.decided', 'agents.off', 'agents.on', 'step.external'])
             || (d.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(d.memberUid)
                 && d.type in ['inbox.added', 'thread.filed', 'thread.note',
@@ -1345,7 +1347,9 @@ service cloud.firestore {
           && (!('confidence' in d) || d.confidence in ['high', 'medium', 'low'])
           && (!('checks' in d) || (d.checks is list && d.checks.size() <= 6))
           // Alone: never a plan-only type (approval, book: item qwFAWxZM5xkcE7PPjAzi).
-          && d.type in outcomeSingle()
+          // A schedule (scheduled tasks): with the proposed schedule that names it.
+          && (d.type in outcomeSingle() || (d.type == 'schedule'
+            && getAfter(inboxDoc('schedules', d.fields.scheduleId)).data.proposal.outcomeId == oid))
           && inboxFieldsOk(d.type, d.fields)
           && d.state == 'proposed'
           && str(d.note, 0, 2000)
@@ -1848,6 +1852,130 @@ service cloud.firestore {
             : type == 'relation.rejected' ? r.state == 'proposed' && d.state == 'rejected' && d.note == r.note
             : r.state == 'related' && d.state == 'rejected' && d.note == r.note;
         }
+      }
+
+      // ---------- scheduled tasks (packages/shared/src/scheduleDocs.ts, scheduleActions.ts) ----------
+      // A schedule belongs to one member: read by him and the organization's agents. The member
+      // makes his own (active at once), edits, pauses, resumes and deletes them, and activates an
+      // agent's proposal only by approving its `schedule` outcome. An agent only proposes (state
+      // proposed, as the home agent of the member's thread, with the outcome in the same batch)
+      // and never changes a schedule after that. Runs are written by the scheduler (the
+      // notifier, Admin SDK) alone; the member only decides a run that could not happen. The Off
+      // switch is the member's own. Nothing here is rewritten on a timer.
+      function schedEv(d) { return inboxEv(d.lastEventId).data; }
+      // The shape (the deep checks are checkRule's, in the app, the CLI and the scheduler).
+      function schedOk(d) {
+        let r = d.rule;
+        return exactKeys(d, ['memberUid', 'agentUid', 'title', 'what', 'rule', 'runTitle', 'steps',
+             'templateId', 'subjectId', 'state', 'activeFrom', 'proposal', 'replaces', 'version',
+             'createdBy', 'createdAt', 'updatedAt', 'lastEventId'])
+          && str(d.title, 1, 80) && str(d.what, 1, 4000) && str(d.runTitle, 1, 100)
+          && keysOk(r, ['freq', 'at'], ['tz', 'date', 'weekdays', 'monthDay', 'month', 'weekend', 'until'])
+          && r.freq in ['once', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly']
+          && r.at is string && r.at.matches('([01][0-9]|2[0-3]):[0-5][0-9]')
+          && str(r.get('tz', 'UTC'), 1, 64) && r.get('weekdays', []).size() <= 7
+          && d.steps is list && d.steps.size() >= 1 && d.steps.size() <= 8
+          && strOrNull(d.templateId, 40)
+          && (d.subjectId == null || inboxSubjectOf(d.subjectId, d.memberUid))
+          && d.version is int && d.updatedAt == request.time;
+      }
+      // An agent's proposal: itself the home agent of the member's thread, with the outcome of
+      // this batch's event (whose own rule checks that it names this schedule); a change only of
+      // a schedule it runs for that member. (A getAfter of that outcome's fields here runs out of
+      // the evaluation budget: existsAfter and the event suffice.)
+      function schedProposalOk(d) {
+        let t = get(inboxDoc('inboxThreads', d.proposal.threadId)).data;
+        let x = d.replaces == null ? null : get(inboxDoc('schedules', d.replaces)).data;
+        return d.state == 'proposed' && d.activeFrom == null && d.agentUid == me()
+          && d.createdBy == me_('agent') && exactKeys(d.proposal, ['threadId', 'outcomeId', 'by'])
+          && d.proposal.by == me() && t.fetchedBy == me() && t.memberUid == d.memberUid
+          && existsAfter(inboxDoc('inboxOutcomes', d.proposal.outcomeId))
+          && schedEv(d).data.outcomeId == d.proposal.outcomeId
+          && inboxDocTracked(d, ['outcome.proposed'], d.memberUid, d.proposal.threadId)
+          && (x == null || (x.memberUid == d.memberUid && x.agentUid == me() && x.state in ['active', 'paused']));
+      }
+      match /schedules/{sid} {
+        allow read: if inboxReader(resource.data);
+        allow create: if schedCreateOk();
+        function schedCreateOk() {
+          let d = request.resource.data;
+          return schedOk(d) && d.version == 1 && d.createdAt == request.time
+          && schedEv(d).data.scheduleId == sid
+          && ((inboxOwner(d) && d.state == 'active' && d.activeFrom == request.time
+              && d.proposal == null && d.replaces == null && d.createdBy == me_('human')
+              && activeAgentDoc(get(agentPath(wid, d.agentUid)))
+              && inboxTracked(d.lastEventId, ['schedule.created'], me()))
+            || (isActiveAgent(wid) && schedProposalOk(d)));
+        }
+        // The member only. Pause and resume flip active and paused; a proposal turns active only
+        // with the approval of its outcome; a new rule, a resume or an activation starts now.
+        allow update: if schedUpdateOk();
+        function schedUpdateOk() {
+          let d = request.resource.data;
+          let r = resource.data;
+          let e = schedEv(d);
+          return inboxOwner(r) && schedOk(d) && d.version == r.version + 1
+          && touched(['title', 'what', 'rule', 'runTitle', 'steps', 'templateId', 'subjectId', 'state',
+               'activeFrom', 'version'])
+          && inboxTracked(d.lastEventId,
+               ['schedule.updated', 'schedule.paused', 'schedule.resumed', 'outcome.approved'], me())
+          && e.data.scheduleId == sid
+          && (d.activeFrom == request.time
+            || (d.activeFrom == r.activeFrom && d.rule == r.rule && (r.state == 'active' || d.state != 'active')))
+          && (e.type == 'schedule.paused' ? r.state == 'active' && d.state == 'paused'
+            : e.type == 'schedule.resumed' ? r.state == 'paused' && d.state == 'active'
+            : r.state == 'proposed'
+              ? e.type == 'outcome.approved' && r.replaces == null && d.state == 'active'
+                && e.data.outcomeId == r.proposal.outcomeId
+            : r.state in ['active', 'paused'] && d.state == r.state);
+        }
+        // The member only, tracked at the fixed id (a delete, or the rejection or replacement of a
+        // proposal).
+        allow delete: if inboxOwner(resource.data)
+          && inboxTracked('del-schedule-' + sid, ['schedule.deleted', 'outcome.rejected', 'outcome.approved'], me());
+      }
+
+      // One per schedule and period ({sid}_{key}), made and moved by the scheduler. The member
+      // answers a run that could not happen: Run now, Try later (within 35 days) or Skip.
+      match /scheduleRuns/{rid} {
+        allow read: if inboxReader(resource.data);
+        allow update: if schedRunDecided();
+        function schedRunDecided() {
+          let d = request.resource.data;
+          let r = resource.data;
+          let c = d.decision.choice;
+          return inboxOwner(r) && r.state == 'cantRun'
+          && touched(['state', 'decision', 'laterAt'])
+          && exactKeys(d.decision, ['choice', 'by', 'at', 'via'])
+          && d.decision.by == me() && d.decision.at == request.time && d.decision.via in ['web', 'telegram']
+          && d.state == {'runNow': 'runNow', 'later': 'later', 'skip': 'skipped'}[c]
+          && (c == 'later'
+            ? d.laterAt is timestamp && d.laterAt > request.time
+              && d.laterAt <= request.time + duration.value(35, 'd')
+            : d.laterAt == r.laterAt)
+          && inboxTracked(d.lastEventId, ['run.decided'], me())
+          && schedEv(d).data.runId == rid && schedEv(d).data.choice == c;
+        }
+        allow create, delete: if false;
+      }
+
+      // The member's Off switch in this organization (absent: all on): his own, read by him and
+      // the organization's agents. Off since now; on clears it.
+      match /agentsOff/{uid} {
+        allow read: if (uid == me() && isMember(wid)) || isActiveAgent(wid);
+        allow create, update: if schedOffOk();
+        function schedOffOk() {
+          let d = request.resource.data;
+          let off = d.all || d.agents.size() > 0;
+          return uid == me() && isMember(wid)
+          && exactKeys(d, ['all', 'agents', 'since', 'updatedAt', 'lastEventId'])
+          && d.all is bool && d.agents is list && d.agents.size() <= 20
+          && (!d.all || d.agents.size() == 0)
+          && d.since == (off ? request.time : null)
+          && d.updatedAt == request.time
+          && inboxTracked(d.lastEventId, [off ? 'agents.off' : 'agents.on'], me());
+        }
+        allow delete: if false;
       }
     }
   }

@@ -388,5 +388,29 @@
     "kind": "human",
     "plan": true,
     "planOnly": true
+  },
+  "schedule": {
+    "label": "Schedule",
+    "approve": "Set up schedule",
+    "description": "A recurring or later task the member asked for: proposed with schedule_propose (never outcome_propose), with the plan each run follows.",
+    "fields": {
+      "scheduleId": {
+        "kind": "line",
+        "label": "Schedule",
+        "help": "The proposed schedule (set by schedule_propose)",
+        "required": true
+      },
+      "sentence": {
+        "kind": "line",
+        "label": "When",
+        "help": "The rule in words, e.g. \"Monthly · day 1 · 09:00 Lisbon\"",
+        "required": true
+      }
+    },
+    "executor": "none",
+    "after": {
+      "state": "done"
+    },
+    "ownTool": "schedule_propose"
   }
 }
