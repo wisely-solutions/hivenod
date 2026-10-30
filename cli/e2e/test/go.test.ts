@@ -28,6 +28,8 @@ import {
   type SendBackOf,
   requestRevision,
   requestRecheck,
+  schedulePaths,
+  type ScheduleOf,
   instructThread,
   inboxPaths,
   type PlanInput,
@@ -180,6 +182,7 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
       'inboxRelations',
       'inboxPlans',
       'inboxAttachments',
+      'schedules',
     ])
       await read(`workspaces/${W}/${c}`);
     // Projects, items and runs were removed (slice 11): their old data is not the agent's.
@@ -220,7 +223,12 @@ function mask(v: unknown, uid: string): unknown {
           ([k, x]) =>
             [
               mask(k, uid) as string,
-              k === 'waitedMs' && typeof x === 'number' ? '<ms>' : mask(x, uid),
+              k === 'waitedMs' && typeof x === 'number'
+                ? '<ms>'
+                : // Next runs (schedule_list, schedule_propose) are computed from now.
+                  k === 'nextRuns' && Array.isArray(x)
+                  ? `<${x.length} runs>`
+                  : mask(x, uid),
             ] as const,
         )
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
@@ -766,6 +774,96 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
             versions: 2,
             fields: { text: 'Hi Sam, thanks for flagging this. Thursday works for me. Best, Cara' },
           },
+        ],
+      },
+    });
+    matchesGolden(r);
+  }, 120_000);
+
+  it('schedules (slice 5): the agent proposes, revises after Ask for changes, the person approves, schedule_list shows it active', async () => {
+    const r = await scenario(async (call) => {
+      const owner = as('owner');
+      const thread = async (tid: string) =>
+        (await snap(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+      const outcome = async (oid: string) =>
+        (await snap(inboxPaths.outcome(W, oid))) as unknown as OutcomeStateOf;
+      const schedule = async (sid: string) =>
+        (await snap(schedulePaths.schedule(W, sid))) as unknown as ScheduleOf;
+      const t1 = out(
+        await call('inbox_add', {
+          source: 'teams',
+          sender: { name: 'Cara Owner', handle: 'cara@example.com' },
+          text: 'Every 1st at 9, prepare the invoices and ask me before sending.',
+          threadRef: 'invoices-1',
+          receivedAt: '2026-10-28T09:00:00Z',
+          fromMember: true,
+        }),
+      ).threadId as string;
+      await call('schedule_list', {});
+      const INVOICES = {
+        threadId: t1,
+        title: 'Send invoices',
+        what: 'Prepare the invoices from the hours log, show the totals and send them after approval.',
+        rule: { freq: 'monthly', at: '09:00', tz: 'Europe/Lisbon', monthDay: 1 },
+        runTitle: 'Send invoices · {month} {year}',
+        steps: [
+          { type: 'reply', fields: { text: 'The invoices for {period} are ready.' } },
+          { type: 'approval', fields: { what: 'Send the invoices for {period}' } },
+        ],
+        note: 'Same steps as by hand on 1 Oct.',
+        confidence: 'high',
+        checks: ['Ran it by hand on 1 Oct'],
+      };
+      // A rule Hivenod refuses, and the outcome type through outcome_propose: refused.
+      await call('schedule_propose', { ...INVOICES, rule: { freq: 'weekly', at: '09:00' } });
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'schedule',
+        fields: { scheduleId: 'x', sentence: 'x' },
+      });
+      const p = out(await call('schedule_propose', INVOICES));
+      const oid = p.outcomeId as string;
+      const sid = p.scheduleId as string;
+      await call('schedule_list', {});
+      await owner.run(
+        requestRevision(owner.ctx, {
+          outcomeId: oid,
+          outcome: await outcome(oid),
+          thread: await thread(t1),
+          instruction: 'At 08:30, and on a weekend move it to Monday',
+        }),
+      );
+      await call('thread_read', { threadId: t1 });
+      await call('schedule_propose', {
+        ...INVOICES,
+        rule: { ...INVOICES.rule, at: '08:30', weekend: 'after' },
+        note: 'At 08:30; a weekend 1st moves to Monday.',
+        revises: oid,
+      });
+      await owner.run(
+        approveOutcome(owner.ctx, {
+          outcomeId: oid,
+          outcome: await outcome(oid),
+          thread: await thread(t1),
+          schedule: { id: sid, data: await schedule(sid) },
+        }),
+      );
+      await call('schedule_list', {});
+      // Decided: a late revision is refused.
+      await call('schedule_propose', { ...INVOICES, revises: oid });
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([true, true, false, false, true, true, true, true, true, false]);
+    expect(r.calls[4]).toMatchObject({
+      out: { sentence: 'Monthly · day 1 · 09:00', state: 'proposed', nextRuns: '<3 runs>' },
+    });
+    expect(r.calls[7]).toMatchObject({
+      out: { version: 2, sentence: 'Monthly · day 1 · 08:30 · Mon if weekend' },
+    });
+    expect(r.calls[8]).toMatchObject({
+      out: {
+        schedules: [
+          { state: 'active', sentence: 'Monthly · day 1 · 08:30 · Mon if weekend', yours: true },
         ],
       },
     });

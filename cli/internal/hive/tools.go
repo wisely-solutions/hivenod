@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/wisely-solutions/hivenod/cli/internal/actions"
 	"github.com/wisely-solutions/hivenod/cli/internal/mcpserver"
 	"github.com/wisely-solutions/hivenod/cli/internal/model"
 )
@@ -204,6 +205,29 @@ var ToolRuns = map[string]Run{
 		return c.PlanSendBack(ctx, a.S("threadId"), a.S("reason"), a.F("toStep"))
 	},
 	"thread_wake": func(ctx context.Context, c *Client, a Args) (any, error) { return c.ThreadWake(ctx, a.S("threadId")) },
+	// Scheduled tasks, slice 5
+	"schedule_propose": func(ctx context.Context, c *Client, a Args) (any, error) {
+		in := ScheduleProposeIn{ThreadID: a.S("threadId"), Title: a.S("title"), What: a.S("what"), Rule: asMap(a["rule"]),
+			Template: a.SP("template"), RunTitle: a.SP("runTitle"), Note: a.SP("note"), Confidence: a.SP("confidence"),
+			Checks: a.Strings("checks"), Revises: a.SP("revises"), Replaces: a.SP("replaces")}
+		if a.Has("subjectId") {
+			in.SubjectID = actions.OptString{Set: true, Val: a.SP("subjectId")}
+		}
+		arr, _ := a["steps"].([]any)
+		if arr == nil && a.S("template") == "" {
+			return nil, Errf("steps is a list of 1 to 8 plan steps {type, fields}, or give a template.")
+		}
+		for _, e := range arr {
+			m := Args(asMap(e))
+			f := asMap(m["fields"])
+			if f == nil {
+				f = map[string]any{}
+			}
+			in.Steps = append(in.Steps, PlanStepArg{Type: m.S("type"), Fields: f})
+		}
+		return c.SchedulePropose(ctx, in)
+	},
+	"schedule_list": func(ctx context.Context, c *Client, a Args) (any, error) { return c.ScheduleList(ctx, a.S("member")) },
 }
 
 // PlainTools are the tools of `hivenod mcp` (no channel).

@@ -56,6 +56,12 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    */
   keepgreen: '0.2.222',
   /**
+   * Scheduled tasks, slice 5: schedule_propose (and revises after Ask for changes) and
+   * schedule_list. An older CLI cannot propose a schedule (scheduled runs still reach it as plain
+   * plan threads: plan, longstep).
+   */
+  schedule: '0.2.244',
+  /**
    * Their reply (packages/shared/src/theirreply.ts): step_ask, step_sent, outcome_done evidence,
    * and the inbox reasons external_reply, ask_approved and nudge_due on a step. An older CLI
    * refuses the step type and never wakes on their reply.

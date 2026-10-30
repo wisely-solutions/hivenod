@@ -1621,7 +1621,7 @@ service cloud.firestore {
         function inboxReviseAsk(d, r, type) {
           return type == 'outcome.revise_requested'
             && touched(['state', 'revise'])
-            && r.type in ['reply', 'nudge', 'handover', 'make_it_work']
+            && r.type in ['reply', 'nudge', 'handover', 'make_it_work', 'schedule']
             && ((r.state == 'proposed' && d.state == 'revising'
                 && exactKeys(d.revise, ['instruction', 'chips', 'byUid', 'at'])
                 && d.revise.byUid == me() && d.revise.at == request.time
@@ -1909,7 +1909,18 @@ service cloud.firestore {
         }
         // The member only. Pause and resume flip active and paused; a proposal turns active only
         // with the approval of its outcome; a new rule, a resume or an activation starts now.
-        allow update: if schedUpdateOk();
+        allow update: if schedUpdateOk() || schedRevisedOk();
+        // Its agent rewrites its proposal after Ask for changes, in the batch of the outcome's next
+        // version (outcome.revised: only the proposing agent, only a revising outcome; so only
+        // this agent, only while proposed). State and proposal stay (touched).
+        function schedRevisedOk() {
+          let d = request.resource.data;
+          let r = resource.data;
+          return schedOk(d) && d.version == r.version + 1
+          && touched(['title', 'what', 'rule', 'runTitle', 'steps', 'templateId', 'subjectId', 'version'])
+          && inboxTracked(d.lastEventId, ['outcome.revised'], r.memberUid)
+          && getAfter(inboxDoc('inboxOutcomes', r.proposal.outcomeId)).data.lastEventId == d.lastEventId;
+        }
         function schedUpdateOk() {
           let d = request.resource.data;
           let r = resource.data;

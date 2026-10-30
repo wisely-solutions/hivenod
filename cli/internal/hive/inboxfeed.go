@@ -392,6 +392,9 @@ func InboxText(e InboxEventInfo) string {
 		}
 	case "revise":
 		what = fmt.Sprintf("revise it with outcome_propose revises=%s (same threadId and type): apply only what they asked and keep the rest; do not reject it or start a new outcome. If you cannot make the change, say why with inbox_ask on the thread", or(e.OutcomeID, "?"))
+		if e.OutcomeType == "schedule" {
+			what = fmt.Sprintf("revise it with schedule_propose revises=%s, giving the whole schedule again (title, what, rule, steps): change only what they asked and keep the rest; do not start a new schedule. If you cannot make the change, say why with inbox_ask on the thread", or(e.OutcomeID, "?"))
+		}
 	case "recheck":
 		what = "re-read the messages (new ones especially) and the context; for each open proposal and each step of a live plan that has not run, keep it or write its next version with outcome_propose revises=<outcomeId> (only what changed), or ask with inbox_ask; then answer with thread_recheck_done (result still_good, revised or asked, with a one-line note)"
 	case "instruct":

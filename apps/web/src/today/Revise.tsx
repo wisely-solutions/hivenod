@@ -40,7 +40,13 @@ export function AskBox({
   onText,
   onCancel,
   onAsk,
+  placeholder = 'Mention 14:00 as a backup, Sam prefers afternoons',
+  noChips = false,
 }: {
+  /** The text box's example (a schedule: "At 08:30, and not on weekends"). */
+  placeholder?: string;
+  /** No quick chips (they are about a message's wording: a schedule has none). */
+  noChips?: boolean;
   chips: readonly string[];
   text: string;
   /** The version the agent will write. */
@@ -77,8 +83,13 @@ export function AskBox({
           {text.length} / {MAX}
         </span>
       </div>
-      <div role="group" aria-label="Quick changes" className="mt-2 flex flex-wrap gap-2">
-        {REVISE_CHIPS.map((c) => {
+      <div
+        role="group"
+        aria-label="Quick changes"
+        hidden={noChips}
+        className="mt-2 flex flex-wrap gap-2"
+      >
+        {(noChips ? [] : REVISE_CHIPS).map((c) => {
           const on = chips.includes(c);
           return (
             <button
@@ -107,7 +118,7 @@ export function AskBox({
         value={text}
         maxLength={MAX + 50}
         aria-describedby={`${id}-hint`}
-        placeholder="Mention 14:00 as a backup, Sam prefers afternoons"
+        placeholder={placeholder}
         onChange={(e) => onText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {

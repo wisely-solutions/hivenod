@@ -17,14 +17,17 @@ import {
   type WriteOp,
 } from './actions';
 import {
+  cleanLines,
   cleanPlanSteps,
   inboxPaths,
+  reviseOutcomeOps,
+  type OutcomeStateOf,
   inboxPlan,
   INBOX_LIMITS,
   type PlanStepInput,
   type ThreadStateOf,
 } from './inbox';
-import { outcomeKind, outcomeType } from './outcomes';
+import { OUTCOME_CONFIDENCE, outcomeKind, outcomeType } from './outcomes';
 import { planTemplate, templateSendBack } from './planTemplates';
 import { planThreadState } from './plans';
 import {
@@ -296,6 +299,9 @@ export function proposeSchedule(
     threadId: string;
     thread: ThreadStateOf;
     note?: string;
+    /** How sure the agent is (high, medium, low) and what it verified, as on outcome_propose. */
+    confidence?: string | null;
+    checks?: readonly string[] | null;
     replaces?: { id: string; schedule: ScheduleOf } | null;
     scheduleId?: string;
     outcomeId?: string;
@@ -318,6 +324,7 @@ export function proposeSchedule(
     note.length <= INBOX_LIMITS.outcomeNote,
     `The note is at most ${INBOX_LIMITS.outcomeNote} characters.`,
   );
+  const { conf, checks } = sureness(input);
   const scheduleId = input.scheduleId ?? nid(ctx);
   const outcomeId = input.outcomeId ?? nid(ctx);
   const sentence = ruleSentence(c.rule).slice(0, 300);
@@ -356,6 +363,8 @@ export function proposeSchedule(
           fields,
           state: 'proposed',
           note,
+          ...(conf !== null ? { confidence: conf } : {}),
+          ...(checks.length > 0 ? { checks } : {}),
           proposedBy: me,
           executor: null,
           decision: null,
@@ -368,6 +377,78 @@ export function proposeSchedule(
     ],
   );
   return { ...p, scheduleId, outcomeId, sentence };
+}
+
+function sureness(input: { confidence?: string | null; checks?: readonly string[] | null }) {
+  const conf = input.confidence ?? null;
+  need(
+    conf === null || (OUTCOME_CONFIDENCE as readonly string[]).includes(conf),
+    'The confidence is high, medium or low.',
+  );
+  const checks = cleanLines('checks', input.checks, INBOX_LIMITS.checks, INBOX_LIMITS.check);
+  return { conf, checks };
+}
+
+/**
+ * schedule_propose with `revises` (slice 5): after Ask for changes the proposing agent rewrites
+ * its proposed schedule and the `schedule` outcome gets the next version (fields: the same
+ * scheduleId, the new sentence), in one batch with the outcome.revised event. A subject left out
+ * keeps the proposal's; a change (`replaces`) stays a change of the same schedule.
+ */
+export function reviseSchedule(
+  ctx: ActionContext,
+  input: ScheduleInput & {
+    outcomeId: string;
+    outcome: OutcomeStateOf;
+    thread: ThreadStateOf;
+    schedule: { id: string; data: ScheduleOf };
+    note?: string;
+    confidence?: string | null;
+    checks?: readonly string[] | null;
+  },
+): ActionPlan & { scheduleId: string; outcomeId: string; sentence: string; version: number } {
+  requireAgent(ctx);
+  const o = input.outcome;
+  const sc = input.schedule;
+  need(
+    o.type === 'schedule',
+    `Outcome ${input.outcomeId} is a ${o.type}: revise it with outcome_propose.`,
+  );
+  need(sc.id === o.fields.scheduleId, 'Give the schedule this proposal names.');
+  need(sc.data.state === 'proposed', 'This schedule is no longer a proposal.');
+  need(sc.data.agentUid === ctx.actor.id, 'Only the agent that proposed this schedule revises it.');
+  const c = cleanSchedule({
+    ...input,
+    subjectId: input.subjectId === undefined ? sc.data.subjectId : input.subjectId,
+  });
+  const sentence = ruleSentence(c.rule).slice(0, 300);
+  const p = reviseOutcomeOps(ctx, {
+    outcomeId: input.outcomeId,
+    outcome: o,
+    thread: input.thread,
+    fields: { scheduleId: sc.id, sentence },
+    note: input.note,
+    confidence: input.confidence,
+    checks: input.checks,
+  });
+  const ops = [...p.ops];
+  const event = ops.pop()!;
+  ops.push(
+    upd(
+      schedulePaths.schedule(ctx.workspaceId, sc.id),
+      { ...c, version: sc.data.version + 1 },
+      p.eventId,
+    ),
+    event,
+  );
+  return {
+    eventId: p.eventId,
+    ops,
+    scheduleId: sc.id,
+    outcomeId: input.outcomeId,
+    sentence,
+    version: p.version,
+  };
 }
 
 // ---------- runs that could not happen: the member decides ----------

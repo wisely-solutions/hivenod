@@ -25,6 +25,8 @@ import { firestoreRemindPorts } from './remindStore';
 import { TelegramApi, TelegramBot } from './telegram';
 import { notifyPath } from '@hive/shared';
 import { describePersonalOrg, parsePersonalOrgArgs, personalOrg } from './personalOrg';
+import { Scheduler } from './scheduler';
+import { schedulerPorts, watchSchedules } from './schedulerStore';
 
 const log = (s: string) => console.log(`${new Date().toISOString()} ${s}`);
 
@@ -100,8 +102,8 @@ async function run() {
 
   const ports = firestorePorts(db, {
     sendPush,
-    sendTelegram: async (chatId, notice, action) =>
-      bot ? bot.send(chatId, notice, action) : false,
+    sendTelegram: async (chatId, notice, action, silent) =>
+      bot ? bot.send(chatId, notice, action, silent) : false,
     log,
   });
   const engine = new Engine(ports);
@@ -137,9 +139,24 @@ async function run() {
   const remind = new Reminders(firestoreRemindPorts(db, log));
   const stopWatch = watchAll(db, engine, kick, log, reach, remind);
   const every = setInterval(() => void sweep(), 60_000);
+  // Scheduled tasks (slices 3-4): the clock of every schedule; HIVE_SCHEDULER=off leaves it out.
+  let scheduler: Scheduler | null = null;
+  let stopSchedules = () => undefined as void;
+  if ((get('HIVE_SCHEDULER') ?? 'on') !== 'off') {
+    scheduler = new Scheduler(
+      schedulerPorts(db, {
+        log,
+        version: get('HIVE_VERSION'),
+        tell: (uid, notice, action, key, opts) =>
+          engine.deliver(uid, notice, action, key, opts.urgent === true, opts.silent === true),
+      }),
+    );
+    stopSchedules = watchSchedules(db, scheduler, log);
+    void scheduler.start();
+  } else log('Scheduler off (HIVE_SCHEDULER=off).');
   void bot?.poll();
   log(
-    `Notifier running (push ${pub ? 'on' : 'off'}, telegram ${botName ? `@${botName}` : 'off'}).`,
+    `Notifier running (push ${pub ? 'on' : 'off'}, telegram ${botName ? `@${botName}` : 'off'}, scheduler ${scheduler ? 'on' : 'off'}).`,
   );
 
   const stop = () => {
@@ -147,6 +164,8 @@ async function run() {
     bot?.stop();
     stopWatch();
     reach.stop();
+    scheduler?.stop();
+    stopSchedules();
     process.exit(0);
   };
   process.on('SIGINT', stop);

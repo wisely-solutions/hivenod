@@ -302,7 +302,7 @@ export const RETIRED_MESSAGE = (type: string) =>
     : `${type} was retired with Calendar: bookings are no longer made through Hivenod. Reject it, or propose a reply that suggests times.`;
 
 /** The outcome types with text worth revising (the others are a one-tap decision). */
-export const REVISABLE_TYPES: readonly string[] = ['reply', 'nudge', 'handover'];
+export const REVISABLE_TYPES: readonly string[] = ['reply', 'nudge', 'handover', 'schedule'];
 
 const by = z.object({ type: z.enum(['human', 'agent']), id: z.string() });
 
@@ -786,7 +786,7 @@ export function titleFrom(text: string): string {
   return first.trim().replace(/\s+/g, ' ').slice(0, 120);
 }
 /** A list of short lines (checks, options): trimmed, each 1..each characters, at most max. */
-function cleanLines(
+export function cleanLines(
   what: string,
   v: readonly unknown[] | null | undefined,
   max: number,
@@ -2998,19 +2998,38 @@ export function cancelRevision(
  */
 export function reviseOutcome(
   ctx: ActionContext,
-  input: {
-    outcomeId: string;
-    outcome: OutcomeStateOf;
-    thread: ThreadStateOf;
-    type?: string;
-    threadId?: string;
-    fields: Readonly<Record<string, unknown>>;
-    note?: string;
-    confidence?: string | null;
-    checks?: readonly string[] | null;
-    /** A plan step's plan: during a re-check, an approved step that has not run may be revised. */
-    plan?: PlanInput;
-  },
+  input: ReviseOutcomeInput,
+): ActionPlan & { version: number } {
+  const own = outcomeType(input.outcome.type)?.ownTool;
+  need(
+    own === undefined,
+    `A ${input.outcome.type} is revised with ${own} (revises), not outcome_propose.`,
+  );
+  return reviseOutcomeOps(ctx, input);
+}
+
+/** reviseOutcome's input. */
+export interface ReviseOutcomeInput {
+  outcomeId: string;
+  outcome: OutcomeStateOf;
+  thread: ThreadStateOf;
+  type?: string;
+  threadId?: string;
+  fields: Readonly<Record<string, unknown>>;
+  note?: string;
+  confidence?: string | null;
+  checks?: readonly string[] | null;
+  /** A plan step's plan: during a re-check, an approved step that has not run may be revised. */
+  plan?: PlanInput;
+}
+
+/**
+ * The next version of an outcome (reviseOutcome without the own-tool check): schedule_propose
+ * revises (./scheduleActions.ts reviseSchedule) adds the schedule's own write to this batch.
+ */
+export function reviseOutcomeOps(
+  ctx: ActionContext,
+  input: ReviseOutcomeInput,
 ): ActionPlan & { version: number } {
   requireAgent(ctx);
   const o = input.outcome;

@@ -51,6 +51,7 @@ import {
   type ThreadStateOf,
 } from '../../packages/shared/src/index';
 
+import { scheduleCases } from './scheduleCases';
 import { summaryCases } from './summaryCases';
 
 export const NOW_MS = 1_800_000_000_000;
@@ -1748,6 +1749,7 @@ function build(): ContractCase[] {
   search('limit 0 is the default', { filters: { limit: 0 } });
   search('limit over the top', { filters: { limit: 500 } });
   summaryCases(act, pure, { agent: AGENT, other: OTHER, human: HUMAN });
+  scheduleCases(act, pure, { agent: AGENT, other: OTHER, human: HUMAN });
 
   return cases;
 }

@@ -20,6 +20,8 @@ a service account that can read and write Firestore, and its own secrets file.
   device that wakes up does not get a burst of old pop-ups.
 
 - Reach out (item KZ6O9, `src/reach.ts`): see below.
+- Scheduled tasks (`src/scheduler.ts`): the clock of every schedule, and the "can't run" asks. See
+  below.
 
 Not built: the daily email digest (needs an email provider, a spend card).
 
@@ -55,6 +57,54 @@ writes a day):
 
 LLM: at most one model turn per 30 minutes of real quiet, none while flagged. Host: one
 `setTimeout` per step.
+
+## Scheduled tasks: the scheduler and "can't run"
+
+The notifier is Hivenod's only clock (design `~/drafts/schedules/design.md`, slices 3 and 4). The
+engine `src/scheduler.ts` is pure (ports, fake-clock tests); `src/schedulerStore.ts` is its
+Firestore side. `HIVE_SCHEDULER=off` in the environment leaves it out.
+
+- **Listeners** per organization: `schedules` (active, paused), `scheduleRuns` (open states),
+  `agentsOff`, and the plan doc of each open run that has a thread. **One timer** to the earliest
+  thing due (a run, an agent re-check, a start deadline, an ask, a digest), re-planned when a
+  listener changes something; capped at 6 h. **Beat**: `config/scheduler.beatAt` every 15 min (it
+  also re-runs a pass); the web and agents say "scheduler down" when it is older than 35 min
+  (`schedulerDown` in `packages/shared/src/scheduleAsk.ts`).
+- **Fire** (`dueNow` of `schedules.ts`): an occurrence at most 15 min late fires through
+  `fireScheduledRun` (one batch: run `{sid}_{key}` with create(), the thread, its message, plan and
+  steps; ids derived from schedule and period). The first fire wins; a second notifier or a restart
+  gets ALREADY_EXISTS and does nothing. Older occurrences (the notifier was down) never fire late:
+  the newest 3 per schedule become can't-run asks (`hostDown`), older ones `expired`.
+- **Gates** at due time: Off for that agent → `off`; agent revoked or paused → `paused`; CLI below
+  `plan` (or `longstep`) → `cliOld`; offline → `waitingAgent`, fired when it comes online within 15
+  min (one agent read a minute), else `offline` with the last-seen time.
+- **Tracking** from the run's plan: under way → `running`; done → `done`; stopped by the member →
+  `stopped` (no ask); blocked (a step failed) → `failed` with the step's error; still not started 30
+  min after firing → `noStart`.
+- **Asks** (`runAskNotice`, `nextAskAt`): once/yearly urgent (at once even in quiet hours, then every
+  2 h outside them, until decided); monthly/quarterly high (at once, after 4 h, then daily 09:00);
+  weekly once; daily in the **daily digest** (end of quiet hours, else 08:30, member's zone; with
+  "Coming up today"), a silent Telegram line after today's digest went out, and a message of its
+  own on the third miss in a row. Every message is claimed first (a transaction on `ask.n`), so two
+  notifiers never double one. Reported daily/weekly misses expire when the next run comes.
+- **Buttons** (`src/telegram.ts`, `src/runDecide.ts`): Run now · Try later (In 1 hour · Tomorrow
+  09:00 · Pick a time…, a typed "14:30", "tomorrow 10:00", "3 Nov 9:00") · Skip this one · Open,
+  applied as the shared `decideRun` after the rules' checks (the member, still in the organization,
+  the run still `cantRun`, else "Decided at HH:MM (Skip)"). The scheduler then acts: Run now fires
+  (or, with a thread, retries the failed step / asks the agent to start); Try later runs the gates
+  again at that time and asks again if it still cannot run.
+
+**Cost** (no polling; free quota 50,000 reads and 20,000 writes a day):
+
+| Per day                                    | Reads                        | Writes                                |
+| ------------------------------------------ | ---------------------------- | ------------------------------------- |
+| Beat                                       | 1 (at start)                 | 96                                    |
+| A schedule with no run that day            | 0                            | 0                                     |
+| A run that fires and is done (2-step plan) | ~10 (agent, run, plan, step) | ~11 (fire batch 7, running 2, done 2) |
+| A run that can't run, asked once           | ~4                           | ~3 (run + event, ask claim)           |
+| Agent offline at due time                  | ≤ 15 (one a minute)          | 1                                     |
+| Daily digest, per member                   | 1 + prefs (≤ 24, 1 h cache)  | 1                                     |
+| Start-up                                   | 1 query per active schedule  | 0                                     |
 
 ## Secrets (files, never in the repo)
 
@@ -110,6 +160,9 @@ WantedBy=default.target
 | `workspaces/{wid}/notified/{key}`                | notifier                     | what was already sent per thread arrival                  |
 | `telegramActions/{code}`, `telegramChats/{chat}` | notifier only                | button targets (no rule: clients cannot reach them)       |
 | outcomes' `statusAsk`, `silence`                 | notifier (Admin SDK)         | reach out: Hivenod's status request and the silent flag   |
+| `workspaces/{wid}/scheduleRuns/{sid}_{key}`      | notifier (member decides)    | scheduled runs: state, why, ask, decision                 |
+| `config/scheduler`                               | notifier                     | the scheduler's beat (`beatAt`, host)                     |
+| `users/{uid}/notify/digest`                      | notifier                     | the local date of the last daily digest (claim)           |
 
 ## Tests
 
