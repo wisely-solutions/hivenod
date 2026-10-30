@@ -54,7 +54,7 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * template and step_progress check (re-checks while Ship it? waits). An older CLI refuses the
    * step type and the check.
    */
-  keepgreen: '0.2.217',
+  keepgreen: '0.2.222',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */

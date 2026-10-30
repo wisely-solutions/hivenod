@@ -30080,7 +30080,12 @@
           {
             "kind": "update",
             "path": "workspaces/w1/inboxPlans/pl1",
-            "data": { "cursor": 4, "updatedAt": { "__hive": "serverTime" }, "lastEventId": "id01" }
+            "data": {
+              "cursor": 4,
+              "cursorAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
           },
           {
             "kind": "update",
