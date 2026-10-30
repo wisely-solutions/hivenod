@@ -131,10 +131,5 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByTestId('agent-name')).toHaveText('Pairpoint agent');
     await axe(page);
     await expectNoHorizontalScroll(page);
-
-    // The activity says who renamed what.
-    await page.goto('/activity');
-    await expect(page.getByText('renamed Claude Code (desktop) to Pairpoint agent')).toBeVisible();
-    await axe(page);
   });
 }

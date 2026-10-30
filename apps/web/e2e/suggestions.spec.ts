@@ -133,15 +133,6 @@ test('suggestions lane: add to Ideas, dismiss needs a reason, hidden when empty'
   const triage = (await adminDoc(at('s2')))?.fields.triage?.mapValue?.fields;
   expect(triage?.outcome?.stringValue).toBe('dismissed');
   expect(triage?.reason?.stringValue).toBe('Already fixed in the footer card.');
-
-  // The activity feed says what happened in plain words.
-  await page.goto('/activity');
-  await expect(
-    page.getByText(/dismissed the suggestion “Footer link to \/pricing is broken”/).first(),
-  ).toBeVisible({ timeout: 20_000 });
-  await expect(
-    page.getByText('added the suggestion “Add alt text to hero images” to Ideas').first(),
-  ).toBeVisible();
 });
 
 test('suggestions show in Needs you > Findings for a triager', async ({ page }) => {

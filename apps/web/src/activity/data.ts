@@ -1,4 +1,10 @@
-import { eventSchema, itemSchema, type HiveEvent } from '@hive/shared';
+import {
+  eventSchema,
+  inboxEventSchema,
+  itemSchema,
+  type HiveEvent,
+  type InboxEvent,
+} from '@hive/shared';
 import { countReads } from '../lib/reads';
 import {
   collection,
@@ -26,6 +32,7 @@ import {
   PAGE_SIZE,
   type FeedFilters,
 } from './logic';
+import { threadFeedConstraints, type ThreadGroupId } from './threadLogic';
 
 /** A clock that re-renders every `ms` milliseconds. */
 export function useNow(ms: number): number {
@@ -51,9 +58,9 @@ function parse<S extends z.ZodType>(
 
 // ---------- the feed: one listener on the newest page, older pages on demand ----------
 
-export interface Feed {
+export interface Feed<T = HiveEvent> {
   state: 'loading' | 'ready' | 'error';
-  rows: Row<HiveEvent>[];
+  rows: Row<T>[];
   /** Ids that arrived live after the first load (they get the soft highlight). */
   fresh: ReadonlySet<string>;
   hasMore: boolean;
@@ -65,9 +72,9 @@ export interface Feed {
   indexBuilding: boolean;
 }
 
-interface FeedStore {
+interface FeedStore<T> {
   key: string;
-  map: Map<string, Row<HiveEvent>>;
+  map: Map<string, Row<T>>;
   cursor: QueryDocumentSnapshot<DocumentData> | null;
   exhausted: boolean;
   /** True once an older page was read: the head snapshot no longer decides the cursor. */
@@ -77,16 +84,18 @@ interface FeedStore {
   state: 'loading' | 'ready' | 'error';
   building: boolean;
 }
-const emptyStore = (key: string): FeedStore => ({
-  key,
-  map: new Map(),
-  cursor: null,
-  exhausted: false,
-  paged: false,
-  settled: false,
-  state: 'loading',
-  building: false,
-});
+function emptyStore<T>(key: string): FeedStore<T> {
+  return {
+    key,
+    map: new Map(),
+    cursor: null,
+    exhausted: false,
+    paged: false,
+    settled: false,
+    state: 'loading',
+    building: false,
+  };
+}
 
 /**
  * The activity feed. Exactly one live listener (the newest 50 events for the filters); older
@@ -95,13 +104,9 @@ const emptyStore = (key: string): FeedStore => ({
  */
 export function useActivityFeed(wid: string, filters: FeedFilters, enabled: boolean): Feed {
   const key = `${wid}|${filters.projectId}|${filters.actor}|${filters.group}`;
-  const [store, setStore] = useState<FeedStore>(() => emptyStore(key));
-  const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
-  const [loadingMore, setLoadingMore] = useState(false);
-  const live = store.key === key ? store : null;
-
-  const build = useCallback(
-    (after?: QueryDocumentSnapshot<DocumentData>): Query => {
+  return usePagedFeed(
+    key,
+    (after) => {
       const parts = [
         collection(db, `workspaces/${wid}/events`),
         ...feedConstraints(filters).map(([f, op, v]) => where(f, op, v)),
@@ -112,7 +117,59 @@ export function useActivityFeed(wid: string, filters: FeedFilters, enabled: bool
       const [col, ...rest] = parts;
       return query(col, ...rest);
     },
-    // filters is rebuilt each render; its parts are in `key`
+    eventSchema,
+    enabled,
+  );
+}
+
+/**
+ * Activity on threads (slice 9): the member's own thread events, newest first, live; the same
+ * paging as the item feed. `group` narrows the types ('' = every type the feed shows).
+ */
+export function useThreadFeed(
+  wid: string,
+  uid: string,
+  group: '' | ThreadGroupId,
+  enabled: boolean,
+): Feed<InboxEvent> {
+  const key = `${wid}|${uid}|${group}`;
+  return usePagedFeed(
+    key,
+    (after) => {
+      const parts = [
+        collection(db, `workspaces/${wid}/inboxEvents`),
+        ...threadFeedConstraints(uid, group).map(([f, op, v]) => where(f, op, v)),
+        orderBy('at', 'desc'),
+        ...(after ? [startAfter(after)] : []),
+        limit(PAGE_SIZE),
+      ] as const;
+      const [col, ...rest] = parts;
+      return query(col, ...rest);
+    },
+    inboxEventSchema,
+    enabled,
+  );
+}
+
+/** One live listener on the newest page of `build()`, older pages read on demand. */
+function usePagedFeed<S extends z.ZodType<{ at: { toMillis: () => number } }>>(
+  key: string,
+  buildQuery: (after?: QueryDocumentSnapshot<DocumentData>) => Query,
+  schema: S,
+  enabled: boolean,
+): Feed<z.infer<S>> {
+  type T = z.infer<S>;
+  const [store, setStore] = useState<FeedStore<T>>(() => emptyStore<T>(key));
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(new Set());
+  const [loadingMore, setLoadingMore] = useState(false);
+  const live = store.key === key ? store : null;
+  const buildRef = useRef(buildQuery);
+  useEffect(() => {
+    buildRef.current = buildQuery;
+  });
+  // The query's parts are in `key`.
+  const build = useCallback(
+    (after?: QueryDocumentSnapshot<DocumentData>) => buildRef.current(after),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [key],
   );
@@ -132,10 +189,10 @@ export function useActivityFeed(wid: string, filters: FeedFilters, enabled: bool
         if (!snap.metadata.fromCache) settled = true;
         const added = snap.docChanges().filter((c) => c.type === 'added');
         setStore((cur) => {
-          const base = cur.key === key ? cur : emptyStore(key);
+          const base = cur.key === key ? cur : emptyStore<T>(key);
           // The first server answer replaces whatever the cache offered.
           const map = new Map(!wasSettled && !snap.metadata.fromCache ? [] : base.map);
-          for (const r of parse(snap.docs, eventSchema)) map.set(r.id, r);
+          for (const r of parse(snap.docs, schema)) map.set(r.id, r);
           return {
             key,
             map,
@@ -167,7 +224,7 @@ export function useActivityFeed(wid: string, filters: FeedFilters, enabled: bool
       },
       (err) =>
         setStore((cur) => ({
-          ...(cur.key === key ? cur : emptyStore(key)),
+          ...(cur.key === key ? cur : emptyStore<T>(key)),
           state: 'error',
           building: isIndexBuilding(err),
         })),
@@ -176,7 +233,7 @@ export function useActivityFeed(wid: string, filters: FeedFilters, enabled: bool
       stop();
       timers.forEach(clearTimeout);
     };
-  }, [enabled, key, build]);
+  }, [enabled, key, build, schema]);
 
   const busy = useRef(false);
   const loadMore = useCallback(() => {
@@ -186,10 +243,11 @@ export function useActivityFeed(wid: string, filters: FeedFilters, enabled: bool
     setLoadingMore(true);
     getDocs(build(cursor))
       .then((snap) => {
+        countReads(snap);
         setStore((cur) => {
           if (cur.key !== key) return cur;
           const map = new Map(cur.map);
-          for (const r of parse(snap.docs, eventSchema)) map.set(r.id, r);
+          for (const r of parse(snap.docs, schema)) map.set(r.id, r);
           return {
             ...cur,
             map,
@@ -209,7 +267,7 @@ export function useActivityFeed(wid: string, filters: FeedFilters, enabled: bool
         busy.current = false;
         setLoadingMore(false);
       });
-  }, [live, build, key]);
+  }, [live, build, key, schema]);
 
   const rows = useMemo(
     () =>
@@ -230,6 +288,45 @@ export function useActivityFeed(wid: string, filters: FeedFilters, enabled: bool
     loadMore,
     indexBuilding: Boolean(live?.building),
   };
+}
+
+// ---------- thread titles (slice 9) ----------
+
+const threadTitleCache = new Map<string, string | null>();
+
+/** Titles of the threads the given events point at, read once each and remembered. */
+export function useThreadTitles(
+  wid: string,
+  events: ReadonlyArray<{ threadId: string | null }>,
+): ((tid: string | null) => string | null) & { settled: boolean } {
+  const [, bump] = useState(0);
+  const wanted = useMemo(
+    () => [...new Set(events.flatMap((e) => (e.threadId ? [e.threadId] : [])))],
+    [events],
+  );
+  useEffect(() => {
+    let live = true;
+    const missing = wanted.filter((t) => !threadTitleCache.has(`${wid}/${t}`));
+    if (!missing.length) return;
+    void Promise.all(
+      missing.map(async (t) => {
+        try {
+          const snap = await getDoc(doc(db, `workspaces/${wid}/inboxThreads/${t}`));
+          const title = snap.exists() ? (snap.data() as { title?: unknown }).title : null;
+          threadTitleCache.set(`${wid}/${t}`, typeof title === 'string' ? title : null);
+        } catch {
+          threadTitleCache.set(`${wid}/${t}`, null);
+        }
+      }),
+    ).then(() => live && bump((n) => n + 1));
+    return () => {
+      live = false;
+    };
+  }, [wid, wanted]);
+  const settled = wanted.every((t) => threadTitleCache.has(`${wid}/${t}`));
+  const titleOf = (tid: string | null) =>
+    tid ? (threadTitleCache.get(`${wid}/${tid}`) ?? null) : null;
+  return Object.assign(titleOf, { settled });
 }
 
 // ---------- reads that a plain member can only make one project at a time ----------

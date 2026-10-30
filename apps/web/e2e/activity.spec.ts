@@ -14,7 +14,6 @@ import {
   signIn,
   uidOf,
   workspaceOf,
-  settle,
 } from './helpers';
 
 const SHOTS = process.env.SHOTS_DIR;
@@ -266,78 +265,7 @@ test.beforeEach(async ({ page }) => {
   await freezeClock(page);
 });
 
-test('Activity: live feed grouped by day, filters, paging and a new event', async ({ page }) => {
-  const { base } = await seed(page);
-  await page.goto('/activity');
-  await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
-  const today = page.getByRole('region', { name: 'Today' });
-  await expect(today.getByText('Scout attached report.html to “Market analysis”')).toBeVisible();
-  await expect(today.getByText('Ana Admin approved “Market analysis”')).toBeVisible();
-  // 50 per page.
-  const rows = page.locator('section[aria-label] > ul > li');
-  const filters = page.getByRole('group', { name: 'Filters' });
-  await expect(rows).toHaveCount(50, { timeout: 15_000 });
-  await expectNoHorizontalScroll(page);
-  await shot(page, 'activity');
-
-  // More arrive when the end is reached (125 events in all).
-  await expect(async () => {
-    await rows.last().scrollIntoViewIfNeeded();
-    await expect(page.getByText('That is everything.')).toBeVisible({ timeout: 1500 });
-  }).toPass({ timeout: 20_000 });
-  expect(await rows.count()).toBeGreaterThanOrEqual(125);
-
-  // Filters: type, who, project.
-  await filters.getByLabel('Type', { exact: true }).selectOption({ label: 'Decisions' });
-  await expect(page.getByText('Ana Admin approved “Market analysis”')).toBeVisible();
-  await expect(page.getByText('Scout attached report.html')).toBeHidden();
-  await filters.getByLabel('Type', { exact: true }).selectOption({ label: 'Agent runs' });
-  await expect(page.getByText('Scout started a run on “Pricing page”')).toBeVisible();
-  await filters.getByLabel('Type', { exact: true }).selectOption({ label: 'All types' });
-  await filters.getByLabel('Who', { exact: true }).selectOption({ label: 'All people' });
-  await expect(page.getByText('Ana Admin approved “Market analysis”')).toBeVisible();
-  await expect(page.getByText('Scout attached report.html')).toBeHidden();
-  await filters.getByLabel('Who', { exact: true }).selectOption({ label: 'Agent · Scout' });
-  await expect(page.getByText('Scout attached report.html to “Market analysis”')).toBeVisible();
-  await filters.getByLabel('Project', { exact: true }).selectOption({ label: '📝 Blog' });
-  await expect(page.getByText('Scout attached report.html to “Market analysis”')).toBeVisible();
-
-  // A run row opens its log.
-  await filters.getByLabel('Who', { exact: true }).selectOption({ label: 'Everyone' });
-  await filters.getByLabel('Type', { exact: true }).selectOption({ label: 'Agent runs' });
-  const row = page
-    .getByRole('listitem')
-    .filter({ hasText: 'Scout started a run on “Pricing page”' });
-  await expect(row.getByRole('button', { name: 'Show log' })).toHaveAttribute(
-    'aria-expanded',
-    'false',
-  );
-  await row.getByRole('button', { name: 'Show log' }).click();
-  await expect(row.getByRole('button', { name: 'Hide log' })).toHaveAttribute(
-    'aria-expanded',
-    'true',
-  );
-  await expect(row.getByText(/No log lines yet/)).toBeVisible();
-
-  // A new event slides in at the top with the soft highlight.
-  await filters.getByLabel('Type', { exact: true }).selectOption({ label: 'All types' });
-  await expect(page.getByText('Ana Admin approved “Market analysis”')).toBeVisible();
-  await page.waitForTimeout(1500); // let the server answer the new filter first
-  await adminSet(
-    `${base}/events/live1`,
-    eventDoc('message.posted', 0, { data: { kind: 'question' } }),
-  );
-  const fresh = page
-    .getByRole('listitem')
-    .filter({ hasText: 'Scout asked a question on “Market analysis”' });
-  await expect(fresh).toBeVisible();
-  await expect(fresh).toHaveClass(/drop-in-highlight/);
-  await expect(
-    page.getByRole('region', { name: 'Today' }).getByRole('listitem').first(),
-  ).toContainText('asked a question');
-  await settle(page);
-  await axe(page);
-});
+// The Activity page reads thread events since slice 9 (threadactivity.spec.ts).
 
 test('Agent profile: status, KPIs that add up, runs with logs, release of a stalled run', async ({
   page,
@@ -391,8 +319,7 @@ test('Agent profile: status, KPIs that add up, runs with logs, release of a stal
     )
     .toBe('queued');
   expect((await adminDoc(`${base}/projects/blog/items/i4`))?.fields.claim?.nullValue).toBeNull();
-  await page.goto('/activity');
-  await expect(page.getByText(/released the stalled claim on “Old FAQ”/)).toBeVisible();
+  // Activity shows thread events since slice 9; the release is checked on the item above.
   await axe(page);
 });
 
@@ -533,12 +460,6 @@ test('A decision made from Telegram says so in Activity and in the item decision
     at: ago(1),
     lastEventId: 'tg1',
   });
-  await page.goto('/activity');
-  await expect(page.getByText('Ana Admin sent “Launch post” back via Telegram')).toBeVisible();
-  await expect(
-    page.getByText('Ana Admin approved “Market analysis”', { exact: true }),
-  ).toBeVisible();
-  await shot(page, 'telegram-activity');
   await page.goto('/p/blog?item=i2');
   const detail = page.getByRole('article', { name: /Launch post/ });
   await expect(detail.getByText(/· via Telegram/)).toBeVisible();

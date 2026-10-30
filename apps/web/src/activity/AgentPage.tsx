@@ -51,6 +51,8 @@ import {
   type WindowId,
 } from './logic';
 import { useItemTitles, useNow, useScopedQuery } from './data';
+import { ThreadFeed } from './ThreadFeed';
+import type { ThreadFeedFilters } from './threadLogic';
 import { RunLog } from './RunLog';
 
 const route = getRouteApi('/agents/$id');
@@ -378,8 +380,26 @@ function Profile({
           </section>
         </>
       )}
+
+      <section aria-labelledby="agent-activity-h" className="mt-8">
+        <h2 id="agent-activity-h" className="mb-3">
+          <Eyebrow>Activity on your threads</Eyebrow>
+        </h2>
+        <ThreadFeed
+          filters={agentFeedFilters(id)}
+          emptyText={`What ${agent.data.name} does on your threads shows up here, newest first.`}
+        />
+      </section>
     </>
   );
+}
+
+const feedFilters = new Map<string, ThreadFeedFilters>();
+/** One stable filter object per agent (the feed memoises on it). */
+function agentFeedFilters(id: string): ThreadFeedFilters {
+  let f = feedFilters.get(id);
+  if (!f) feedFilters.set(id, (f = { group: '', actor: id }));
+  return f;
 }
 
 function Kpis({

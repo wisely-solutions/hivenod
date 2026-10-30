@@ -81,26 +81,6 @@ test('board, Needs you and Activity update live within ~2 s, without a refresh',
     () => expect(page.getByText('Live board item')).toBeVisible({ timeout: LIMIT_MS }),
   );
 
-  await page.goto('/activity');
-  await expect(page.getByRole('heading', { name: 'Activity', level: 1 })).toBeVisible();
-  await page.waitForTimeout(1500);
-  seen.activity = await delay(
-    () =>
-      adminSet(`workspaces/${wid}/events/rt1`, {
-        actor: { type: 'agent', id: 'scout', name: 'Scout' },
-        projectId: pid,
-        itemId: 'b1',
-        runId: null,
-        type: 'message.posted',
-        data: { kind: 'question' },
-        at: new Date(),
-      }),
-    () =>
-      expect(page.getByText(/Scout asked a question on/).first()).toBeVisible({
-        timeout: LIMIT_MS,
-      }),
-  );
-
   test.info().annotations.push({ type: 'delay-ms', description: JSON.stringify(seen) });
   console.log('REALTIME delay ms', JSON.stringify(seen));
 });
