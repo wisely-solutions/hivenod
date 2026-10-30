@@ -174,6 +174,44 @@ misleading 409 "release already exists". This is a size limit for the whole file
   `changed(keys + ['updatedAt', 'lastEventId'])`; repeated unrolled checks become a small function.
   Re-fit the estimate if the probe and the estimate drift apart by more than about 2000 bytes.
 
+## Migrating a project's open items to Inbox threads
+
+Before Projects are removed (Inbox item OE8Fm, slice 8), the open items of a project become Inbox threads with
+a Development plan (`dev` template), filed under the subject "Hivenod development" (findings under "Hive
+findings"):
+
+```sh
+node scripts/migrate-project-to-threads.mjs --org <wid> --project <pid> --member <uid> --agent <agentId> --dry-run
+node scripts/migrate-project-to-threads.mjs --org <wid> --project <pid> --member <uid> --agent <agentId> --yes
+```
+
+| Item now                                                    | Becomes                                                                                                      |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| waiting at a person step named Approve...                   | thread, plan at 2 Approve idea (Shape done)                                                                  |
+| waiting at a person step named Accept...                    | thread, plan at 6 Accept on live (steps 1-5 done: PR link, release number, live commit taken from the notes) |
+| open finding (status suggested) of the last 30 days         | thread (source `finding`) with a Development plan proposed by the agent (Approve plan = accept)              |
+| at an agent step (Shape, Build, Release, Test)              | skipped: nothing is migrated mid-flight; finish it in the project, then rerun                                |
+| done, stopped, archived, older findings, other person steps | skipped (they are in the export)                                                                             |
+
+Each thread's first message is the item's description, a link back to the old item, its notes (oldest
+dropped past 50 000 characters) and decisions; the item's attachments are copied as thread attachments where
+they fit the thread rules (an SVG image or a non-https link is reported and left out). The dry run prints
+the mapping table and builds and checks every document without writing. The documents are made by the shared
+Inbox actions (`createMemberThread`, `approveOutcome`, `finishOutcome`, `addInboxMessage`, `proposePlan`,
+`assignSubject`, `threadAttach`) replayed in memory, then checked against the shared zod schemas (the Admin
+API skips the rules, so the script validates itself). Ids derive from the item; each item is one atomic
+commit (attachments may follow in further commits) and the item gets `migratedTo {threadId, planId, at, by}`
+last, so a rerun skips migrated items and finishes a half-written one. Nothing is deleted (slice 11 does).
+Afterwards the home agent writes a summary for each thread.
+
+Admin access through the REST API with the service account (`GOOGLE_APPLICATION_CREDENTIALS`); a production
+run needs `--yes` and the owner's OK at run time, after he saw the dry-run table. Against the emulator:
+`--emulator host:port` (project `demo-hive`, or `--firebase-project`; token `owner`). The emulator test
+(`scripts/migrate-project.emu.test.mjs`, in `pnpm test:rules`) seeds items at Shape, Approve, Build and
+Accept plus findings, runs it twice and checks threads, plans and no duplicates. The script loads
+`packages/shared/src/*.ts` directly (Node 22 strips the types; `scripts/ts-resolve-hook.mjs` adds the `.ts`
+extension to their imports).
+
 ## GitHub Actions
 
 `Release` (after green CI on `main`) and `Rollback` deploy only when the repo secret
