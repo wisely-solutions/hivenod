@@ -163,7 +163,7 @@ misleading 409 "release already exists". This is a size limit for the whole file
   "rules too big: N of 256000 bytes" (nothing deployed). A 409 behind which the 400 hides is reported the same
   way and never retried.
 - **Offline budget (before merging):** `pnpm test:scripts` (`scripts/rules-size.test.mjs`) fails when the
-  *estimated* compiled size of `firestore.rules` is over **235000 bytes** (`RULES_COMPILED_BUDGET`, about 8%
+  _estimated_ compiled size of `firestore.rules` is over **235000 bytes** (`RULES_COMPILED_BUDGET`, about 8%
   under the limit). The estimate (`estimateCompiledSize` in `scripts/rules-size-lib.mjs`) is
   3.3424 x tokens + 1.3917 x characters of names, strings and numbers - 8074, comments and whitespace
   excluded, fitted on measured rulesets within about 400 bytes. Every token costs about 3 bytes and every

@@ -33,18 +33,9 @@ const AGENT_TYPES = "'item.claimed', 'item.released', 'item.completed', 'item.up
  * replaced). Where a promise is enforced by two independent layers, the mutation removes both.
  */
 const MUTATIONS = [
-  [
-    'agent cliVersion unbounded',
-    [["&& strOrNull(d.get('cliVersion', null), 40)", '']],
-  ],
-  [
-    'agent seenSession unbounded',
-    [["&& strOrNull(d.get('seenSession', null), 64)", '']],
-  ],
-  [
-    'agent seenHostId unbounded',
-    [["&& strOrNull(d.get('seenHostId', null), 64))", ')']],
-  ],
+  ['agent cliVersion unbounded', [["&& strOrNull(d.get('cliVersion', null), 40)", '']]],
+  ['agent seenSession unbounded', [["&& strOrNull(d.get('seenSession', null), 64)", '']]],
+  ['agent seenHostId unbounded', [["&& strOrNull(d.get('seenHostId', null), 64))", ')']]],
   [
     'cliVersion without presence',
     [
@@ -97,10 +88,7 @@ const MUTATIONS = [
     'event time not checked',
     [
       ['&& e.data.at == request.time', ''],
-      [
-        '&& d.at == request.time\n          && d.data is map',
-        '&& d.data is map',
-      ],
+      ['&& d.at == request.time\n          && d.data is map', '&& d.data is map'],
     ],
   ],
   [
@@ -353,10 +341,7 @@ const MUTATIONS = [
   [
     'attachments oversize',
     [
-      [
-        'str(d.content, 0, 921600)',
-        'str(d.content, 0, 2000000)',
-      ],
+      ['str(d.content, 0, 921600)', 'str(d.content, 0, 2000000)'],
       ['d.bytes <= 921600', 'd.bytes <= 2000000'],
     ],
   ],
@@ -471,10 +456,7 @@ const MUTATIONS = [
       ['return (inboxOwner(r)\n', 'return ((inboxOwner(r) || isActiveAgent(wid))\n'],
     ],
   ],
-  [
-    'plans: nine steps',
-    [['d.steps.size() <= 8', 'd.steps.size() <= 9']],
-  ],
+  ['plans: nine steps', [['d.steps.size() <= 8', 'd.steps.size() <= 9']]],
   [
     'plans: step on another thread',
     [
@@ -490,12 +472,7 @@ const MUTATIONS = [
   ],
   [
     'inbox: plan-only type proposed alone',
-    [
-      [
-        '&& d.type in outcomeSingle()',
-        '&& d.type in outcomeTypes()',
-      ],
-    ],
+    [['&& d.type in outcomeSingle()', '&& d.type in outcomeTypes()']],
   ],
   [
     'inbox: forged executor',
@@ -511,12 +488,7 @@ const MUTATIONS = [
   ],
   [
     'inbox: agent rewrites more than a subject area',
-    [
-      [
-        "&& touched(['area', 'label', 'labelSuggested', 'labelBy'])",
-        '',
-      ],
-    ],
+    [["&& touched(['area', 'label', 'labelSuggested', 'labelBy'])", '']],
   ],
   [
     'inbox: agent sets an area outside a filing',
@@ -576,12 +548,7 @@ const MUTATIONS = [
   ],
   [
     'inbox: members edit the label list',
-    [
-      [
-        "return cid == 'labels' && isAdmin(wid)",
-        "return cid == 'labels' && isMember(wid)",
-      ],
-    ],
+    [["return cid == 'labels' && isAdmin(wid)", "return cid == 'labels' && isMember(wid)"]],
   ],
   [
     'inbox: agents edit the label list',
@@ -592,10 +559,7 @@ const MUTATIONS = [
       ],
     ],
   ],
-  [
-    'inbox: unbounded label list',
-    [['d.labels.size() <= 12', 'd.labels.size() <= 100']],
-  ],
+  ['inbox: unbounded label list', [['d.labels.size() <= 12', 'd.labels.size() <= 100']]],
   [
     'inbox: people write agent events',
     [
@@ -623,10 +587,7 @@ const MUTATIONS = [
     [['return d.state == outcomeAfter()[type]', 'return d.state is string']],
   ],
   ['inbox: early wake', [['&& r.waiting.until <= request.time', '']]],
-  [
-    'inbox: an item link without the item',
-    [['|| inboxItemMade(d))', '|| true)']],
-  ],
+  ['inbox: an item link without the item', [['|| inboxItemMade(d))', '|| true)']]],
   [
     "inbox: linking another member's thread",
     [["&& get(inboxDoc('inboxThreads', e.threadId)).data.memberUid == me()", '']],
@@ -681,8 +642,8 @@ const MUTATIONS = [
     'inbox: unbounded checks',
     [
       [
-        "(d.checks is list && d.checks.size() <= 6))\n          // Alone",
-        "(d.checks is list))\n          // Alone",
+        '(d.checks is list && d.checks.size() <= 6))\n          // Alone',
+        '(d.checks is list))\n          // Alone',
       ],
     ],
   ],
@@ -697,26 +658,10 @@ const MUTATIONS = [
   ],
   [
     'inbox: due without its event',
-    [
-      [
-        "['thread.due'], r.memberUid, tid)",
-        "['thread.due', 'thread.flagged'], r.memberUid, tid)",
-      ],
-    ],
+    [["['thread.due'], r.memberUid, tid)", "['thread.due', 'thread.flagged'], r.memberUid, tid)"]],
   ],
-  [
-    'inbox: due not a timestamp',
-    [['&& (d.due == null || d.due is timestamp)', '']],
-  ],
-  [
-    'inbox: due rewrites more',
-    [
-      [
-        "touched(['due'])",
-        "touched(['due', 'state'])",
-      ],
-    ],
-  ],
+  ['inbox: due not a timestamp', [['&& (d.due == null || d.due is timestamp)', '']]],
+  ['inbox: due rewrites more', [["touched(['due'])", "touched(['due', 'state'])"]]],
   [
     'inbox: unbounded options',
     [
@@ -771,10 +716,7 @@ const MUTATIONS = [
     'inbox: approve any version',
     [["&& d.decision.version <= r.get('versions', []).size())))", ')))']],
   ],
-  [
-    'inbox: member rewrites fields while asking',
-    [["touched(['state', 'revise'])", 'true']],
-  ],
+  ['inbox: member rewrites fields while asking', [["touched(['state', 'revise'])", 'true']]],
   [
     'inbox: reject while revising',
     [
@@ -847,10 +789,7 @@ const MUTATIONS = [
     'recheck: checkedAt with any result',
     [["&& e.data.data.result == 'still_good' && oid in e.data.data.checked", '']],
   ],
-  [
-    'recheck: checkedAt with other changes',
-    [["touched(['checkedAt'])", 'true']],
-  ],
+  ['recheck: checkedAt with other changes', [["touched(['checkedAt'])", 'true']]],
   [
     'recheck: unasked revise without a request',
     [
@@ -878,10 +817,7 @@ const MUTATIONS = [
     ],
   ],
   // Ask the agent (item w6O2KOw4ys70TQv9I1xD).
-  [
-    'instruct: another member asks',
-    [['(inboxOwner(r) && inboxInstructed(', '(inboxInstructed(']],
-  ],
+  ['instruct: another member asks', [['(inboxOwner(r) && inboxInstructed(', '(inboxInstructed(']]],
   [
     'instruct: ask while pending',
     [["|| r.instruct.at + duration.value(30, 'm') <= request.time)", '|| true)']],
