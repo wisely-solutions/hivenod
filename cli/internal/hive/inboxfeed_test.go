@@ -29,6 +29,7 @@ type fakeInbox struct {
 	sums     []FeedSummary
 	events   map[string]*FeedEvent
 	woken    []string
+	beats    []string
 	subs     int
 	threads  []FeedThread
 	outcomes []FeedOutcome
@@ -106,6 +107,13 @@ func (f *fakeInbox) EventOf(_ context.Context, id string) (*FeedEvent, error) {
 func (f *fakeInbox) Wake(_ context.Context, id string) error {
 	f.mu.Lock()
 	f.woken = append(f.woken, id)
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fakeInbox) Heartbeat(_ context.Context, id string) error {
+	f.mu.Lock()
+	f.beats = append(f.beats, id)
 	f.mu.Unlock()
 	return nil
 }
@@ -704,4 +712,68 @@ func TestInboxFeedSummarize(t *testing.T) {
 	r.want("t4:summarize", "t5:summarize", "t3:summarize", "t6:new")
 	r.summaries([]FeedSummary{fresh, young, stale, none, {ThreadID: "t6", MemberUID: "joao", Title: "Thread t6", UpdatedAtMs: r.now.UnixMilli() - 600_000}})
 	r.want("t4:summarize", "t5:summarize", "t3:summarize", "t6:new")
+}
+
+// Long steps (item OE8FmrTaIxFVGcaeGG3N, slice 6b): a long carry_out counts toward max items (a
+// second Build waits until the first ends), bypasses the inbox cap, gets a heartbeat every 5
+// minutes while this session holds it, and a running one is resumed by a new session.
+func TestInboxFeedLongStepsCountTowardMaxItems(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 1, MaxSteps: 1, Tick: 20 * time.Millisecond})
+	r.feed.Start()
+	b1 := FeedOutcome{ID: "b1", ThreadID: "t1", MemberUID: "joao", Type: "build", CreatedAtMs: r.now.UnixMilli(), PlanID: "p1"}
+	b2 := FeedOutcome{ID: "b2", ThreadID: "t2", MemberUID: "joao", Type: "build", CreatedAtMs: r.now.UnixMilli() + 1, PlanID: "p2"}
+	rp := FeedOutcome{ID: "r1", ThreadID: "t3", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli()}
+	r.plans([]FeedPlan{
+		{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"b1"}},
+		{ID: "p2", ThreadID: "t2", State: "active", Steps: []string{"b2"}},
+	})
+	r.set(nil, []FeedOutcome{b1, b2, rp})
+	// One Build and the reply (inbox cap 1 is not used by the Build); the second Build waits.
+	r.want("t1:carry_out", "t3:carry_out")
+	if m := r.meta(0); m["long"] != "true" || m["outcome_id"] != "b1" {
+		t.Fatal(m)
+	}
+	// Started: still one running, b2 still waits.
+	r.set(nil, []FeedOutcome{b2})
+	r.runningSteps([]FeedRunning{{ID: "b1", ThreadID: "t1", MemberUID: "joao", Type: "build", PlanID: "p1", Long: true, BeatAtMs: r.now.UnixMilli()}})
+	r.want("t1:carry_out", "t3:carry_out")
+	// Five minutes on: this session stamps b1.
+	r.mu.Lock()
+	r.now = r.now.Add(5 * time.Minute)
+	r.mu.Unlock()
+	r.settle()
+	r.src.mu.Lock()
+	beats := append([]string{}, r.src.beats...)
+	r.src.mu.Unlock()
+	if len(beats) == 0 || beats[0] != "b1" {
+		t.Fatalf("beats %v", beats)
+	}
+	// b1 done: the second Build goes out (once the start grace is over).
+	r.runningSteps(nil)
+	r.mu.Lock()
+	r.now = r.now.Add(11 * time.Second)
+	r.mu.Unlock()
+	r.settle()
+	r.want("t1:carry_out", "t3:carry_out", "t2:carry_out")
+}
+
+func TestInboxFeedLongStepResumedByANewSession(t *testing.T) {
+	r := newRig(t, InboxOptions{MaxInbox: 3, MaxSteps: 2})
+	r.feed.Start()
+	r.plans([]FeedPlan{{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"x", "b1"}, Cursor: 1}})
+	r.runningSteps([]FeedRunning{{ID: "b1", ThreadID: "t1", MemberUID: "joao", Type: "release", PlanID: "p1", Long: true, BeatAtMs: r.now.UnixMilli() - 3_600_000}})
+	r.want("t1:carry_out")
+	m := r.meta(0)
+	if m["why"] != "resume" || m["outcome_id"] != "b1" || m["step"] != "2 of 2" {
+		t.Fatal(m)
+	}
+	r.mu.Lock()
+	c := r.pushed[0].Content
+	r.mu.Unlock()
+	if !strings.Contains(c, "was running before this session") {
+		t.Fatal(c)
+	}
+	// Once only.
+	r.runningSteps([]FeedRunning{{ID: "b1", ThreadID: "t1", MemberUID: "joao", Type: "release", PlanID: "p1", Long: true}})
+	r.want("t1:carry_out")
 }

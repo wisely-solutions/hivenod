@@ -889,7 +889,11 @@ func (c *Client) outcomeRevise(ctx context.Context, id, typ string, fields map[s
 }
 
 // OutcomeResult is outcome_done's result.
-type OutcomeResult struct{ Text, Permalink, ItemID, Error *string }
+type OutcomeResult struct {
+	Text, Permalink, ItemID, Error *string
+	// Usage (slice 6b): what carrying it out cost.
+	Tokens, CostEur *float64
+}
 
 // OutcomeDone reports an approved outcome (outcome_done).
 func (c *Client) OutcomeDone(ctx context.Context, id, status string, res OutcomeResult) (map[string]any, error) {
@@ -927,6 +931,12 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 		ItemID    *string `json:"itemId"`
 		Error     *string `json:"error"`
 	}{res.Text, res.Permalink, res.ItemID, res.Error}
+	if res.Tokens != nil || res.CostEur != nil {
+		in.Usage = &struct {
+			Tokens  *float64 `json:"tokens"`
+			CostEur *float64 `json:"costEur"`
+		}{res.Tokens, res.CostEur}
+	}
 	p, err := actions.FinishOutcome(c.actx(), in)
 	if err != nil {
 		return nil, wrap(err)
@@ -941,6 +951,8 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 	note := "Reported as done."
 	state := status
 	switch {
+	case status == "started" && isLong(o.Type):
+		state, note = "running", "Started: report step_progress as you go (at least every 10 min; this session also stamps it every 5 min), then outcome_done status done."
 	case status == "started":
 		state, note = "running", "Started: the step waits until the item is Done; then report it done (outcome_done status done)."
 	case o.PlanID != nil && status == "done" && in.Plan != nil && in.Plan.Plan.Cursor+1 >= len(in.Plan.Plan.Steps):

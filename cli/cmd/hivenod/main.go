@@ -39,7 +39,7 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
                            (hivenod inbox --help)
   hivenod logout           forgets the token saved by pairing
   hivenod mcp              MCP stdio server for Claude Code
-  hivenod mcp --channel [--project P] [--step S] [--max-items N]
+  hivenod mcp --channel [--project P] [--step S] [--max-items N | --max-steps N]
                            the same, as a Claude Code channel: a live session gets its work
                            pushed in, claimed, up to N items at a time (default 1, or
                            HIVENOD_MAX_ITEMS; protects this agent from too much work, it is not
@@ -86,6 +86,8 @@ func parse(args []string) (opts, []string, error) {
 	fs.StringVar(&o.project, "project", "", "")
 	fs.StringVar(&o.step, "step", "", "")
 	fs.StringVar(&o.maxItems, "max-items", "", "")
+	// --max-steps (slice 6b): how many long plan steps the session runs at once; --max-items stays.
+	fs.StringVar(&o.maxItems, "max-steps", "", "")
 	fs.StringVar(&o.maxInbox, "max-inbox", "", "")
 	fs.StringVar(&o.server, "server", "", "")
 	fs.StringVar(&o.title, "title", "", "")

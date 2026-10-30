@@ -94,4 +94,3 @@ func (c *Client) TakenOver(ctx context.Context) (bool, error) {
 	sid, _ := c.PresenceIdentity()
 	return actions.TakenOver(a, c.ServerNow().UnixMilli(), sid), nil
 }
-

@@ -85,7 +85,10 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome / plan: a person's H
   hivenod plan send-back THREAD --reason R [--to-step N]
                            from the plan step you carry out, sends the plan back to an
                            earlier agent step (N, e.g. 3 for Build; default: the nearest)
-  hivenod outcome done OUTCOME --status done|failed|started [--text T] [--permalink URL] [--item-id I] [--error E]
+  hivenod outcome progress OUTCOME --line L [--percent N]
+                           where a long step you started (build, release) stands; at least
+                           every 10 minutes while you work on it
+  hivenod outcome done OUTCOME --status done|failed|started [--text T] [--permalink URL] [--item-id I] [--error E] [--tokens N] [--cost-eur E]
                            after carrying out an outcome the person approved; started (with
                            --item-id) is for a Build it plan step whose item is made
 
@@ -104,7 +107,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file", "ref", "file", "base-version", "template", "to-step"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file", "ref", "file", "base-version", "template", "to-step", "line", "percent", "tokens", "cost-eur"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
@@ -404,6 +407,34 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 			opt(r, k, f)
 		}
 		a["outcomeId"], a["status"], a["result"] = id, *str["status"], map[string]any(r)
+		u := map[string]any{}
+		for k, f := range map[string]string{"tokens": "tokens", "costEur": "cost-eur"} {
+			if set[f] {
+				n, err := strconv.ParseFloat(*str[f], 64)
+				if err != nil {
+					fmt.Fprintf(stderr, "hivenod: --%s is a number\n", f)
+					return 2
+				}
+				u[k] = n
+			}
+		}
+		if len(u) > 0 {
+			a["usage"] = u
+		}
+	case "outcome progress":
+		tool = "step_progress"
+		if id == "" || *str["line"] == "" {
+			return usage()
+		}
+		a["outcomeId"], a["line"] = id, *str["line"]
+		if set["percent"] {
+			n, err := strconv.Atoi(*str["percent"])
+			if err != nil {
+				fmt.Fprintf(stderr, "hivenod: --percent is a whole number\n")
+				return 2
+			}
+			a["percent"] = float64(n)
+		}
 	default:
 		return usage()
 	}
