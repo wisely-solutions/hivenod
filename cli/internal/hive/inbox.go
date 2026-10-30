@@ -497,6 +497,17 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 		if o.CheckedAt != nil {
 			row["checkedAt"] = isoPtr(o.CheckedAt)
 		}
+		// Their reply: the message in hand (to approve, approved to send, or sent), their reply quoted.
+		if e := o.Ext; e != nil {
+			ext := map[string]any{"sent": e.Sent, "outAt": isoPtr(e.OutAt), "ask": nil, "reply": nil}
+			if e.Ask != nil {
+				ext["ask"] = map[string]any{"n": e.Ask.N, "kind": e.Ask.Kind, "text": e.Ask.Text, "state": e.Ask.State}
+			}
+			if e.Reply != nil {
+				ext["reply"] = map[string]any{"messageId": e.Reply.MessageDocID, "quote": e.Reply.Quote}
+			}
+			row["ext"] = ext
+		}
 		// Ask for changes: how many versions, and what the person asks while revising.
 		if len(o.Versions) > 0 || revise != nil {
 			row["versions"] = max(len(o.Versions), 1)

@@ -55,6 +55,12 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * step type and the check.
    */
   keepgreen: '0.2.222',
+  /**
+   * Their reply (packages/shared/src/theirreply.ts): step_ask, step_sent, outcome_done evidence,
+   * and the inbox reasons external_reply, ask_approved and nudge_due on a step. An older CLI
+   * refuses the step type and never wakes on their reply.
+   */
+  their_reply: '0.2.241',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */
