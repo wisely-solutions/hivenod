@@ -1,10 +1,8 @@
-/** Telegram Bot API over fetch: sending, long polling, linking a chat and the two decision buttons. */
+/** Telegram Bot API over fetch: sending, long polling, linking a chat and the thread quick actions. */
 import { randomId, notifyPath, type Notice } from '@hive/shared';
 import type { Firestore } from 'firebase-admin/firestore';
-import { canSendBack, decide, whyNot } from './decide';
-import type { ApprovalAction, ThreadTelegram } from './engine';
+import type { ThreadTelegram } from './engine';
 import { decideThread, threadCheck, type ThreadAction, type ThreadDecision } from './threadDecide';
-import { itemSchema, projectSchema, paths } from '@hive/shared';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 /** A button's text is kept short (Telegram cuts long ones anyway). */
@@ -37,9 +35,6 @@ export function threadKeyboard(code: string, a: ThreadTelegram, open: string): B
     [{ text: 'Ask for changes', callback_data: `tc:${code}` }, openB],
   ];
 }
-
-const isThread = (a: ApprovalAction | ThreadTelegram): a is ThreadTelegram =>
-  (a as { kind?: string }).kind === 'thread';
 
 /** The message text: the bold one-liner, then the second line. */
 export function noticeText(notice: Notice): string {
@@ -97,15 +92,11 @@ export class TelegramBot {
   }
 
   /** The Ports.sendTelegram implementation. */
-  async send(
-    chatId: number,
-    notice: Notice,
-    action?: ApprovalAction | ThreadTelegram,
-  ): Promise<boolean> {
+  async send(chatId: number, notice: Notice, action?: ThreadTelegram): Promise<boolean> {
     const text = noticeText(notice);
     const row1 = [{ text: 'Open', url: `${this.appUrl}${notice.url}` }];
     let rows: unknown[][] = [row1];
-    if (action && isThread(action)) {
+    if (action) {
       const code = randomId(12);
       const doc: ThreadAction = {
         kind: 'thread',
@@ -116,19 +107,6 @@ export class TelegramBot {
       };
       await this.db.doc(`telegramActions/${code}`).set({ ...doc, chatId, createdAt: this.now() });
       rows = threadKeyboard(code, action, `${this.appUrl}${notice.url}`);
-    } else if (action) {
-      const code = randomId(12);
-      await this.db
-        .doc(`telegramActions/${code}`)
-        .set({ ...action, chatId, createdAt: this.now() });
-      const buttons: unknown[] = [{ text: 'Approve', callback_data: `a:${code}` }];
-      const proj = await this.db.doc(paths.project(action.wid, action.pid)).get();
-      const item = await this.db.doc(paths.item(action.wid, action.pid, action.iid)).get();
-      const p = projectSchema.safeParse(proj.data());
-      const i = itemSchema.safeParse(item.data());
-      if (p.success && i.success && canSendBack(p.data, i.data))
-        buttons.push({ text: 'Send back', callback_data: `s:${code}` });
-      rows.unshift(buttons);
     }
     try {
       await this.api.call('sendMessage', {
@@ -308,78 +286,18 @@ export class TelegramBot {
     if (r.ok) await this.say(chatId, r.text);
   }
 
-  private async action(code: string, chatId: number): Promise<ApprovalAction | null> {
-    const snap = await this.db.doc(`telegramActions/${code}`).get();
-    const d = snap.data() as (ApprovalAction & { chatId: number; kind?: string }) | undefined;
-    if (d?.kind === 'thread') return null;
-    // The chat must be the one the message was sent to, and still the person's linked chat.
-    if (!d || d.chatId !== chatId) return null;
-    const link = (await this.db.doc(notifyPath.telegram(d.uid)).get()).data() as
-      { chatId?: number } | undefined;
-    return link?.chatId === chatId ? d : null;
-  }
-
   private async onButton(q: NonNullable<Update['callback_query']>) {
     const chatId = q.message?.chat.id;
     const [kind, code] = (q.data ?? '').split(':');
     if (chatId && code && kind?.startsWith('t')) return this.onThreadButton(q, chatId, kind, code);
-    if (!chatId || !code || (kind !== 'a' && kind !== 's'))
-      return void (await this.api.call('answerCallbackQuery', { callback_query_id: q.id }));
-    const a = await this.action(code, chatId);
-    if (!a)
+    // Old Approve / Send back buttons of project items (gone, design 7) answer nothing.
+    if (chatId && code && (kind === 'a' || kind === 's'))
       return void (await this.api.call('answerCallbackQuery', {
         callback_query_id: q.id,
         text: 'This button has expired.',
         show_alert: true,
       }));
-    if (kind === 'a') {
-      const r = await decide(this.db, a, 'approve', '', this.now());
-      await this.api.call('answerCallbackQuery', {
-        callback_query_id: q.id,
-        text: r.text.slice(0, 190),
-      });
-      if (q.message)
-        await this.api
-          .call('editMessageReplyMarkup', {
-            chat_id: chatId,
-            message_id: q.message.message_id,
-            reply_markup: { inline_keyboard: [] },
-          })
-          .catch(() => undefined);
-      if (!r.ok) await this.say(chatId, r.text);
-      else await this.say(chatId, r.text);
-      return;
-    }
-    // Send back needs a reason: ask for it as a reply to this prompt.
-    const snap = await this.loadForPrompt(a);
-    if (snap) {
-      await this.api.call('answerCallbackQuery', {
-        callback_query_id: q.id,
-        text: snap.slice(0, 190),
-        show_alert: true,
-      });
-      return;
-    }
-    await this.api.call('answerCallbackQuery', { callback_query_id: q.id });
-    const sent = await this.say(
-      chatId,
-      'Why send it back? Reply to this message (at least 10 characters).',
-      {
-        reply_markup: { force_reply: true, input_field_placeholder: 'What should change?' },
-      },
-    );
-    await this.db.doc(`telegramActions/${code}`).update({ promptMessageId: sent.message_id });
-  }
-
-  private async loadForPrompt(a: ApprovalAction): Promise<string | null> {
-    const [p, i] = await Promise.all([
-      this.db.doc(paths.project(a.wid, a.pid)).get(),
-      this.db.doc(paths.item(a.wid, a.pid, a.iid)).get(),
-    ]);
-    const pr = projectSchema.safeParse(p.data());
-    const it = itemSchema.safeParse(i.data());
-    if (!pr.success || !it.success) return 'I could not find that item any more.';
-    return whyNot(pr.data, it.data, a);
+    return void (await this.api.call('answerCallbackQuery', { callback_query_id: q.id }));
   }
 
   private async onReason(chatId: number, promptId: number, text: string) {
@@ -401,15 +319,7 @@ export class TelegramBot {
       await this.say(chatId, r.ok ? r.text : `${r.text} Reply to my question again.`);
       return;
     }
-    const a = await this.action(doc.id, chatId);
-    if (!a) return;
-    const r = await decide(this.db, a, 'sendback', text, this.now());
-    if (r.ok) await doc.ref.delete().catch(() => undefined);
-    await this.say(
-      chatId,
-      r.ok
-        ? r.text
-        : r.text + (r.text.startsWith('Please say') ? ' Reply to my question again.' : ''),
-    );
+    // An old Send back prompt of a project item (gone, design 7): nothing to do.
+    await doc.ref.delete().catch(() => undefined);
   }
 }

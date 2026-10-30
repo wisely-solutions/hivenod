@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { bellEntrySchema, bellId, bellNeedsYou, bellPlain } from './bell';
+import { bellEntrySchema, bellId, bellNeedsYou, bellPlain, INBOX_BELL_PROJECT } from './bell';
 
 const base = {
   workspaceId: 'w',
-  projectId: 'p',
-  itemId: 'i',
-  projectName: 'Hive',
-  itemTitle: 'Connect wizard',
-  stepName: 'Accept',
+  projectId: INBOX_BELL_PROJECT,
+  itemId: 't1',
+  projectName: 'Inbox · Payments',
+  itemTitle: 'Move the review',
+  stepName: '',
   actorName: 'Hive',
   text: '',
   at: 1,
@@ -16,30 +16,23 @@ const base = {
 
 describe('bell entries (item 3ENs)', () => {
   it('reads each kind as a sentence', () => {
-    expect(bellPlain({ ...base, kind: 'gate' })).toBe('Connect wizard waits for your Accept');
-    expect(bellPlain({ ...base, kind: 'question', text: 'token ready?' })).toBe(
-      'Hive asked about Connect wizard: “token ready?”',
+    expect(bellPlain({ ...base, kind: 'inboxAsk', text: 'Thursday?' })).toBe(
+      'Hive asks you about Move the review: “Thursday?”',
     );
-    expect(bellPlain({ ...base, kind: 'answer', actorName: 'João' })).toBe(
-      'João answered the question on Connect wizard',
+    expect(bellPlain({ ...base, kind: 'inboxCall', text: 'Reply' })).toBe(
+      'Your call on Move the review: Reply',
     );
-    expect(
-      bellPlain({ ...base, kind: 'sentBack', stepName: 'Build', text: '7 e2e failures' }),
-    ).toBe('Hive sent Connect wizard back to Build: 7 e2e failures');
   });
-  it('only gates and questions ask you to act', () => {
-    expect(bellNeedsYou('gate')).toBe(true);
-    expect(bellNeedsYou('question')).toBe(true);
-    expect(bellNeedsYou('answer')).toBe(false);
-    expect(bellNeedsYou('sentBack')).toBe(false);
+  it('both inbox kinds ask you to act', () => {
+    expect(bellNeedsYou('inboxAsk')).toBe(true);
+    expect(bellNeedsYou('inboxCall')).toBe(true);
   });
   it('makes stable, safe document ids', () => {
-    expect(bellId.gate('abc', 'review:2')).toBe('g-abc-review_2');
-    expect(bellId.question('m1')).toBe('q-m1');
-    expect(bellId.sentBack('d/1')).toBe('s-d_1');
+    expect(bellId.inbox('t1', 's:p1:o2')).toBe('i-t1-s_p1_o2');
   });
-  it('validates entries', () => {
-    expect(bellEntrySchema.safeParse({ ...base, kind: 'gate' }).success).toBe(true);
+  it('validates entries; the old project kinds no longer parse', () => {
+    expect(bellEntrySchema.safeParse({ ...base, kind: 'inboxAsk' }).success).toBe(true);
+    expect(bellEntrySchema.safeParse({ ...base, kind: 'gate' }).success).toBe(false);
     expect(bellEntrySchema.safeParse({ ...base, kind: 'other' }).success).toBe(false);
   });
 });

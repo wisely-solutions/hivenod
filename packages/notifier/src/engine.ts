@@ -3,25 +3,16 @@
  * to the world through `Ports`, so the tests run it with fakes. One `Engine` per process.
  *
  * Rules:
- *  - An arrival at a gate (item waiting, keyed by step + send-back count) tells every decider who has
- *    not voted, once. A question tells the project's people, once.
+ *  - Inbox threads only (projects were removed, design 7): a thread arriving at Needs you (an
+ *    agent's question) or Your call (outcomes proposed, a plan step at its turn) tells its member
+ *    alone, once per arrival, on the bell, push and Telegram. An urgent thread skips quiet hours
+ *    and the summary.
  *  - Arrivals older than FRESH_MS are recorded silently (a restart must not replay the backlog).
  *  - Quiet hours hold a message back; it goes out once they end (several held become one summary).
- *  - The bell (item 3ENs): every new arrival, question, answer and send-back is written to the
- *    history of the people it is for, whatever their channels, quiet hours or its age. Pop-ups
- *    stay live only; the bell is where the rest waits.
- *  - Inbox (item 4PEHr): a thread arriving at Needs you (an agent's question) or Your call
- *    (outcomes proposed) tells its member alone, once per arrival, on the bell, push and
- *    Telegram. An urgent thread skips quiet hours and the summary.
- *  - After the gate's remindAfterHours a reminder goes out once, and only then is `remindedAt` set,
- *    which the app shows as "reminder sent".
- *  - Silence (item AzveC): an actively worked item with no activity (log line, tool write, status)
- *    for its project's silenceAfter minutes (or 10 minutes after a person asked) is flagged on the
- *    item, and its deciders are told once per silence (bell, push, Telegram). Any activity ends
- *    the silence; the next one is a new silence.
+ *  - The bell (item 3ENs): every new arrival is written to the member's history, whatever their
+ *    channels, quiet hours or its age. Pop-ups stay live only; the bell is where the rest waits.
  */
 import {
-  approvalNotice,
   askApproves,
   decisionLines,
   type ThreadAsk,
@@ -31,21 +22,11 @@ import {
   inQuietHours,
   inboxNotice,
   INBOX_BELL_PROJECT,
-  gateKey,
-  questionNotice,
-  reminderDue,
-  silenceDeciders,
-  silenceDue,
-  silenceNotice,
-  type Silence,
   summaryNotice,
-  notifyPath,
   DEFAULT_NOTIFY_PREFS,
-  type Item,
   type Notice,
   type Notified,
   type NotifyPrefs,
-  type Project,
   type PushSub,
   type TelegramLink,
 } from '@hive/shared';
@@ -55,14 +36,6 @@ import type { ThreadAction } from './threadDecide.js';
 export const FRESH_MS = 30 * 60_000;
 /** More than this many messages for one person in one pass become one summary. */
 export const SUMMARY_OVER = 3;
-
-export interface ApprovalAction {
-  wid: string;
-  pid: string;
-  iid: string;
-  uid: string;
-  gateKey: string;
-}
 
 export interface Ports {
   now(): number;
@@ -74,25 +47,7 @@ export interface Ports {
   setNotified(wid: string, key: string, value: Notified): Promise<void>;
   /** 'gone' = the endpoint is dead and should be forgotten. */
   sendPush(sub: PushSub, notice: Notice): Promise<PushOutcome>;
-  sendTelegram(
-    chatId: number,
-    notice: Notice,
-    action?: ApprovalAction | ThreadTelegram,
-  ): Promise<boolean>;
-  /** Sets or clears the silence flag on an item (item AzveC). */
-  setSilence(wid: string, pid: string, iid: string, silence: Silence | null): Promise<void>;
-  /**
-   * The holder's newest activity on a run after `afterMs` (item AzveC), in ms: its newest log
-   * line, or its newest tool write on the item (an event of the agent, heartbeats aside). Null:
-   * none since then.
-   */
-  lastActivity(
-    wid: string,
-    iid: string,
-    runId: string,
-    agentUid: string,
-    afterMs: number,
-  ): Promise<number | null>;
+  sendTelegram(chatId: number, notice: Notice, action?: ThreadTelegram): Promise<boolean>;
   /** Writes a bell entry unless one with this id exists (users/{uid}/notifications/{id}). */
   addBell(uid: string, id: string, entry: BellEntry): Promise<void>;
   log(line: string): void;
@@ -102,60 +57,6 @@ export interface Ports {
 export type Delivery = 'sent' | 'held' | 'none' | 'retry';
 /** After this many sweeps of failing pushes we stop retrying one message. */
 export const MAX_RETRY_SWEEPS = 5;
-
-export interface WaitingItem {
-  wid: string;
-  pid: string;
-  iid: string;
-  project: Project;
-  item: Item;
-}
-/** An item an agent holds (item AzveC), with its run's start. */
-/** The last activity of a silent-looking item is read again after this long (item AzveC). */
-export const ACTIVITY_READ_EVERY_MS = 55_000;
-const ACTIVITY_OVERLAP_MS = 2 * 60_000;
-
-export interface WorkingItem {
-  wid: string;
-  pid: string;
-  iid: string;
-  project: Project;
-  item: Item;
-  /** When the run started (ms): the claim time. */
-  startedMs: number;
-  /** The agent's name, for the message. */
-  agentName: string;
-}
-export interface QuestionMsg {
-  wid: string;
-  pid: string;
-  iid: string;
-  mid: string;
-  project: Project;
-  itemTitle: string;
-  text: string;
-  atMs: number;
-  /** Who asked (the agent's name), for the bell. */
-  byName?: string;
-}
-/** A decision the bell cares about: a send-back or an answer. */
-export interface DecisionMsg {
-  wid: string;
-  pid: string;
-  did: string;
-  project: Project;
-  itemId: string;
-  itemTitle: string;
-  outcome: 'sentBack' | 'answered';
-  toStepId: string | null;
-  byUid: string;
-  byName: string;
-  /** The reason or the answer. */
-  text: string;
-  atMs: number;
-  /** The person who created the item (null when an agent did). */
-  creatorUid: string | null;
-}
 
 /**
  * The quick actions of a thread message (slice 3): what the buttons decide, and which ones the
@@ -250,10 +151,7 @@ export function threadAction(t: InboxWaiting): ThreadTelegram | undefined {
 }
 
 export class Engine {
-  private waiting = new Map<string, WaitingItem>();
   private inbox = new Map<string, InboxWaiting>();
-  private questions = new Map<string, QuestionMsg>();
-  private working = new Map<string, WorkingItem>();
   /** Channels that already got a message, by `key|uid|channel` (kept for the process's life). */
   private chanDone = new Set<string>();
   private tries = new Map<string, number>();
@@ -271,73 +169,10 @@ export class Engine {
     }
   }
 
-  /** A send-back tells the person who created the item; an answer tells the other project people. */
-  async onDecision(d: DecisionMsg): Promise<void> {
-    const base = {
-      workspaceId: d.wid,
-      projectId: d.pid,
-      itemId: d.itemId,
-      projectName: d.project.name,
-      itemTitle: clipText(d.itemTitle, 300),
-      actorName: clipText(d.byName, 200),
-      text: clipText(d.text.replace(/\s+/g, ' ').trim(), 200),
-      at: d.atMs,
-      readAt: null,
-    };
-    if (d.outcome === 'sentBack') {
-      if (!d.creatorUid || d.creatorUid === d.byUid) return;
-      const step = d.project.steps.find((s) => s.id === d.toStepId);
-      await this.bell([d.creatorUid], bellId.sentBack(d.did), {
-        ...base,
-        kind: 'sentBack',
-        stepName: step?.name ?? 'an earlier step',
-      });
-    } else {
-      const to = d.project.memberUids.filter((u) => u !== d.byUid);
-      await this.bell(to, bellId.answer(d.did), { ...base, kind: 'answer', stepName: '' });
-    }
-  }
-
-  /** Forget what is no longer waiting (the listener removed or changed it). */
-  setWaiting(w: WaitingItem | null, key: string) {
-    if (w) this.waiting.set(key, w);
-    else this.waiting.delete(key);
-  }
   setInbox(t: InboxWaiting | null, key: string) {
     if (t) this.inbox.set(key, t);
     else this.inbox.delete(key);
   }
-  /**
-   * The last activity per item (item AzveC): the newest found so far and up to when it was read.
-   * Each read only asks for what came after the last one, at most once a minute.
-   */
-  private activityCache = new Map<
-    string,
-    { runId: string; ms: number | null; readAt: number; readTo: number }
-  >();
-  private async activity(w: WorkingItem, runId: string, agentUid: string): Promise<number | null> {
-    const key = `${w.wid}/${w.iid}`;
-    const now = this.p.now();
-    let hit = this.activityCache.get(key);
-    if (hit && hit.runId !== runId) hit = undefined;
-    if (hit && now - hit.readAt < ACTIVITY_READ_EVERY_MS) return hit.ms;
-    // A little overlap: server times and the notifier's clock may differ by a few seconds.
-    const after = hit ? hit.readTo - ACTIVITY_OVERLAP_MS : w.startedMs;
-    const found = await this.p.lastActivity(w.wid, w.iid, runId, agentUid, after);
-    const ms = Math.max(hit?.ms ?? 0, found ?? 0) || null;
-    this.activityCache.set(key, { runId, ms, readAt: now, readTo: now });
-    return ms;
-  }
-
-  setWorking(w: WorkingItem | null, key: string) {
-    if (w) this.working.set(key, w);
-    else this.working.delete(key);
-  }
-  setQuestion(q: QuestionMsg | null, key: string) {
-    if (q) this.questions.set(key, q);
-    else this.questions.delete(key);
-  }
-
   private async prefs(uid: string): Promise<NotifyPrefs> {
     const hit = this.prefsCache.get(uid);
     if (hit && this.p.now() - hit.at < 60_000) return hit.prefs;
@@ -354,7 +189,7 @@ export class Engine {
   async deliver(
     uid: string,
     notice: Notice,
-    action?: ApprovalAction | ThreadTelegram,
+    action?: ThreadTelegram,
     key = '',
     urgent = false,
   ): Promise<Delivery> {
@@ -398,7 +233,7 @@ export class Engine {
     return sent ? 'sent' : 'none';
   }
 
-  /** One pass over everything waiting: new arrivals, held messages, reminders, questions. */
+  /** One pass over every waiting thread: new arrivals and held messages. */
   async sweep(): Promise<void> {
     const now = this.p.now();
     const records = new Map<string, { wid: string; key: string; rec: Notified; dirty: boolean }>();
@@ -416,147 +251,6 @@ export class Engine {
       }
       return r;
     };
-
-    for (const w of [...this.waiting.values()]) {
-      try {
-        const step = w.project.steps.find((s) => s.id === w.item.stepId);
-        if (w.item.status !== 'waiting' || !w.item.gate || step?.kind !== 'human' || !step.gate)
-          continue;
-        const gate = step.gate;
-        const key = gateKey(w.item);
-        const since = w.item.updatedAt.toMillis();
-        const voted = new Set([
-          ...Object.keys(w.item.gate.approvals),
-          ...Object.keys(w.item.gate.rejections),
-        ]);
-        const todo = gate.deciderUids.filter((u) => !voted.has(u));
-        const docKey = notifyPath.notifiedGate(w.iid);
-        const r = await record(w.wid, docKey, () => ({
-          itemId: w.iid,
-          projectId: w.pid,
-          gateKey: key,
-          // An old arrival is recorded without a message: a restart must not replay the backlog.
-          sent: now - since > FRESH_MS ? [...gate.deciderUids] : [],
-          remindedAt: null,
-          at: now,
-        }));
-        if (!r) continue;
-        // Just created (dirty before anything else touched it): an arrival this notifier never saw.
-        let arrived = r.dirty;
-        if (r.rec.gateKey !== key) {
-          // The item came back to a gate (sent back and forward): a new arrival.
-          r.rec = { ...r.rec, gateKey: key, sent: [], remindedAt: null, at: now };
-          r.dirty = true;
-          arrived = true;
-        }
-        const rec = r.rec;
-        const base = {
-          projectName: w.project.name,
-          stepName: step.name,
-          itemTitle: w.item.title,
-          projectId: w.pid,
-          itemId: w.iid,
-        };
-        if (arrived)
-          await this.bell(todo, bellId.gate(w.iid, key), {
-            kind: 'gate',
-            workspaceId: w.wid,
-            projectId: w.pid,
-            itemId: w.iid,
-            projectName: w.project.name,
-            itemTitle: w.item.title,
-            stepName: step.name,
-            actorName: '',
-            text: '',
-            at: since,
-            readAt: null,
-          });
-        for (const uid of todo) {
-          if (rec.sent.includes(uid)) continue;
-          cands.push({
-            uid,
-            notice: approvalNotice(base),
-            action: { wid: w.wid, pid: w.pid, iid: w.iid, uid, gateKey: key },
-            key: `arr|${w.iid}|${key}`,
-            done: () => {
-              rec.sent = [...rec.sent, uid];
-              r.dirty = true;
-            },
-          });
-        }
-        if (!rec.remindedAt && reminderDue(since, now, gate.remindAfterHours)) {
-          const hours = Math.max(1, Math.floor((now - since) / 3_600_000));
-          let reached = false;
-          let retry = false;
-          for (const uid of todo) {
-            const d = await this.deliver(
-              uid,
-              approvalNotice({ ...base, reminderHours: hours }),
-              { wid: w.wid, pid: w.pid, iid: w.iid, uid, gateKey: key },
-              `rem|${w.iid}|${key}`,
-            );
-            if (d === 'sent') reached = true;
-            if (d === 'retry') retry = true;
-          }
-          if (reached && !retry) {
-            rec.remindedAt = now;
-            r.dirty = true;
-          }
-        }
-      } catch (e) {
-        this.p.log(`waiting ${w.iid}: ${String(e)}`);
-      }
-    }
-
-    for (const q of [...this.questions.values()]) {
-      try {
-        const key = `q-${q.mid}`;
-        const r = await record(q.wid, key, () => ({
-          itemId: q.iid,
-          projectId: q.pid,
-          gateKey: `q:${q.mid}`,
-          sent: now - q.atMs > FRESH_MS ? [...q.project.memberUids] : [],
-          remindedAt: null,
-          at: now,
-        }));
-        if (!r) continue;
-        if (r.dirty)
-          await this.bell(q.project.memberUids, bellId.question(q.mid), {
-            kind: 'question',
-            workspaceId: q.wid,
-            projectId: q.pid,
-            itemId: q.iid,
-            projectName: q.project.name,
-            itemTitle: clipText(q.itemTitle, 300),
-            stepName: '',
-            actorName: clipText(q.byName ?? '', 200),
-            text: clipText(q.text.replace(/\s+/g, ' ').trim(), 200),
-            at: q.atMs,
-            readAt: null,
-          });
-        const notice = questionNotice({
-          projectName: q.project.name,
-          itemTitle: q.itemTitle,
-          text: q.text,
-          projectId: q.pid,
-          itemId: q.iid,
-        });
-        for (const uid of q.project.memberUids) {
-          if (r.rec.sent.includes(uid)) continue;
-          cands.push({
-            uid,
-            notice,
-            key: `q|${q.iid}|${q.mid}`,
-            done: () => {
-              r.rec.sent = [...r.rec.sent, uid];
-              r.dirty = true;
-            },
-          });
-        }
-      } catch (e) {
-        this.p.log(`question ${q.mid}: ${String(e)}`);
-      }
-    }
 
     for (const t of [...this.inbox.values()]) {
       try {
@@ -610,89 +304,6 @@ export class Engine {
         this.p.log(`inbox ${t.tid}: ${String(e)}`);
       }
     }
-    const workingNow = new Set([...this.working.values()].map((w) => `${w.wid}/${w.iid}`));
-    for (const k of this.activityCache.keys()) if (!workingNow.has(k)) this.activityCache.delete(k);
-    for (const w of [...this.working.values()]) {
-      try {
-        const at = { item: w.item, project: w.project, startedMs: w.startedMs, nowMs: now };
-        // Silence counts from the last activity. The item alone gives an upper bound, so the
-        // log and the events are only read when the item would be silent without them.
-        let due = silenceDue({ ...at, activityMs: null });
-        if (due && w.item.claim) {
-          const activityMs = await this.activity(w, w.item.claim.runId, w.item.claim.agentUid);
-          due = silenceDue({ ...at, activityMs });
-        }
-        const flag = w.item.silence ?? null;
-        if (!due) {
-          if (flag) {
-            await this.p.setSilence(w.wid, w.pid, w.iid, null);
-            w.item = { ...w.item, silence: null };
-          }
-          continue;
-        }
-        if (!flag || flag.runId !== due.runId || flag.since !== due.since) {
-          const next = { runId: due.runId, since: due.since, at: now };
-          await this.p.setSilence(w.wid, w.pid, w.iid, next);
-          w.item = { ...w.item, silence: next };
-        }
-        const key = `${due.runId}:${due.since}`;
-        const deciders = silenceDeciders(w.project, w.item);
-        const r = await record(w.wid, notifyPath.notifiedSilence(w.iid), () => ({
-          itemId: w.iid,
-          projectId: w.pid,
-          gateKey: key,
-          sent: [],
-          remindedAt: null,
-          at: now,
-        }));
-        if (!r) continue;
-        let fresh = r.dirty;
-        if (r.rec.gateKey !== key) {
-          // A status ended the last silence: this is a new one.
-          r.rec = { ...r.rec, gateKey: key, sent: [], at: now };
-          r.dirty = true;
-          fresh = true;
-        }
-        const minutes = Math.max(1, Math.floor((now - due.since) / 60_000));
-        if (fresh)
-          await this.bell(deciders, bellId.silence(w.iid, key), {
-            kind: 'silence',
-            workspaceId: w.wid,
-            projectId: w.pid,
-            itemId: w.iid,
-            projectName: w.project.name,
-            itemTitle: clipText(w.item.title, 300),
-            stepName: '',
-            actorName: clipText(w.agentName, 200),
-            text: `no activity for ${minutes} min`,
-            at: now,
-            readAt: null,
-          });
-        const notice = silenceNotice({
-          projectName: w.project.name,
-          itemTitle: w.item.title,
-          agentName: w.agentName,
-          minutes,
-          projectId: w.pid,
-          itemId: w.iid,
-        });
-        const rec = r.rec;
-        for (const uid of deciders) {
-          if (rec.sent.includes(uid)) continue;
-          cands.push({
-            uid,
-            notice,
-            key: `sil|${w.iid}|${key}`,
-            done: () => {
-              rec.sent = [...rec.sent, uid];
-              r.dirty = true;
-            },
-          });
-        }
-      } catch (e) {
-        this.p.log(`working ${w.iid}: ${String(e)}`);
-      }
-    }
 
     const byUid = new Map<string, Candidate[]>();
     for (const c of cands) byUid.set(c.uid, [...(byUid.get(c.uid) ?? []), c]);
@@ -729,7 +340,7 @@ export class Engine {
 interface Candidate {
   uid: string;
   notice: Notice;
-  action?: ApprovalAction | ThreadTelegram;
+  action?: ThreadTelegram;
   key: string;
   urgent?: boolean;
   done: () => void;

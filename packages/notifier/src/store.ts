@@ -3,24 +3,19 @@ import {
   BELL_KEEP_MS,
   bellPath,
   DEFAULT_NOTIFY_PREFS,
-  decisionSchema,
-  itemSchema,
   notifiedSchema,
   notifyPath,
   notifyPrefsSchema,
   askFallback,
   outcomeType,
-  projectSchema,
   threadAsk,
   type PlanStateOf,
   pushSubSchema,
   telegramLinkSchema,
   type Notified,
-  type Project,
 } from '@hive/shared';
-import { Timestamp, type Firestore } from 'firebase-admin/firestore';
+import type { Firestore } from 'firebase-admin/firestore';
 import {
-  FRESH_MS,
   SUMMARY_WAIT_MS,
   type Engine,
   type InboxWaiting,
@@ -67,48 +62,6 @@ export function firestorePorts(
     async setNotified(wid, key, value: Notified) {
       await db.doc(notifyPath.notified(wid, key)).set(value);
     },
-    async setSilence(wid, pid, iid, silence) {
-      try {
-        await db.doc(`workspaces/${wid}/projects/${pid}/items/${iid}`).update({ silence });
-      } catch (e) {
-        // NOT_FOUND: the item is gone meanwhile. Nothing to flag.
-        if ((e as { code?: number }).code !== 5) throw e;
-      }
-    },
-    async lastActivity(wid, iid, runId, agentUid, afterMs) {
-      const after = Timestamp.fromMillis(afterMs);
-      const ms = (v: unknown) => (v as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
-      let best = 0;
-      const log = await db
-        .collection(`workspaces/${wid}/runs/${runId}/log`)
-        .where('at', '>', after)
-        .orderBy('at', 'desc')
-        .limit(1)
-        .get();
-      for (const d of log.docs) best = Math.max(best, ms(d.data().at));
-      // The agent's tool writes on the item (progress, notes, attachments, status...): its events,
-      // heartbeats aside. Newest first, page by page, only those after `afterMs`.
-      let q = db
-        .collection(`workspaces/${wid}/events`)
-        .where('itemId', '==', iid)
-        .where('at', '>', after)
-        .orderBy('at', 'desc')
-        .limit(100);
-      for (;;) {
-        const page = await q.get();
-        const hit = page.docs.find((d) => {
-          const e = d.data();
-          return e.actor?.id === agentUid && e.type !== 'run.heartbeat';
-        });
-        if (hit) {
-          best = Math.max(best, ms(hit.data().at));
-          break;
-        }
-        if (page.size < 100) break;
-        q = q.startAfter(page.docs[page.size - 1]!);
-      }
-      return best || null;
-    },
     async addBell(uid, id, entry) {
       try {
         await db.doc(bellPath.entry(uid, id)).create(entry);
@@ -152,7 +105,10 @@ function namer(db: Firestore) {
   };
 }
 
-/** Starts listeners on every organization, project, waiting item and open question. Returns a stopper. */
+/**
+ * Starts listeners on every organization's Inbox threads waiting for their member, with their
+ * proposals and plans (projects, items, questions and decisions are gone, design 7). Returns a stopper.
+ */
 export function watchAll(
   db: Firestore,
   engine: Engine,
@@ -162,37 +118,6 @@ export function watchAll(
   const stops: (() => void)[] = [];
   const orgs = new Map<string, () => void>();
   const nameOf = namer(db);
-  /** Decisions already handed to the bell by this process (a project change re-subscribes). */
-  const seenDecisions = new Set<string>();
-
-  const watchOrg = (wid: string) => {
-    const projects = new Map<string, () => void>();
-    const stopProjects = db.collection(`workspaces/${wid}/projects`).onSnapshot(
-      (snap) => {
-        const live = new Set<string>();
-        for (const d of snap.docs) {
-          const p = projectSchema.safeParse(d.data());
-          if (!p.success || p.data.archivedAt) continue;
-          live.add(d.id);
-          projects.get(d.id)?.();
-          projects.set(d.id, watchProject(wid, d.id, p.data));
-        }
-        for (const [pid, stop] of projects)
-          if (!live.has(pid)) {
-            stop();
-            projects.delete(pid);
-          }
-        kick();
-      },
-      (e) => log(`projects ${wid}: ${String(e)}`),
-    );
-    const stopInbox = watchInbox(wid);
-    return () => {
-      stopProjects();
-      stopInbox();
-      projects.forEach((s) => s());
-    };
-  };
 
   /**
    * Inbox (item 4PEHr): threads waiting for their member, the proposals that put them at Your
@@ -440,193 +365,11 @@ export function watchAll(
       keys.forEach((k) => engine.setInbox(null, k));
     };
   };
-  /** When a run started (ms), cached: a run's start never changes. */
-  const runStarts = new Map<string, number>();
-  const runStart = async (wid: string, runId: string): Promise<number | null> => {
-    const key = `${wid}/${runId}`;
-    const hit = runStarts.get(key);
-    if (hit !== undefined) return hit;
-    const r = await db.doc(`workspaces/${wid}/runs/${runId}`).get();
-    const at = (r.data()?.startedAt as { toMillis(): number } | undefined)?.toMillis();
-    if (at === undefined) return null;
-    runStarts.set(key, at);
-    return at;
-  };
-
-  const watchProject = (wid: string, pid: string, project: Project) => {
-    const keys = new Set<string>();
-    const wkeys = new Set<string>();
-    const qkeys = new Set<string>();
-    const titles = new Map<string, string>();
-    const stopItems = db
-      .collection(`workspaces/${wid}/projects/${pid}/items`)
-      .where('status', '==', 'waiting')
-      .onSnapshot(
-        (snap) => {
-          const now = new Set<string>();
-          for (const d of snap.docs) {
-            const item = itemSchema.safeParse(d.data());
-            if (!item.success) continue;
-            titles.set(d.id, item.data.title);
-            const key = `${wid}/${pid}/${d.id}`;
-            now.add(key);
-            engine.setWaiting({ wid, pid, iid: d.id, project, item: item.data }, key);
-          }
-          for (const k of keys) if (!now.has(k)) engine.setWaiting(null, k);
-          keys.clear();
-          now.forEach((k) => keys.add(k));
-          kick();
-        },
-        (e) => log(`items ${wid}/${pid}: ${String(e)}`),
-      );
-    // Same query shape as the app's, so the same composite index serves it.
-    const stopQs = db
-      .collectionGroup('messages')
-      .where('workspaceId', '==', wid)
-      .where('projectId', '==', pid)
-      .where('kind', '==', 'question')
-      .where('answered', '==', false)
-      .orderBy('at', 'asc')
-      .onSnapshot(
-        async (snap) => {
-          const now = new Set<string>();
-          for (const d of snap.docs) {
-            const m = d.data() as {
-              itemId?: string;
-              text?: string;
-              at?: { toMillis(): number };
-              by?: { id?: string };
-            };
-            if (!m.itemId || !m.at) continue;
-            let title = titles.get(m.itemId);
-            if (!title) {
-              const it = await db.doc(`workspaces/${wid}/projects/${pid}/items/${m.itemId}`).get();
-              title = (it.data()?.title as string | undefined) ?? 'An item';
-            }
-            const key = `${wid}/${pid}/${d.id}`;
-            now.add(key);
-            engine.setQuestion(
-              {
-                wid,
-                pid,
-                iid: m.itemId,
-                mid: d.id,
-                project,
-                itemTitle: title,
-                text: m.text ?? '',
-                atMs: m.at.toMillis(),
-                byName: m.by?.id ? await nameOf(wid, m.by.id) : '',
-              },
-              key,
-            );
-          }
-          for (const k of qkeys) if (!now.has(k)) engine.setQuestion(null, k);
-          qkeys.clear();
-          now.forEach((k) => qkeys.add(k));
-          kick();
-        },
-        (e) => log(`questions ${wid}/${pid}: ${String(e)}`),
-      );
-    // Send-backs and answers, for the bell (item 3ENs). Only additions: a decision never changes.
-    // Older ones (the notifier was off) are not replayed: the bell never had them.
-    const stopDecisions = db
-      .collection(`workspaces/${wid}/projects/${pid}/decisions`)
-      .where('at', '>=', Timestamp.fromMillis(Date.now() - FRESH_MS))
-      .onSnapshot(
-        async (snap) => {
-          for (const ch of snap.docChanges()) {
-            if (ch.type !== 'added' || seenDecisions.has(ch.doc.ref.path)) continue;
-            seenDecisions.add(ch.doc.ref.path);
-            const p = decisionSchema.safeParse(ch.doc.data());
-            if (!p.success) continue;
-            const dec = p.data;
-            if (dec.outcome !== 'sentBack' && dec.outcome !== 'answered') continue;
-            try {
-              let creatorUid: string | null = null;
-              let title = dec.itemTitle;
-              if (dec.outcome === 'sentBack') {
-                const it = await db
-                  .doc(`workspaces/${wid}/projects/${pid}/items/${dec.itemId}`)
-                  .get();
-                const by = it.data()?.createdBy as { type?: string; id?: string } | undefined;
-                creatorUid = by?.type === 'human' && by.id ? by.id : null;
-                title = title || ((it.data()?.title as string | undefined) ?? 'An item');
-              }
-              await engine.onDecision({
-                wid,
-                pid,
-                did: ch.doc.id,
-                project,
-                itemId: dec.itemId,
-                itemTitle: title || 'An item',
-                outcome: dec.outcome,
-                toStepId: dec.toStepId,
-                byUid: dec.byUid,
-                byName: await nameOf(wid, dec.byUid),
-                text: dec.rationale,
-                atMs: dec.at.toMillis(),
-                creatorUid,
-              });
-            } catch (e) {
-              log(`decision ${wid}/${pid}/${ch.doc.id}: ${String(e)}`);
-            }
-          }
-        },
-        (e) => log(`decisions ${wid}/${pid}: ${String(e)}`),
-      );
-    // Items agents are working (item AzveC): the silence check.
-    const stopWorking = db
-      .collection(`workspaces/${wid}/projects/${pid}/items`)
-      .where('status', '==', 'working')
-      .onSnapshot(
-        async (snap) => {
-          const now = new Set<string>();
-          for (const d of snap.docs) {
-            const item = itemSchema.safeParse(d.data());
-            if (!item.success || !item.data.claim) continue;
-            const key = `${wid}/${pid}/${d.id}`;
-            try {
-              const startedMs = await runStart(wid, item.data.claim.runId);
-              if (startedMs === null) continue;
-              now.add(key);
-              engine.setWorking(
-                {
-                  wid,
-                  pid,
-                  iid: d.id,
-                  project,
-                  item: item.data,
-                  startedMs,
-                  agentName: await nameOf(wid, item.data.claim.agentUid),
-                },
-                key,
-              );
-            } catch (e) {
-              log(`working ${key}: ${String(e)}`);
-            }
-          }
-          for (const k of wkeys) if (!now.has(k)) engine.setWorking(null, k);
-          wkeys.clear();
-          now.forEach((k) => wkeys.add(k));
-          kick();
-        },
-        (e) => log(`working ${wid}/${pid}: ${String(e)}`),
-      );
-    return () => {
-      stopItems();
-      stopWorking();
-      stopQs();
-      stopDecisions();
-      keys.forEach((k) => engine.setWaiting(null, k));
-      wkeys.forEach((k) => engine.setWorking(null, k));
-      qkeys.forEach((k) => engine.setQuestion(null, k));
-    };
-  };
 
   stops.push(
     db.collection('workspaces').onSnapshot(
       (snap) => {
-        for (const d of snap.docs) if (!orgs.has(d.id)) orgs.set(d.id, watchOrg(d.id));
+        for (const d of snap.docs) if (!orgs.has(d.id)) orgs.set(d.id, watchInbox(d.id));
       },
       (e) => log(`workspaces: ${String(e)}`),
     ),
