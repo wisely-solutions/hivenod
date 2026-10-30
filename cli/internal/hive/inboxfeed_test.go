@@ -821,3 +821,88 @@ func TestInboxFeedStepStatusRequest(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+// schedInbox is a fake source that also reads a run's `scheduled` context.
+type schedInbox struct {
+	*fakeInbox
+	reads int
+	fail  bool
+}
+
+func (s *schedInbox) ScheduledOf(_ context.Context, sid, key string) (*ScheduledInfo, error) {
+	s.mu.Lock()
+	s.reads++
+	s.mu.Unlock()
+	if s.fail {
+		return nil, fmt.Errorf("offline")
+	}
+	return &ScheduledInfo{ScheduleID: sid, Title: "Send invoices", Period: "Nov 2026", DueAt: "2026-11-01T09:00:00Z", Due: "1 Nov 09:00"}, nil
+}
+
+func newSchedRig(t *testing.T, fail bool) (*feedRig, *schedInbox) {
+	r := &feedRig{t: t, src: &fakeInbox{events: map[string]*FeedEvent{}}, now: time.UnixMilli(1_000_000_000_000)}
+	src := &schedInbox{fakeInbox: r.src, fail: fail}
+	r.feed = NewInboxFeed(src, func(e Event) { r.mu.Lock(); r.pushed = append(r.pushed, e); r.mu.Unlock() }, InboxOptions{MaxInbox: 3, Tick: time.Hour}, func() time.Time { r.mu.Lock(); defer r.mu.Unlock(); return r.now })
+	t.Cleanup(r.feed.Stop)
+	return r, src
+}
+
+// Scheduled tasks (design 6): a step of a scheduled run's thread goes out with the `scheduled`
+// context (which schedule, period and due time), read once per run; the next step reuses it.
+func TestInboxFeedScheduledRunCarryOut(t *testing.T) {
+	r, src := newSchedRig(t, false)
+	r.feed.Start()
+	run := r.th("t1", func(t *FeedThread) {
+		t.State, t.Waiting = "waiting", &FeedWaiting{On: "agent"}
+		t.Schedule = &FeedThreadSchedule{ScheduleID: "s1", RunKey: "2026-11"}
+	})
+	o1 := FeedOutcome{ID: "o1", ThreadID: "t1", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli(), PlanID: "p1"}
+	r.plans([]FeedPlan{{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"o1", "o2"}, Cursor: 0}})
+	r.set([]FeedThread{run}, []FeedOutcome{o1})
+	r.want("t1:carry_out")
+	m := r.meta(0)
+	if m["schedule_id"] != "s1" || m["period"] != "Nov 2026" || m["plan_id"] != "p1" {
+		t.Fatal(m)
+	}
+	r.mu.Lock()
+	c := r.pushed[0].Content
+	r.mu.Unlock()
+	if !strings.Contains(c, "Scheduled run of 'Send invoices' for Nov 2026 (due 1 Nov 09:00) (schedule s1)") || !strings.Contains(c, "Never reschedule it yourself") {
+		t.Fatal(c)
+	}
+	// Step 2 of the same run: no second read.
+	o2 := FeedOutcome{ID: "o2", ThreadID: "t1", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli(), PlanID: "p1"}
+	r.plans([]FeedPlan{{ID: "p1", ThreadID: "t1", State: "active", Steps: []string{"o1", "o2"}, Cursor: 1}})
+	r.set([]FeedThread{run}, []FeedOutcome{o2})
+	r.want("t1:carry_out", "t1:carry_out")
+	src.mu.Lock()
+	reads := src.reads
+	src.mu.Unlock()
+	if reads != 1 {
+		t.Fatalf("reads %d, want 1", reads)
+	}
+	// A thread that is not a run: no context, no read.
+	plain := r.th("t2", func(t *FeedThread) { t.State, t.Waiting = "waiting", &FeedWaiting{On: "agent"} })
+	o3 := FeedOutcome{ID: "o3", ThreadID: "t2", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli()}
+	r.set([]FeedThread{run, plain}, []FeedOutcome{o2, o3})
+	r.want("t1:carry_out", "t1:carry_out", "t2:carry_out")
+	if m := r.meta(2); m["schedule_id"] != "" {
+		t.Fatal(m)
+	}
+}
+
+// A failed read never holds the step up: it goes out with the schedule id and run key.
+func TestInboxFeedScheduledReadFails(t *testing.T) {
+	r, _ := newSchedRig(t, true)
+	r.feed.Start()
+	run := r.th("t1", func(t *FeedThread) {
+		t.State, t.Waiting = "waiting", &FeedWaiting{On: "agent"}
+		t.Schedule = &FeedThreadSchedule{ScheduleID: "s1", RunKey: "2026-11"}
+	})
+	o1 := FeedOutcome{ID: "o1", ThreadID: "t1", MemberUID: "joao", Type: "reply", CreatedAtMs: r.now.UnixMilli()}
+	r.set([]FeedThread{run}, []FeedOutcome{o1})
+	r.want("t1:carry_out")
+	if m := r.meta(0); m["schedule_id"] != "s1" || m["period"] != "2026-11" {
+		t.Fatal(m)
+	}
+}

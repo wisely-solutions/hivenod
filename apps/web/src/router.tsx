@@ -262,6 +262,19 @@ const inboxThreadRoute = createRoute({
     s.from === 'today' ? { from: s.from } : {},
   component: lazyRouteComponent(() => import('./threads/ThreadPage'), 'ThreadPage'),
 });
+// Scheduled tasks, slice 6: the member's schedules across every organization.
+const schedulesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/schedules',
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): { s?: string; view?: 'month'; at?: string } => ({
+    ...(typeof s.s === 'string' && s.s ? { s: s.s } : {}),
+    ...(s.view === 'month' ? { view: 'month' as const } : {}),
+    ...(typeof s.at === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.at) ? { at: s.at } : {}),
+  }),
+  component: lazyRouteComponent(() => import('./schedules/SchedulesPage'), 'SchedulesPage'),
+});
 const activityRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/activity',
@@ -373,6 +386,7 @@ export const router = createRouter({
     inboxRoute,
     inboxSubjectRoute,
     inboxThreadRoute,
+    schedulesRoute,
     activityRoute,
     agentsRoute,
     connectRoute,

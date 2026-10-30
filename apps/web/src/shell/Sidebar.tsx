@@ -27,6 +27,7 @@ const ORG_SETTINGS = /^\/settings\/(organization|members|groups|labels)\/?$/;
 function scopeTitle(to: string): string {
   if (to === '/') return 'Today: everything waiting for you, in all your organizations';
   if (to === '/inbox') return 'Inbox: your threads, in all your organizations';
+  if (to === '/schedules') return 'Schedules: what your agents do on a schedule, in all your organizations';
   return '';
 }
 

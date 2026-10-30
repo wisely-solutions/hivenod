@@ -1,7 +1,22 @@
-import { Activity, Bot, ChartNoAxesColumn, Mails, Sun, UserRound } from 'lucide-react';
+import {
+  Activity,
+  Bot,
+  CalendarClock,
+  ChartNoAxesColumn,
+  Mails,
+  Sun,
+  UserRound,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-export type NavPath = '/' | '/inbox' | '/insights' | '/activity' | '/agents' | '/account';
+export type NavPath =
+  | '/'
+  | '/inbox'
+  | '/schedules'
+  | '/insights'
+  | '/activity'
+  | '/agents'
+  | '/account';
 
 export interface NavEntry {
   to: NavPath;
@@ -24,6 +39,9 @@ export const NAV: NavEntry[] = [
   // Today (item kt3E7) replaced Needs you: same route, badge and `g n`.
   { to: '/', label: 'Today', icon: Sun, badge: true, key: 'n', zone: 'you' },
   { to: '/inbox', label: 'Inbox', icon: Mails, key: 'm', zone: 'you' },
+  // Scheduled tasks, slice 6 (design 9.1): `g c`, free since Calendar left. No phone tab: reached
+  // from Today's Coming up.
+  { to: '/schedules', label: 'Schedules', icon: CalendarClock, key: 'c', zone: 'you' },
   // Projects was removed (item OE8FmrTaIxFVGcaeGG3N, slice 10).
   { to: '/agents', label: 'Agents', icon: Bot, key: 'e', zone: 'org' },
   { to: '/activity', label: 'Activity', icon: Activity, key: 'a', zone: 'org' },
