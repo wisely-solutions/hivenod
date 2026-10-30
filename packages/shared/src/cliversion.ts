@@ -42,7 +42,7 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * Development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6): plan_propose template, plan_send_back,
    * and carry_out again (why sent_back) after a send back. An older CLI never redoes a step.
    */
-  devplan: '0.2.204',
+  devplan: '0.2.206',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */
