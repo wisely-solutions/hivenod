@@ -19,6 +19,9 @@ import { useToday } from '../today/useToday';
 import { Icon } from '../ui/icon';
 import { nextKey, parseFilter } from './logic';
 import { useNeedsAll } from '../needs/data';
+import { useAgentsAcross, useTodaySchedules } from '../schedules/data';
+import { cantRunCards, comingUp, schedulerBanner, viewerTz } from '../schedules/logic';
+import { CantRunCardView, ComingUpPanel, SchedulerBanner } from '../schedules/parts';
 import { ScopeLine } from '../shell/ScopePill';
 import { OrgChips } from '../orgs/OrgChips';
 import {
@@ -141,6 +144,21 @@ export function InboxPage() {
   const cardRef = useRef<DecisionCardHandle>(null);
   const capture = useOptionalCapture();
   const today = useToday(all, list, tidy, now, done.length);
+  // Scheduled tasks (slice 6, design 9.3): runs that couldn't happen, Coming up, the banner.
+  const wids = useMemo(() => all.orgs.map((o) => o.wid), [all.orgs]);
+  const sched = useTodaySchedules(session.me.uid, wids);
+  const tz = useMemo(() => viewerTz(), []);
+  const agentsAcross = useAgentsAcross(session.me.uid, sched.schedules.list.length ? wids : []);
+  const runCards = useMemo(
+    () => cantRunCards(sched.cant.list, sched.schedules.list, now, tz),
+    [sched.cant.list, sched.schedules.list, now, tz],
+  );
+  const coming = useMemo(
+    () => comingUp(sched.schedules.list, now, tz),
+    [sched.schedules.list, now, tz],
+  );
+  const schedBanner =
+    sched.beat === undefined ? null : schedulerBanner(sched.beat, sched.schedules.list, now, tz);
 
   const keep = {
     ...(filter !== 'all' ? { f: filter } : {}),
@@ -501,6 +519,29 @@ export function InboxPage() {
         </div>
       ) : null}
       {loading ? null : (
+        <>
+          <SchedulerBanner text={schedBanner} />
+          {runCards.length ? (
+            <div
+              role="group"
+              aria-label="Runs that didn’t happen"
+              className="mb-5 flex flex-col gap-3"
+            >
+              {runCards.map((c) => (
+                <CantRunCardView
+                  key={c.key}
+                  card={c}
+                  uid={session.me.uid}
+                  now={now}
+                  tz={tz}
+                  compact={!desktop}
+                />
+              ))}
+            </div>
+          ) : null}
+        </>
+      )}
+      {loading ? null : (
         <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start xl:gap-6">
           <div className="min-w-0">
             {total === 0 ? (
@@ -544,7 +585,11 @@ export function InboxPage() {
               </>
             )}
           </div>
-          <aside aria-label="Your day" className="mt-6 xl:mt-0">
+          <aside aria-label="Your day" className="mt-6 flex flex-col gap-4 xl:mt-0">
+            <ComingUpPanel
+              runs={coming}
+              agentName={(w, a) => agentsAcross.get(`${w}/${a}`)?.name ?? 'Agent'}
+            />
             <TodayRail waiting={today.waiting} working={today.working} now={now} />
           </aside>
         </div>

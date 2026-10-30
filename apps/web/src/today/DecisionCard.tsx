@@ -194,6 +194,7 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
     ) : null;
     // A plan (item qwFAWxZM5xkcE7PPjAzi): the card shows the step that waits for the member.
     const planStep = (entry.proposals ?? []).find((p) => p.data.planId);
+    const scheduleProposal = (entry.proposals ?? []).find((p) => p.data.type === 'schedule');
     const card = entry.plan
       ? shell(
           band,
@@ -253,17 +254,19 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
               band,
               <>
                 <CardHead props={props} />
-                {entry.proposals?.length === 1 && entry.proposals[0]!.data.type === 'schedule' ? (
-                  // A schedule proposal (scheduled tasks, slice 5): its own card.
+                {scheduleProposal ? (
+                  // A schedule proposal (scheduled tasks, slices 5-6): its own card, also when
+                  // another proposal waits next to it (that one shows once this is decided).
                   <SchedulePanel
                     ref={inner}
                     wid={entry.wid}
                     thread={entry.thread!}
-                    outcome={entry.proposals[0]!}
+                    outcome={scheduleProposal}
                     now={props.now}
                     agentName={props.agentName}
                     onDone={props.onDone}
                     extra={notNow}
+                    othersPending={(entry.proposals?.length ?? 0) > 1}
                   />
                 ) : (
                   <ProposalPanel

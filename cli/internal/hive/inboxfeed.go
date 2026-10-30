@@ -47,6 +47,28 @@ type FeedThread struct {
 	ID, MemberUID, State, Title, LastEventID string
 	UpdatedAtMs, LastMessageAtMs             int64
 	Waiting                                  *FeedWaiting
+	// Schedule (scheduled tasks): a scheduled run's thread, its schedule and run key; nil otherwise.
+	Schedule *FeedThreadSchedule
+}
+
+// FeedThreadSchedule is a run thread's mirror of its schedule (inboxThreads.schedule).
+type FeedThreadSchedule struct{ ScheduleID, RunKey string }
+
+// ScheduledInfo is the `scheduled` context of a carry_out on a scheduled run's thread (design
+// 6: which schedule and period this run is, and when it was due).
+type ScheduledInfo struct {
+	ScheduleID string `json:"scheduleId"`
+	Title      string `json:"title"`
+	Period     string `json:"period"`
+	// DueAt is RFC 3339 (UTC); Due is the same in words in the schedule's zone ("1 Nov 09:00").
+	DueAt string `json:"dueAt"`
+	Due   string `json:"due"`
+}
+
+// ScheduledSource is the optional part of an InboxSource that reads a run's schedule and run
+// (two reads per run, once per session). Without it, carry_outs on run threads go out plain.
+type ScheduledSource interface {
+	ScheduledOf(ctx context.Context, scheduleID, runKey string) (*ScheduledInfo, error)
 }
 
 // FeedOutcome is an approved outcome this agent carries out.
@@ -215,6 +237,8 @@ type InboxEventInfo struct {
 	// Long (reason carry_out, slice 6b): a long step; Resume: it was running before this session.
 	Long   bool `json:"long"`
 	Resume bool `json:"resume"`
+	// Scheduled (reason carry_out on a scheduled run's thread): which schedule and period.
+	Scheduled *ScheduledInfo `json:"scheduled,omitempty"`
 	// AskN (Their reply: reasons ask_approved, nudge_due on a step): the message's number.
 	AskN int `json:"askN"`
 }
@@ -321,6 +345,9 @@ func InboxText(e InboxEventInfo) string {
 			if e.SentBack {
 				lines = append(lines, "The plan was sent back to this step: "+clip(or(e.Why, "no reason given"), 1000)+". Do it again with that change; the steps after it run again in order.")
 			}
+			if sc := e.Scheduled; sc != nil {
+				lines = append(lines, scheduledLine(sc))
+			}
 		} else {
 			lines = append(lines, fmt.Sprintf("The person approved a %s outcome (outcome %s) on thread %s.", or(e.OutcomeType, "?"), or(e.OutcomeID, "?"), e.ThreadID))
 		}
@@ -421,6 +448,18 @@ func InboxText(e InboxEventInfo) string {
 	return strings.Join(lines, "\n")
 }
 
+// scheduledLine tells the agent which scheduled run this is (design 6).
+func scheduledLine(sc *ScheduledInfo) string {
+	what := "Scheduled run of '" + or(sc.Title, "?") + "'"
+	if sc.Period != "" {
+		what += " for " + sc.Period
+	}
+	if sc.Due != "" {
+		what += " (due " + sc.Due + ")"
+	}
+	return what + fmt.Sprintf(" (schedule %s). If you cannot do it now, report failed with why; Hivenod asks the member. Never reschedule it yourself.", or(sc.ScheduleID, "?"))
+}
+
 type feedDue struct {
 	slot, reason, threadID, memberUID string
 	atMs                              int64
@@ -506,9 +545,12 @@ type InboxFeed struct {
 	sent     []int64
 	types    map[string]*FeedEvent
 	fetching map[string]bool
-	wakes    map[string]string
-	closed   bool
-	pumping  bool
+	// scheduled: the `scheduled` context per run ("sid/key"); schedFetching: being read.
+	scheduled     map[string]*ScheduledInfo
+	schedFetching map[string]bool
+	wakes         map[string]string
+	closed        bool
+	pumping       bool
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -546,6 +588,7 @@ func NewInboxFeed(src InboxSource, push func(Event), o InboxOptions, now func() 
 		threads: map[string]FeedThread{}, outcomes: map[string]FeedOutcome{}, revising: map[string]FeedRevise{}, revised: map[string]int64{}, rechecks: map[string]FeedRecheck{}, recheckd: map[string]int64{}, instructs: map[string]FeedInstruct{}, instructd: map[string]string{}, summaries: map[string]FeedSummary{}, summarized: map[string]int64{}, summarizeMs: InboxSummarizeAfter.Milliseconds(), plans: map[string]FeedPlan{}, running: map[string]FeedRunning{}, items: map[string]string{}, checked: map[string]int64{}, checking: map[string]bool{}, built: map[string]string{}, extSent: map[string]bool{}, handled: map[string]string{},
 		seen: map[string]bool{}, due: map[string]*feedDue{}, nudged: map[string]int64{}, carried: map[string]bool{}, asked: map[string]int64{},
 		inflight: map[string]*feedFlight{}, types: map[string]*FeedEvent{}, fetching: map[string]bool{},
+		scheduled: map[string]*ScheduledInfo{}, schedFetching: map[string]bool{},
 		wakes: map[string]string{}, ctx: ctx, cancel: cancel}
 }
 
@@ -860,11 +903,28 @@ func (f *InboxFeed) Evaluate() {
 			}
 		}
 	}
+	var schedLook []FeedThreadSchedule
 	for _, id := range f.oorder {
 		o := f.outcomes[id]
 		slot := "o:" + o.ID
 		if f.carried[f.round(o)] || f.due[slot] != nil || !f.atTurn(o) {
 			continue
+		}
+		// A scheduled run's step goes out with its `scheduled` context: read it first (once).
+		var sched *ScheduledInfo
+		if t, ok := f.threads[o.ThreadID]; ok && t.Schedule != nil {
+			if _, can := f.src.(ScheduledSource); can {
+				k := t.Schedule.ScheduleID + "/" + t.Schedule.RunKey
+				sc, known := f.scheduled[k]
+				if !known {
+					if !f.schedFetching[k] {
+						f.schedFetching[k] = true
+						schedLook = append(schedLook, *t.Schedule)
+					}
+					continue
+				}
+				sched = sc
+			}
 		}
 		long := isLong(o.Type)
 		// Long steps count toward max items (slice 6b): one more only while a slot is free.
@@ -872,7 +932,7 @@ func (f *InboxFeed) Evaluate() {
 			continue
 		}
 		oc := o
-		info := InboxEventInfo{Reason: "carry_out", ThreadID: o.ThreadID, OutcomeID: o.ID, OutcomeType: o.Type, Long: long}
+		info := InboxEventInfo{Reason: "carry_out", ThreadID: o.ThreadID, OutcomeID: o.ID, OutcomeType: o.Type, Long: long, Scheduled: sched}
 		if o.PlanID != "" {
 			p := f.plans[o.PlanID]
 			info.PlanID, info.Step = o.PlanID, p.stepOf(o.ID)
@@ -1052,6 +1112,9 @@ func (f *InboxFeed) Evaluate() {
 		// One batch, then one look: the threads of a snapshot go out in priority order.
 		go f.fetch(fetch)
 	}
+	if len(schedLook) > 0 {
+		go f.fetchScheduled(schedLook)
+	}
 	for _, id := range wake {
 		go func(id string) {
 			if err := f.src.Wake(f.ctx, id); err != nil {
@@ -1192,6 +1255,27 @@ func (f *InboxFeed) fetch(ids []string) {
 	}
 }
 
+// fetchScheduled reads the `scheduled` context of run threads, then looks again. A failed read
+// still lets the step go out (with what the thread says: its schedule id), never holds it up.
+func (f *InboxFeed) fetchScheduled(list []FeedThreadSchedule) {
+	src, _ := f.src.(ScheduledSource)
+	for _, ts := range list {
+		k := ts.ScheduleID + "/" + ts.RunKey
+		var sc *ScheduledInfo
+		if src != nil {
+			sc, _ = src.ScheduledOf(f.ctx, ts.ScheduleID, ts.RunKey)
+		}
+		if sc == nil {
+			sc = &ScheduledInfo{ScheduleID: ts.ScheduleID, Period: ts.RunKey}
+		}
+		f.mu.Lock()
+		f.scheduled[k] = sc
+		delete(f.schedFetching, k)
+		f.mu.Unlock()
+	}
+	f.Evaluate()
+}
+
 // pump picks what goes out now. Call with f.mu held; send the result after unlocking.
 func (f *InboxFeed) pump() []Event {
 	for key, d := range f.due {
@@ -1291,6 +1375,12 @@ func (f *InboxFeed) pump() []Event {
 		}
 		if d.info.SentBack {
 			meta["why"] = "sent_back"
+		}
+		if sc := d.info.Scheduled; sc != nil {
+			meta["schedule_id"] = sc.ScheduleID
+			if sc.Period != "" {
+				meta["period"] = sc.Period
+			}
 		}
 		if d.info.PlanID != "" {
 			meta["plan_id"] = d.info.PlanID
@@ -1404,6 +1494,13 @@ func (s firestoreInbox) WatchThreads(ctx context.Context, on func([]FeedThread))
 					fw.UntilMs = &ms
 				}
 				t.Waiting = fw
+			}
+			if sc, ok := m["schedule"].(map[string]any); ok {
+				sid, _ := sc["scheduleId"].(string)
+				key, _ := sc["runKey"].(string)
+				if sid != "" && key != "" {
+					t.Schedule = &FeedThreadSchedule{ScheduleID: sid, RunKey: key}
+				}
 			}
 			rows = append(rows, t)
 		}
@@ -1622,6 +1719,46 @@ func feedPlanOf(id string, m map[string]any) FeedPlan {
 		p.SentBackOf, _ = sb["reason"].(string)
 	}
 	return p
+}
+
+// ScheduledOf reads a run's schedule (title, zone) and run (period, due): the `scheduled`
+// context of its carry_outs. Agents of the organization may read both (rules: inboxReader).
+func (s firestoreInbox) ScheduledOf(ctx context.Context, scheduleID, runKey string) (*ScheduledInfo, error) {
+	out := &ScheduledInfo{ScheduleID: scheduleID}
+	tz := "Europe/Lisbon"
+	if snap, err := s.c.DB.Doc(model.Paths.InboxCollection(s.c.WorkspaceID, "schedules") + "/" + scheduleID).Get(ctx); err == nil {
+		m := snap.Data()
+		out.Title, _ = m["title"].(string)
+		if r, ok := m["rule"].(map[string]any); ok {
+			if z, ok := r["tz"].(string); ok && z != "" {
+				tz = z
+			}
+		}
+	}
+	snap, err := s.c.DB.Doc(model.Paths.InboxCollection(s.c.WorkspaceID, "scheduleRuns") + "/" + scheduleID + "_" + runKey).Get(ctx)
+	if err != nil {
+		return out, err
+	}
+	m := snap.Data()
+	out.Period, _ = m["period"].(string)
+	if out.Title == "" {
+		out.Title, _ = m["title"].(string)
+	}
+	if due, ok := m["dueAt"].(time.Time); ok {
+		out.DueAt = due.UTC().Format(time.RFC3339)
+		out.Due = dueWords(due, tz)
+	}
+	return out, nil
+}
+
+// dueWords is "1 Nov 09:00" in the schedule's zone (UTC when the zone is unknown).
+func dueWords(t time.Time, tz string) string {
+	if loc, err := time.LoadLocation(tz); err == nil {
+		t = t.In(loc)
+	} else {
+		t = t.UTC()
+	}
+	return t.Format("2 Jan 15:04")
 }
 
 func (s firestoreInbox) EventOf(ctx context.Context, eventID string) (*FeedEvent, error) {

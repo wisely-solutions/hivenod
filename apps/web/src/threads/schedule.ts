@@ -11,6 +11,7 @@ import {
   ruleSentence,
   tzCity,
   urgencyOf,
+  type Occurrence,
   type ScheduleOf,
   type ScheduleFreq,
   type ScheduleRule,
@@ -58,36 +59,55 @@ export interface ScheduleCard {
   runs: string[];
   /** The first run's thread title ("Send invoices · Nov 2026"), or the template. */
   runTitle: string;
-  steps: { title: string; who: 'agent' | 'you' }[];
+  steps: ScheduleStepView[];
   cantRun: string;
 }
 
-/** The card of a proposed schedule, at `now`. */
-export function scheduleCard(s: ScheduleOf, now: number): ScheduleCard {
-  let occ: ReturnType<typeof nextRuns> = [];
-  try {
-    occ = nextRuns(s.rule, now, 3);
-  } catch {
-    occ = [];
-  }
-  const runs = occ.map((o) => {
-    const [date, time] = o.local.split(' ');
-    const [y, m, d] = date!.split('-').map(Number);
-    const wd = new Date(Date.UTC(y!, m! - 1, d!)).getUTCDay();
-    return `${WEEKDAY[(wd + 6) % 7]} ${d} ${MONTH[m! - 1]} ${y} · ${time}`;
-  });
-  // Placeholders read as the first run's ("{period}" → "Nov 2026"), like its thread title.
-  const fill = (v: unknown) => (typeof v === 'string' && occ[0] ? fillPlaceholders(v, occ[0]) : v);
-  const steps = s.steps.map((st) => {
+/** "Sun 1 Nov 2026 · 09:00" from an occurrence's local "YYYY-MM-DD HH:MM". */
+export function runDayWords(local: string): string {
+  const [date, time] = local.split(' ');
+  const [y, m, d] = date!.split('-').map(Number);
+  const wd = new Date(Date.UTC(y!, m! - 1, d!)).getUTCDay();
+  return `${WEEKDAY[(wd + 6) % 7]} ${d} ${MONTH[m! - 1]} ${y} · ${time}`;
+}
+
+export interface ScheduleStepView {
+  title: string;
+  who: 'agent' | 'you';
+}
+
+/**
+ * The plan of each run in words, placeholders read as `occ`'s ("{period}" → "Nov 2026"), like
+ * its thread title; without an occurrence they stay as written.
+ */
+export function scheduleSteps(
+  steps: ScheduleOf['steps'],
+  occ: Occurrence | null,
+): ScheduleStepView[] {
+  const fill = (v: unknown) => (typeof v === 'string' && occ ? fillPlaceholders(v, occ) : v);
+  return steps.map((st) => {
     const fields = Object.fromEntries(Object.entries(st.fields).map(([k, v]) => [k, fill(v)]));
     return {
       title:
         st.type === 'approval'
           ? String(fields.what ?? '') || 'Your approval'
           : stepTitle(st.type, fields) || (outcomeType(st.type)?.label ?? st.type),
-      who: (st.type === 'approval' ? 'you' : 'agent') as 'agent' | 'you',
+      who: st.type === 'approval' ? 'you' : 'agent',
     };
   });
+}
+
+/** The card of a proposed schedule, at `now`. */
+export function scheduleCard(s: ScheduleOf, now: number): ScheduleCard {
+  const occ: ReturnType<typeof nextRuns> = (() => {
+    try {
+      return nextRuns(s.rule, now, 3);
+    } catch {
+      return [];
+    }
+  })();
+  const runs = occ.map((o) => runDayWords(o.local));
+  const steps = scheduleSteps(s.steps, occ[0] ?? null);
   return {
     ask: s.replaces
       ? `Change “${s.title}”?`

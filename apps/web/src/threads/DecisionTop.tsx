@@ -185,7 +185,12 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
       agent,
     });
     const asks = top.kind === 'person' || top.kind === 'question';
-    const shownProposal = top.kind === 'person' && !main ? proposals[0] : undefined;
+    // A schedule proposal goes first (slice 6): it has its own card even when another proposal
+    // waits next to it; the others show once it is decided.
+    const shownProposal =
+      top.kind === 'person' && !main
+        ? (proposals.find((p) => p.data.type === 'schedule') ?? proposals[0])
+        : undefined;
     // A schedule proposal (scheduled tasks, slice 5) has a card of its own.
     const scheduleProposal = shownProposal?.data.type === 'schedule' ? shownProposal : undefined;
     const kicker =
@@ -494,6 +499,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           agentName={agentName}
           onDone={props.onDone}
           extra={notNow}
+          othersPending={proposals.length > 1}
         />
       );
     } else if (shownProposal) {

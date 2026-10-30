@@ -251,6 +251,30 @@ describe('an agent proposes, the member decides', () => {
     expect(op(c.ops, 'inboxEvents').data!.data).toMatchObject({ scheduleId: 's1' });
   });
 
+  it('next to another open proposal, approving leaves the thread on Your call (slice 6)', () => {
+    const p = proposed();
+    const o = stored(op(p.ops, 'inboxOutcomes').data!) as unknown as OutcomeStateOf;
+    const s = asSchedule(op(p.ops, 'schedules').data!);
+    const yc = { ...thread, state: 'yourCall' as const };
+    const alone = approveOutcome(human, {
+      outcomeId: 'o1',
+      outcome: o,
+      thread: yc,
+      schedule: { id: 'sp1', data: s },
+      othersPending: false,
+    });
+    expect(alone.ops.some((x) => x.path.endsWith(`inboxThreads/t1`))).toBe(true);
+    const others = approveOutcome(human, {
+      outcomeId: 'o1',
+      outcome: o,
+      thread: yc,
+      schedule: { id: 'sp1', data: s },
+      othersPending: true,
+    });
+    expect(others.ops.some((x) => x.path.endsWith(`inboxThreads/t1`))).toBe(false);
+    expect(op(others.ops, 'schedules/sp1').data).toMatchObject({ state: 'active' });
+  });
+
   it('carries confidence and checks like outcome_propose', () => {
     const p = proposeSchedule(agent, {
       ...INPUT,

@@ -170,6 +170,50 @@ test.describe('desktop 1440', () => {
   });
 });
 
+// Slice 6 (a slice-5 leftover): a schedule proposed next to another proposal on the same thread
+// still gets its own card on the decision page and on Today; approving it leaves the other one
+// waiting (the thread stays on Your call), which then shows.
+test('a schedule next to another proposal keeps its card; the other shows after', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'the same card on every screen');
+  test.setTimeout(180_000);
+  const s = await proposed(page);
+  try {
+    const reply = await s.books.propose(s.tid, 'reply', { text: 'Sure, I will set that up.' });
+    const top = page.getByRole('region', { name: 'Decision' });
+    const card = top.locator('[data-schedule-card]');
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    await expect(card.locator('[data-schedule-sentence]')).toHaveText(
+      'Monthly · day 1 · 09:00 (Lisbon)',
+    );
+    await expect(page.getByRole('alert')).toHaveCount(0);
+
+    // Today shows the same card for this thread.
+    await page.goto('/');
+    const today = page.locator('[data-schedule-card]');
+    await expect(today).toBeVisible({ timeout: 20_000 });
+
+    await page.goto(`/inbox/${s.wid}/t/${s.tid}`);
+    await top
+      .locator('[data-schedule-card]')
+      .getByRole('button', { name: 'Set up schedule' })
+      .click();
+    await expect
+      .poll(() => field(`workspaces/${s.wid}/schedules/${s.scheduleId}`, 'state'), {
+        timeout: UNDO_WAIT + 8000,
+      })
+      .toBe('active');
+    expect(await field(`workspaces/${s.wid}/inboxThreads/${s.tid}`, 'state')).toBe('yourCall');
+    expect(await field(`workspaces/${s.wid}/inboxOutcomes/${reply}`, 'state')).toBe('proposed');
+    await expect(top.locator('[data-schedule-card]')).toBeHidden();
+    await expect(top).toContainText('Sure, I will set that up.');
+  } finally {
+    await s.books.stop();
+  }
+});
+
 test.describe('phone 390', () => {
   test.skip(({ isMobile }) => !isMobile, 'phone layout');
   test.use({ viewport: { width: 390, height: 844 } });
