@@ -43,6 +43,12 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * and carry_out again (why sent_back) after a send back. An older CLI never redoes a step.
    */
   devplan: '0.2.206',
+  /**
+   * Long steps (item OE8FmrTaIxFVGcaeGG3N, slice 6b): Build and Release start, report
+   * step_progress (the CLI stamps a heartbeat every 5 minutes), count toward max items and are
+   * resumed by a new session. An older CLI never starts them and never sends a heartbeat.
+   */
+  longstep: '0.2.209',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */

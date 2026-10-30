@@ -123,6 +123,8 @@ export function PlanPanel(props: PlanPanelProps) {
     ...(view.steps.some((s) => s.type === 'shape' || s.type === 'build' || s.type === 'release')
       ? ['devplan']
       : []),
+    // Build and Release need the CLI that starts, stamps and resumes long steps (slice 6b).
+    ...(view.steps.some((s) => s.type === 'build' || s.type === 'release') ? ['longstep'] : []),
   ];
   const oldKinds = kinds.filter(
     (k) => home.state === 'ready' && !!home.data && cliSupports(k, have) === 'old',
@@ -285,6 +287,12 @@ export function PlanPanel(props: PlanPanelProps) {
             />
           ))}
         </div>
+        {o.state === 'running' && o.progress ? (
+          <p data-step-progress="" className="mt-3 text-14 text-ink [overflow-wrap:anywhere]">
+            {o.progress.line}
+            {o.progress.percent !== null ? ` · ${o.progress.percent}%` : ''}
+          </p>
+        ) : null}
         {o.state === 'failed' ? (
           <p className="mt-3 text-14 text-sendback">
             Failed{o.result?.error ? `: ${o.result.error}` : ''}

@@ -106,7 +106,16 @@ async function toShipIt(page: Page, s: Seed, tid: string, planId: string) {
   const [, gate] = await s.agent.stepsOf(planId);
   const dec = (await docOf(oPath(s, gate!))).decision?.mapValue?.fields;
   expect(dec?.summaryVersion?.integerValue).toBe(String(v));
-  // Build: an open, green, unmerged pull request.
+  // Build (a long step, slice 6b): started, its progress on the top card, then an open, green,
+  // unmerged pull request.
+  await s.agent.finishStep(planId, 'started');
+  await s.agent.progress(planId, 'Tests green, writing the PR', 70);
+  await expect(top(page).locator('[data-progress-line]')).toHaveText(
+    'Tests green, writing the PR · 70%',
+    { timeout: 20_000 },
+  );
+  await expect(top(page).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '70');
+  await look(page, `slice6b-building-${test.info().project.name}`);
   await s.agent.finishStep(planId, 'done', {
     permalink: 'https://github.com/example/board/pull/86',
   });
