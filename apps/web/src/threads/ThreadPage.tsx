@@ -56,7 +56,14 @@ import { ActionMenu } from '../ui/menu';
 import { Dialog, useToast } from '../ui/overlay';
 import { BriefingBar } from './BriefingBar';
 import { useMySubjects, useThread } from './data';
-import { freshness, looseSummarySchema, planFoldParts, everythingHint, topState } from './decision';
+import {
+  freshness,
+  looseSummarySchema,
+  planFoldParts,
+  everythingHint,
+  threadImages,
+  topState,
+} from './decision';
 import {
   detailHint,
   Everything,
@@ -97,7 +104,11 @@ export function ThreadPage() {
   const { session, actionContext, run } = useReady();
   const navigate = useNavigate();
   const uid = session.me.uid;
-  const { thread, messages, outcomes, events, plans, subject } = useThread(wid, tid, uid);
+  const { thread, messages, outcomes, events, plans, attachments, subject } = useThread(
+    wid,
+    tid,
+    uid,
+  );
   const agents = useLiveCollection(`workspaces/${wid}/agents`, agentSchema);
   const all = useNeedsAll();
   const wide = useWide();
@@ -123,6 +134,12 @@ export function ThreadPage() {
     hasSummary ? summaryPaths.summary(wid, tid) : null,
     looseSummarySchema,
   );
+  // The thread's files (slice 4); its images are what image visuals may show.
+  const attachRows = useMemo(
+    () => (attachments.state === 'ready' ? attachments.data : []),
+    [attachments],
+  );
+  const images = useMemo(() => threadImages(attachRows, tid), [attachRows, tid]);
   useShortcut({
     id: 'thread-detail',
     keys: ['d'],
@@ -459,6 +476,7 @@ export function ThreadPage() {
           />
           <ShortVersion
             summary={summary}
+            images={images}
             asks={top.kind === 'person' || top.kind === 'question'}
             firstMessage={msgs[0]?.text ?? ''}
             why={fresh.kind === 'none' ? fresh.why : null}
@@ -496,6 +514,7 @@ export function ThreadPage() {
               notes: notes.length,
               outcomes: decided.length,
               links: links.length,
+              files: attachRows.length,
             })}
             open={allOpen}
             onToggle={() => setAllOpen((v) => !v)}
@@ -510,6 +529,7 @@ export function ThreadPage() {
               plans={planRows}
               outcomes={allOutcomes}
               refs={summary?.refs ?? []}
+              attachments={attachRows}
               now={now}
               agentName={agentName}
               pastPlans={

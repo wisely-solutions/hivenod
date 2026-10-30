@@ -334,7 +334,9 @@ done|now|next|changed|removed|null}), edges (≤10 {from, to, label}; [] = a str
 `before_after` `{title, caption, before/after {label ≤24|null, lines 1-6 ≤60}}`; `timeline`
 `{title, caption, events (2-12 {at ISO date or datetime, label ≤60, state
 done|now|next|risk|null})}`. Titles (≤80) and captions (≤200, the takeaway and alt text) and
-all labels are plain text. `image` and `image_pair` come with `thread_attach` (slice 4).
+all labels are plain text. Images (slice 4): `image` `{title, caption, attachment}` and
+`image_pair` `{title, caption, before, after, labels [before, after]|null}` name image
+attachments of the same thread (see "Thread attachments").
 
 **Writing it.** `thread_summary {threadId, baseVersion, summary}` (CLI `hivenod thread summary
 ID --file F|-`): the home agent only, as its last call after every inbox event that changed the
@@ -495,6 +497,31 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
 - **Tests:** `packages/shared/rules/inbox.test.ts`, `inboxrevise.test.ts`, `inboxrecheck.test.ts`, `inboxinstruct.test.ts`, `inboxrelations.test.ts` and `plans.test.ts`. The `inbox: …`, `recheck: …`, `instruct: …`, `chips: …` and `plans: …` mutations in
   `packages/shared/rules/mutate.mjs` are all caught.
 
+### Thread attachments (item OE8FmrTaIxFVGcaeGG3N, slice 4)
+
+The home agent attaches files to its thread with `thread_attach {threadId, source, name?}` (CLI
+`hivenod thread attach ID FILE|URL [--name N]`; `packages/shared/src/threadattach.ts`): the same
+kinds and 900 KB inline limit as item attachments, kept inline in Firestore (no file storage):
+
+```
+workspaces/{wid}/inboxAttachments/{threadId}_{id}   immutable
+  memberUid, threadId, kind html|markdown|text|image|pdf|link, name 1-200, content | null,
+  url (https) | null, bytes, by (agent uid), at, lastEventId (a thread.attached event)
+```
+
+Images are PNG, JPEG or WebP data URLs only (`THREAD_IMAGE_RE`), never SVG or HTML; links are
+https. The id starts with the thread's id, so the rules can refuse a summary visual that names
+another thread's attachment or a URL (`summaryAtt` in the generated block); `writeSummary` also
+checks that each image visual names an existing image of the thread (the Go client reads the
+thread's attachment kinds). The decision page shows only images it was handed for this thread
+(`threadImages`): an `image_pair` side by side on desktop, stacked on a phone, with Compare (a
+slider overlay) when both have the same size; a click opens the image full size in the
+attachment viewer; the caption is the alt text. Everything lists the files under "Files from
+<agent>" (images inline, the rest in the viewer, HTML sandboxed). **The visual rule** in the
+channel instructions, SKILL.md and both tool descriptions: at a person step, a UI change shows
+before/after screenshots (`thread_attach` both, then an `image_pair`). Rules: the home agent
+creates (with its event), the member and the org's agents read, nobody updates or deletes.
+
 ## Agent tools (MCP and Go CLI)
 
 | Tool                        | CLI                                               | What it does                                                                                                                                                                |
@@ -516,6 +543,7 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
 | `thread_due`                | `hivenod thread due ID ISO`                       | Sets the deadline a message states (ISO 8601 with its offset), or clears it (`due: null` / `--clear`). Today ranks by it.                                                   |
 | `thread_recheck_done`       | `hivenod thread recheck-done ID RESULT`           | Answers the member's re-check: `still_good` (stamps the open proposals), `revised` (after `outcome_propose revises`) or `asked` (after `inbox_ask`), with an optional note. |
 | `thread_answer_instruction` | `hivenod thread answer-instruction ID INSTR KIND` | Answers the member's request on the thread once: `note` (with `--note`), `ask`, `outcome` or `plan` (with `--ref`, its id).                                                 |
+| `thread_attach`             | `hivenod thread attach ID FILE\|URL`              | Attaches a file (png, jpg, webp, html, md, txt, pdf; up to 900 KB) or an https link to the thread (home agent only). Returns `attachmentId` for image visuals.              |
 | `thread_suggest_chips`      | `hivenod thread suggest-chips ID [CHIP]…`         | Sets the home agent's quick chips for the thread (0-5 of `prepare_meeting`, `recheck`, `follow_up`, `summarize`, `draft_reply`).                                            |
 
 ### Decision data (item kt3E7u9EliL3q2veDDI0)

@@ -4,7 +4,14 @@
  * details through the safe Markdown renderer, plus what the agent checked), Plan (phones) and
  * Everything (the conversation, steps, files and links, related subjects).
  */
-import type { InboxMessage, InboxOutcome, InboxPlan, InboxThread, SummaryRef } from '@hive/shared';
+import type {
+  InboxAttachment,
+  InboxMessage,
+  InboxOutcome,
+  InboxPlan,
+  InboxThread,
+  SummaryRef,
+} from '@hive/shared';
 import { Check, ChevronDown, ChevronRight, ExternalLink, Paperclip } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import type { Row } from '../lib/live';
@@ -12,8 +19,12 @@ import { Pill } from '../ui/badge';
 import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
 import { Markdown, parseBlocks } from '../ui/markdown';
+import { Dialog } from '../ui/overlay';
+import type { ThreadImages } from '../ui/visuals/ImageVisuals';
 import { VisualNotShown, VisualView } from '../ui/visuals/Visual';
+import { AttachmentViewer } from '../review/Viewers';
 import { Conversation } from './Conversation';
+import { THREAD_IMAGE_RE } from '@hive/shared';
 import { excerpt, safeHttps, type ShownSummary, type TopTone } from './decision';
 import type { TimelineEntry } from './logic';
 import { OutcomeCard } from './OutcomeCard';
@@ -115,12 +126,15 @@ function RefLink({ r, onInside }: { r: SummaryRef; onInside: () => void }) {
 
 export function ShortVersion({
   summary,
+  images,
   asks,
   firstMessage,
   why,
   onOpenEverything,
 }: {
   summary: ShownSummary | null;
+  /** The thread's images the image visuals may show (threadImages). */
+  images: ThreadImages;
   /** A person step waits (the visual rule: a visual, or the agent's reason for none). */
   asks: boolean;
   firstMessage: string;
@@ -163,7 +177,11 @@ export function ShortVersion({
                       'md:col-span-2',
                   )}
                 >
-                  {v.ok ? <VisualView v={v.visual} /> : <VisualNotShown kind={v.kind} />}
+                  {v.ok ? (
+                    <VisualView v={v.visual} images={images} />
+                  ) : (
+                    <VisualNotShown kind={v.kind} />
+                  )}
                 </div>
               ))}
             </div>
@@ -254,6 +272,8 @@ export interface EverythingProps {
   plans: Row<InboxPlan>[];
   outcomes: Row<InboxOutcome>[];
   refs: SummaryRef[];
+  /** Files the home agent attached to the thread (slice 4). */
+  attachments: Row<InboxAttachment>[];
   now: number;
   agentName: (id: string) => string;
   /** Older plans, drawn by the caller (the plan panel). */
@@ -370,6 +390,9 @@ export function Everything(p: EverythingProps) {
         </section>
       ) : null}
       {shows('Steps') ? p.pastPlans : null}
+      {shows('Files') && p.attachments.length ? (
+        <ThreadFiles rows={p.attachments} agent={p.agentName(t.fetchedBy ?? '')} />
+      ) : null}
       {shows('Files') && files.length ? (
         <section aria-label="Files">
           <h3 className={cn(EYEBROW, 'mb-2')}>Files</h3>
@@ -421,5 +444,79 @@ export function Everything(p: EverythingProps) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+// ---------- the thread's files (slice 4) ----------
+
+/** One attached file: images inline, everything else opens in the attachment viewer. */
+function ThreadFile({ a }: { a: InboxAttachment }) {
+  const [open, setOpen] = useState(false);
+  const isImage = a.kind === 'image' && THREAD_IMAGE_RE.test(a.content ?? '');
+  const link = a.kind === 'link' ? safeHttps(a.url) : null;
+  if (a.kind === 'link')
+    return link ? (
+      <a
+        href={link}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex max-w-full items-center gap-1 text-14 font-medium text-agent hov:underline"
+      >
+        <span className="truncate">{a.name}</span>
+        <Icon icon={ExternalLink} size={12} className="shrink-0" />
+      </a>
+    ) : (
+      <span className="text-14 text-ink">{a.name}</span>
+    );
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full min-w-0 flex-col items-start gap-1.5 rounded-card text-left foc:outline-2 foc:outline-offset-2 foc:outline-focus"
+      >
+        <span className="flex min-w-0 max-w-full items-center gap-2 text-14 font-medium text-agent hov:underline">
+          <Icon icon={Paperclip} size={14} className="shrink-0 text-text-3" />
+          <span className="truncate">{a.name}</span>
+        </span>
+        {isImage ? (
+          <img
+            src={a.content ?? ''}
+            alt={a.name}
+            className="max-h-40 max-w-full rounded-btn border border-line"
+          />
+        ) : null}
+      </button>
+      <Dialog open={open} onOpenChange={setOpen} title={a.name} wide>
+        <div className="h-[70dvh] overflow-hidden rounded-card border border-line">
+          <AttachmentViewer
+            attachment={{
+              kind: a.kind,
+              name: a.name,
+              content: a.kind === 'image' && !isImage ? null : a.content,
+              url: null,
+            }}
+          />
+        </div>
+      </Dialog>
+    </>
+  );
+}
+
+export function ThreadFiles({ rows, agent }: { rows: Row<InboxAttachment>[]; agent: string }) {
+  const sorted = [...rows].sort(
+    (x, y) => (y.data.at?.toMillis() ?? 0) - (x.data.at?.toMillis() ?? 0),
+  );
+  return (
+    <section aria-label={`Files from ${agent}`} data-thread-files="">
+      <h3 className={cn(EYEBROW, 'mb-2')}>Files from {agent}</h3>
+      <ul className="flex flex-col gap-3">
+        {sorted.map((r) => (
+          <li key={r.id} data-attachment={r.id}>
+            <ThreadFile a={r.data} />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

@@ -12,15 +12,21 @@ describe('hivenod plugin skill', () => {
     expect(fm).toMatch(/^description: .{40,}/m);
   });
   it('carries the visual rule for summaries at person steps (item OE8FmrTaIxFVGcaeGG3N)', () => {
-    for (const w of ['thread_summary', 'At every person step', 'noVisualWhy', 'summarize'])
+    for (const w of [
+      'thread_summary',
+      'At every person step',
+      'noVisualWhy',
+      'summarize',
+      '`thread_attach` both, then an `image_pair`',
+    ])
       expect(skill).toContain(w);
   });
   it('carries the orchestration hint the channel protocol no longer has', () => {
     for (const w of ['sub-agent', 'SendMessage', 'TaskStop', 'release', 'inbox', 'itemId'])
       expect(skill).toContain(w);
   });
-  it('is shipped by the plugin at version 0.3.3 and the marketplace points at it', () => {
-    expect(JSON.parse(read('plugins/hivenod/.claude-plugin/plugin.json')).version).toBe('0.3.3');
+  it('is shipped by the plugin at version 0.3.4 and the marketplace points at it', () => {
+    expect(JSON.parse(read('plugins/hivenod/.claude-plugin/plugin.json')).version).toBe('0.3.4');
     const m = JSON.parse(read('.claude-plugin/marketplace.json'));
     expect(JSON.stringify(m)).toContain('./plugins/hivenod');
   });

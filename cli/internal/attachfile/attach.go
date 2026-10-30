@@ -48,6 +48,7 @@ var types = map[string]ftype{
 	".png":  {kind: "image", mime: "image/png"},
 	".jpg":  {kind: "image", mime: "image/jpeg"},
 	".jpeg": {kind: "image", mime: "image/jpeg"},
+	".webp": {kind: "image", mime: "image/webp"},
 	".pdf":  {kind: "pdf", mime: "application/pdf"},
 }
 
@@ -87,7 +88,7 @@ func Prepare(source, name string, deny []string) (*Prepared, error) {
 	}
 	t, ok := types[strings.ToLower(filepath.Ext(source))]
 	if !ok {
-		return nil, errf("Cannot attach %q: use html, md, txt, png, jpg or pdf, or attach a URL instead.", filepath.Base(source))
+		return nil, errf("Cannot attach %q: use html, md, txt, png, jpg, webp or pdf, or attach a URL instead.", filepath.Base(source))
 	}
 	f, err := OpenGuarded(source, deny)
 	if err != nil {

@@ -25,6 +25,7 @@ import {
   answerInstruction,
   suggestChips,
   reviseOutcome,
+  threadAttach,
   writeSummary,
   type PlanInput,
   type PlanStepInput,
@@ -234,8 +235,27 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
       );
       return oid;
     },
+    /** Attaches a file to the thread (thread_attach, slice 4); returns its attachment id. */
+    async attach(
+      tid: string,
+      file: {
+        kind: 'image' | 'html' | 'markdown' | 'text' | 'pdf' | 'link';
+        name: string;
+        content?: string;
+        url?: string;
+      },
+    ) {
+      const p = threadAttach(ctx, { threadId: tid, thread: await thread(tid), ...file });
+      await run(p);
+      return p.attachmentId;
+    },
     /** Writes the thread's next summary (thread_summary, item OE8FmrTaIxFVGcaeGG3N). */
-    async summary(tid: string, content: Record<string, unknown>) {
+    async summary(
+      tid: string,
+      content: Record<string, unknown>,
+      /** The thread's attachments as {id: kind} (image visuals, slice 4). */
+      attachments: Record<string, string> = {},
+    ) {
       const th = await thread(tid);
       const v = (th as { summary?: { version: number } }).summary?.version ?? 0;
       const p = writeSummary(ctx, {
@@ -245,6 +265,7 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
         baseVersion: v,
         summary: content,
         basis: { lastEventId: null, planCursor: null },
+        attachments,
       });
       await run(p);
       return p.version;

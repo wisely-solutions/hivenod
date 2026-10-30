@@ -49,6 +49,10 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome / plan: a person's H
                            confidence?, bullets, details?, visuals?, noVisualWhy?, refs?};
                            --base-version (or "baseVersion" in the file) is the version
                            thread read showed, 0 for none
+  hivenod thread attach ID FILE|URL [--name N]
+                           attaches a file (png, jpg, webp, html, md, txt, pdf; up to 900 KB)
+                           or an https link to the thread (you are its home agent); name the
+                           attachmentId in a summary's image or image_pair visual
   hivenod subject list [--member UID]
                            the person's subjects, with threads waiting for them and open
   hivenod subject assign THREAD (--subject-id S | --name "Topic (client)") [--area "Client A"] [--label Sales]
@@ -283,6 +287,12 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 		if len(checks) > 0 {
 			a["checks"] = anyList(checks)
 		}
+	case "thread attach":
+		if id == "" || len(pos) != 2 {
+			return usage()
+		}
+		tool, a["threadId"], a["source"] = "thread_attach", id, pos[1]
+		opt(a, "name", "name")
 	case "thread summary":
 		tool = "thread_summary"
 		if id == "" || *str["file"] == "" {

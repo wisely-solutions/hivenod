@@ -809,8 +809,40 @@
         }
       },
       {
+        "name": "thread_attach",
+        "description": "Attach a file or a link to a thread you brought in (you are its home agent): screenshots, drafts, reports. source is a file path (images: png, jpg, webp; or html, md, txt, pdf; up to 900 KB, inlined) or an https URL (stored as a link). The person sees it in the thread's Everything (images inline, HTML sandboxed). Returns attachmentId: name it in a summary visual, {kind: image, attachment} or {kind: image_pair, before, after}. At every person step (an approval or a verification) include at least one visual: for a UI change, attach the before and after screenshots, then show them as an image_pair in thread_summary.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "description": "File path or https URL"
+            },
+            "name": {
+              "description": "Display name; defaults to the file name",
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "threadId",
+            "source"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "thread_summary",
-        "description": "Write the summary of a thread you brought in (you are its home agent), as your LAST call after every inbox event that changed the thread (a message, a proposal or plan, a step done or failed, an answer, a send back, a re-check, a request): the person reads it first and decides from it. headline is the thing, not the process (one line); ask is the yes/no question while a proposal or person step waits (else leave it out); answer is the one-line state; recommendation {action, why} and confidence; 1-5 bullets of facts with numbers; details (markdown) for More detail. At every person step (an approval or a verification: whenever ask is set) include at least one visual when there is data (a chart), a UI change or a flow or sequence (a diagram: before_after, flow or timeline); if none fits, set noVisualWhy in one line. Visuals are data, never pictures or markup: bar, line, stacked_bar {title, caption, unit?, x: 2-24 labels, series: 1-4 {name, values per x}, highlight?, better?: up|down}; number {title, caption, value, unit?, delta?, trend?, better?}; flow {title, caption, nodes: 2-8 {id, label, who?: agent|person|system, state?: done|now|next|changed|removed}, edges?: {from, to, label?}}; before_after {title, caption, before: {label?, lines 1-6}, after: {...}}; timeline {title, caption, events: 2-12 {at: ISO date, label, state?: done|now|next|risk}}. At most 4. baseVersion is the summary version thread_read showed (0 when none): a summary that moved on is refused, re-read and write again.",
+        "description": "Write the summary of a thread you brought in (you are its home agent), as your LAST call after every inbox event that changed the thread (a message, a proposal or plan, a step done or failed, an answer, a send back, a re-check, a request): the person reads it first and decides from it. headline is the thing, not the process (one line); ask is the yes/no question while a proposal or person step waits (else leave it out); answer is the one-line state; recommendation {action, why} and confidence; 1-5 bullets of facts with numbers; details (markdown) for More detail. At every person step (an approval or a verification: whenever ask is set) include at least one visual when there is data (a chart), a UI change (before/after screenshots: thread_attach both, then an image_pair) or a flow or sequence (a diagram: before_after, flow or timeline); if none fits, set noVisualWhy in one line. Visuals are data or images you attached, never markup: bar, line, stacked_bar {title, caption, unit?, x: 2-24 labels, series: 1-4 {name, values per x}, highlight?, better?: up|down}; number {title, caption, value, unit?, delta?, trend?, better?}; flow {title, caption, nodes: 2-8 {id, label, who?: agent|person|system, state?: done|now|next|changed|removed}, edges?: {from, to, label?}}; before_after {title, caption, before: {label?, lines 1-6}, after: {...}}; timeline {title, caption, events: 2-12 {at: ISO date, label, state?: done|now|next|risk}}; image {title, caption, attachment: an image attachmentId of this thread from thread_attach}; image_pair {title, caption, before, after: image attachmentIds of this thread, labels?: [before label, after label]}. At most 4. baseVersion is the summary version thread_read showed (0 when none): a summary that moved on is refused, re-read and write again.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -887,7 +919,7 @@
                 "visuals": {
                   "type": "array",
                   "maxItems": 4,
-                  "description": "Charts and diagrams (data, see the tool description)",
+                  "description": "Charts, diagrams and images (see the tool description)",
                   "items": {
                     "type": "object",
                     "properties": {
@@ -900,7 +932,9 @@
                           "number",
                           "flow",
                           "before_after",
-                          "timeline"
+                          "timeline",
+                          "image",
+                          "image_pair"
                         ]
                       },
                       "title": {
@@ -2860,8 +2894,40 @@
         }
       },
       {
+        "name": "thread_attach",
+        "description": "Attach a file or a link to a thread you brought in (you are its home agent): screenshots, drafts, reports. source is a file path (images: png, jpg, webp; or html, md, txt, pdf; up to 900 KB, inlined) or an https URL (stored as a link). The person sees it in the thread's Everything (images inline, HTML sandboxed). Returns attachmentId: name it in a summary visual, {kind: image, attachment} or {kind: image_pair, before, after}. At every person step (an approval or a verification) include at least one visual: for a UI change, attach the before and after screenshots, then show them as an image_pair in thread_summary.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "description": "File path or https URL"
+            },
+            "name": {
+              "description": "Display name; defaults to the file name",
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "threadId",
+            "source"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "thread_summary",
-        "description": "Write the summary of a thread you brought in (you are its home agent), as your LAST call after every inbox event that changed the thread (a message, a proposal or plan, a step done or failed, an answer, a send back, a re-check, a request): the person reads it first and decides from it. headline is the thing, not the process (one line); ask is the yes/no question while a proposal or person step waits (else leave it out); answer is the one-line state; recommendation {action, why} and confidence; 1-5 bullets of facts with numbers; details (markdown) for More detail. At every person step (an approval or a verification: whenever ask is set) include at least one visual when there is data (a chart), a UI change or a flow or sequence (a diagram: before_after, flow or timeline); if none fits, set noVisualWhy in one line. Visuals are data, never pictures or markup: bar, line, stacked_bar {title, caption, unit?, x: 2-24 labels, series: 1-4 {name, values per x}, highlight?, better?: up|down}; number {title, caption, value, unit?, delta?, trend?, better?}; flow {title, caption, nodes: 2-8 {id, label, who?: agent|person|system, state?: done|now|next|changed|removed}, edges?: {from, to, label?}}; before_after {title, caption, before: {label?, lines 1-6}, after: {...}}; timeline {title, caption, events: 2-12 {at: ISO date, label, state?: done|now|next|risk}}. At most 4. baseVersion is the summary version thread_read showed (0 when none): a summary that moved on is refused, re-read and write again.",
+        "description": "Write the summary of a thread you brought in (you are its home agent), as your LAST call after every inbox event that changed the thread (a message, a proposal or plan, a step done or failed, an answer, a send back, a re-check, a request): the person reads it first and decides from it. headline is the thing, not the process (one line); ask is the yes/no question while a proposal or person step waits (else leave it out); answer is the one-line state; recommendation {action, why} and confidence; 1-5 bullets of facts with numbers; details (markdown) for More detail. At every person step (an approval or a verification: whenever ask is set) include at least one visual when there is data (a chart), a UI change (before/after screenshots: thread_attach both, then an image_pair) or a flow or sequence (a diagram: before_after, flow or timeline); if none fits, set noVisualWhy in one line. Visuals are data or images you attached, never markup: bar, line, stacked_bar {title, caption, unit?, x: 2-24 labels, series: 1-4 {name, values per x}, highlight?, better?: up|down}; number {title, caption, value, unit?, delta?, trend?, better?}; flow {title, caption, nodes: 2-8 {id, label, who?: agent|person|system, state?: done|now|next|changed|removed}, edges?: {from, to, label?}}; before_after {title, caption, before: {label?, lines 1-6}, after: {...}}; timeline {title, caption, events: 2-12 {at: ISO date, label, state?: done|now|next|risk}}; image {title, caption, attachment: an image attachmentId of this thread from thread_attach}; image_pair {title, caption, before, after: image attachmentIds of this thread, labels?: [before label, after label]}. At most 4. baseVersion is the summary version thread_read showed (0 when none): a summary that moved on is refused, re-read and write again.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2938,7 +3004,7 @@
                 "visuals": {
                   "type": "array",
                   "maxItems": 4,
-                  "description": "Charts and diagrams (data, see the tool description)",
+                  "description": "Charts, diagrams and images (see the tool description)",
                   "items": {
                     "type": "object",
                     "properties": {
@@ -2951,7 +3017,9 @@
                           "number",
                           "flow",
                           "before_after",
-                          "timeline"
+                          "timeline",
+                          "image",
+                          "image_pair"
                         ]
                       },
                       "title": {

@@ -99,8 +99,13 @@ func (c *Client) ThreadSummary(ctx context.Context, id string, summary any, base
 		cursor := live.Plan.Cursor
 		basis.PlanCursor = &cursor
 	}
+	atts, err := c.threadAttachmentKinds(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	r, err := actions.WriteSummary(c.actx(), actions.WriteSummaryInput{
 		ThreadID: id, Thread: actions.ThreadStateFrom(t), Current: cur, BaseVersion: baseVersion, Summary: summary, Basis: basis,
+		Attachments: atts,
 	})
 	if err != nil {
 		return nil, wrap(err)

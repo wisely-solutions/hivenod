@@ -183,3 +183,55 @@ describe('safety', () => {
     expect(screen.getByText(/can’t show yet \(image\)/)).toBeInTheDocument();
   });
 });
+
+describe('images (slice 4)', () => {
+  const PNG = 'data:image/png;base64,iVBORw0KGgo=';
+  const images = new Map([
+    ['t1_b4', { name: 'before.png', src: PNG }],
+    ['t1_af', { name: 'after.png', src: `${PNG}AA` }],
+  ]);
+  const pair = v({
+    kind: 'image_pair',
+    title: 'Board card',
+    caption: 'The card now shows the summary line',
+    before: 't1_b4',
+    after: 't1_af',
+    labels: null,
+  });
+  it('an image pair shows both, alt from the caption, Show data names the files', () => {
+    render(<VisualView v={pair} images={images} />);
+    expect(screen.getByAltText('Before: The card now shows the summary line')).toHaveAttribute(
+      'src',
+      PNG,
+    );
+    expect(screen.getByAltText('After: The card now shows the summary line')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show data' }));
+    expect(screen.getByText('Before: before.png')).toBeInTheDocument();
+    expect(screen.getByText('After: after.png')).toBeInTheDocument();
+  });
+  it('Compare appears only when both images have the same size', () => {
+    render(<VisualView v={pair} images={images} />);
+    expect(screen.queryByRole('button', { name: 'Compare' })).toBeNull();
+    for (const img of screen.getAllByRole('img')) {
+      Object.defineProperty(img, 'naturalWidth', { value: 800 });
+      Object.defineProperty(img, 'naturalHeight', { value: 600 });
+      fireEvent.load(img);
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    expect(screen.getByRole('slider', { name: /Compare/ })).toBeInTheDocument();
+  });
+  it('an image not handed to the page is not shown (another thread, a URL)', () => {
+    const { container } = render(
+      <VisualView
+        v={v({ kind: 'image', title: 'Shot', caption: 'New', attachment: 't2_x' })}
+        images={images}
+      />,
+    );
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByText('This image isn’t available on this thread.')).toBeInTheDocument();
+  });
+  it('labels show as plain text', () => {
+    render(<VisualView v={{ ...pair, labels: ['<b>Old</b>', 'New'] } as Visual} images={images} />);
+    expect(screen.getByText('<b>Old</b>')).toBeInTheDocument();
+  });
+});

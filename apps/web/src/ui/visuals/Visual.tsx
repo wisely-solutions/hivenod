@@ -1,5 +1,5 @@
 /**
- * The visual kit (item OE8FmrTaIxFVGcaeGG3N, slice 2; design 5): charts (bar, line, stacked_bar,
+ * The visual kit (item OE8FmrTaIxFVGcaeGG3N, slices 2 and 4; design 5): charts (bar, line, stacked_bar,
  * number) and diagrams (flow, before_after, timeline) drawn from the summary's data by our own
  * SVG and HTML, never from agent markup. Every label is a React text node (plain text, never
  * HTML). Each visual is a figure with its title and caption (the takeaway, also the SVG's
@@ -22,9 +22,11 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '../cn';
 import { Icon } from '../icon';
+import { Frame } from './frame';
+import { ImagePairView, ImageView, type ThreadImages } from './ImageVisuals';
 import {
   bandX,
   chartDomain,
@@ -59,54 +61,6 @@ function useWidth<T extends HTMLElement>() {
     return () => ro.disconnect();
   }, []);
   return [ref, w || 600] as const;
-}
-
-// ---------- the frame: figure, caption, Show data ----------
-
-function Frame({
-  title,
-  caption,
-  kind,
-  data,
-  children,
-}: {
-  title: string;
-  caption: string;
-  kind: string;
-  /** The same data as a table or list (Show data). */
-  data: ReactNode;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
-  return (
-    <div
-      data-visual={kind}
-      className="flex min-w-0 flex-col rounded-card border border-line bg-surface p-3.5"
-    >
-      <figure className="m-0 min-w-0">
-        <p className="text-14 font-semibold text-ink [overflow-wrap:anywhere]">{title}</p>
-        <div className="mt-2.5 min-w-0">{children}</div>
-        <figcaption className="mt-2 text-13 leading-relaxed text-text-2 [overflow-wrap:anywhere]">
-          {caption}
-        </figcaption>
-      </figure>
-      <div className="mt-2">
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={id}
-          onClick={() => setOpen((v) => !v)}
-          className="inline-flex min-h-8 items-center rounded-btn border border-line-strong px-2.5 text-13 font-medium text-ink hov:bg-canvas foc:outline-2 foc:outline-offset-2 foc:outline-focus"
-        >
-          {open ? 'Hide data' : 'Show data'}
-        </button>
-        <div id={id} data-visual-data="" hidden={!open} className="mt-2">
-          {open ? data : null}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 const cell = 'border-b border-line px-2 py-1.5 text-left text-13 [overflow-wrap:anywhere]';
@@ -686,9 +640,15 @@ function timelineData(v: TimelineVisual) {
 
 // ---------- the one entry point ----------
 
-/** One visual from the summary, drawn by the kit. */
-export function VisualView({ v }: { v: Visual }) {
+const NO_IMAGES: ThreadImages = new Map();
+
+/** One visual from the summary, drawn by the kit (images: the thread's, checked by the caller). */
+export function VisualView({ v, images = NO_IMAGES }: { v: Visual; images?: ThreadImages }) {
   switch (v.kind) {
+    case 'image':
+      return <ImageView v={v} images={images} />;
+    case 'image_pair':
+      return <ImagePairView v={v} images={images} />;
     case 'bar':
     case 'line':
     case 'stacked_bar':
@@ -724,7 +684,7 @@ export function VisualView({ v }: { v: Visual }) {
   }
 }
 
-/** A visual of a kind this page cannot draw (a newer agent, or images before slice 4). */
+/** A visual of a kind this page cannot draw (from a newer agent). */
 export function VisualNotShown({ kind }: { kind: string }) {
   return (
     <p
