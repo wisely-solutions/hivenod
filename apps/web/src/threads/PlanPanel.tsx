@@ -14,6 +14,7 @@ import {
   minVersionFor,
   outcomeType,
   paths,
+  planTemplate,
   planView,
   recheckable,
   staleReason,
@@ -89,6 +90,15 @@ export function PlanPanel(props: PlanPanelProps) {
   const main = planMain(pl);
   const free = firstFree(pl);
   const agent = agentName(plan.data.proposedBy);
+  // A plan the member made from a template (New thread, slice 6) is theirs.
+  const tpl = plan.data.templateId ? planTemplate(plan.data.templateId) : null;
+  const mine = plan.data.proposedBy === thread.data.memberUid;
+  const planHead =
+    plan.data.state === 'proposed'
+      ? `${agent} proposes ${tpl ? `the ${tpl.name} plan` : 'a plan'}`
+      : mine
+        ? `Your ${tpl ? `${tpl.name} plan` : 'plan'}`
+        : `${agent}’s ${tpl ? `${tpl.name} plan` : 'plan'}`;
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState<number | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
@@ -413,13 +423,9 @@ export function PlanPanel(props: PlanPanelProps) {
       ) : null}
       <div className="flex items-start gap-2">
         {rail ? (
-          <p className="min-w-0 flex-1 text-15 font-semibold text-ink">
-            {plan.data.state === 'proposed' ? `${agent} proposes a plan` : `${agent}’s plan`}
-          </p>
+          <p className="min-w-0 flex-1 text-15 font-semibold text-ink">{planHead}</p>
         ) : (
-          <h2 className="min-w-0 flex-1 text-15 font-semibold text-ink">
-            {plan.data.state === 'proposed' ? `${agent} proposes a plan` : `${agent}’s plan`}
-          </h2>
+          <h2 className="min-w-0 flex-1 text-15 font-semibold text-ink">{planHead}</h2>
         )}
         {sheet ? (
           <span className="text-13 text-text-2">

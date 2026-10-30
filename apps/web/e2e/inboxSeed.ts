@@ -270,6 +270,15 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
       await run(p);
       return p.version;
     },
+    /** A thread's plans (ids, any state), e.g. one the member made with New thread (slice 6). */
+    async plansOf(tid: string) {
+      const q = query(collection(db, `workspaces/${wid}/inboxPlans`), where('threadId', '==', tid));
+      return (await getDocs(q)).docs.map((d) => d.id);
+    },
+    /** A plan's step ids, in order. */
+    async stepsOf(pid: string) {
+      return ((await getDoc(doc(db, inboxPaths.plan(wid, pid)))).data() as PlanInput['plan']).steps;
+    },
     outcome: async (oid: string) =>
       (await getDoc(doc(db, inboxPaths.outcome(wid, oid)))).data() as OutcomeStateOf,
     stop: () => deleteApp(app),

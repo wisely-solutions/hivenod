@@ -544,8 +544,8 @@ function MoreDecisions({ actions }: { actions: MenuAction[] }) {
           data-more-decisions=""
           aria-label="More decisions"
           className="min-h-11 px-3 max-sm:w-full"
+          leading={<Icon icon={MoreHorizontal} size={18} />}
         >
-          <Icon icon={MoreHorizontal} size={18} />
           <span className="sm:sr-only">More</span>
         </Button>
       }
