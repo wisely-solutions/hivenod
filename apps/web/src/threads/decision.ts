@@ -175,7 +175,7 @@ export function topState(i: TopInput): TopState {
   if (t.state === 'investigating')
     return { kind: 'working', tone: 'agent', kicker: `${agent} is working on it` };
   if (t.state === 'waiting')
-    return { kind: 'waiting', tone: 'neutral', kicker: waitingText(t.waiting) };
+    return { kind: 'waiting', tone: 'neutral', kicker: waitingText(t.waiting, agent) };
   if (t.state === 'ignored') return { kind: 'done', tone: 'neutral', kicker: 'Ignored' };
   if (v?.state === 'done' || t.state === 'done')
     return { kind: 'done', tone: 'approve', kicker: `Done · ${dayMonth(t.updatedAt)}` };

@@ -930,7 +930,8 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
           thread: { ...t },
           ...(versions.length ? { version: viewN } : {}),
           ...(dirty ? { fields: edited } : {}),
-          ...(inPlan ? { plan: inPlan } : {}),
+          // A single outcome with nothing else to decide: the thread waits on the agent.
+          ...(inPlan ? { plan: inPlan } : { othersPending: proposals.length > 1 }),
         });
       } catch (e) {
         setError(errorText(e));

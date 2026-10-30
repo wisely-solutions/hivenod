@@ -259,3 +259,35 @@ describe('approveOutcome with versions', () => {
     expect(versionCount(two)).toBe(2);
   });
 });
+
+describe('approveOutcome: the thread state of a single outcome (item OE8FmrTaIxFVGcaeGG3N)', () => {
+  const threadOps = (p: { ops: { path: string; data?: unknown }[] }) =>
+    p.ops.filter((op) => op.path.includes('/inboxThreads/'));
+  it('an outcome the agent carries out, nothing else to decide: waiting on the agent', () => {
+    const t = threadOps(approveOutcome(joao, { ...base, othersPending: false }));
+    expect(t).toHaveLength(1);
+    expect(t[0]!.data).toMatchObject({ state: 'waiting', waiting: { on: 'agent', until: null } });
+  });
+  it('other proposals still wait: the thread stays Your call (no thread write)', () => {
+    expect(threadOps(approveOutcome(joao, { ...base, othersPending: true }))).toHaveLength(0);
+  });
+  it('without othersPending (old callers) the thread is left as it is', () => {
+    expect(threadOps(approveOutcome(joao, base))).toHaveLength(0);
+  });
+  it('a thread not at Your call is left as it is', () => {
+    const p = approveOutcome(joao, {
+      ...base,
+      thread: { ...TH, state: 'needsYou' },
+      othersPending: false,
+    });
+    expect(threadOps(p)).toHaveLength(0);
+  });
+  it('an immediate outcome still takes its after-state', () => {
+    const p = approveOutcome(joao, {
+      ...base,
+      outcome: { ...O, type: 'ignore', fields: {} },
+      othersPending: false,
+    });
+    expect(threadOps(p)[0]!.data).toMatchObject({ state: 'ignored', waiting: null });
+  });
+});

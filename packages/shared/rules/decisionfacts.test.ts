@@ -26,7 +26,7 @@ const T = (tid: string) => inboxPaths.thread(W, tid);
 const O = (oid: string) => inboxPaths.outcome(W, oid);
 const PL = (pid: string) => inboxPaths.plan(W, pid);
 const E = (eid: string) => inboxPaths.event(W, eid);
-const IDS = ['df1', 'df2', 'df3', 'df4', 'df5', 'df6'];
+const IDS = ['df1', 'df2', 'df3', 'df4', 'df5', 'df6', 'df7'];
 const FACTS = ['stepLabel', 'templateId', 'waitedMs', 'recommended', 'summaryVersion'];
 const thread = async () => (await snap(T('dt1'))) as unknown as ThreadStateOf;
 async function load(): Promise<PlanInput & { plan: PlanOf & SendBackOf }> {
@@ -109,6 +109,7 @@ describe('decision facts', () => {
       ),
     );
     await finish(2);
+    await finish(3);
     pl = await load();
     const back = sendBackPlan(alice.ctx, { ...pl, thread: await thread(), reason: 'Bigger' });
     await ok(alice.run(back));

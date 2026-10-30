@@ -315,7 +315,10 @@ export const inboxThreadSchema = z.object({
   subjectId: z.string().nullable(),
   state: z.enum(THREAD_STATES),
   waiting: z
-    .object({ on: z.enum(['them', 'thirdParty', 'date', 'item']), until: timestamp.nullable() })
+    .object({
+      on: z.enum(['them', 'thirdParty', 'date', 'item', 'agent']),
+      until: timestamp.nullable(),
+    })
     .nullable(),
   question: z
     .object({
@@ -1879,6 +1882,12 @@ export function approveOutcome(
      * next steps follow that version.
      */
     summaryVersion?: number | null;
+    /**
+     * A single outcome: whether other proposals of the thread still wait for the member. False:
+     * an outcome the agent carries out moves the thread to waiting on the agent (nothing is the
+     * member's call any more); absent: the thread's state is left as it is.
+     */
+    othersPending?: boolean;
   },
 ): ActionPlan {
   const o = input.outcome;
@@ -1981,7 +1990,15 @@ export function approveOutcome(
               eventId,
             ),
           ]
-        : []),
+        : !pl && input.othersPending === false && input.thread.state === 'yourCall'
+          ? [
+              upd(
+                inboxPaths.thread(ctx.workspaceId, o.threadId),
+                { state: 'waiting', waiting: { on: 'agent', until: null } },
+                eventId,
+              ),
+            ]
+          : []),
     ],
   );
   return approval;

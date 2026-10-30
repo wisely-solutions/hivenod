@@ -245,7 +245,14 @@ export async function decideThread(
           outcomeId: oid,
           outcome: o,
           thread,
-          ...(o.planId ? { plan: planInput(s) } : {}),
+          ...(o.planId
+            ? { plan: planInput(s) }
+            : {
+                othersPending: s.outcomes.some(
+                  (x) =>
+                    x.id !== oid && (x.data.state === 'proposed' || x.data.state === 'revising'),
+                ),
+              }),
           // A gate pins the summary version the person decided on (slice 6).
           ...(s.thread.summary ? { summaryVersion: s.thread.summary.version } : {}),
         }),
