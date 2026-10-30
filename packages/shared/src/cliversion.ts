@@ -60,7 +60,7 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * schedule_list. An older CLI cannot propose a schedule (scheduled runs still reach it as plain
    * plan threads: plan, longstep).
    */
-  schedule: '0.2.239',
+  schedule: '0.2.244',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */
