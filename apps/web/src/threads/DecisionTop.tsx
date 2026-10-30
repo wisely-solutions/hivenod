@@ -9,6 +9,8 @@
 import {
   outcomeType,
   planView,
+  scheduleSchema,
+  schedulePaths,
   recheckable,
   staleReason,
   stepSilentText,
@@ -27,7 +29,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
-import type { Row } from '../lib/live';
+import { useLiveDoc, type Row } from '../lib/live';
 import { effectLines } from '../lib/outcomes';
 import { ProposalPanel, QuestionPanel, type DecisionCardHandle } from '../today/DecisionCard';
 import { Pill } from '../ui/badge';
@@ -50,6 +52,8 @@ import {
 import { GateAsk } from './GateAsk';
 import { ActionMenu, type MenuAction } from '../ui/menu';
 import { RecheckButton, useRecheck } from './Recheck';
+import { SchedulePanel } from './SchedulePanel';
+import { scheduleCard } from './schedule';
 import { SummaryVersions } from './SummaryVersions';
 import { usePlanActions } from './usePlanActions';
 import { askOf } from '../needs/logic';
@@ -181,6 +185,19 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
     });
     const asks = top.kind === 'person' || top.kind === 'question';
     const shownProposal = top.kind === 'person' && !main ? proposals[0] : undefined;
+    // A schedule proposal (scheduled tasks, slice 5) has a card of its own.
+    const scheduleProposal = shownProposal?.data.type === 'schedule' ? shownProposal : undefined;
+    const kicker =
+      scheduleProposal && proposals.length === 1 ? 'Your approval · new schedule' : top.kicker;
+    // Its ask names the schedule (the panel listens to the same doc: one read).
+    const schedLive = useLiveDoc(
+      scheduleProposal && typeof scheduleProposal.data.fields.scheduleId === 'string'
+        ? schedulePaths.schedule(wid, scheduleProposal.data.fields.scheduleId)
+        : null,
+      scheduleSchema,
+    );
+    const schedAsk =
+      schedLive.state === 'ready' && schedLive.data ? scheduleCard(schedLive.data, now).ask : null;
 
     // The headline: the summary's ask while something waits, else its headline; without one,
     // the app's own line (design 4.3), never nothing.
@@ -191,6 +208,9 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
     else if (main?.kind === 'approvePlan' && view)
       fallback = `${agentName(plan!.data.proposedBy)} proposes a plan of ${view.total} steps`;
     else if (stepRow) fallback = stepTitle(stepRow.data.type, stepRow.data.fields);
+    else if (scheduleProposal)
+      fallback =
+        schedAsk ?? `Set up the schedule ${agentName(scheduleProposal.data.proposedBy)} proposes?`;
     else if (shownProposal)
       fallback = `${agentName(shownProposal.data.proposedBy)} proposes: ${outcomeType(shownProposal.data.type)?.label ?? shownProposal.data.type}`;
     else if (top.kind === 'blocked' && cur)
@@ -444,6 +464,20 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           }
         />
       );
+    } else if (scheduleProposal) {
+      widget = (
+        <SchedulePanel
+          ref={panelRef}
+          key={scheduleProposal.id}
+          wid={wid}
+          thread={thread}
+          outcome={scheduleProposal}
+          now={now}
+          agentName={agentName}
+          onDone={props.onDone}
+          extra={notNow}
+        />
+      );
     } else if (shownProposal) {
       widget = (
         <ProposalPanel
@@ -485,7 +519,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           )}
         >
           <span aria-hidden>{MARK[top.tone]} </span>
-          <span data-kicker="">{top.kicker}</span>
+          <span data-kicker="">{kicker}</span>
         </p>
         <h2
           data-headline=""

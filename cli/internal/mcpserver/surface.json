@@ -1138,7 +1138,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 128,
-              "description": "The subject the run threads are filed under (subject_list); default the thread's subject on approval"
+              "description": "The subject the run threads are filed under (subject_list); default the thread's subject"
             },
             "note": {
               "description": "Why this schedule, in 1-2 sentences: the person reads it first",
@@ -2474,7 +2474,7 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 128,
-              "description": "The subject the run threads are filed under (subject_list); default the thread's subject on approval"
+              "description": "The subject the run threads are filed under (subject_list); default the thread's subject"
             },
             "note": {
               "description": "Why this schedule, in 1-2 sentences: the person reads it first",

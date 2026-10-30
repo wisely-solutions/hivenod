@@ -89,6 +89,7 @@ import {
   stepTitle,
 } from '../threads/plan';
 import { GateAsk } from '../threads/GateAsk';
+import { SchedulePanel } from '../threads/SchedulePanel';
 import { usePlanActions } from '../threads/usePlanActions';
 import { askOf } from '../needs/logic';
 import { NotNowButton, useNotNow } from '../threads/NotNow';
@@ -252,19 +253,33 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
               band,
               <>
                 <CardHead props={props} />
-                <ProposalPanel
-                  ref={inner}
-                  wid={entry.wid}
-                  thread={entry.thread!}
-                  proposals={entry.proposals ?? []}
-                  sender={props.sender}
-                  now={props.now}
-                  agentName={props.agentName}
-                  onDone={props.onDone}
-                  onOpen={props.onOpen}
-                  onSkip={props.onSkip}
-                  extra={notNow}
-                />
+                {entry.proposals?.length === 1 && entry.proposals[0]!.data.type === 'schedule' ? (
+                  // A schedule proposal (scheduled tasks, slice 5): its own card.
+                  <SchedulePanel
+                    ref={inner}
+                    wid={entry.wid}
+                    thread={entry.thread!}
+                    outcome={entry.proposals[0]!}
+                    now={props.now}
+                    agentName={props.agentName}
+                    onDone={props.onDone}
+                    extra={notNow}
+                  />
+                ) : (
+                  <ProposalPanel
+                    ref={inner}
+                    wid={entry.wid}
+                    thread={entry.thread!}
+                    proposals={entry.proposals ?? []}
+                    sender={props.sender}
+                    now={props.now}
+                    agentName={props.agentName}
+                    onDone={props.onDone}
+                    onOpen={props.onOpen}
+                    onSkip={props.onSkip}
+                    extra={notNow}
+                  />
+                )}
                 {nnError}
               </>,
               t.title,

@@ -1052,12 +1052,7 @@ const MUTATIONS = [
   // Slice 5: the agent revises its own proposal after Ask for changes, with the outcome.
   [
     'schedule revise: any version',
-    [
-      [
-        'return schedOk(d) && d.version == r.version + 1',
-        'return schedOk(d)',
-      ],
-    ],
+    [['return schedOk(d) && d.version == r.version + 1', 'return schedOk(d)']],
   ],
   [
     'schedule revise: without the outcome revision',
