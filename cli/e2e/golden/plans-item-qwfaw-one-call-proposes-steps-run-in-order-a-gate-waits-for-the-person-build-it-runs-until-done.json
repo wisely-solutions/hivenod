@@ -16,12 +16,12 @@
     {
       "tool": "plan_propose",
       "ok": false,
-      "out": "MCP error -32602: Input validation error: Invalid arguments for tool plan_propose: steps[0].type: must be one of \"reply\", \"make_it_work\", \"handover\", \"snooze\", \"nudge\", \"approval\""
+      "out": "MCP error -32602: Input validation error: Invalid arguments for tool plan_propose: steps[0].type: must be one of \"reply\", \"make_it_work\", \"handover\", \"snooze\", \"nudge\", \"shape\", \"build\", \"release\", \"approval\""
     },
     {
       "tool": "plan_propose",
       "ok": false,
-      "out": "MCP error -32602: Input validation error: Invalid arguments for tool plan_propose: steps: at least 1 entries"
+      "out": "A plan has 1 to 8 steps."
     },
     {
       "tool": "plan_propose",
