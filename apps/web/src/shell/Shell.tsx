@@ -35,7 +35,7 @@ import { ShortcutsProvider, useShortcut } from './shortcuts';
 import { useUndoLast } from '../ui/overlay';
 import { Sidebar } from './Sidebar';
 import { OffProvider } from '../off/data';
-import { OffPill } from '../off/OffSwitch';
+import { OffDialogHost, OffPill } from '../off/OffSwitch';
 import { TabBar, useScrollHidden } from './TabBar';
 
 /**
@@ -286,6 +286,7 @@ function Frame({ children }: { children?: ReactNode }) {
       <OnlineAgainToast />
       <InstallHint />
       <ShellPalette open={palette} onOpenChange={setPalette} />
+      <OffDialogHost />
     </div>
   );
 }

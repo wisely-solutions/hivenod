@@ -28,8 +28,7 @@ import { isOffDoc, sinceText, willStart, type WaitingStep } from './logic';
 
 /** The pill: `full` in the wide sidebar and on Today, `compact` in the phone header, `icon` in the narrow sidebar. */
 export function OffPill({ variant = 'full' }: { variant?: 'full' | 'compact' | 'icon' }) {
-  const { summary } = useOff();
-  const [open, setOpen] = useState(false);
+  const { summary, setPanel } = useOff();
   const off = summary.off;
   const label = `${summary.label}: change`;
   return (
@@ -39,7 +38,7 @@ export function OffPill({ variant = 'full' }: { variant?: 'full' | 'compact' | '
         data-off-pill={off ? 'off' : 'on'}
         aria-label={label}
         title={off ? `${summary.label} · nothing automated acts` : 'Agents on · turn them Off'}
-        onClick={() => setOpen(true)}
+        onClick={() => setPanel('open')}
         className={cn(
           'inline-flex shrink-0 items-center gap-1.5 rounded-full border font-medium transition-colors foc:outline-2 foc:outline-offset-2 foc:outline-focus',
           variant === 'icon' ? 'size-11 justify-center' : 'min-h-11 px-3 text-13',
@@ -61,7 +60,6 @@ export function OffPill({ variant = 'full' }: { variant?: 'full' | 'compact' | '
           </>
         )}
       </button>
-      <OffDialog open={open} onOpenChange={setOpen} />
     </>
   );
 }
@@ -329,8 +327,7 @@ export function OffDialog({
 
 /** Today's banner while Off: since when, what it means, the runs that couldn't happen, Turn on. */
 export function OffBanner() {
-  const { summary, cantRun } = useOff();
-  const [open, setOpen] = useState(false);
+  const { summary, cantRun, setPanel } = useOff();
   if (!summary.off) return null;
   const who =
     summary.label === 'Agents off'
@@ -355,13 +352,24 @@ export function OffBanner() {
       <div className="mt-3">
         <Button
           variant="secondary"
-          onClick={() => setOpen(true)}
+          onClick={() => setPanel('confirm')}
           leading={<Icon icon={Power} size={16} />}
         >
           Turn on…
         </Button>
       </div>
-      <OffDialog open={open} onOpenChange={setOpen} confirmFirst />
     </section>
+  );
+}
+
+/** The one Off panel of the shell, opened by the pills and the Today banner. */
+export function OffDialogHost() {
+  const { panel, setPanel } = useOff();
+  return (
+    <OffDialog
+      open={panel !== 'closed'}
+      onOpenChange={(o) => setPanel(o ? 'open' : 'closed')}
+      confirmFirst={panel === 'confirm'}
+    />
   );
 }

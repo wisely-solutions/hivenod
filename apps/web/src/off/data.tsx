@@ -31,6 +31,9 @@ export interface OffData {
   turnOff: (input: { all: true } | { agents: string[] }) => Promise<void>;
   /** Turn every agent On again, everywhere. */
   turnOn: () => Promise<void>;
+  /** The one Off panel (OffDialogHost): closed, open, or open on "Turn agents on?". */
+  panel: 'closed' | 'open' | 'confirm';
+  setPanel: (p: 'closed' | 'open' | 'confirm') => void;
   /** An agent's name (the organization on screen; null elsewhere). */
   agentName: (wid: string, uid: string) => string | null;
 }
@@ -101,6 +104,7 @@ export function OffProvider({ children }: { children: ReactNode }) {
     [wid, session.profile.workspaceIds],
   );
   const [states, setStates] = useState<Record<string, OrgState>>({});
+  const [panel, setPanel] = useState<'closed' | 'open' | 'confirm'>('closed');
   const onOrg = useCallback((w: string, s: OrgState | null) => {
     setStates((cur) => {
       if (s === null) {
@@ -135,6 +139,8 @@ export function OffProvider({ children }: { children: ReactNode }) {
       summary: summarizeOff(orgs, agentName),
       cantRun,
       agentName,
+      panel,
+      setPanel,
       turnOff: async (input) => {
         if ('all' in input) await Promise.all(order.map((w) => write(w, { all: true })));
         else await write(wid, { all: false, agents: input.agents });
@@ -145,7 +151,7 @@ export function OffProvider({ children }: { children: ReactNode }) {
         );
       },
     };
-  }, [order, states, actionContext, run, agentName, wid]);
+  }, [order, states, actionContext, run, agentName, wid, panel]);
   return (
     <Ctx.Provider value={value}>
       {children}
