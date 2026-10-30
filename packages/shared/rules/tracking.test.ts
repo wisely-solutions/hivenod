@@ -93,6 +93,14 @@ describe('every domain write carries an event', () => {
     await denied(ag.run([eventOp(ag, 'e1', { type: 'decision.approved', itemId: 'gated' })]));
     await ok(ag.run([eventOp(ag, 'e2', { type: 'run.started' })]));
   });
+  it('ATTACK: denies an agent writing a human-only workspace event with no project', async () => {
+    const ag = as(AGENTS.a);
+    const over = { type: 'workspace.updated', projectId: null };
+    await denied(ag.run([eventOp(ag, 'e1', over)]));
+    // control: the same event by a member is allowed
+    const a = as('alice');
+    await ok(a.run([eventOp(a, 'e2', over)]));
+  });
   it('ATTACK: denies an agent event outside its projects or without a project', async () => {
     const ag = as(AGENTS.a);
     await denied(ag.run([eventOp(ag, 'e1', { type: 'run.started', projectId: 'p2' })]));

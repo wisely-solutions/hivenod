@@ -181,7 +181,7 @@ test.describe('desktop 1440', () => {
         'data-outcome-state',
         'proposed',
       );
-      // The card follows the local write at once; the server copy a moment later.
+      // The cancel write lands after the card flips: wait for it, don't read once.
       await expect
         .poll(async () => (await outcomeDoc(s)).revise?.nullValue, { timeout: 15_000 })
         .toBe(null);
