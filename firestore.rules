@@ -1468,9 +1468,6 @@ service cloud.firestore {
           && inboxTrackedThread(wid, request.resource.data.lastEventId, ['inbox.added'],
                request.resource.data.memberUid, tid)
           && inboxMessageIn(wid, request.resource.data.lastEventId, tid);
-        // Not now (item OE8FmrTaIxFVGcaeGG3N, slice 3): the member only; `updatedAt` stays (the
-        // summary stays fresh).
-        // (Last: the other branches are near the 1000-expression budget.)
         allow update: if (request.resource.data.updatedAt == request.time
           // Summaries (item OE8FmrTaIxFVGcaeGG3N): the home agent's mirror of the summary it wrote.
           && ((changed(['summary', 'updatedAt', 'lastEventId']) && isActiveAgent(wid)
@@ -1499,22 +1496,18 @@ service cloud.firestore {
             || (inboxOwner(wid, resource.data) && inboxInstructed(wid, tid, request.resource.data, resource.data))
             || (isActiveAgent(wid) && inboxInstructionAnswered(wid, tid, request.resource.data, resource.data))
             || (isActiveAgent(wid) && inboxChipsSuggested(wid, tid, request.resource.data, resource.data))))
-          || (request.resource.data.updatedAt == resource.data.updatedAt
-            && inboxOwner(wid, resource.data) && inboxNotNow(wid, tid, request.resource.data, resource.data));
+          || (inboxOwner(wid, resource.data) && inboxNotNow(wid, tid, request.resource.data, resource.data));
         allow delete: if false;
 
-        // Out of Today until a time within 48 hours, about the decision its event names, only
-        // while something waits for the member.
+        // Not now: updatedAt kept; last, for the expression budget.
         function inboxNotNow(wid, tid, d, r) {
+          let n = d.notNow;
           let e = inboxEv(wid, d.lastEventId).data.data;
-          return changed(['notNow', 'lastEventId'])
-            && r.state in ['needsYou', 'yourCall']
-            && exactKeys(d.notNow, ['until', 'key', 'at'])
-            && d.notNow.until is timestamp && d.notNow.until > request.time
-            && d.notNow.until <= request.time + duration.value(48, 'h')
-            && str(d.notNow.key, 1, 200) && d.notNow.at == request.time
+          return changed(['notNow', 'lastEventId']) && r.state in ['needsYou', 'yourCall']
+            && exactKeys(n, ['until', 'key', 'at']) && n.until > request.time
+            && n.until <= request.time + duration.value(48, 'h') && str(n.key, 1, 200) && n.at == request.time
             && inboxTrackedThread(wid, d.lastEventId, ['thread.not_now'], me(), tid)
-            && e.key == d.notNow.key && e.until == d.notNow.until;
+            && e.key == n.key && e.until == n.until;
         }
 
         // The mirror equals the summary written in this batch (its event is this write's). The
