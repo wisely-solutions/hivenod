@@ -126,9 +126,7 @@ test.beforeEach(async ({ page }) => {
   await freezeClock(page);
 });
 
-test('Agent settings: paused + Resume, guardrails saved, tokens and model shown', async ({
-  page,
-}) => {
+test('Agent settings: paused + Resume, guardrails saved, no project scope', async ({ page }) => {
   const { base } = await seed(page);
   await page.goto('/agents');
   const row = page.getByRole('listitem', { name: 'Scout' });
@@ -147,24 +145,16 @@ test('Agent settings: paused + Resume, guardrails saved, tokens and model shown'
   await expect(banner).toContainText('3 failed runs in a row');
 
   // Settings start from the defaults for an agent that never had them.
-  const settings = page.getByRole('region', { name: 'Allowed to work on' });
+  const settings = page.getByRole('region', { name: 'Works on' });
   await expect(settings.getByLabel('Stop after failed runs in a row')).toHaveValue('3');
   // No token limit and no permission chips: usage is tracked only, permissions are Claude Code's.
   await expect(settings.getByLabel(/Token limit/)).toHaveCount(0);
   await expect(settings.getByText(/Allowed when unattended/)).toHaveCount(0);
   await expect(settings.getByText(/set in that machine’s Claude Code settings/)).toBeVisible();
-  await expect(settings.getByRole('button', { name: 'All projects' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  // Projects were removed (OE8Fm slice 10): no project or step picker.
+  await expect(settings.getByRole('button', { name: 'All projects' })).toHaveCount(0);
+  await expect(settings.getByText(/threads and plans of the Inbox/)).toBeVisible();
   await expect(settings.getByText('Ask in Hivenod (Needs you)')).toBeVisible();
-  await expect(
-    settings.getByText('Gates are never decided by agents.', { exact: false }),
-  ).toBeVisible();
-
-  // Tokens: new = 50,000 - 40,000 cached + 2,000 out; the model.
-  await expect(page.getByTestId('kpi-tokens')).toHaveText('12k');
-  await expect(page.getByTestId('kpi-models')).toHaveText('claude-opus-5-5');
   await expectNoHorizontalScroll(page);
   await shot(page, 'agent-settings');
 
@@ -175,9 +165,7 @@ test('Agent settings: paused + Resume, guardrails saved, tokens and model shown'
     .toBe('0');
   expect((await adminDoc(`${base}/agents/scout`))?.fields.pausedAt?.nullValue).toBeNull();
 
-  // Change the guardrails, limit it to one project.
-  await settings.getByRole('button', { name: 'All projects' }).click();
-  await settings.getByRole('button', { name: /Blog/ }).click();
+  // Change the guardrails.
   await settings.getByLabel('Stop after failed runs in a row').fill('0');
   await settings.getByRole('button', { name: 'Save settings' }).click();
   await expect(settings.getByText('A whole number from 1 to 20.')).toBeVisible();
@@ -190,22 +178,8 @@ test('Agent settings: paused + Resume, guardrails saved, tokens and model shown'
   const doc = await adminDoc(`${base}/agents/scout`);
   // Nothing is written for permissions any more.
   expect(doc?.fields.permissions).toBeUndefined();
-  expect(
-    doc?.fields.projectIds?.arrayValue.values.map((v: { stringValue: string }) => v.stringValue),
-  ).toEqual(['blog']);
-
-  // Run details: new tokens in / out, cache reads apart, the model.
-  const runs = page.getByRole('list', { name: 'Runs' });
-  await runs.getByRole('button', { name: /Launch post/ }).click();
-  await expect(page.getByTestId('run-tokens')).toHaveText('10,000 / 2,000');
-  await expect(page.getByTestId('run-cached')).toHaveText('40,000');
-  // The run's Remote Control session opens on claude.ai/code (card OPpbi0MS).
-  await expect(page.getByTestId('run-remote')).toHaveAttribute(
-    'href',
-    'https://claude.ai/code/session_01FakeRemoteSession42',
-  );
-  await expect(runs.getByText('claude-opus-5-5')).toBeVisible();
-  await shot(page, 'agent-run-tokens');
+  // The legacy project scope is left as it was.
+  expect(doc?.fields.projectIds?.stringValue).toBe('*');
 
   await settle(page);
   const { violations } = await new AxeBuilder({ page })
@@ -215,4 +189,3 @@ test('Agent settings: paused + Resume, guardrails saved, tokens and model shown'
     violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
   ).toEqual([]);
 });
-

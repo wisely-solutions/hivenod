@@ -2,30 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { adminSet, person, projectFields, signIn, uidOf, workspaceOf } from './helpers';
 
 const rand = () => Math.random().toString(36).slice(2, 8);
-const LIMIT_MS = 2500; // acceptance: a change shows within ~2 s, without a refresh
-
-const item = (uid: string, over: Record<string, unknown>) => ({
-  title: 'Seeded',
-  type: 'idea',
-  stepId: 'draft',
-  status: 'queued',
-  summary: 'Seed',
-  source: { kind: 'manual', label: 'Test' },
-  createdBy: { type: 'human', id: uid },
-  parentItemId: null,
-  sourceRunId: null,
-  claim: null,
-  progress: null,
-  gate: null,
-  triage: null,
-  sendBackCount: 0,
-  costEur: 0,
-  order: 1,
-  updatedAt: new Date(),
-  lastEventId: 'seed',
-  ...over,
-});
-
 async function seed(page: Page) {
   const owner = person('Rita Realtime');
   await page.goto('/');
@@ -41,14 +17,6 @@ async function seed(page: Page) {
   const pid = `rt${rand()}`;
   await adminSet(`workspaces/${wid}/projects/${pid}`, projectFields('Blog', uid));
   return { wid, uid, pid };
-}
-
-/** Writes with the admin helper (as another browser would), then times until `visible` shows. */
-async function delay(write: () => Promise<void>, visible: () => Promise<void>): Promise<number> {
-  const t0 = Date.now();
-  await write();
-  await visible();
-  return Date.now() - t0;
 }
 
 test('a silently dropped connection shows Reconnecting within ~10 s, and clears when it is back', async ({

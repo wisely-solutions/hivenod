@@ -1,13 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import {
-  adminDoc,
-  adminSet,
-  person,
-  signIn,
-  uidOf,
-  workspaceOf,
-  fastTimers,
-} from './helpers';
+import { adminDoc, adminSet, person, signIn, uidOf, workspaceOf, fastTimers } from './helpers';
 
 // Card M0Caulbg: with Firestore unreachable and a cold cache the SDK raises no error, it serves
 // empty cached snapshots. Screens must say "Can't reach the server" with Retry, never show an

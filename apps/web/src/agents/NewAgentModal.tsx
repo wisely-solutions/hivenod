@@ -2,7 +2,6 @@ import { Check } from 'lucide-react';
 import { useState } from 'react';
 import { useReady } from '../auth/context';
 import { ResponsiveModal } from '../components/ResponsiveModal';
-import { useShellData } from '../shell/data';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 import { Input, RadioCards } from '../ui/form';
@@ -13,7 +12,10 @@ import { createAgentFlow } from './flow';
 export interface AgentFieldsValue {
   name: string;
   color: number;
-  /** 'inbox': Inbox only, no projects (item fJnu6). */
+  /**
+   * 'inbox': Inbox only, no projects (item fJnu6). 'some' (chosen projects) is legacy: Projects were
+   * removed (item OE8FmrTaIxFVGcaeGG3N, slice 10) and the form no longer offers it.
+   */
   scope: 'all' | 'some' | 'inbox';
   chosen: string[];
 }
@@ -40,7 +42,7 @@ export function validateAgentFields(v: AgentFieldsValue): AgentFieldErrors {
   return next;
 }
 
-/** Name, colour and allowed projects: shared by the token dialog and the Connect page. */
+/** Name, colour and what it works on: shared by the token dialog and the Connect page. */
 export function AgentFields({
   value,
   onChange,
@@ -50,13 +52,10 @@ export function AgentFields({
   onChange: (v: AgentFieldsValue) => void;
   errors: AgentFieldErrors;
 }) {
-  const { projects } = useShellData();
-  const live = projects.filter((p) => !p.data.archivedAt);
-  const { name, color, scope, chosen } = value;
+  const { name, color, scope } = value;
   const setName = (name: string) => onChange({ ...value, name });
   const setColor = (color: number) => onChange({ ...value, color });
   const setScope = (scope: AgentFieldsValue['scope']) => onChange({ ...value, scope });
-  const setChosen = (fn: (c: string[]) => string[]) => onChange({ ...value, chosen: fn(chosen) });
   return (
     <>
       <Input
@@ -103,15 +102,14 @@ export function AgentFields({
 
       <div className="flex flex-col gap-2">
         <RadioCards
-          label="Allowed projects"
-          value={scope}
+          label="Works on"
+          value={scope === 'inbox' ? 'inbox' : 'all'}
           onValueChange={(v) => setScope(v as AgentFieldsValue['scope'])}
           options={[
-            { value: 'all', title: 'All projects', description: 'Including ones you add later.' },
             {
-              value: 'some',
-              title: 'Chosen projects',
-              description: 'Only the ones you tick below.',
+              value: 'all',
+              title: 'Inbox and development plans',
+              description: 'Threads, plans and their development steps.',
             },
             {
               value: 'inbox',
@@ -121,39 +119,6 @@ export function AgentFields({
             },
           ]}
         />
-        {scope === 'some' ? (
-          <fieldset className="flex flex-col rounded-card border border-line">
-            <legend className="sr-only">Projects this agent can use</legend>
-            {live.length === 0 ? (
-              <p className="p-3.5 text-14 text-text-2">
-                No projects yet. Choose “All projects”, or add a project first.
-              </p>
-            ) : (
-              live.map((p, i) => (
-                <label
-                  key={p.id}
-                  className={cn(
-                    'flex min-h-11 cursor-pointer items-center gap-3 px-3.5 text-14 text-ink',
-                    i > 0 && 'border-t border-line',
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    className="size-5 accent-[var(--ink)]"
-                    checked={chosen.includes(p.id)}
-                    onChange={(e) =>
-                      setChosen((c) =>
-                        e.target.checked ? [...c, p.id] : c.filter((x) => x !== p.id),
-                      )
-                    }
-                  />
-                  <span aria-hidden>{p.data.emoji}</span>
-                  <span className="truncate">{p.data.name}</span>
-                </label>
-              ))
-            )}
-          </fieldset>
-        ) : null}
         {errors.projects ? <p className="text-13 text-sendback">{errors.projects}</p> : null}
       </div>
     </>

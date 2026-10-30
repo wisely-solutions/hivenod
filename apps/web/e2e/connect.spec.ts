@@ -222,7 +222,7 @@ test('an expired request is refused; Decline stops the terminal; a pair code goe
 for (const theme of ['light', 'dark'] as const) {
   test(`the confirm page is axe-clean in ${theme}`, async ({ page }, info) => {
     await page.emulateMedia({ colorScheme: theme });
-    await asMember(page, 'Axel Confirm');
+    await asAdmin(page, 'Axel Confirm');
     const term = await asTerminal();
     const shots = process.env.SHOTS_DIR;
     const snap = async (name: string) => {
@@ -268,7 +268,7 @@ test('Connect Claude Code: one line for everyone, and the page flips live when t
   page,
   context,
 }) => {
-  const { wid } = await asMember(page, 'Lena Live');
+  const { wid } = await asAdmin(page, 'Lena Live');
   await page.goto('/connect');
   const main = page.getByRole('main');
   await expect(main.getByRole('heading', { name: 'Connect Claude Code' })).toBeVisible();

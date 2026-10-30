@@ -427,12 +427,10 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await page.getByRole('dialog').getByRole('button', { name: 'Move', exact: true }).click();
     await expect(page.getByRole('link', { name: 'Payments review (Thursday)' })).toBeVisible();
 
-    // Make it work: an item made by the member, linked on the thread.
-    await threadMenu('Make it work…');
-    const mw = page.getByRole('dialog');
-    await mw.getByLabel('Item title').fill('Book a room for the payments review');
-    await mw.getByRole('button', { name: 'Create item' }).click();
-    await expect(page.getByText(/You made an item of it: .Book a room/)).toBeVisible();
+    // Make it work (an item in a project) went with Projects (OE8Fm slice 10).
+    await page.getByRole('button', { name: 'Thread actions' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Make it work…' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     // Urgent: the agent flags it, the member takes it off.
     await agent.flag(t2, true);

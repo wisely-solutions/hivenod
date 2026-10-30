@@ -141,9 +141,7 @@ test('a member can leave the organization; the only admin cannot', async ({ page
   await maxSide.ctx.close();
 });
 
-test('one person, several organizations: create, switch, and keep them apart', async ({
-  page,
-}) => {
+test('one person, several organizations: create, switch, and keep them apart', async ({ page }) => {
   test.setTimeout(90_000);
   const who = person('Sam Several');
   await page.goto('/');
@@ -167,7 +165,6 @@ test('one person, several organizations: create, switch, and keep them apart', a
   // The link banner must not appear after creating an org (card fBvI3nno: it used to stick).
   await page.waitForTimeout(8000);
   await expect(page.getByTestId('reconnecting')).toHaveCount(0);
-
 
   // Switch back with the switcher: both are listed, the old data is back.
   await openSwitcher(page);
