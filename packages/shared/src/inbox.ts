@@ -262,12 +262,7 @@ export const RETIRED_MESSAGE = (type: string) =>
   `${type} was retired with Calendar: bookings are no longer made through Hivenod. Reject it, or propose a reply that suggests times.`;
 
 /** The outcome types with text worth revising (the others are a one-tap decision). */
-export const REVISABLE_TYPES: readonly string[] = [
-  'reply',
-  'nudge',
-  'handover',
-  'make_it_work',
-];
+export const REVISABLE_TYPES: readonly string[] = ['reply', 'nudge', 'handover', 'make_it_work'];
 
 const by = z.object({ type: z.enum(['human', 'agent']), id: z.string() });
 
@@ -1824,7 +1819,8 @@ export function approvePlan(
     outcomes: changes,
     ...(pl.plan.state === 'proposed' ? { state: 'active' as const } : {}),
   });
-  for (const id of ids) need(!isRetiredOutcome(pl.outcomes[id]!.type), RETIRED_MESSAGE(pl.outcomes[id]!.type));
+  for (const id of ids)
+    need(!isRetiredOutcome(pl.outcomes[id]!.type), RETIRED_MESSAGE(pl.outcomes[id]!.type));
   const p = inboxPlan(
     ctx,
     'plan.approved',

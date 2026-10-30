@@ -92,20 +92,25 @@ effect on approval and sends nothing. The web app gathers a proposal into the To
 tidy-ups card, which the member approves in one batch, only when all of these hold: its type is
 batchable, its `confidence` is `high`, the thread isn't urgent and has no `due` within 7 days,
 and it's the thread's only open proposal. The flag isn't in the rules: approving is always the
-member's own write. Never mark a type that sends or books as batchable.
+member's own write. Never mark a type that sends as batchable.
 
 The initial types:
 
-| Type           | Fields                         | Carried out by                                   | Thread state when done   |
-| -------------- | ------------------------------ | ------------------------------------------------ | ------------------------ |
-| `reply`        | text, holding?                 | the home agent                                   | waiting on them          |
-| `reply_book`   | text, start, end, with, title? | the home agent (the booking is made on approval) | waiting on them          |
-| `no_reply`     | reason?                        | takes effect on approval                         | done                     |
-| `make_it_work` | title, brief?, project?        | the home agent                                   | waiting on the item      |
-| `handover`     | to, note?                      | the home agent                                   | waiting on a third party |
-| `snooze`       | until                          | takes effect on approval                         | waiting until the date   |
-| `nudge`        | text                           | the home agent                                   | waiting on them          |
-| `ignore`       | reason?                        | takes effect on approval                         | ignored                  |
+| Type           | Fields                  | Carried out by           | Thread state when done   |
+| -------------- | ----------------------- | ------------------------ | ------------------------ |
+| `reply`        | text, holding?          | the home agent           | waiting on them          |
+| `no_reply`     | reason?                 | takes effect on approval | done                     |
+| `make_it_work` | title, brief?, project? | the home agent           | waiting on the item      |
+| `handover`     | to, note?               | the home agent           | waiting on a third party |
+| `snooze`       | until                   | takes effect on approval | waiting until the date   |
+| `nudge`        | text                    | the home agent           | waiting on them          |
+| `ignore`       | reason?                 | takes effect on approval | ignored                  |
+
+`reply_book` and `book` (bookings) were **retired with Calendar** (item OE8FmrTaIxFVGcaeGG3N,
+slice 5): they stay in the registry with `retired: true` so old records still read ("Booking
+(retired)"), but nobody proposes, revises or approves one any more (the actions refuse, and the
+rules have no field lists for them). An old proposed one can only be rejected; an old approved
+one can still be reported done by its executor.
 
 An outcome's life:
 
@@ -122,8 +127,8 @@ An outcome's life:
 ### Ask for changes (item L7OzWKMYZ1O2dX33Xkrj)
 
 Instead of rejecting a proposal and waiting for a new one, the member can ask the agent that
-proposed it to change it. It works on the types with text: `reply`, `reply_book`, `nudge`,
-`handover` and `make_it_work`.
+proposed it to change it. It works on the types with text: `reply`, `nudge`, `handover` and
+`make_it_work`.
 
 1. **The member asks** (`requestRevision`, event `outcome.revise_requested`, member): quick
    chips (`shorter`, `formal`, `warmer`, `availability`) and/or an instruction of 1-500
@@ -169,7 +174,7 @@ message, new facts. The member can ask the thread's home agent to run its checks
    changes: the proposals stay as they are and the member can still approve them.
 2. **The home agent gets a `recheck` inbox event** (priority 1, like `revise`; a listener on
    `fetchedBy == me` and `recheck.state == 'pending'`, one event per request). It re-reads the
-   thread, the new messages, `calendar_free` and the context, then for each open proposal
+   thread, the new messages and the context, then for each open proposal
    (`proposed`) and each step of a live plan that has not run (`approved`, not at the cursor:
    `recheckable`) it either keeps it, or writes its next version with `outcome_propose
 revises=<id>` (allowed unasked while the request is pending; the version's `asked` is null;
@@ -220,7 +225,7 @@ refId?, note?)` (`answerInstruction`, event `thread.instruction_answered`): `not
 **Chips.** The **Re-check** chip asks for a Re-check (above); the others send an instruction.
 The browser shows at most 3 (`packages/shared/src/chips.ts`, nothing stored): the home agent's
 suggestions first (`suggestedChips`, 0-5, set with `thread_suggest_chips`, event
-`thread.chips_suggested`), then those that fit now: **Prepare for the meeting** (a `reply_book`
+`thread.chips_suggested`), then those that fit now: **Prepare for the meeting** (an old `reply_book`
 or `book` outcome approved or done, starting in the next 7 days), **Re-check** (an open proposal
 or unrun plan step may be out of date, and a Re-check may be asked), **Follow up** (waiting on
 them, no message for 3 days), **Summarize** (8 messages or more), **Draft a reply** (nothing
@@ -234,33 +239,13 @@ request (the note, or a link to the question, proposal or plan), and both are on
 timeline. An instruction needs CLI `instruct` in `cliversion.ts`; the line says when the home
 agent is older.
 
-### Bookings (`reply_book`, item w9SAf)
+### Bookings (removed with Calendar)
 
-Approving a `reply_book` outcome also books the meeting, in the same batch: `approveOutcome`
-adds a `calendarUpsert` as the member, for the member's own calendar in this organization
-(source `hivenod`, sourceEventId = the outcome id, so `bookingEventId(member, outcomeId)` finds
-it; title = `title` or "Meeting with <with>"; attendees from `with`). The member's busy time is
-updated with it, so `calendar_free` sees the slot taken at once. The home agent then sends the
-reply and the invite, mirrors the event to the source calendar and reports `outcome_done`.
-
-**Mirroring the booking (item fJnu6).** The home agent creates the meeting in the member's own
-calendar with its own access (for the personal agent in the Personal organization: their Google
-Calendar, inviting the people in `with`; Hivenod never connects to Google). Then it calls
-`calendar_mirror` (`hivenod calendar mirror <outcomeId> <sourceEventId> [--source google]`) with
-that calendar's event id. In one batch (`calendarMirror`), the booking becomes that event: the
-`hivenod` event is soft-deleted and its busy block freed, and the same meeting is saved as
-`google/<event id>` with its busy block. So the agent's next calendar sync updates it instead of
-counting the meeting twice. It is refused unless the outcome is an approved (or done)
-`reply_book`, and calling it again changes nothing. Pass `--from/--to` (MCP `start`/`end`) or
-`--title` only when the calendar changed the meeting. Then it sends the reply and reports
-`outcome_done`. The order for the personal agent:
-
-1. `inbox_list`: the approved `reply_book` outcomes it carries out (`toCarryOut`).
-2. Create the event in Google (its fields: `start`, `end`, `title` or "Meeting with <with>",
-   attendees from `with`), with the invites.
-3. `calendar_mirror` with the Google event id.
-4. Send the reply (`text`) on the thread's channel, as the member.
-5. `outcome_done` with the reply's permalink.
+Bookings went with Calendar (item OE8FmrTaIxFVGcaeGG3N, slice 5): approving never writes a
+calendar event, and there is no `calendar_*` tool or `hivenod calendar` command any more (an old
+CLI's calendar calls are refused by the rules). To offer a time, propose a `reply` that suggests
+it. The old calendar data stays, unread by the app, until the export (slice 7) and the deletion
+script (slice 11).
 
 ### Plans (item qwFAWxZM5xkcE7PPjAzi)
 
@@ -271,15 +256,15 @@ holds the order (`steps`) and whose turn it is (`cursor`). The pure model is
 `packages/shared/src/plans.ts` (`planView`, `singlePlanView`, `planThreadState`); the actions are
 in `inbox.ts`.
 
-- **Step types.** A plan may hold reply, reply_book, book, nudge, handover, make_it_work, snooze
-  (as "wait until") and approval, never no_reply or ignore. `approval` (kind `human`: what,
-  detail?, link?) is a gate the member decides; `book` (start, end, with, title?) books without a
-  reply. Both are plan-only: `outcome_propose` refuses them alone.
+- **Step types.** A plan may hold reply, nudge, handover, make_it_work, snooze (as "wait
+  until") and approval, never no_reply or ignore (nor the retired bookings). `approval` (kind
+  `human`: what, detail?, link?) is a gate the member decides; it is plan-only:
+  `outcome_propose` refuses it alone.
 - **Proposing** (`proposePlan`, agent): the plan, its steps and one `plan.proposed` event in one
   batch, so the member never sees half a plan. The thread goes to Your call.
 - **Approving.** `approvePlan` (`plan.approved`): every proposed agent step is approved at the
-  version on show, unedited; gates and steps being revised are left as they are; booking steps
-  book on approval, as `reply_book`. `approveOutcome` approves one agent step any time before it
+  version on show, unedited; gates and steps being revised are left as they are (a plan with an
+  old booking step is refused). `approveOutcome` approves one agent step any time before it
   runs (with Edit and a chosen version). Approving early never runs a step early.
 - **Order.** A step is carried out only at the cursor (the rules refuse any other), and
   reporting it done moves the cursor by exactly one. A gate is decided only at its
@@ -302,7 +287,7 @@ in `inbox.ts`.
   until → waiting until its date; an approved agent step → the last agent step's after-state
   (Your call for the first); all through → the last agent step's after-state; stopped →
   investigating.
-- **Batch size.** Approve plan and Reject plan with 8 steps (all bookings) fit in one batch: the
+- **Batch size.** Approve plan and Reject plan with 8 steps fit in one batch: the
   rules tests run the worst case on the emulator (within Firestore's 20 reads per batch).
 
 ### Summaries (item OE8FmrTaIxFVGcaeGG3N, slice 1)
@@ -556,7 +541,7 @@ older records stay valid.
   "Sure", "Likely" or "Unsure" with a 3-bar meter. Use `high` only when every fact the outcome
   relies on is verified, and `low` when guessing what they want. Written only on create.
 - **`checks`** (`outcome_propose`, CLI `--check`, repeatable): what the agent verified, at most 6
-  lines of 1-200 characters, e.g. "Your calendar: Thu 10:00-11:00 free".
+  lines of 1-200 characters, e.g. "Ticket 412: fixed in release 38".
 - **`due`** (`thread_due`): a deadline stated in the thread. Its agents or its member set or clear
   it with a `thread.due` event (data `{due, reason}`). Today's rank: band 1 is urgent or due
   within 24 hours (or past), band 2 is due within 7 days, then `needsYou`, then `yourCall`.
@@ -701,7 +686,7 @@ last event id it handled (`lastEventId`):
   registry's word, e.g. Send for a reply) or **Reject** counts down on the pressed button with
   Undo before it is written. The member can also move the thread to another subject, mark it
   done, ignore it, bring it back, mark it urgent or not (`flagThread`), and **Make it work**.
-  An approved `reply_book` shows the slot it booked.
+  An old approved `reply_book` still shows the slot it booked.
 - **Ask for changes** (Today card, the thread page's agent panel and its phone bottom sheet,
   key C): a box with four toggle chips (Shorter, More formal, Warmer, Add my availability), a
   textarea with a 500-character counter and **Ask agent** (⌘↵). While the agent revises, a

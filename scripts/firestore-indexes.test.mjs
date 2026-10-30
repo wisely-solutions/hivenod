@@ -412,13 +412,14 @@ describe('the repository', () => {
     expect(results.length).toBeGreaterThan(10);
   });
 
-  it('scans the Go CLI queries (15, with the live plans and running steps of item qwFAW, the re-check watch of item bmNoI, the instruct watch of item w6O2K, the summaries watch of item OE8Fm and its thread attachment kinds) and finds calendar (memberUid, end) in firestore.indexes.json', () => {
+  it('scans the Go CLI queries (13, with the live plans and running steps of item qwFAW, the re-check watch of item bmNoI, the instruct watch of item w6O2K, the summaries watch of item OE8Fm and its thread attachment kinds; the calendar ones went with Calendar, OE8Fm slice 5)', () => {
     const { problems, results, unanalysable } = guard(root);
     expect(problems).toEqual([]);
     const go = results.filter((r) => r.file.startsWith('cli/'));
-    expect(go).toHaveLength(15);
-    const cal = go.find((r) => r.shape.group === 'calendar');
-    expect(cal?.result.via).toBe('composite');
+    expect(go).toHaveLength(13);
+    expect(
+      go.find((r) => r.shape.group === 'calendar' || r.shape.group === 'busy'),
+    ).toBeUndefined();
     expect(unanalysable.filter((u) => u.file.startsWith('cli/'))).toHaveLength(1);
   });
 });

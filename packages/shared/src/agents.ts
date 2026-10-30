@@ -34,12 +34,7 @@ export function inboxOnly(agent: Pick<Agent, 'scope'>): boolean {
  * refused up front, with a clear message (the rules refuse the writes anyway). Mirrored in Go by
  * cli/internal/hive/scope.go.
  */
-export const INBOX_SCOPE_TOOL_PREFIXES = [
-  'inbox_',
-  'thread_',
-  'subject_',
-  'outcome_',
-] as const;
+export const INBOX_SCOPE_TOOL_PREFIXES = ['inbox_', 'thread_', 'subject_', 'outcome_'] as const;
 
 /** Whether an agent of this scope may call this tool. */
 export function toolInScope(agent: Pick<Agent, 'scope'>, tool: string): boolean {
