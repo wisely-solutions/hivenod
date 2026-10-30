@@ -7,8 +7,12 @@
 
 /** Google's limit: compiled executables must be smaller than this. */
 export const RULES_COMPILED_LIMIT = 256000;
-/** Our budget for the compiled size (about 8% headroom under the limit). */
-export const RULES_COMPILED_BUDGET = 235000;
+/**
+ * Our budget for the compiled size. Lowered to about 15% above the rules after Projects were
+ * removed (OE8Fm slice 11: 126660 bytes measured, 121065 estimated), so they cannot creep back
+ * towards the limit.
+ */
+export const RULES_COMPILED_BUDGET = 145000;
 
 /** The compiled size from Google's 400 message, or null. */
 export function parseCompiledSize(text) {
@@ -27,10 +31,13 @@ export function padRules(src, n) {
   const at = src.indexOf('service cloud.firestore {');
   if (at < 0) throw new Error('padRules: no "service cloud.firestore {" block');
   const j = src.indexOf('{', at) + 1;
-  const terms = Array.from({ length: 20 }, (_, i) => `x == ${i}`).join(' || ');
+  // One long string per pad: it adds compiled bytes but almost no compile time, so padding small
+  // rules up to the limit stays within Google's ~6 s compile deadline (20 comparisons per pad did
+  // not once the rules were about half the limit, OE8Fm slice 11).
+  const filler = 'z'.repeat(400);
   let pad = '\n';
   for (let k = 0; k < n; k++) {
-    pad += `  function zzSizePad${String(k).padStart(5, '0')}(x) { return ${terms}; }\n`;
+    pad += `  function zzSizePad${String(k).padStart(5, '0')}(x) { return x == '${String(k).padStart(5, '0')}${filler}'; }\n`;
   }
   return src.slice(0, j) + pad + src.slice(j);
 }

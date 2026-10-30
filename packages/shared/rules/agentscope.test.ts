@@ -6,37 +6,14 @@
  */
 import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { describe, expect, it } from 'vitest';
-import {
-  claimItem,
-  createAgent,
-  createItem,
-  raiseFinding,
-  rotateAgent,
-  updateAgentSettings,
-  type ItemState,
-} from '../src/actions';
+import { createAgent, rotateAgent, updateAgentSettings } from '../src/actions';
 import { paths } from '../src/schema';
-import {
-  as,
-  denied,
-  I,
-  itemDoc,
-  now,
-  ok,
-  P,
-  projectDoc,
-  put,
-  snap,
-  steps,
-  useEmulator,
-  W,
-} from './harness';
+import { as, denied, LEGACY, now, ok, put, snap, useEmulator, W } from './harness';
 
 useEmulator();
 
 const INBOX = 'agentInbox';
 const A = (uid: string) => paths.agent(W, uid);
-const queued = itemDoc() as unknown as ItemState;
 
 /** An Inbox and Calendar agent as stored. `over` lets a test seed a forged doc. */
 function inboxAgent(over: Record<string, unknown> = {}) {
@@ -184,41 +161,10 @@ describe('refused on development items', () => {
     // A doc forged around the rules (seeded directly) still gets nothing: the scope wins.
     await seedInbox({ projectIds: '*' });
     const a = as(INBOX);
-    await denied(getDoc(doc(a.db, P('p1'))));
-    await denied(getDoc(doc(a.db, I('i1'))));
-    await denied(getDocs(collection(a.db, `${P('p1')}/items`)));
-    await denied(getDoc(doc(a.db, paths.event(W, 'seed'))));
-  });
-
-  it('claims nothing, creates no item and raises no finding', async () => {
-    await seedInbox({ projectIds: '*' });
-    await put({ [P('p1')]: projectDoc({}, { agentsMayCreateItems: true }) });
-    const a = as(INBOX);
-    await denied(
-      a.run(claimItem(a.ctx, { projectId: 'p1', itemId: 'i1', item: queued, runId: 'runX' })),
-    );
-    await denied(
-      a.run(
-        createItem(a.ctx, {
-          project: { steps: steps(), agentsMayCreateItems: true },
-          projectId: 'p1',
-          title: 'x',
-          type: 'task',
-        }),
-      ),
-    );
-    await denied(
-      a.run(
-        raiseFinding(a.ctx, {
-          project: { steps: steps() },
-          projectId: 'p1',
-          parentItemId: 'i1',
-          parent: { title: 'x', claim: null },
-          title: 'Found',
-          details: 'Something',
-        }),
-      ),
-    );
+    await denied(getDoc(doc(a.db, LEGACY.project)));
+    await denied(getDoc(doc(a.db, LEGACY.item)));
+    await denied(getDocs(collection(a.db, `${LEGACY.project}/items`)));
+    await denied(getDoc(doc(a.db, LEGACY.projectEvent)));
   });
 });
 

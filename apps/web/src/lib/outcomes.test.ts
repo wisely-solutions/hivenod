@@ -1,17 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { effectLines, isSentBack, outcomeName } from './outcomes';
-
-describe('outcomes', () => {
-  it('counts only sentBack as sent back', () => {
-    expect(isSentBack('sentBack')).toBe(true);
-    for (const o of ['approved', 'stopped', 'answered'] as const) expect(isSentBack(o)).toBe(false);
-  });
-  it('names outcomes as the app does', () => {
-    expect(outcomeName('approved')).toBe('Approved');
-    expect(outcomeName('sentBack')).toBe('Sent back');
-    expect(outcomeName('stopped')).toBe('Stopped');
-  });
-});
+import { effectLines } from './outcomes';
 
 describe('effectLines (item kt3E7, design 3.8)', () => {
   it('a retired booking is never approved (Calendar removed, slice 5)', () => {
@@ -25,9 +13,11 @@ describe('effectLines (item kt3E7, design 3.8)', () => {
       lead: 'When you approve, it takes effect at once:',
       lines: ['Ignore the thread; nothing is sent'],
     });
-    expect(effectLines('make_it_work', { title: 'Fix it' }, { agent: 'A' }).lines).toEqual([
-      'Create the item “Fix it”',
-      'Keep the thread waiting on the item',
-    ]);
+  });
+  it('a retired Build it step is never approved (Projects removed, slice 11)', () => {
+    expect(effectLines('make_it_work', { title: 'Fix it' }, { agent: 'A' })).toEqual({
+      lead: 'Items were removed with Projects:',
+      lines: ['This proposal can only be rejected'],
+    });
   });
 });

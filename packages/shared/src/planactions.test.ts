@@ -89,7 +89,12 @@ describe('proposePlan', () => {
       thread: TH,
       note: ' Thursday, then the price list ',
       confidence: 'medium',
-      steps: STEPS,
+      // make_it_work was retired with Projects: a new plan uses a hand over instead.
+      steps: STEPS.map((x) =>
+        x.type === 'make_it_work'
+          ? { type: 'handover', fields: { to: 'Website team', note: 'Update the price list' } }
+          : x,
+      ),
       planId: 'p1',
       stepIds: IDS,
     });

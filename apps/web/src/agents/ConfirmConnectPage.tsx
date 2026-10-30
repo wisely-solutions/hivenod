@@ -41,8 +41,6 @@ export function ConfirmConnectPage() {
   const [done, setDone] = useState<{ name: string } | null>(null);
   const [declined, setDeclined] = useState(false);
 
-  const who = { uid: session.me.uid, isAdmin: session.isAdmin };
-
   useEffect(() => {
     if (!linked) return;
     let live = true;
@@ -73,14 +71,7 @@ export function ConfirmConnectPage() {
     setFormError(undefined);
     const name = suggestedName(found.pairing);
     try {
-      await confirmConnectFlow(
-        ctx,
-        run,
-        who,
-        { name, color: colorValue(1), projectIds: [] },
-        found,
-        [],
-      );
+      await confirmConnectFlow(ctx, run, { name, color: colorValue(1), projectIds: [] }, found);
       setDone({ name });
     } catch {
       // Expired or used in the meantime: look again so the page says which.

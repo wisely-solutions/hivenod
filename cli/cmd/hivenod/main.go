@@ -30,21 +30,17 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod pair             pairs this machine with Hivenod (shows a code an admin confirms) and
                            saves the token; then install the hivenod plugin in Claude Code
   hivenod whoami           the agent this machine works as
-  hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...
-                           creates an item (work at the first step) where the project lets
-                           agents create items; at most 30 an hour
   hivenod inbox …, thread …, subject …, outcome …, plan …
                            a person's Inbox: bring messages in, file, note, ask, propose
                            outcomes, report them done
                            (hivenod inbox --help)
   hivenod logout           forgets the token saved by pairing
   hivenod mcp              MCP stdio server for Claude Code
-  hivenod mcp --channel [--project P] [--step S] [--max-items N | --max-steps N]
+  hivenod mcp --channel [--max-items N | --max-steps N] [--max-inbox N]
                            the same, as a Claude Code channel: a live session gets its work
-                           pushed in, claimed, up to N items at a time (default 1, or
-                           HIVENOD_MAX_ITEMS; protects this agent from too much work, it is not
-                           a total: add machines, each with its own agent, for more); [--max-inbox N]: Inbox threads sent at once,
-                           outside max_items (0-10, default 3, 0 is off; or HIVENOD_MAX_INBOX)
+                           pushed in as Inbox threads; N long plan steps (build, release) at a
+                           time (default 1, or HIVENOD_MAX_ITEMS); --max-inbox: Inbox threads
+                           sent at once (0-10, default 3, 0 is off; or HIVENOD_MAX_INBOX)
   hivenod update           installs the latest release (checks its SHA-256 checksum)
   hivenod version          the installed version (matches the Hivenod release)
 
@@ -83,6 +79,7 @@ func parse(args []string) (opts, []string, error) {
 	fs.BoolVar(&o.version, "v", false, "")
 	fs.BoolVar(&o.force, "force", false, "")
 	fs.BoolVar(&o.noStart, "no-start", false, "")
+	// --project / --step (and create-item's flags) stay parsed only to say projects were removed.
 	fs.StringVar(&o.project, "project", "", "")
 	fs.StringVar(&o.step, "step", "", "")
 	fs.StringVar(&o.maxItems, "max-items", "", "")
@@ -152,6 +149,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "hivenod: --server goes with connect or pair; the other commands use the server saved with the token.")
 		return 2
 	}
+	// Projects were removed (item OE8FmrTaIxFVGcaeGG3N, slice 11): --project / --step are refused.
+	if (o.project != "" || o.step != "") && pos[0] != "create-item" {
+		fmt.Fprintln(stderr, "hivenod: "+hive.ProjectsRemovedMessage+" Drop --project and --step.")
+		return 2
+	}
 	// The server saved with the token belongs to that token: HIVENOD_TOKEN ignores it.
 	saved := (*credentials.Stored)(nil)
 	if os.Getenv("HIVENOD_TOKEN") == "" {
@@ -213,39 +215,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return 0
 	case "create-item":
-		title := o.title
-		if title == "" && len(pos) > 1 {
-			title = pos[1]
-		}
-		if o.project == "" || title == "" {
-			fmt.Fprintln(stderr, `hivenod: Usage: hivenod create-item --project P --title "title" [--description "brief"] [--attach file|url]...`)
-			return 2
-		}
-		cfg, err := resolve()
-		if err != nil {
-			return fail(err)
-		}
-		c, err := hive.Connect(ctx, cfg, "")
-		if err != nil {
-			return fail(err)
-		}
-		defer c.Close()
-		r, err := c.CreateItem(ctx, o.project, title, o.description, o.attach)
-		if err != nil {
-			return fail(err)
-		}
-		if o.json {
-			say(hive.JSON(r))
-			return 0
-		}
-		say(fmt.Sprintf("Created item %s. %s", r.ItemID, r.Note))
-		for _, f := range r.Attachments {
-			say("  attached " + f.Name)
-		}
-		for _, e := range r.AttachErrors {
-			say("  not attached: " + e)
-		}
-		return 0
+		return fail(hive.Errf(hive.ProjectsRemovedMessage + " There is no create-item command any more: bring work in with hivenod inbox add."))
 	case "calendar":
 		return fail(hive.Errf(CalendarRemoved))
 	case "mcp":

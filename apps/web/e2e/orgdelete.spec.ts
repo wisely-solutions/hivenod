@@ -12,7 +12,6 @@ import {
   FIRESTORE_PORT,
   newPerson,
   person,
-  projectFields,
   signIn,
   uidOf,
   workspaceOf,
@@ -47,36 +46,11 @@ async function axe(page: Page) {
   ).toEqual([]);
 }
 
-/** One of everything the delete has to find, under a few levels of collections. */
+/** One of everything the delete has to find (Projects, runs and the calendar went in slice 11). */
 async function fill(wid: string, uid: string, agentUid: string) {
   const base = `workspaces/${wid}`;
-  await adminSet(`${base}/projects/a1`, projectFields('Alpha project', uid));
-  await adminSet(`${base}/projects/b1`, projectFields('Beta project', uid));
-  const item = {
-    title: 'An item',
-    type: 'idea',
-    stepId: 'draft',
-    status: 'queued',
-    summary: '',
-    order: 1,
-    updatedAt: new Date(),
-    lastEventId: 'seed',
-  };
-  await adminSet(`${base}/projects/a1/items/i1`, item);
-  await adminSet(`${base}/projects/a1/items/i2`, item);
-  await adminSet(`${base}/projects/b1/items/i1`, item);
-  await adminSet(`${base}/projects/a1/items/i1/messages/m1`, { text: 'hello' });
-  await adminSet(`${base}/projects/a1/items/i1/attachments/x1`, { name: 'x.md' });
-  await adminSet(`${base}/projects/a1/decisions/d1`, { note: 'ok' });
-  await adminSet(`${base}/projects/a1/stepProposals/s1`, { name: 'step' });
-  await adminSet(`${base}/runs/r1`, { projectId: 'a1', agentUid, status: 'done' });
-  await adminSet(`${base}/runs/r1/log/0`, { text: 'line' });
   await adminSet(`${base}/groups/g1`, { name: 'Team', memberUids: [uid], lastEventId: 'seed' });
   await adminSet(`${base}/notified/n1`, { at: new Date() });
-  // A calendar event with its busy block in the member's own store (it goes with the organization).
-  const ev = `${uid}_ev1`;
-  await adminSet(`${base}/calendar/${ev}`, { memberUid: uid, title: 'Standup' });
-  await adminSet(`users/${uid}/busy/${wid}_${ev}`, { workspaceId: wid, deleted: false });
   await adminSet(`${base}/agents/${agentUid}`, {
     name: 'Scout',
     color: 'agent-3',
@@ -91,22 +65,9 @@ async function fill(wid: string, uid: string, agentUid: string) {
   });
   return [
     base,
-    `${base}/projects/a1`,
-    `${base}/projects/b1`,
-    `${base}/projects/a1/items/i1`,
-    `${base}/projects/a1/items/i2`,
-    `${base}/projects/b1/items/i1`,
-    `${base}/projects/a1/items/i1/messages/m1`,
-    `${base}/projects/a1/items/i1/attachments/x1`,
-    `${base}/projects/a1/decisions/d1`,
-    `${base}/projects/a1/stepProposals/s1`,
-    `${base}/runs/r1`,
-    `${base}/runs/r1/log/0`,
     `${base}/groups/g1`,
     `${base}/notified/n1`,
     `${base}/agents/${agentUid}`,
-    `${base}/calendar/${ev}`,
-    `users/${uid}/busy/${wid}_${ev}`,
     `${base}/events/seed`,
     `${base}/members/${uid}`,
   ];
@@ -147,7 +108,7 @@ test('an admin deletes the organization: everything goes, the agent is cut off, 
     authEmulatorUrl: `http://localhost:${AUTH_PORT}`,
   });
   const gone = await fill(wid, uid, agent.uid);
-  expect(await agentCanRead(agent.token, `workspaces/${wid}/projects/a1`)).toBe(true);
+  expect(await agentCanRead(agent.token, `workspaces/${wid}/agents/${agent.uid}`)).toBe(true);
 
   // Max joins as a member; he has an organization of his own too.
   await page.goto('/settings/members');
@@ -184,8 +145,6 @@ test('an admin deletes the organization: everything goes, the agent is cut off, 
   await expect(dialog).toBeVisible();
   const list = dialog.getByRole('list', { name: 'What will be deleted' });
   await expect(list.getByText('2 members lose access')).toBeVisible();
-  await expect(list.getByText('2 projects')).toBeVisible();
-  await expect(list.getByText('3 items')).toBeVisible();
   await expect(list.getByText('1 agent disconnected')).toBeVisible();
   const go = dialog.getByRole('button', { name: 'Delete everything' });
   await expect(go).toBeDisabled();
@@ -218,7 +177,7 @@ test('an admin deletes the organization: everything goes, the agent is cut off, 
     )
     .toEqual([]);
   // The agent's token no longer reads anything.
-  expect(await agentCanRead(agent.token, `workspaces/${wid}/projects/a1`)).toBe(false);
+  expect(await agentCanRead(agent.token, `workspaces/${wid}/agents/${agent.uid}`)).toBe(false);
 
   // Ada's new organization is empty and works.
   await page.goto('/');
@@ -299,7 +258,7 @@ test('screenshots', async ({ page }, info) => {
       await page.goto('/settings/organization');
       await page.getByRole('button', { name: 'Delete organization' }).click();
       const d = page.getByRole('dialog', { name: /^Delete / });
-      await expect(d.getByText('2 projects')).toBeVisible();
+      await expect(d.getByText('1 agent disconnected')).toBeVisible();
       await d.getByLabel(/^Type .* to confirm$/).fill('Shot’s organization');
       await page.waitForTimeout(700);
       await page.screenshot({ path: `${dir}/delete-confirm-${name}-${theme}.png` });

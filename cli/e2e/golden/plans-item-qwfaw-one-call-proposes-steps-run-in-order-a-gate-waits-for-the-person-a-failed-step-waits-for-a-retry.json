@@ -16,7 +16,7 @@
     {
       "tool": "plan_propose",
       "ok": false,
-      "out": "MCP error -32602: Input validation error: Invalid arguments for tool plan_propose: steps[0].type: must be one of \"reply\", \"make_it_work\", \"handover\", \"snooze\", \"nudge\", \"shape\", \"build\", \"release\", \"approval\""
+      "out": "MCP error -32602: Input validation error: Invalid arguments for tool plan_propose: steps[0].type: must be one of \"reply\", \"handover\", \"snooze\", \"nudge\", \"shape\", \"build\", \"release\", \"approval\""
     },
     {
       "tool": "plan_propose",
@@ -31,7 +31,6 @@
         "planId": "<id>",
         "state": "proposed",
         "stepIds": [
-          "<id>",
           "<id>",
           "<id>",
           "<id>"
@@ -53,12 +52,6 @@
             "kind": "agent",
             "outcomeId": "<id>",
             "step": 3,
-            "type": "make_it_work"
-          },
-          {
-            "kind": "agent",
-            "outcomeId": "<id>",
-            "step": 4,
             "type": "reply"
           }
         ],
@@ -107,7 +100,7 @@
             "planId": "<id>",
             "result": null,
             "state": "proposed",
-            "step": "1 of 4",
+            "step": "1 of 3",
             "type": "reply"
           },
           {
@@ -125,26 +118,8 @@
             "planId": "<id>",
             "result": null,
             "state": "proposed",
-            "step": "2 of 4",
+            "step": "2 of 3",
             "type": "approval"
-          },
-          {
-            "checks": [],
-            "confidence": null,
-            "decision": null,
-            "executor": "<agent>",
-            "executorIsMe": true,
-            "fields": {
-              "project": "p1",
-              "title": "Update the price list"
-            },
-            "note": "",
-            "outcomeId": "<id>",
-            "planId": "<id>",
-            "result": null,
-            "state": "proposed",
-            "step": "3 of 4",
-            "type": "make_it_work"
           },
           {
             "checks": [],
@@ -160,7 +135,7 @@
             "planId": "<id>",
             "result": null,
             "state": "proposed",
-            "step": "4 of 4",
+            "step": "3 of 3",
             "type": "reply"
           }
         ],
@@ -170,7 +145,7 @@
             "cursor": 0,
             "note": "Confirm, get your OK on the prices, update the site, then tell Sam.",
             "planId": "<id>",
-            "progress": "Step 1 of 4",
+            "progress": "Step 1 of 3",
             "state": "proposed",
             "steps": [
               {
@@ -194,18 +169,9 @@
               {
                 "atCursor": false,
                 "kind": "agent",
-                "label": "Make it work",
-                "outcomeId": "<id>",
-                "step": 3,
-                "type": "make_it_work",
-                "ui": "proposed"
-              },
-              {
-                "atCursor": false,
-                "kind": "agent",
                 "label": "Reply",
                 "outcomeId": "<id>",
-                "step": 4,
+                "step": 3,
                 "type": "reply",
                 "ui": "proposed"
               }
@@ -251,7 +217,7 @@
             "member": "owner",
             "outcomeId": "<id>",
             "planId": "<id>",
-            "step": "1 of 4",
+            "step": "1 of 3",
             "threadId": "it4cbd6829b8b8fa4bc6781af5",
             "type": "reply"
           }
@@ -336,7 +302,7 @@
               "text": null
             },
             "state": "done",
-            "step": "1 of 4",
+            "step": "1 of 3",
             "type": "reply"
           },
           {
@@ -354,29 +320,8 @@
             "planId": "<id>",
             "result": null,
             "state": "proposed",
-            "step": "2 of 4",
+            "step": "2 of 3",
             "type": "approval"
-          },
-          {
-            "checks": [],
-            "confidence": null,
-            "decision": {
-              "edited": false,
-              "reason": null
-            },
-            "executor": "<agent>",
-            "executorIsMe": true,
-            "fields": {
-              "project": "p1",
-              "title": "Update the price list"
-            },
-            "note": "",
-            "outcomeId": "<id>",
-            "planId": "<id>",
-            "result": null,
-            "state": "approved",
-            "step": "3 of 4",
-            "type": "make_it_work"
           },
           {
             "checks": [],
@@ -395,7 +340,7 @@
             "planId": "<id>",
             "result": null,
             "state": "approved",
-            "step": "4 of 4",
+            "step": "3 of 3",
             "type": "reply"
           }
         ],
@@ -405,7 +350,7 @@
             "cursor": 1,
             "note": "Confirm, get your OK on the prices, update the site, then tell Sam.",
             "planId": "<id>",
-            "progress": "Step 2 of 4",
+            "progress": "Step 2 of 3",
             "state": "active",
             "steps": [
               {
@@ -429,18 +374,9 @@
               {
                 "atCursor": false,
                 "kind": "agent",
-                "label": "Make it work",
-                "outcomeId": "<id>",
-                "step": 3,
-                "type": "make_it_work",
-                "ui": "approved"
-              },
-              {
-                "atCursor": false,
-                "kind": "agent",
                 "label": "Reply",
                 "outcomeId": "<id>",
-                "step": 4,
+                "step": 3,
                 "type": "reply",
                 "ui": "approved"
               }
@@ -466,15 +402,14 @@
         "toCarryOut": [
           {
             "fields": {
-              "project": "p1",
-              "title": "Update the price list"
+              "text": "Done: the new prices are live."
             },
             "member": "owner",
             "outcomeId": "<id>",
             "planId": "<id>",
-            "step": "3 of 4",
+            "step": "3 of 3",
             "threadId": "it4cbd6829b8b8fa4bc6781af5",
-            "type": "make_it_work"
+            "type": "reply"
           }
         ],
         "toWake": [],
@@ -484,241 +419,7 @@
     {
       "tool": "outcome_done",
       "ok": false,
-      "out": "Give the item you made (result.itemId)."
-    },
-    {
-      "tool": "outcome_done",
-      "ok": false,
-      "out": "Item nope not found. Check the id (list_work) and that this agent may use its project."
-    },
-    {
-      "tool": "outcome_done",
-      "ok": true,
-      "out": {
-        "note": "Started: the step waits until the item is Done; then report it done (outcome_done status done).",
-        "outcomeId": "<id>",
-        "planId": "<id>",
-        "state": "running",
-        "threadId": "it4cbd6829b8b8fa4bc6781af5",
-        "threadState": "waiting"
-      }
-    },
-    {
-      "tool": "thread_read",
-      "ok": true,
-      "out": {
-        "due": null,
-        "fetchedBy": "<agent>",
-        "fetchedByMe": true,
-        "member": "owner",
-        "messages": [
-          {
-            "attachments": [],
-            "direction": "in",
-            "messageId": "imd8314557a67d2ff9fb46dec1",
-            "permalink": null,
-            "receivedAt": "<iso>",
-            "replyRef": null,
-            "sender": {
-              "handle": "sam@example.com",
-              "name": "Sam Example"
-            },
-            "source": "teams",
-            "text": "Can you update the price list on the website? A goes from 10 to 12.",
-            "threadRef": "prices-1"
-          }
-        ],
-        "next": "Waiting. A new message from them reopens it.",
-        "outcomes": [
-          {
-            "checks": [],
-            "confidence": "high",
-            "decision": {
-              "edited": false,
-              "reason": null
-            },
-            "executor": "<agent>",
-            "executorIsMe": true,
-            "fields": {
-              "holding": true,
-              "text": "On it, Sam."
-            },
-            "note": "",
-            "outcomeId": "<id>",
-            "planId": "<id>",
-            "result": {
-              "error": null,
-              "itemId": null,
-              "permalink": "https://teams.example.com/m/1",
-              "text": null
-            },
-            "state": "done",
-            "step": "1 of 4",
-            "type": "reply"
-          },
-          {
-            "checks": [],
-            "confidence": null,
-            "decision": {
-              "edited": false,
-              "reason": null
-            },
-            "executor": null,
-            "executorIsMe": false,
-            "fields": {
-              "detail": "A: 10 → 12",
-              "what": "New price list"
-            },
-            "note": "",
-            "outcomeId": "<id>",
-            "planId": "<id>",
-            "result": null,
-            "state": "done",
-            "step": "2 of 4",
-            "type": "approval"
-          },
-          {
-            "checks": [],
-            "confidence": null,
-            "decision": {
-              "edited": false,
-              "reason": null
-            },
-            "executor": "<agent>",
-            "executorIsMe": true,
-            "fields": {
-              "project": "p1",
-              "title": "Update the price list"
-            },
-            "note": "",
-            "outcomeId": "<id>",
-            "planId": "<id>",
-            "result": {
-              "error": null,
-              "itemId": "i1",
-              "permalink": "https://hivenod.com/p/p1?item=i1",
-              "text": null
-            },
-            "state": "running",
-            "step": "3 of 4",
-            "type": "make_it_work"
-          },
-          {
-            "checks": [],
-            "confidence": null,
-            "decision": {
-              "edited": false,
-              "reason": null
-            },
-            "executor": "<agent>",
-            "executorIsMe": true,
-            "fields": {
-              "text": "Done: the new prices are live."
-            },
-            "note": "",
-            "outcomeId": "<id>",
-            "planId": "<id>",
-            "result": null,
-            "state": "approved",
-            "step": "4 of 4",
-            "type": "reply"
-          }
-        ],
-        "plans": [
-          {
-            "confidence": "medium",
-            "cursor": 2,
-            "note": "Confirm, get your OK on the prices, update the site, then tell Sam.",
-            "planId": "<id>",
-            "progress": "Step 3 of 4",
-            "state": "active",
-            "steps": [
-              {
-                "atCursor": false,
-                "kind": "agent",
-                "label": "Reply",
-                "outcomeId": "<id>",
-                "step": 1,
-                "type": "reply",
-                "ui": "done"
-              },
-              {
-                "atCursor": false,
-                "kind": "human",
-                "label": "Your approval",
-                "outcomeId": "<id>",
-                "step": 2,
-                "type": "approval",
-                "ui": "done"
-              },
-              {
-                "atCursor": true,
-                "kind": "agent",
-                "label": "Make it work",
-                "outcomeId": "<id>",
-                "step": 3,
-                "type": "make_it_work",
-                "ui": "running"
-              },
-              {
-                "atCursor": false,
-                "kind": "agent",
-                "label": "Reply",
-                "outcomeId": "<id>",
-                "step": 4,
-                "type": "reply",
-                "ui": "approved"
-              }
-            ]
-          }
-        ],
-        "question": null,
-        "state": "waiting",
-        "subject": null,
-        "summary": null,
-        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
-        "threadId": "it4cbd6829b8b8fa4bc6781af5",
-        "timeline": [],
-        "title": "Can you update the price list on the website? A goes from 10 to 12.",
-        "urgent": false,
-        "waiting": {
-          "on": "item",
-          "until": null
-        }
-      }
-    },
-    {
-      "tool": "outcome_done",
-      "ok": true,
-      "out": {
-        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
-        "outcomeId": "<id>",
-        "planId": "<id>",
-        "state": "done",
-        "threadId": "it4cbd6829b8b8fa4bc6781af5",
-        "threadState": "waiting"
-      }
-    },
-    {
-      "tool": "inbox_list",
-      "ok": true,
-      "out": {
-        "toCarryOut": [
-          {
-            "fields": {
-              "text": "Done: the new prices are live."
-            },
-            "member": "owner",
-            "outcomeId": "<id>",
-            "planId": "<id>",
-            "step": "4 of 4",
-            "threadId": "it4cbd6829b8b8fa4bc6781af5",
-            "type": "reply"
-          }
-        ],
-        "toWake": [],
-        "toWork": []
-      }
+      "out": "Projects were removed from Hivenod; work arrives as Inbox threads. Report outcome_done without itemId."
     },
     {
       "tool": "outcome_done",
@@ -799,7 +500,7 @@
               "text": null
             },
             "state": "done",
-            "step": "1 of 4",
+            "step": "1 of 3",
             "type": "reply"
           },
           {
@@ -820,34 +521,8 @@
             "planId": "<id>",
             "result": null,
             "state": "done",
-            "step": "2 of 4",
+            "step": "2 of 3",
             "type": "approval"
-          },
-          {
-            "checks": [],
-            "confidence": null,
-            "decision": {
-              "edited": false,
-              "reason": null
-            },
-            "executor": "<agent>",
-            "executorIsMe": true,
-            "fields": {
-              "project": "p1",
-              "title": "Update the price list"
-            },
-            "note": "",
-            "outcomeId": "<id>",
-            "planId": "<id>",
-            "result": {
-              "error": null,
-              "itemId": "i1",
-              "permalink": null,
-              "text": null
-            },
-            "state": "done",
-            "step": "3 of 4",
-            "type": "make_it_work"
           },
           {
             "checks": [],
@@ -871,14 +546,14 @@
               "text": null
             },
             "state": "done",
-            "step": "4 of 4",
+            "step": "3 of 3",
             "type": "reply"
           }
         ],
         "plans": [
           {
             "confidence": "medium",
-            "cursor": 4,
+            "cursor": 3,
             "note": "Confirm, get your OK on the prices, update the site, then tell Sam.",
             "planId": "<id>",
             "progress": "Done",
@@ -905,18 +580,9 @@
               {
                 "atCursor": false,
                 "kind": "agent",
-                "label": "Make it work",
-                "outcomeId": "<id>",
-                "step": 3,
-                "type": "make_it_work",
-                "ui": "done"
-              },
-              {
-                "atCursor": false,
-                "kind": "agent",
                 "label": "Reply",
                 "outcomeId": "<id>",
-                "step": 4,
+                "step": 3,
                 "type": "reply",
                 "ui": "done"
               }
@@ -987,9 +653,6 @@
         "lastSeenAt": null,
         "name": "Research agent",
         "previousAgentUid": null,
-        "projectIds": [
-          "p1"
-        ],
         "revokedAt": null,
         "tokenHint": "wIn0"
       }
@@ -1007,6 +670,19 @@
         "projectId": "p1",
         "runId": null,
         "type": "project.created"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": null,
+        "runId": null,
+        "type": "workspace.created"
       }
     ],
     "workspaces/w1/inboxThreads": [
@@ -1083,37 +759,6 @@
         "state": "done",
         "threadId": "it4cbd6829b8b8fa4bc6781af5",
         "type": "reply",
-        "updatedAt": "<ts>"
-      },
-      {
-        "createdAt": "<ts>",
-        "decision": {
-          "at": "<ts>",
-          "byUid": "owner",
-          "edited": false,
-          "reason": null
-        },
-        "executor": "<agent>",
-        "fields": {
-          "project": "p1",
-          "title": "Update the price list"
-        },
-        "lastEventId": "<id>",
-        "memberUid": "owner",
-        "note": "",
-        "planId": "<id>",
-        "proposedBy": "<agent>",
-        "result": {
-          "at": "<ts>",
-          "by": "<agent>",
-          "error": null,
-          "itemId": "i1",
-          "permalink": null,
-          "text": null
-        },
-        "state": "done",
-        "threadId": "it4cbd6829b8b8fa4bc6781af5",
-        "type": "make_it_work",
         "updatedAt": "<ts>"
       },
       {
@@ -1219,44 +864,6 @@
         },
         "at": "<ts>",
         "data": {
-          "itemId": "i1",
-          "outcomeId": "<id>",
-          "permalink": "https://hivenod.com/p/p1?item=i1",
-          "planId": "<id>",
-          "type": "make_it_work"
-        },
-        "memberUid": "owner",
-        "subjectId": null,
-        "threadId": "it4cbd6829b8b8fa4bc6781af5",
-        "type": "outcome.started"
-      },
-      {
-        "actor": {
-          "id": "<agent>",
-          "name": "Research agent",
-          "type": "agent"
-        },
-        "at": "<ts>",
-        "data": {
-          "itemId": "i1",
-          "outcomeId": "<id>",
-          "permalink": null,
-          "planId": "<id>",
-          "type": "make_it_work"
-        },
-        "memberUid": "owner",
-        "subjectId": null,
-        "threadId": "it4cbd6829b8b8fa4bc6781af5",
-        "type": "outcome.done"
-      },
-      {
-        "actor": {
-          "id": "<agent>",
-          "name": "Research agent",
-          "type": "agent"
-        },
-        "at": "<ts>",
-        "data": {
           "itemId": null,
           "outcomeId": "<id>",
           "permalink": "https://teams.example.com/m/1",
@@ -1299,13 +906,11 @@
           "steps": [
             "<id>",
             "<id>",
-            "<id>",
             "<id>"
           ],
           "types": [
             "reply",
             "approval",
-            "make_it_work",
             "reply"
           ]
         },
@@ -1323,7 +928,6 @@
         "at": "<ts>",
         "data": {
           "approved": [
-            "<id>",
             "<id>",
             "<id>"
           ],
@@ -1383,7 +987,7 @@
       {
         "confidence": "medium",
         "createdAt": "<ts>",
-        "cursor": 4,
+        "cursor": 3,
         "cursorAt": "<ts>",
         "lastEventId": "<id>",
         "memberUid": "owner",
@@ -1393,224 +997,9 @@
         "steps": [
           "<id>",
           "<id>",
-          "<id>",
           "<id>"
         ],
         "threadId": "it4cbd6829b8b8fa4bc6781af5",
-        "updatedAt": "<ts>"
-      }
-    ],
-    "workspaces/w1/projects": [
-      {
-        "archivedAt": null,
-        "budgetEur": 10,
-        "color": "#2F5FD0",
-        "createdAt": "<ts>",
-        "createdBy": "owner",
-        "emoji": "📝",
-        "lastEventId": "seed",
-        "memberUids": [
-          "alice",
-          "bob",
-          "carol",
-          "dave"
-        ],
-        "name": "Blog",
-        "stepIndex": {
-          "draft": 1,
-          "intake": 0,
-          "publish": 3,
-          "review": 2
-        },
-        "steps": [
-          {
-            "description": "New work",
-            "id": "intake",
-            "kind": "agent",
-            "name": "Intake"
-          },
-          {
-            "description": "Write it",
-            "id": "draft",
-            "instructions": "Write",
-            "kind": "agent",
-            "name": "Draft"
-          },
-          {
-            "description": "Decide",
-            "gate": {
-              "deciderUids": [
-                "alice",
-                "bob",
-                "carol"
-              ],
-              "groupIds": [],
-              "mustInclude": [],
-              "n": 1,
-              "rejectPolicy": "one",
-              "remindAfterHours": 24,
-              "rule": "any"
-            },
-            "id": "review",
-            "kind": "human",
-            "name": "Review"
-          },
-          {
-            "description": "Ship it",
-            "id": "publish",
-            "kind": "agent",
-            "name": "Publish"
-          }
-        ],
-        "templateId": "content"
-      },
-      {
-        "archivedAt": null,
-        "budgetEur": 10,
-        "color": "#2F5FD0",
-        "createdAt": "<ts>",
-        "createdBy": "owner",
-        "emoji": "📝",
-        "lastEventId": "seed",
-        "memberUids": [
-          "alice",
-          "bob",
-          "carol",
-          "dave"
-        ],
-        "name": "Blog",
-        "stepIndex": {
-          "draft": 1,
-          "intake": 0,
-          "publish": 3,
-          "review": 2
-        },
-        "steps": [
-          {
-            "description": "New work",
-            "id": "intake",
-            "kind": "agent",
-            "name": "Intake"
-          },
-          {
-            "description": "Write it",
-            "id": "draft",
-            "instructions": "Write",
-            "kind": "agent",
-            "name": "Draft"
-          },
-          {
-            "description": "Decide",
-            "gate": {
-              "deciderUids": [
-                "alice",
-                "bob",
-                "carol"
-              ],
-              "groupIds": [],
-              "mustInclude": [],
-              "n": 1,
-              "rejectPolicy": "one",
-              "remindAfterHours": 24,
-              "rule": "any"
-            },
-            "id": "review",
-            "kind": "human",
-            "name": "Review"
-          },
-          {
-            "description": "Ship it",
-            "id": "publish",
-            "kind": "agent",
-            "name": "Publish"
-          }
-        ],
-        "templateId": "content"
-      }
-    ],
-    "workspaces/w1/projects/p1/items": [
-      {
-        "claim": null,
-        "costEur": 0,
-        "createdBy": {
-          "id": "alice",
-          "type": "human"
-        },
-        "gate": null,
-        "lastEventId": "seed",
-        "order": 1,
-        "parentItemId": null,
-        "progress": null,
-        "sendBackCount": 0,
-        "source": {
-          "kind": "manual",
-          "label": "Alice"
-        },
-        "sourceRunId": null,
-        "status": "queued",
-        "stepId": "draft",
-        "summary": "",
-        "title": "Post about bees",
-        "triage": null,
-        "type": "idea",
-        "updatedAt": "<ts>"
-      },
-      {
-        "claim": null,
-        "costEur": 0,
-        "createdBy": {
-          "id": "alice",
-          "type": "human"
-        },
-        "gate": {
-          "approvals": {},
-          "rejections": {},
-          "stepId": "review"
-        },
-        "lastEventId": "seed",
-        "order": 1,
-        "parentItemId": null,
-        "progress": null,
-        "sendBackCount": 0,
-        "source": {
-          "kind": "manual",
-          "label": "Alice"
-        },
-        "sourceRunId": null,
-        "status": "waiting",
-        "stepId": "review",
-        "summary": "",
-        "title": "Post about bees",
-        "triage": null,
-        "type": "idea",
-        "updatedAt": "<ts>"
-      }
-    ],
-    "workspaces/w1/projects/p2/items": [
-      {
-        "claim": null,
-        "costEur": 0,
-        "createdBy": {
-          "id": "alice",
-          "type": "human"
-        },
-        "gate": null,
-        "lastEventId": "seed",
-        "order": 1,
-        "parentItemId": null,
-        "progress": null,
-        "sendBackCount": 0,
-        "source": {
-          "kind": "manual",
-          "label": "Alice"
-        },
-        "sourceRunId": null,
-        "status": "queued",
-        "stepId": "draft",
-        "summary": "",
-        "title": "Post about bees",
-        "triage": null,
-        "type": "idea",
         "updatedAt": "<ts>"
       }
     ]

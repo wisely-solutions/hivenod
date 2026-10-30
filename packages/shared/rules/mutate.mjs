@@ -26,13 +26,22 @@ for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
 }
 process.on('exit', cleanup);
 
-/** [name, find, replace] — `find` must occur in the rules (all occurrences are replaced). */
-const AGENT_TYPES = "'item.claimed', 'item.released', 'item.completed', 'item.updated',";
 /**
  * [name, [[find, replace], …]]. Every `find` must occur in the rules (all occurrences are
  * replaced). Where a promise is enforced by two independent layers, the mutation removes both.
  */
 const MUTATIONS = [
+  // Projects removed (OE8Fm slice 11): workspace events never name a project, item or run, and
+  // only admins read the old project events.
+  [
+    'events may name a project',
+    [['&& d.projectId == null && d.itemId == null && d.runId == null', '']],
+  ],
+  [
+    'members read project events',
+    [['(resource.data.projectId == null && isMember(wid))', 'isMember(wid)']],
+  ],
+  ['member connects unbounded', [['&& d.projectIds is list && d.projectIds.size() <= 5;', ';']]],
   ['agent cliVersion unbounded', [["&& strOrNull(d.get('cliVersion', null), 40)", '']]],
   ['agent seenSession unbounded', [["&& strOrNull(d.get('seenSession', null), 64)", '']]],
   ['agent seenHostId unbounded', [["&& strOrNull(d.get('seenHostId', null), 64))", ')']]],
@@ -44,45 +53,6 @@ const MUTATIONS = [
         "&& strOrNull(d.get('seenHost', null), 80)",
       ],
     ],
-  ],
-  [
-    'agents may decide',
-    [
-      [
-        "return canProject(wid, pid)\n            && (exactKeys(d, ['workspaceId', 'projectId', 'itemId', 'itemTitle',",
-        "return (canProject(wid, pid) || projectAgent(wid, pid))\n            && (exactKeys(d, ['workspaceId', 'projectId', 'itemId', 'itemTitle',",
-      ],
-      [AGENT_TYPES, AGENT_TYPES + " 'decision.approved', 'decision.sentBack', 'decision.stopped',"],
-    ],
-  ],
-  [
-    'non-deciders may decide',
-    [
-      ['&& me() in stepOf(p, r.stepId).gate.deciderUids', ''],
-      ['&& me() in stepOf(p, d.stepId).gate.deciderUids', ''],
-    ],
-  ],
-  [
-    'gate rule ignored',
-    [
-      [
-        'let valid = approvedSet.intersection(g.deciderUids.toSet());\n      return valid.hasAll',
-        'let valid = approvedSet.intersection(g.deciderUids.toSet());\n      return true || valid.hasAll',
-      ],
-    ],
-  ],
-  ['atLeast ignores n', [['valid.size() >= g.n', 'valid.size() >= 1']]],
-  ['all needs only one', [['&& valid.hasAll(g.deciderUids)));', '&& valid.size() >= 1));']]],
-  ['mustInclude ignored', [['return valid.hasAll(g.mustInclude) && (', 'return (']]],
-  [
-    'non-deciders count to n',
-    [['let valid = approvedSet.intersection(g.deciderUids.toSet());', 'let valid = approvedSet;']],
-  ],
-  ['majority ignored', [['valid * 2 > g.deciderUids.size()', 'valid >= 1']]],
-  ['claims never stale', [["duration.value(10, 'm')", "duration.value(0, 'm')"]]],
-  [
-    'claims never expire',
-    [["|| r.claim.heartbeatAt < request.time - duration.value(10, 'm')", '|| true']],
   ],
   [
     'event time not checked',
@@ -108,19 +78,6 @@ const MUTATIONS = [
     ],
   ],
   [
-    'event scope not checked',
-    [['.data.itemId == iid;\n    }', '.data.itemId == iid || true;\n    }']],
-  ],
-  [
-    'events editable',
-    [
-      [
-        'allow update, delete: if false;\n      }\n\n      // ---------- calendar (Inbox item w9SAf; removed',
-        'allow update, delete: if true;\n      }\n\n      // ---------- calendar (Inbox item w9SAf; removed',
-      ],
-    ],
-  ],
-  [
     'agents emit human events',
     [
       [
@@ -132,160 +89,6 @@ const MUTATIONS = [
   [
     'revoked agents active',
     [['return a != null && a.data.revokedAt == null;', 'return a != null;']],
-  ],
-  ['agents unscoped', [["&& (a.projectIds == '*' || pid in a.projectIds);", '&& true;']]],
-  [
-    'agents skip steps',
-    [
-      [
-        "&& nextOk(d, r, p)\n              && itemTracked(wid, d, ['item.completed']",
-        "&& itemTracked(wid, d, ['item.completed']",
-      ],
-    ],
-  ],
-  // ----- per-item paths (card st5INNZj) -----
-  [
-    'paths: jumps over unskipped steps',
-    [
-      [
-        '      return j > i && (\n        (n <= 1 ||',
-        '      return j > i || (\n        (n <= 1 ||',
-      ],
-    ],
-  ],
-  [
-    'paths: agents skip gates',
-    [
-      [
-        "function skipped(s, k, g) { return s.id in (s.kind == 'agent' ? k : g); }",
-        'function skipped(s, k, g) { return s.id in k || s.id in g; }',
-      ],
-    ],
-  ],
-  [
-    'paths: anyone skips a gate',
-    [["? type == 'human' && me() in stepOf(p, st).gate.deciderUids", '? true']],
-  ],
-  [
-    'paths: non-deciders settle requests',
-    [
-      [
-        "&& me() in stepOf(p, st).gate.deciderUids\n              && d.get('pathRequests', {})",
-        "\n              && d.get('pathRequests', {})",
-      ],
-    ],
-  ],
-  [
-    'paths: agents ask again after a refusal',
-    [["&& (type == 'human' || !(st in r.get('pathRefused', [])))", '']],
-  ],
-  ['paths: unshaped items decided', [['              && !unshaped(r)\n', '\n']]],
-  [
-    'paths: unshaped items worked',
-    [
-      ['(claimIt(r, p, sh, d)', '(claimIt(r, p, false, d)'],
-      ["(shaping ? run.data.get('job', '') == 'shape' : agentAllowedAtStep(p, r.stepId))", 'true'],
-    ],
-  ],
-  [
-    'paths: steps behind change',
-    [
-      [
-        '&& hasStep(p, st) && p.stepIndex[st] > p.stepIndex[r.stepId]\n              && d.get',
-        '&& hasStep(p, st)\n              && d.get',
-      ],
-    ],
-  ],
-  [
-    'proposals: anyone accepts',
-    [
-      [
-        'allow update: if isMember(wid) && canSetStepAgents(wid, get(projPath(wid, pid)).data)',
-        'allow update: if isMember(wid)',
-      ],
-    ],
-  ],
-  [
-    'agents act at human steps',
-    [
-      [
-        ": (sh || stepOf(p, r.stepId).kind == 'agent')\n                  // Releasing",
-        ': (sh || true)\n                  // Releasing',
-      ],
-    ],
-  ],
-  [
-    'gate may arrive pre-approved',
-    [
-      [
-        "&& d.gate == {'stepId': p.steps[idx].id, 'approvals': {}, 'rejections': {}})",
-        '&& d.gate != null)',
-      ],
-    ],
-  ],
-  [
-    'heartbeat events uncoalesced',
-    [["request.time >= resource.data.heartbeatEventAt + duration.value(5, 'm')", 'true']],
-  ],
-  [
-    'heartbeats never need events',
-    [["request.time < resource.data.heartbeatEventAt + duration.value(6, 'm')", 'true']],
-  ],
-  [
-    'item heartbeat decoupled',
-    [['&& getAfter(runPath(wid, r.claim.runId)).data.heartbeatAt == request.time', '']],
-  ],
-  [
-    'claims for others',
-    [
-      [
-        '&& d.claim.agentUid == me() && d.claim.heartbeatAt == request.time\n              && d.status',
-        '&& d.claim.heartbeatAt == request.time\n              && d.status',
-      ],
-      [
-        '&& run != null && run.data.agentUid == me() && run.data.itemId == iid',
-        '&& run != null && run.data.itemId == iid',
-      ],
-      [
-        'return it.claim.runId == rid && it.claim.agentUid == me() &&',
-        'return it.claim.runId == rid &&',
-      ],
-    ],
-  ],
-  [
-    'claim without run',
-    [
-      [
-        "&& run != null && run.data.agentUid == me() && run.data.itemId == iid\n              && run.data.projectId == pid && run.data.stepId == r.stepId\n              && run.data.status == 'running'\n",
-        '\n',
-      ],
-    ],
-  ],
-  ['send back forward', [['&& p.stepIndex[d.stepId] < p.stepIndex[r.stepId]', '']]],
-  ['send back count free', [['&& d.sendBackCount == r.sendBackCount + 1', '']]],
-  [
-    'decision optional',
-    [
-      [
-        'let dec = getAfter(decisionPath(wid, pid, request.resource.data.lastEventId));\n            return dec != null && dec.data.itemId == iid && dec.data.outcome == outcome\n              && dec.data.byUid == me()\n              &&',
-        'return ',
-      ],
-      // The item rules route by the decision's outcome: without a decision, take it from the event.
-      [
-        "return dec == null ? '' : dec.data.outcome;",
-        "return dec == null ? getAfter(eventPath(wid, request.resource.data.lastEventId)).data.type.split('[.]')[1] : dec.data.outcome;",
-      ],
-    ],
-  ],
-  ['double voting', [['&& !(me() in r.gate.approvals) && !(me() in r.gate.rejections)', '']]],
-  [
-    'humans move items',
-    [
-      [
-        "touched(['title', 'summary', 'type', 'order'])",
-        "changed(['title', 'summary', 'type', 'order', 'updatedAt', 'lastEventId', 'stepId', 'status', 'gate', 'claim'])",
-      ],
-    ],
   ],
   [
     'groups by members',
@@ -307,17 +110,6 @@ const MUTATIONS = [
   ],
   ['member can be agent', [['&& aid != me() && !(aid in get(wsPath(wid)).data.memberRoles)', '']]],
   ['owner adds members directly', [['.addedKeys().size() == 0', '.addedKeys().size() >= 0']]],
-  // The project delete rule is now a flat `if false` (projects are archived; only an organization
-  // delete removes them). The old admin-plus-tracked-event rule no longer exists.
-  [
-    'project delete by members',
-    [
-      [
-        'only an organization delete removes them.\n        allow delete: if false;',
-        'only an organization delete removes them.\n        allow delete: if isMember(wid);',
-      ],
-    ],
-  ],
   [
     'invite email unchecked',
     [
@@ -337,18 +129,9 @@ const MUTATIONS = [
       ],
     ],
   ],
-  ['log cap lifted', [['int(n) < 500', 'int(n) < 501']]],
   [
     'outsiders read',
     [['allow read: if isMember(wid) || isActiveAgent(wid);', 'allow read: if signedIn();']],
-  ],
-  ['untriaged findings claimable', [["&& !(r.type == 'finding' && r.triage == null)", '']]],
-  [
-    'attachments oversize',
-    [
-      ['str(d.content, 0, 921600)', 'str(d.content, 0, 2000000)'],
-      ['d.bytes <= 921600', 'd.bytes <= 2000000'],
-    ],
   ],
   // Inbox (item 4PEHrOW5IfXBQWgOK9wo)
   [
@@ -418,20 +201,6 @@ const MUTATIONS = [
     ],
   ],
   [
-    'plans: agent decides a step',
-    [
-      [
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back']));",
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back', 'outcome.approved']));",
-      ],
-      [
-        '|| (inboxOwner(r) && inboxPlanLive(p)',
-        '|| ((inboxOwner(r) || isActiveAgent(wid)) && inboxPlanLive(p)',
-      ],
-      ['return (inboxOwner(r)\n', 'return ((inboxOwner(r) || isActiveAgent(wid))\n'],
-    ],
-  ],
-  [
     'plans: gate decided before its turn',
     [
       [
@@ -451,16 +220,6 @@ const MUTATIONS = [
     ],
   ],
   ['plans: done step reordered', [['inboxPlanFirstFree(r)))))', '0))))']]],
-  [
-    'plans: agent edits steps',
-    [
-      [
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back']));",
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back', 'plan.edited']));",
-      ],
-      ['return (inboxOwner(r)\n', 'return ((inboxOwner(r) || isActiveAgent(wid))\n'],
-    ],
-  ],
   ['plans: nine steps', [['d.steps.size() <= 8', 'd.steps.size() <= 9']]],
   [
     'plans: step on another thread',
@@ -593,28 +352,6 @@ const MUTATIONS = [
     [['return d.state == outcomeAfter()[type]', 'return d.state is string']],
   ],
   ['inbox: early wake', [['&& r.waiting.until <= request.time', '']]],
-  ['inbox: an item link without the item', [['|| inboxItemMade(d))', '|| true)']]],
-  [
-    "inbox: linking another member's thread",
-    [["&& get(inboxDoc('inboxThreads', e.threadId)).data.memberUid == me()", '']],
-  ],
-  [
-    'inbox: agents decide relations',
-    [
-      [
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back']));",
-        "'thread.instruction_answered', 'thread.chips_suggested', 'summary.written', 'thread.attached',\n                  'plan.sent_back', 'relation.accepted']));",
-      ],
-      [
-        "return inboxOwner(r)\n          && touched(['state', 'note', 'decision'",
-        "return (inboxOwner(r) || isActiveAgent(wid))\n          && touched(['state', 'note', 'decision'",
-      ],
-      [
-        "['relation.accepted', 'relation.created', 'relation.rejected', 'relation.removed'], me())",
-        "['relation.accepted', 'relation.created', 'relation.rejected', 'relation.removed'], resource.data.memberUid)",
-      ],
-    ],
-  ],
   [
     "inbox: relate another member's subject",
     [['&& inboxSubjectOf(d.a, d.memberUid) && inboxSubjectOf(d.b, d.memberUid);', ';']],

@@ -60,7 +60,7 @@ export function ThreadFeed({
 
   if (feed.state === 'loading' || (feed.state === 'ready' && shown.length > 0 && !revealed))
     return (
-      <div aria-busy="true" aria-label="Loading activity">
+      <div role="status" aria-busy="true" aria-label="Loading activity">
         <div className="mb-2 py-1">
           <Skeleton className="h-4 w-24" />
         </div>

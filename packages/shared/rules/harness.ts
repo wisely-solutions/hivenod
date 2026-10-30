@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach } from 'vitest';
 import { SERVER_TIME, type ActionContext, type ActionPlan, type WriteOp } from '../src/actions';
 import { applyPlan, toFirestoreValue } from '../src/firestore';
-import { buildStepIndex, paths, type Gate, type Step } from '../src/schema';
+import { paths } from '../src/schema';
 
 export const W = 'w1';
 export const W2 = 'w2';
@@ -23,35 +23,14 @@ export const HUMANS = {
   alice: 'alice',
   bob: 'bob',
   carol: 'carol',
-  dave: 'dave', // member, never a decider
+  dave: 'dave', // member
   eve: 'eve', // signed in, not a member
 } as const;
 export const AGENTS = {
-  a: 'agentA', // allowed in p1 only
-  star: 'agentStar', // allowed everywhere
+  a: 'agentA', // legacy projectIds ['p1'] (ignored since Projects were removed)
+  star: 'agentStar', // legacy projectIds '*'
   revoked: 'agentRevoked', // revoked
 } as const;
-
-export const gate = (over: Partial<Gate> = {}): Gate => ({
-  deciderUids: ['alice', 'bob', 'carol'],
-  groupIds: [],
-  rule: 'any',
-  n: 1,
-  mustInclude: [],
-  rejectPolicy: 'one',
-  remindAfterHours: 24,
-  ...over,
-});
-
-/** intake (agent) → draft (agent) → review (human gate) → publish (agent) */
-export function steps(g: Partial<Gate> = {}): Step[] {
-  return [
-    { id: 'intake', name: 'Intake', kind: 'agent', description: 'New work' },
-    { id: 'draft', name: 'Draft', kind: 'agent', description: 'Write it', instructions: 'Write' },
-    { id: 'review', name: 'Review', kind: 'human', description: 'Decide', gate: gate(g) },
-    { id: 'publish', name: 'Publish', kind: 'agent', description: 'Ship it' },
-  ];
-}
 
 let env: RulesTestEnvironment;
 export const getEnv = () => env;
@@ -118,60 +97,18 @@ export async function put(docs: Record<string, Record<string, unknown>>) {
   });
 }
 
-export function projectDoc(g: Partial<Gate> = {}, extra: Record<string, unknown> = {}) {
-  const s = steps(g);
-  return {
-    name: 'Blog',
-    emoji: '📝',
-    color: '#2F5FD0',
-    budgetEur: 10, // seeded like an older project: a stored budget is kept and ignored
-    templateId: 'content',
-    steps: s,
-    stepIndex: buildStepIndex(s),
-    memberUids: ['alice', 'bob', 'carol', 'dave'],
-    createdBy: 'owner',
-    createdAt: now(),
-    archivedAt: null,
-    lastEventId: 'seed',
-    ...extra,
-  };
-}
-
-export function itemDoc(over: Record<string, unknown> = {}) {
-  return {
-    title: 'Post about bees',
-    type: 'idea',
-    stepId: 'draft',
-    status: 'queued',
-    summary: '',
-    source: { kind: 'manual', label: 'Alice' },
-    createdBy: { type: 'human', id: 'alice' },
-    parentItemId: null,
-    sourceRunId: null,
-    claim: null,
-    progress: null,
-    gate: null,
-    triage: null,
-    sendBackCount: 0,
-    costEur: 0,
-    order: 1,
-    updatedAt: now(),
-    lastEventId: 'seed',
-    ...over,
-  };
-}
-
-export const waitingGate = (approvals: string[] = [], rejections: string[] = []) => ({
-  stepId: 'review',
-  approvals: Object.fromEntries(approvals.map((u) => [u, { at: now(), rationale: 'ok' }])),
-  rejections: Object.fromEntries(
-    rejections.map((u) => [u, { at: now(), rationale: 'not this one' }]),
-  ),
-});
-
-/** An item waiting at the review gate. */
-export const atGate = (approvals: string[] = [], rejections: string[] = []) =>
-  itemDoc({ stepId: 'review', status: 'waiting', gate: waitingGate(approvals, rejections) });
+/**
+ * Old Projects data (removed in OE8Fm slice 11): still in the database until the deletion script
+ * runs, and no rule lets anyone read or write it.
+ */
+export const LEGACY = {
+  project: `workspaces/w1/projects/p1`,
+  item: `workspaces/w1/projects/p1/items/i1`,
+  run: `workspaces/w1/runs/r1`,
+  calendar: `workspaces/w1/calendar/c1`,
+  busy: `users/alice/busy/w1_c1`,
+  projectEvent: `workspaces/w1/events/seed-project`,
+} as const;
 
 function agentDoc(projectIds: string[] | '*', revoked = false) {
   return {
@@ -187,9 +124,6 @@ function agentDoc(projectIds: string[] | '*', revoked = false) {
     lastEventId: 'seed',
   };
 }
-
-export const P = (pid: string) => paths.project(W, pid);
-export const I = (iid: string, pid = 'p1') => paths.item(W, pid, iid);
 
 async function seed() {
   await put({
@@ -218,18 +152,32 @@ async function seed() {
     [paths.agent(W, AGENTS.a)]: agentDoc(['p1']),
     [paths.agent(W, AGENTS.star)]: agentDoc('*'),
     [paths.agent(W, AGENTS.revoked)]: agentDoc('*', true),
-    [P('p1')]: projectDoc(),
-    [P('p2')]: projectDoc(),
-    [I('i1')]: itemDoc(),
-    [I('i1', 'p2')]: itemDoc(),
-    [I('gated')]: atGate(),
-    [paths.group(W, 'g1')]: { name: 'Product', memberUids: ['alice'], lastEventId: 'seed' },
-    [paths.event(W, 'seed')]: {
+    [LEGACY.project]: {
+      name: 'Blog',
+      memberUids: ['alice'],
+      createdBy: 'owner',
+      lastEventId: 'seed',
+    },
+    [LEGACY.item]: { title: 'Post about bees', stepId: 'draft', status: 'queued', claim: null },
+    [LEGACY.run]: { agentUid: AGENTS.a, projectId: 'p1', itemId: 'i1', endedAt: null },
+    [LEGACY.calendar]: { title: 'Call', memberUid: 'alice' },
+    [LEGACY.busy]: { workspaceId: W, start: now(), end: now() },
+    [LEGACY.projectEvent]: {
       actor: { type: 'human', id: 'owner', name: 'Owner' },
       projectId: 'p1',
       itemId: null,
       runId: null,
       type: 'project.created',
+      data: {},
+      at: now(),
+    },
+    [paths.group(W, 'g1')]: { name: 'Product', memberUids: ['alice'], lastEventId: 'seed' },
+    [paths.event(W, 'seed')]: {
+      actor: { type: 'human', id: 'owner', name: 'Owner' },
+      projectId: null,
+      itemId: null,
+      runId: null,
+      type: 'workspace.created',
       data: {},
       at: now(),
     },
@@ -290,10 +238,10 @@ export function eventOp(a: As, id: string, over: Record<string, unknown> = {}): 
     path: paths.event(W, id),
     data: {
       actor: { type: a.ctx.actor.type, id: a.uid, name: a.ctx.actor.name },
-      projectId: 'p1',
+      projectId: null,
       itemId: null,
       runId: null,
-      type: 'item.updated',
+      type: 'group.updated',
       data: {},
       at: SERVER_TIME,
       ...over,

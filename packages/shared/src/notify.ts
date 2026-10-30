@@ -1,7 +1,8 @@
 /**
  * Reaching people outside the app (card rN5Q12W2). Pure model shared by the web app (Me ->
  * Notifications, the reminder label) and the notifier service (packages/notifier): what a person
- * chose, when they must not be disturbed, which gate a reminder belongs to, and the texts.
+ * chose, when they must not be disturbed, and the texts. Since projects were removed (design 7) it
+ * only tells people about Inbox threads.
  *
  * Storage (written by the app unless noted):
  *  - users/{uid}/notify/prefs      the person's choices (NotifyPrefs)
@@ -12,7 +13,7 @@
  *  - workspaces/{wid}/notified/{key}  what the notifier already sent (notifier only; members read it)
  */
 import { z } from 'zod';
-import { id, uid, type Item } from './schema';
+import { id, uid } from './schema';
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
@@ -63,11 +64,15 @@ export const notifyConfigSchema = z.object({
 });
 export type NotifyConfig = z.infer<typeof notifyConfigSchema>;
 
-/** What the notifier remembers about one waiting gate (doc id `g-<itemId>`). */
+/**
+ * What the notifier remembers about one waiting Inbox thread (doc id `i-<threadId>`). The field
+ * names are those of the project-item era, kept so the stored docs stay readable: itemId is the
+ * thread id, projectId is INBOX_BELL_PROJECT ('inbox').
+ */
 export const notifiedSchema = z.object({
   itemId: id,
   projectId: id,
-  /** `<stepId>:<sendBackCount>`, see gateKey(): a new arrival at a gate is a new key. */
+  /** The thread's arrival (threadAsk key): a new question, round or plan step is a new key. */
   gateKey: z.string().max(100),
   /** People already told about this arrival. */
   sent: z.array(uid).max(200),
@@ -85,9 +90,6 @@ export const notifyPath = {
   telegramLink: (code: string) => `telegramLinks/${code}`,
   config: 'config/notify',
   notified: (w: string, key: string) => `workspaces/${w}/notified/${key}`,
-  notifiedGate: (itemId: string) => `g-${itemId}`,
-  /** The silence notices of an item (item AzveC). */
-  notifiedSilence: (itemId: string) => `n-${itemId}`,
 } as const;
 
 /** A short stable id for a subscription (its endpoint is too long and awkward for a doc id). */
@@ -131,37 +133,6 @@ export function inQuietHours(quiet: NotifyPrefs['quiet'], now: Date): boolean {
   return from < to ? m >= from && m < to : m >= from || m < to;
 }
 
-/** Identifies one arrival of an item at a gate; sending an item back and forward makes a new one. */
-export function gateKey(item: Pick<Item, 'stepId' | 'sendBackCount'>): string {
-  return `${item.stepId}:${item.sendBackCount}`;
-}
-
-/** True when a gate has waited at least `remindAfterHours` (0 means no reminders). */
-export function reminderDue(sinceMs: number, nowMs: number, remindAfterHours: number): boolean {
-  return remindAfterHours > 0 && nowMs - sinceMs >= remindAfterHours * 3_600_000;
-}
-
-/**
- * The note shown next to "Waiting 30 h" on Needs you and the board: "reminder sent" once the
- * notifier sent it, "reminder due" when the time has passed but nothing was sent (nobody is
- * reachable, or the notifier is off), nothing before that.
- */
-export function reminderNote(input: {
-  sinceMs: number;
-  nowMs: number;
-  remindAfterHours: number;
-  item: Pick<Item, 'stepId' | 'sendBackCount'>;
-  notified: Pick<Notified, 'gateKey' | 'remindedAt'> | null | undefined;
-}): 'sent' | 'due' | null {
-  if (input.notified?.remindedAt && input.notified.gateKey === gateKey(input.item)) return 'sent';
-  return reminderDue(input.sinceMs, input.nowMs, input.remindAfterHours) ? 'due' : null;
-}
-
-/** The deep link to an item, relative to the app origin. */
-export function itemLink(projectId: string, itemId: string): string {
-  return `/p/${projectId}?item=${itemId}`;
-}
-
 export interface Notice {
   title: string;
   body: string;
@@ -172,39 +143,6 @@ export interface Notice {
 }
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-
-export function approvalNotice(a: {
-  projectName: string;
-  stepName: string;
-  itemTitle: string;
-  projectId: string;
-  itemId: string;
-  reminderHours?: number;
-}): Notice {
-  return {
-    title: a.reminderHours
-      ? `Still waiting: ${clip(a.itemTitle, 80)}`
-      : `Needs your approval: ${clip(a.itemTitle, 80)}`,
-    body: a.reminderHours
-      ? `${a.projectName} · ${a.stepName} · waiting ${a.reminderHours} h`
-      : `${a.projectName} · ${a.stepName}`,
-    url: itemLink(a.projectId, a.itemId),
-  };
-}
-
-export function questionNotice(q: {
-  projectName: string;
-  itemTitle: string;
-  text: string;
-  projectId: string;
-  itemId: string;
-}): Notice {
-  return {
-    title: `Question: ${clip(q.itemTitle, 80)}`,
-    body: `${q.projectName} · ${clip(q.text, 160)}`,
-    url: itemLink(q.projectId, q.itemId),
-  };
-}
 
 /** The deep link to an Inbox thread, relative to the app origin. */
 export function threadLink(workspaceId: string, threadId: string): string {
@@ -227,21 +165,6 @@ export function inboxNotice(t: {
     title: `${t.urgent ? 'Urgent · ' : ''}${head}: ${clip(t.threadTitle || 'An Inbox thread', 80)}`,
     body: `${t.subjectName ? `${clip(t.subjectName, 60)} · ` : ''}${clip(t.text, 160)}`,
     url: threadLink(t.workspaceId, t.threadId),
-  };
-}
-/** An item whose agent has shown no activity for a while (item AzveC). */
-export function silenceNotice(a: {
-  projectName: string;
-  itemTitle: string;
-  agentName: string;
-  minutes: number;
-  projectId: string;
-  itemId: string;
-}): Notice {
-  return {
-    title: `No update: ${clip(a.itemTitle, 80)}`,
-    body: `${a.projectName} · ${a.agentName ? `${clip(a.agentName, 60)} · ` : ''}no activity for ${a.minutes} min`,
-    url: itemLink(a.projectId, a.itemId),
   };
 }
 

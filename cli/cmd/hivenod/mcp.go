@@ -71,10 +71,6 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 			return err
 		}
 	}
-	// Tests only: a short heartbeat interval (black-box suite in cli/e2e).
-	if d := msEnv("HIVENOD_HEARTBEAT_MS"); d > 0 {
-		hive.HeartbeatInterval = d
-	}
 	lazy := &hive.Lazy{Connect: func(ctx context.Context) (*hive.Client, error) { return hive.Connect(ctx, cfg, "") }}
 	sf := mcpserver.LoadSurface()
 	srv := &mcpserver.Server{Info: sf.ServerInfo}
@@ -99,10 +95,7 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 		srv.Instructions = hive.ChannelInstructions(maxItems)
 		srv.Tools = hive.ChannelTools(lazy, cs)
 		push := func(e hive.Event) { _ = srv.Notify("notifications/claude/channel", e) }
-		opts := hive.ChannelOptions{ProjectID: o.project, StepID: o.step, MaxItems: maxItems,
-			Presence: msEnv("HIVENOD_PRESENCE_MS"), Retry: msEnv("HIVENOD_CHANNEL_RETRY_MS"),
-			ParkCheck: msEnv("HIVENOD_PARK_CHECK_MS"), StatusCheck: msEnv("HIVENOD_STATUS_CHECK_MS"),
-			StatusMinute: msEnv("HIVENOD_STATUS_MINUTE_MS"),
+		opts := hive.ChannelOptions{Presence: msEnv("HIVENOD_PRESENCE_MS"),
 			Inbox: hive.InboxOptions{MaxInbox: maxInbox, MaxSteps: maxItems, PerMinute: int(msEnv("HIVENOD_INBOX_PER_MIN") / time.Millisecond),
 				NudgeAfter: msEnv("HIVENOD_INBOX_NUDGE_MS"), Lease: msEnv("HIVENOD_INBOX_LEASE_MS"), Tick: msEnv("HIVENOD_INBOX_TICK_MS")}}
 		if cfg.WebURL != "" && os.Getenv("HIVENOD_NO_UPDATE_CHECK") == "" {
@@ -121,8 +114,8 @@ func runMCP(ctx context.Context, cfg hive.Config, o opts, stdin io.Reader, stdou
 					return
 				}
 			}
-			// Never started: its tools pass calls through as without a channel.
-			push(hive.Event{Content: "Hivenod could not start handing work to this session: " + hive.Message(err) + " Fix it, then restart the session.", Meta: map[string]string{"kind": "info", "code": "setup"}})
+			// Never started: its tools still work as without a channel.
+			push(hive.Event{Content: "Hivenod could not start sending work to this session: " + hive.Message(err) + " Fix it, then restart the session.", Meta: map[string]string{"kind": "info", "code": "setup"}})
 		}
 	}
 	err = srv.Serve(ctx, stdin, stdout)

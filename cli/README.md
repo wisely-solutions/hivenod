@@ -18,17 +18,19 @@ stays TypeScript. Install it with `curl -fsSL https://hivenod.com/install.sh | s
   is the minimum-version-per-event-kind table; its copy `internal/actions/cliversions.json`
   (`actions.EventMinVersion`) is kept equal by `scripts/cli-versions.test.mjs`
   (`UPDATE_GO_CONTRACT=1 pnpm test:scripts` rewrites it). Add a row when a new event kind needs a
-  new CLI. `update.Updater.Notice` compares with `<site>/cli/bin/latest.json` at session start, at
+  new CLI. `CLI_PROTOCOL` is 3 (projects removed); an older CLI is told to run `hivenod update`. `update.Updater.Notice` compares with `<site>/cli/bin/latest.json` at session start, at
   most once a day (time kept in `~/.hivenod/update-check`), and the session pushes an info event;
   `HIVENOD_NO_UPDATE_CHECK=1` turns it off. Tests use a fake latest.json, never the network.
 - The MCP surface is Go's own: a tool change is made here only.
   - `internal/mcpserver/surface.json` lists the tools (name, description, input schema) for
     `hivenod mcp` and `hivenod mcp --channel`. Edit it by hand, and add or remove the handler in
-    `internal/hive/tools.go` (`ToolRuns`). `go test ./internal/mcpserver/` checks the file (names,
+    `internal/hive/tools.go` (`ToolRuns`). The tools are the Inbox ones (`inbox_*`, `thread_*`,
+    `subject_*`, `outcome_*`, `plan_*`); the item tools and `hivenod create-item` were removed with
+    projects (slice 11) and say "Projects were removed from Hivenod; work arrives as Inbox threads". `go test ./internal/mcpserver/` checks the file (names,
     schemas the validator understands, plain vs channel tools); `go test ./internal/hive/` checks
     that every listed tool has a handler and every handler is listed.
   - The texts the channel sends to the model (instructions in `internal/hive/instructions.go`,
-    work, inbox and status events) are snapshot-tested against `internal/hive/testdata/texts.json`.
+    Inbox and info events) are snapshot-tested against `internal/hive/testdata/texts.json`.
     After changing one on purpose: `UPDATE_GO_SURFACE=1 go test ./internal/hive/`, then review the
     diff.
 - `e2e/` (`@hive/cli-e2e`) is the black-box suite: it builds this binary once and drives it over
@@ -36,7 +38,7 @@ stays TypeScript. Install it with `curl -fsSL https://hivenod.com/install.sh | s
   (`pnpm test:rules`). `e2e/test/go.test.ts` compares tool results and the resulting documents
   (ids, times and temp paths masked) with the golden files in `e2e/golden/`, first recorded while
   the TypeScript client and this binary agreed; after an intended change run
-  `UPDATE_GOLDEN=1 pnpm test:rules` and review the diff. The channel, agent, paths, send-back and
+  `UPDATE_GOLDEN=1 pnpm test:rules` and review the diff. The channel, agent and
   self-hosting suites sit next to it, and so does the real-Claude smoke (`pnpm smoke:claude`).
 
 Build and test (Go 1.27+):

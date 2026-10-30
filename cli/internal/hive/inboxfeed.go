@@ -6,7 +6,6 @@ package hive
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/wisely-solutions/hivenod/cli/internal/actions"
 	"math"
@@ -1505,35 +1504,10 @@ func (s firestoreInbox) WatchRunning(ctx context.Context, on func([]FeedRunning)
 	}, nil)
 }
 
-// ItemState reads a Build it item: its status ("stopped" when archived), or gone when deleted.
-func (s firestoreInbox) ItemState(ctx context.Context, projectID, itemID string) (string, bool, error) {
-	if projectID == "" {
-		l, err := s.c.load(ctx, itemID, "")
-		if err != nil {
-			var he *Error
-			if errors.As(err, &he) {
-				return "", true, nil
-			}
-			return "", false, err
-		}
-		projectID = l.ProjectID
-	}
-	snap, err := s.c.DB.Doc(model.Paths.Item(s.c.WorkspaceID, projectID, itemID)).Get(ctx)
-	if err != nil {
-		if NotFound(err) {
-			return "", true, nil
-		}
-		return "", false, err
-	}
-	if !snap.Exists() {
-		return "", true, nil
-	}
-	m := snap.Data()
-	if m["archivedAt"] != nil {
-		return "stopped", false, nil
-	}
-	st, _ := m["status"].(string)
-	return st, false, nil
+// ItemState: Build it items went with projects (item OE8FmrTaIxFVGcaeGG3N, slice 11), so a
+// step still waiting on one is told it is gone (item_stopped) and reports it failed.
+func (s firestoreInbox) ItemState(context.Context, string, string) (string, bool, error) {
+	return "", true, nil
 }
 
 func feedPlanOf(id string, m map[string]any) FeedPlan {

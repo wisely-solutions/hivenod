@@ -1,16 +1,13 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Inbox, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { colorIndex } from '../agents/logic';
 import { firstName, useReady } from '../auth/context';
-import { isLive } from '../shell/logic';
 import { useShellData } from '../shell/data';
 import { useShortcut } from '../shell/shortcuts';
 import { useOptionalCapture } from '../capture/CaptureProvider';
-import { AgentAvatar } from '../ui/avatar';
 import { Segmented, Select } from '../ui/form';
 import { Button } from '../ui/button';
-import { EmptyState, Skeleton, WorkingDots } from '../ui/feedback';
+import { EmptyState, Skeleton } from '../ui/feedback';
 import { AnimatePresence, motion } from '../ui/motion';
 import { Popover } from '../ui/overlay';
 import { BriefCard } from '../today/BriefCard';
@@ -412,39 +409,17 @@ export function InboxPage() {
     </ul>
   );
 
-  const working = shell.agents.filter(
-    (a) =>
-      !a.data.revokedAt && shell.runs.some((r) => r.data.agentUid === a.id && isLive(r.data, now)),
-  );
   const activeAgents = shell.agents.some((a) => !a.data.revokedAt);
   const empty = loading ? null : (
     <EmptyState
       icon={Inbox}
       title="Nothing needs you."
       description={
-        working.length
-          ? `${working.length} ${working.length === 1 ? 'agent is' : 'agents are'} working. New decisions show up here as they arrive.`
-          : activeAgents
-            ? 'Agents are idle. New decisions show up here as they arrive.'
-            : 'New decisions show up here as they arrive.'
+        activeAgents
+          ? 'Agents are idle. New decisions show up here as they arrive.'
+          : 'New decisions show up here as they arrive.'
       }
-    >
-      {working.length ? (
-        <ul className="flex flex-col items-center gap-2">
-          {working.map((a) => (
-            <li key={a.id} className="inline-flex items-center gap-2 text-14 text-text-2">
-              <AgentAvatar
-                name={a.data.name}
-                color={colorIndex(a.data.color, a.id)}
-                live
-                size="sm"
-              />
-              {a.data.name} <WorkingDots />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </EmptyState>
+    />
   );
 
   // Everything, in every organization and filter.

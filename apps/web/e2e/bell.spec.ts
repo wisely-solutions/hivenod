@@ -1,7 +1,7 @@
 /**
  * The bell (item 3ENs): pop-ups are live only, the history waits behind the bell. Signing in
  * with unread entries shows no toast and the count; a live entry gives one toast and one row;
- * opening an entry opens the item and marks it read on every device; Mark all read; phones get
+ * opening an entry opens the thread and marks it read on every device; Mark all read; phones get
  * the bell in the top bar with a full-screen list; light and dark are axe-clean.
  */
 import AxeBuilder from '@axe-core/playwright';
@@ -16,7 +16,6 @@ import {
   expectNoHorizontalScroll,
   newPerson,
   person,
-  projectFields,
   signIn,
   uidOf,
   workspaceOf,
@@ -26,46 +25,25 @@ import {
 const rand = () => Math.random().toString(36).slice(2, 8);
 const SHOTS = process.env.SHOTS_DIR;
 
-const item = (uid: string, title: string, stepId = 'review') => ({
-  title,
-  type: 'task',
-  stepId,
-  status: stepId === 'review' ? 'waiting' : 'queued',
-  summary: 'Seeded for the bell.',
-  source: { kind: 'manual', label: 'Test' },
-  createdBy: { type: 'human', id: uid },
-  parentItemId: null,
-  sourceRunId: null,
-  claim: null,
-  progress: null,
-  gate: stepId === 'review' ? { stepId: 'review', approvals: {}, rejections: {} } : null,
-  triage: null,
-  sendBackCount: 0,
-  costEur: 0,
-  order: 1,
-  updatedAt: new Date(agoMs(90)),
-  lastEventId: 'seed',
-});
-
+/** A bell entry about a thread (every entry since Projects were removed, slice 11). */
 function entry(
   wid: string,
-  pid: string,
-  itemId: string,
+  threadId: string,
   itemTitle: string,
-  kind: 'gate' | 'question' | 'answer' | 'sentBack',
+  kind: 'inboxAsk' | 'inboxCall' | 'silence',
   at: number,
   over: Record<string, unknown> = {},
 ) {
   return {
     kind,
     workspaceId: wid,
-    projectId: pid,
-    itemId,
-    projectName: 'Hive',
+    projectId: 'inbox',
+    itemId: threadId,
+    projectName: 'Inbox',
     itemTitle,
-    stepName: kind === 'sentBack' ? 'Build' : kind === 'gate' ? 'Accept' : '',
-    actorName: kind === 'gate' ? '' : 'Hive',
-    text: kind === 'question' ? 'token ready?' : kind === 'sentBack' ? '7 e2e failures' : '',
+    stepName: '',
+    actorName: 'Hive',
+    text: kind === 'inboxAsk' ? 'token ready?' : kind === 'silence' ? 'silent for 41 min' : 'Reply',
     at,
     readAt: null,
     ...over,
@@ -80,7 +58,7 @@ const TITLES = [
   'Item focus view',
 ];
 
-/** A person in an org with a project "Hive", 5 items and 5 unread bell entries (seeded before sign-in shows). */
+/** A person with 5 unread bell entries about their threads (seeded before sign-in shows). */
 async function seedBell(page: Page, who: Person = person('Jo Bell'), readIds: string[] = []) {
   await page.goto('/');
   await signIn(page, who);
@@ -90,23 +68,20 @@ async function seedBell(page: Page, who: Person = person('Jo Bell'), readIds: st
   await expect.poll(() => workspaceOf(who.email).catch(() => ''), { timeout: 20_000 }).not.toBe('');
   const wid = await workspaceOf(who.email);
   const uid = await uidOf(who.email);
-  const pid = `bl${rand()}`;
+  const tp = `bl${rand()}`;
   const now = NOW;
-  const kinds = ['gate', 'question', 'gate', 'sentBack', 'answer'] as const;
-  const docs: Array<[string, Record<string, unknown>]> = [
-    [`workspaces/${wid}/projects/${pid}`, { ...projectFields('Hive', uid), name: 'Hive' }],
-  ];
+  const kinds = ['inboxCall', 'inboxAsk', 'inboxCall', 'silence', 'inboxAsk'] as const;
+  const docs: Array<[string, Record<string, unknown>]> = [];
   TITLES.forEach((t, i) => {
-    docs.push([`workspaces/${wid}/projects/${pid}/items/b${i}`, item(uid, t)]);
     // Two today, the rest yesterday and before: a day's worth of things that happened while away.
     const at = i < 2 ? agoMs((i + 1) * 30) : agoMs((i + 22) * 60);
     docs.push([
       `users/${uid}/notifications/n${i}`,
-      entry(wid, pid, `b${i}`, t, kinds[i]!, at, readIds.includes(`n${i}`) ? { readAt: now } : {}),
+      entry(wid, `${tp}${i}`, t, kinds[i]!, at, readIds.includes(`n${i}`) ? { readAt: now } : {}),
     ]);
   });
   await adminSetAll(docs);
-  return { wid, uid, pid, who };
+  return { wid, uid, tp, who };
 }
 
 const toasts = (page: Page) => page.locator('[data-toast-region] [role="status"]');
@@ -143,20 +118,19 @@ test('signing in with 5 unread shows no pop-up; the bell says 5; open, read, mar
   await expect(pop.getByText('Today', { exact: true })).toBeVisible();
   await expect(pop.getByText('Yesterday', { exact: true })).toBeVisible();
   await expect(pop.locator('[data-entry="n0"]')).toContainText(
-    'Archive or delete an item waits for your Accept',
+    'Your call on Archive or delete an item: Reply',
   );
   await expect(pop.locator('[data-entry="n1"]')).toContainText(
-    'Hive asked about Open source Hivenod: “token ready?”',
+    'Hive asks you about Open source Hivenod: “token ready?”',
   );
-  // Filters: Needs you = approvals and questions.
+  // Filters: Needs you = questions and your calls (not a silent step).
   await pop.getByRole('button', { name: 'Needs you' }).click();
-  await expect(pop.locator('[data-entry]')).toHaveCount(3);
+  await expect(pop.locator('[data-entry]')).toHaveCount(4);
   await pop.getByRole('button', { name: 'All', exact: true }).click();
 
-  // A click opens the item and marks the entry read.
+  // A click opens the thread and marks the entry read.
   await pop.locator('[data-entry="n2"]').click();
-  // Projects were removed (OE8Fm slice 10): an old item entry opens Inbox (not migrated).
-  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(page).toHaveURL(/\/inbox\/[^/]+\/t\/bl[a-z0-9]+2$/);
   await expect.poll(() => readAt(uid, 'n2')).toBe('read');
   await expect(bellCount(page)).toHaveText('4');
   await page.keyboard.press('Escape');
@@ -183,7 +157,7 @@ test('a live event while the app is open gives one toast and one bell entry', as
   page,
 }, info) => {
   test.setTimeout(90_000);
-  const { wid, uid, pid } = await seedBell(page);
+  const { wid, uid, tp } = await seedBell(page);
   await page.reload();
   if (info.project.name !== 'desktop-1440') await page.setViewportSize({ width: 390, height: 844 });
   await expect(bellCount(page)).toHaveText('5');
@@ -191,19 +165,18 @@ test('a live event while the app is open gives one toast and one bell entry', as
   await adminSetAll([
     [
       `users/${uid}/notifications/live1`,
-      entry(wid, pid, 'b4', 'Item focus view', 'gate', NOW + 1000),
+      entry(wid, `${tp}4`, 'Item focus view', 'inboxCall', NOW + 1000),
     ],
   ]);
   await expect(toasts(page)).toHaveCount(1);
-  await expect(toasts(page)).toContainText('Item focus view waits for your Accept');
+  await expect(toasts(page)).toContainText('Your call on Item focus view: Reply');
   await expect(bellCount(page)).toHaveText('6');
   // Once only.
   await page.waitForTimeout(1000);
   await expect(toasts(page)).toHaveCount(1);
-  // Its Open goes to the item and marks it read.
+  // Its Open goes to the thread and marks it read.
   await toasts(page).getByRole('button', { name: 'Open' }).click();
-  // Projects were removed (OE8Fm slice 10): an old item entry opens Inbox (not migrated).
-  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(page).toHaveURL(/\/inbox\/[^/]+\/t\/bl[a-z0-9]+4$/);
   await expect.poll(() => readAt(uid, 'live1')).toBe('read');
   await expect(bellCount(page)).toHaveText('5');
 });
@@ -260,8 +233,7 @@ test('phones: the bell sits in the top bar and opens the full-screen list; the t
   await expect(page.locator('main [data-entry]')).toHaveCount(5);
   await expectNoHorizontalScroll(page);
   await page.locator('main [data-entry="n1"]').click();
-  // Projects were removed (OE8Fm slice 10): an old item entry opens Inbox (not migrated).
-  await expect(page).toHaveURL(/\/inbox$/);
+  await expect(page).toHaveURL(/\/inbox\/[^/]+\/t\/bl[a-z0-9]+1$/);
   await expect.poll(() => readAt(uid, 'n1')).toBe('read');
   await expect(bell).toHaveAccessibleName('Notifications, 4 unread');
 });

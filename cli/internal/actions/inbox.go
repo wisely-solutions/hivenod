@@ -61,12 +61,15 @@ type OutcomeType struct {
 	PlanOnly bool `json:"planOnly"`
 	// Long (slice 6b): a long step (Build, Release), started then reported done.
 	Long bool `json:"long"`
-	// Retired (bookings, item OE8FmrTaIxFVGcaeGG3N slice 5): old records only, never proposed.
+	// Retired (bookings, slice 5; make_it_work, slice 11): old records only, never proposed.
 	Retired bool `json:"retired"`
 }
 
 // RetiredMessage is RETIRED_MESSAGE: the refusal for a retired outcome type.
 func RetiredMessage(t string) string {
+	if t == "make_it_work" {
+		return "make_it_work was retired with Projects: Hivenod has no items any more. Reject it, or propose a Development plan (plan_propose template dev)."
+	}
 	return t + " was retired with Calendar: bookings are no longer made through Hivenod. Reject it, or propose a reply that suggests times."
 }
 

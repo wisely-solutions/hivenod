@@ -148,9 +148,6 @@
         "lastSeenAt": null,
         "name": "Research agent",
         "previousAgentUid": null,
-        "projectIds": [
-          "p1"
-        ],
         "revokedAt": null,
         "tokenHint": "wIn0"
       }
@@ -168,6 +165,19 @@
         "projectId": "p1",
         "runId": null,
         "type": "project.created"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": null,
+        "runId": null,
+        "type": "workspace.created"
       }
     ],
     "workspaces/w1/inboxThreads": [
@@ -426,220 +436,6 @@
         "name": "report.html",
         "threadId": "itb3654b7dfc07565a0236b702",
         "url": null
-      }
-    ],
-    "workspaces/w1/projects": [
-      {
-        "archivedAt": null,
-        "budgetEur": 10,
-        "color": "#2F5FD0",
-        "createdAt": "<ts>",
-        "createdBy": "owner",
-        "emoji": "📝",
-        "lastEventId": "seed",
-        "memberUids": [
-          "alice",
-          "bob",
-          "carol",
-          "dave"
-        ],
-        "name": "Blog",
-        "stepIndex": {
-          "draft": 1,
-          "intake": 0,
-          "publish": 3,
-          "review": 2
-        },
-        "steps": [
-          {
-            "description": "New work",
-            "id": "intake",
-            "kind": "agent",
-            "name": "Intake"
-          },
-          {
-            "description": "Write it",
-            "id": "draft",
-            "instructions": "Write",
-            "kind": "agent",
-            "name": "Draft"
-          },
-          {
-            "description": "Decide",
-            "gate": {
-              "deciderUids": [
-                "alice",
-                "bob",
-                "carol"
-              ],
-              "groupIds": [],
-              "mustInclude": [],
-              "n": 1,
-              "rejectPolicy": "one",
-              "remindAfterHours": 24,
-              "rule": "any"
-            },
-            "id": "review",
-            "kind": "human",
-            "name": "Review"
-          },
-          {
-            "description": "Ship it",
-            "id": "publish",
-            "kind": "agent",
-            "name": "Publish"
-          }
-        ],
-        "templateId": "content"
-      },
-      {
-        "archivedAt": null,
-        "budgetEur": 10,
-        "color": "#2F5FD0",
-        "createdAt": "<ts>",
-        "createdBy": "owner",
-        "emoji": "📝",
-        "lastEventId": "seed",
-        "memberUids": [
-          "alice",
-          "bob",
-          "carol",
-          "dave"
-        ],
-        "name": "Blog",
-        "stepIndex": {
-          "draft": 1,
-          "intake": 0,
-          "publish": 3,
-          "review": 2
-        },
-        "steps": [
-          {
-            "description": "New work",
-            "id": "intake",
-            "kind": "agent",
-            "name": "Intake"
-          },
-          {
-            "description": "Write it",
-            "id": "draft",
-            "instructions": "Write",
-            "kind": "agent",
-            "name": "Draft"
-          },
-          {
-            "description": "Decide",
-            "gate": {
-              "deciderUids": [
-                "alice",
-                "bob",
-                "carol"
-              ],
-              "groupIds": [],
-              "mustInclude": [],
-              "n": 1,
-              "rejectPolicy": "one",
-              "remindAfterHours": 24,
-              "rule": "any"
-            },
-            "id": "review",
-            "kind": "human",
-            "name": "Review"
-          },
-          {
-            "description": "Ship it",
-            "id": "publish",
-            "kind": "agent",
-            "name": "Publish"
-          }
-        ],
-        "templateId": "content"
-      }
-    ],
-    "workspaces/w1/projects/p1/items": [
-      {
-        "claim": null,
-        "costEur": 0,
-        "createdBy": {
-          "id": "alice",
-          "type": "human"
-        },
-        "gate": null,
-        "lastEventId": "seed",
-        "order": 1,
-        "parentItemId": null,
-        "progress": null,
-        "sendBackCount": 0,
-        "source": {
-          "kind": "manual",
-          "label": "Alice"
-        },
-        "sourceRunId": null,
-        "status": "queued",
-        "stepId": "draft",
-        "summary": "",
-        "title": "Post about bees",
-        "triage": null,
-        "type": "idea",
-        "updatedAt": "<ts>"
-      },
-      {
-        "claim": null,
-        "costEur": 0,
-        "createdBy": {
-          "id": "alice",
-          "type": "human"
-        },
-        "gate": {
-          "approvals": {},
-          "rejections": {},
-          "stepId": "review"
-        },
-        "lastEventId": "seed",
-        "order": 1,
-        "parentItemId": null,
-        "progress": null,
-        "sendBackCount": 0,
-        "source": {
-          "kind": "manual",
-          "label": "Alice"
-        },
-        "sourceRunId": null,
-        "status": "waiting",
-        "stepId": "review",
-        "summary": "",
-        "title": "Post about bees",
-        "triage": null,
-        "type": "idea",
-        "updatedAt": "<ts>"
-      }
-    ],
-    "workspaces/w1/projects/p2/items": [
-      {
-        "claim": null,
-        "costEur": 0,
-        "createdBy": {
-          "id": "alice",
-          "type": "human"
-        },
-        "gate": null,
-        "lastEventId": "seed",
-        "order": 1,
-        "parentItemId": null,
-        "progress": null,
-        "sendBackCount": 0,
-        "source": {
-          "kind": "manual",
-          "label": "Alice"
-        },
-        "sourceRunId": null,
-        "status": "queued",
-        "stepId": "draft",
-        "summary": "",
-        "title": "Post about bees",
-        "triage": null,
-        "type": "idea",
-        "updatedAt": "<ts>"
       }
     ]
   }

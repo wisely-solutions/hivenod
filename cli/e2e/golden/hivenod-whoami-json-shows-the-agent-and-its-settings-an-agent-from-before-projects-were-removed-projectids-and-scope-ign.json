@@ -2,15 +2,11 @@
   "whoami": {
     "agentUid": "<agent>",
     "guardrails": {
-      "maxFailedRuns": 5
+      "maxFailedRuns": 3
     },
     "name": "Research agent",
     "paused": false,
     "pausedReason": null,
-    "projectIds": [
-      "p1"
-    ],
-    "scope": null,
     "workspaceId": "w1"
   }
 }

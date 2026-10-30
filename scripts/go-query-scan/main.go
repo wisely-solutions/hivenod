@@ -43,9 +43,7 @@ type query struct {
 // builders: path-builder functions whose result ends in a known collection id. "" means the id is
 // the last string-literal argument of the call.
 var builders = map[string]string{
-	"actions.CalendarPaths.Events": "calendar",
-	"actions.CalendarPaths.Busy":   "busy",
-	"model.Paths.InboxCollection":  "",
+	"model.Paths.InboxCollection": "",
 }
 
 var ignored = map[string]bool{"Limit": true, "LimitToLast": true, "Offset": true, "Select": true,

@@ -1,13 +1,6 @@
 import { Timestamp } from 'firebase/firestore';
 import { describe, expect, it } from 'vitest';
-import {
-  checkConnect,
-  CONNECT_ERRORS,
-  initialChoice,
-  newlyConnected,
-  stepsLeftOut,
-  withAgentOnSteps,
-} from './confirm';
+import { checkConnect, CONNECT_ERRORS, newlyConnected } from './confirm';
 
 const base = {
   publicKey: 'B' + 'x'.repeat(86),
@@ -43,35 +36,6 @@ describe('checkConnect', () => {
       ok: false,
       pair: 'K7QX29PD',
     });
-  });
-});
-
-describe('projects and steps', () => {
-  it('ticks all projects when they fit, none when a member has more than 5', () => {
-    expect(initialChoice(['a', 'b'], false)).toEqual(['a', 'b']);
-    expect(initialChoice(['a', 'b', 'c', 'd', 'e', 'f'], false)).toEqual([]);
-    expect(initialChoice(['a', 'b', 'c', 'd', 'e', 'f'], true)).toHaveLength(6);
-  });
-  const steps = [
-    { id: 'shape', kind: 'agent' },
-    { id: 'approve', kind: 'human' },
-    { id: 'build', kind: 'agent' },
-  ] as never;
-  it('adds the agent to limited agent steps only', () => {
-    expect(withAgentOnSteps({ steps, stepAgents: {} }, 'n')).toBeNull();
-    expect(withAgentOnSteps({ steps, stepAgents: { build: ['old'] } }, 'n')).toEqual({
-      build: ['old', 'n'],
-    });
-    expect(withAgentOnSteps({ steps, stepAgents: { build: ['n'] } }, 'n')).toBeNull();
-    expect(withAgentOnSteps({ steps, stepAgents: { approve: ['x'] } }, 'n')).toBeNull();
-  });
-  it('counts limited steps a plain member may not change', () => {
-    const p = (createdBy: string) => ({
-      id: createdBy,
-      data: { steps, stepAgents: { build: ['old'] }, createdBy },
-    });
-    expect(stepsLeftOut({ uid: 'alice', isAdmin: false }, [p('alice'), p('owner')])).toBe(1);
-    expect(stepsLeftOut({ uid: 'owner', isAdmin: true }, [p('alice')])).toBe(0);
   });
 });
 

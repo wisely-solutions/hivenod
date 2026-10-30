@@ -2,13 +2,10 @@ import {
   createAgent,
   revokeAgent,
   rotateAgent,
-  setStepAgents,
   tokenHint,
   type ActionContext,
   type ActionPlan,
   type Agent,
-  type OpenRun,
-  type Project,
 } from '@hive/shared';
 import { createAgentIdentity } from '@hive/shared/agent-auth';
 import { app, AUTH_EMULATOR_PORT, USE_EMULATOR } from '../lib/app';
@@ -49,17 +46,12 @@ export async function createAgentFlow(
   return token;
 }
 
-/**
- * Revokes the old identity and creates a new one with the same name, colour, scope and settings.
- * Steps limited to the old identity are then limited to the new one (one save per project).
- */
+/** Revokes the old identity and creates a new one with the same name, colour, scope and settings. */
 export async function rotateAgentFlow(
   ctx: ActionContext,
   run: Run,
   previousAgentUid: string,
   agent: Pick<Agent, 'name' | 'color' | 'projectIds' | 'guardrails' | 'scope'>,
-  projects: readonly { id: string; data: Pick<Project, 'steps' | 'stepAgents'> }[] = [],
-  openRuns: readonly OpenRun[] = [],
 ): Promise<string> {
   const { uid, token } = await identityFor(ctx.workspaceId);
   await run(
@@ -72,37 +64,12 @@ export async function rotateAgentFlow(
       tokenHint: tokenHint(token),
       ...(agent.guardrails ? { guardrails: agent.guardrails } : {}),
       ...(agent.scope ? { scope: agent.scope } : {}),
-      openRuns,
     }),
   );
-  for (const p of projectsToRelink(projects, previousAgentUid)) {
-    const stepAgents = Object.fromEntries(
-      Object.entries(p.data.stepAgents ?? {}).map(([k, v]) => [
-        k,
-        v.map((u) => (u === previousAgentUid ? uid : u)),
-      ]),
-    );
-    await run(setStepAgents(ctx, { projectId: p.id, steps: p.data.steps, stepAgents }));
-  }
   return token;
 }
 
-/** Projects with a step limited to this agent. */
-export function projectsToRelink<P extends { data: Pick<Project, 'stepAgents'> }>(
-  projects: readonly P[],
-  agentUid: string,
-): P[] {
-  return projects.filter((p) =>
-    Object.values(p.data.stepAgents ?? {}).some((uids) => uids.includes(agentUid)),
-  );
-}
-
-/** Revokes the agent and, in the same batch, ends its open runs and gives their items back. */
-export function revokeAgentFlow(
-  ctx: ActionContext,
-  run: Run,
-  agentUid: string,
-  openRuns: readonly OpenRun[] = [],
-): Promise<void> {
-  return run(revokeAgent(ctx, { agentUid, openRuns }));
+/** Revokes the agent. */
+export function revokeAgentFlow(ctx: ActionContext, run: Run, agentUid: string): Promise<void> {
+  return run(revokeAgent(ctx, { agentUid }));
 }

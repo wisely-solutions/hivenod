@@ -3,7 +3,7 @@ package mcpserver
 import (
 	"encoding/json"
 	"regexp"
-	"sort"
+	"strings"
 	"testing"
 )
 
@@ -94,23 +94,28 @@ func TestSurfaceIsWellFormed(t *testing.T) {
 	}
 	plain := checkTools(t, "plain", sf.Plain.Tools)
 	channel := checkTools(t, "channel", sf.Channel.Tools)
-	// The channel mode drops wait_for_work and adds park and unpark; everything else is
-	// the same tool (the channel may only loosen itemId/runId to optional).
-	var onlyPlain, onlyChannel []string
+	// Projects were removed (item OE8FmrTaIxFVGcaeGG3N, slice 11): both modes serve the same
+	// thread tools, and no item, run or calendar tool is left.
+	if len(plain) != len(channel) {
+		t.Errorf("plain has %d tools, channel %d", len(plain), len(channel))
+	}
 	for n := range plain {
 		if _, ok := channel[n]; !ok {
-			onlyPlain = append(onlyPlain, n)
+			t.Errorf("%s only in plain mode", n)
 		}
 	}
-	for n := range channel {
-		if _, ok := plain[n]; !ok {
-			onlyChannel = append(onlyChannel, n)
+	for _, n := range RemovedTools {
+		if _, ok := plain[n]; ok {
+			t.Errorf("removed tool %s is still listed", n)
+		}
+		if _, ok := channel[n]; ok {
+			t.Errorf("removed tool %s is still listed in channel mode", n)
 		}
 	}
-	sort.Strings(onlyPlain)
-	sort.Strings(onlyChannel)
-	if got, _ := json.Marshal([]any{onlyPlain, onlyChannel}); string(got) != `[["wait_for_work"],["park","unpark"]]` {
-		t.Errorf("plain vs channel tools: %s", got)
+	for n := range plain {
+		if strings.HasPrefix(n, "calendar_") {
+			t.Errorf("calendar tool %s is still listed", n)
+		}
 	}
 }
 

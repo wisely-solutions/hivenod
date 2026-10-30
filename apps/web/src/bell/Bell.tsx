@@ -5,17 +5,7 @@
  */
 import { bellText, type BellKind } from '@hive/shared';
 import { Link } from '@tanstack/react-router';
-import {
-  Bell,
-  Check,
-  CircleHelp,
-  Clock,
-  Mail,
-  MailQuestion,
-  MessageSquare,
-  Undo2,
-  type LucideIcon,
-} from 'lucide-react';
+import { Bell, Clock, Mail, MailQuestion, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useReady } from '../auth/context';
 import { useNeedsAll } from '../needs/data';
@@ -26,10 +16,6 @@ import { useBell } from './data';
 import { filterRows, groupByDay, timeLabel, type BellFilter, type BellRow } from './logic';
 
 const KIND: Record<BellKind, { icon: LucideIcon; tone: string }> = {
-  gate: { icon: Check, tone: 'bg-gate-bg text-gate-text' },
-  question: { icon: CircleHelp, tone: 'bg-agent-soft text-agent' },
-  answer: { icon: MessageSquare, tone: 'bg-approve-bg text-approve-text' },
-  sentBack: { icon: Undo2, tone: 'bg-sendback-bg text-sendback' },
   inboxAsk: { icon: MailQuestion, tone: 'bg-agent-soft text-agent' },
   inboxCall: { icon: Mail, tone: 'bg-gate-bg text-gate-text' },
   silence: { icon: Clock, tone: 'bg-sendback-bg text-sendback' },

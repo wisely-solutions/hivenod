@@ -1,11 +1,10 @@
 # The Personal organization and the personal agent
 
-Inbox item fJnu6, slice (c). A member's **Personal** organization holds their own Inbox: no
-development projects. Their personal agent (a Claude Code session that already has the member's
+Inbox item fJnu6, slice (c). A member's **Personal** organization holds their own Inbox. Their personal agent (a Claude Code session that already has the member's
 own accounts, such as their mail) joins it as an **Inbox-only agent**. It brings the member's own
 requests into the Personal Inbox.
 
-Calendar was removed (item OE8FmrTaIxFVGcaeGG3N, slice 5): there is no calendar sync, no
+Calendar was removed (item OE8FmrTaIxFVGcaeGG3N, slice 5), and so were projects and items (slice 11): there is no calendar sync, no
 `calendar_*` tool and no `hivenod calendar` command any more. Stop any calendar sync routine the
 agent runs. **Hivenod never connects to Google.**
 
@@ -36,15 +35,14 @@ On the personal agent's machine (its desk session):
    the terminal shown, names the agent (for example "Personal") and picks **Inbox
    only**. Then they press Pair this terminal.
 3. Back in the terminal, `hivenod whoami` says
-   `scope: Inbox only (no development projects)`.
+   `scope: Inbox only`.
 
 An Inbox-only agent:
 
-- uses only the Inbox tools (`inbox_*`, `thread_*`, `subject_*`, `outcome_*`). Every other tool
-  answers "This agent is limited to Inbox", and the Firestore rules refuse it every project, item, claim, created item and
-  finding, whatever its settings say;
-- is created by an admin only, and its scope never changes (not even on token rotation). To make
-  it a project agent, connect a new one.
+- uses only the Inbox tools (`inbox_*`, `thread_*`, `subject_*`, `outcome_*`, `plan_*`). Every other tool
+  answers "This agent is limited to Inbox", whatever its settings say;
+- is created by an admin only, and its scope never changes (not even on token rotation). To change the scope, connect a new
+  agent.
 
 Then add the Hivenod plugin to its Claude Code (`claude plugin marketplace add
 wisely-solutions/hivenod`, `claude plugin install hivenod@hivenod`), or the plain MCP server

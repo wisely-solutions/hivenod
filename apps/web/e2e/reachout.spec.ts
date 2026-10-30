@@ -1,9 +1,8 @@
 /**
  * Item KZ6O9: Hivenod reaches out when work in agent hands goes quiet. When the agent did not
  * answer the status request, the notifier flags it; the web shows "<agent> silent for N min" on the
- * card and the item (parked items too), on the thread's plan step, and in Today's "Agents working".
- * The timers, requests, messages and buttons are tested in packages/notifier (emulator, fake
- * clock) and cli (Go). At 1440 and 390, light and dark, axe-clean.
+ * thread's decision top and plan step, and in Today's "Agents working". The timers, requests,
+ * messages and buttons are tested in packages/notifier (emulator, fake clock). At 1440 and 390, light and dark, axe-clean.
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
@@ -12,7 +11,6 @@ import {
   adminSet,
   expectNoHorizontalScroll,
   person,
-  projectFields,
   settle,
   signIn,
   uidOf,
@@ -48,7 +46,6 @@ async function seed(page: Page) {
   const wid = await workspaceOf(me.email);
   const uid = await uidOf(me.email);
   const base = `workspaces/${wid}`;
-  await adminSet(`${base}/projects/hive`, projectFields('Hive', uid));
   await adminSet(`${base}/agents/hive`, {
     name: 'Hive',
     color: 'agent-3',
@@ -60,60 +57,6 @@ async function seed(page: Page) {
     tokenHint: 'a7f3',
     previousAgentUid: null,
     lastEventId: 'seed',
-  });
-  const run = (itemId: string) => ({
-    agentUid: 'hive',
-    projectId: 'hive',
-    itemId,
-    stepId: 'draft',
-    startedAt: ago(90),
-    heartbeatAt: ago(0),
-    heartbeatEventAt: ago(4),
-    endedAt: null,
-    status: 'running',
-    costEur: 0,
-    tokensIn: 0,
-    tokensOut: 0,
-    model: null,
-    summary: null,
-    lastEventId: 'seed',
-  });
-  await adminSet(`${base}/runs/r1`, run('i1'));
-  await adminSet(`${base}/projects/hive/items/i1`, {
-    title: 'Dark mode for the board',
-    type: 'task',
-    stepId: 'draft',
-    status: 'working',
-    summary: '',
-    source: { kind: 'manual', label: 'Test' },
-    createdBy: { type: 'human', id: uid },
-    parentItemId: null,
-    sourceRunId: null,
-    claim: { runId: 'r1', agentUid: 'hive', heartbeatAt: new Date() },
-    progress: null,
-    gate: null,
-    triage: null,
-    sendBackCount: 0,
-    costEur: 0,
-    order: 1,
-    updatedAt: ago(41),
-    lastEventId: 'seed',
-    statusUpdate: {
-      runId: 'r1',
-      text: 'tests green, opening the PR',
-      pct: null,
-      at: ago(41),
-      by: 'hive',
-    },
-    statusAsk: { runId: 'r1', byUid: 'hivenod', at: ago(10) },
-    silence: {
-      runId: 'r1',
-      since: Date.now() - 41 * MIN,
-      at: Date.now() - MIN,
-      asked: Date.now() - 11 * MIN,
-      agent: 'Hive',
-      told: Date.now() - MIN,
-    },
   });
   // An Inbox thread whose plan step the agent carries out went silent.
   const old = ago(52);
@@ -176,7 +119,7 @@ test('silent work shows "<agent> silent for N min" on the thread, its plan step 
   if (info.project.name !== 'desktop-1440') await page.setViewportSize({ width: 390, height: 844 });
   const { wid } = await seed(page);
 
-  // The board card and item went with Projects (OE8Fm slice 10): the thread and Today remain.
+  // Items went with Projects (OE8Fm slices 10 and 11): reach out watches thread steps.
   await page.goto(`/inbox/${wid}/t/rt1`);
   // The decision page's top says it; at 1440 the plan step shows it too (the plan folds at 390).
   const top = page.getByRole('region', { name: 'Decision' });

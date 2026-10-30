@@ -252,7 +252,7 @@ export function ThreadPage() {
   const home = agents.state === 'ready' ? agents.data.find((a) => a.id === t.fetchedBy) : undefined;
   const agentInfo = {
     name: agentName(t.fetchedBy),
-    online: home ? isOnline(home.data, [], home.id, now) : false,
+    online: home ? isOnline(home.data, now) : false,
     lastSeen: home?.data.lastSeenAt?.toMillis() ?? null,
     cliVersion: home?.data.cliVersion ?? null,
   };

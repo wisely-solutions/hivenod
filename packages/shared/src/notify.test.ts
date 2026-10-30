@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_NOTIFY_PREFS,
-  approvalNotice,
-  gateKey,
   inQuietHours,
-  itemLink,
+  inboxNotice,
   notifyPrefsSchema,
-  reminderDue,
-  reminderNote,
   subId,
+  summaryNotice,
   tabTitle,
+  threadLink,
 } from './notify';
 
 const quiet = (over = {}) => ({ ...DEFAULT_NOTIFY_PREFS.quiet, enabled: true, ...over });
@@ -45,37 +43,24 @@ describe('inQuietHours', () => {
   });
 });
 
-describe('reminders', () => {
-  const H = 3_600_000;
-  it('is due after the hours and never when 0', () => {
-    expect(reminderDue(0, 24 * H, 24)).toBe(true);
-    expect(reminderDue(0, 24 * H - 1, 24)).toBe(false);
-    expect(reminderDue(0, 999 * H, 0)).toBe(false);
-  });
-  const item = { stepId: 's2', sendBackCount: 1 };
-  it('says sent only for the same arrival', () => {
-    const base = { sinceMs: 0, nowMs: 30 * H, remindAfterHours: 24, item };
-    expect(reminderNote({ ...base, notified: { gateKey: gateKey(item), remindedAt: 5 } })).toBe(
-      'sent',
-    );
-    expect(reminderNote({ ...base, notified: { gateKey: 's2:0', remindedAt: 5 } })).toBe('due');
-    expect(reminderNote({ ...base, notified: null })).toBe('due');
-    expect(reminderNote({ ...base, nowMs: 2 * H, notified: null })).toBeNull();
-  });
-});
-
 describe('texts and ids', () => {
-  it('links to the item on the board', () => {
-    expect(itemLink('p1', 'i1')).toBe('/p/p1?item=i1');
-    expect(
-      approvalNotice({
-        projectName: 'Blog',
-        stepName: 'Review',
-        itemTitle: 'Post',
-        projectId: 'p1',
-        itemId: 'i1',
-      }).url,
-    ).toBe('/p/p1?item=i1');
+  it('links to the Inbox thread', () => {
+    expect(threadLink('w1', 't1')).toBe('/inbox/w1/t/t1');
+    const n = inboxNotice({
+      kind: 'needsYou',
+      subjectName: 'Payments',
+      threadTitle: 'Move the review?',
+      text: 'Is Thursday fine?',
+      workspaceId: 'w1',
+      threadId: 't1',
+      urgent: true,
+    });
+    expect(n).toEqual({
+      title: 'Urgent · Needs you: Move the review?',
+      body: 'Payments · Is Thursday fine?',
+      url: '/inbox/w1/t/t1',
+    });
+    expect(summaryNotice(4).title).toBe('4 things need you');
   });
   it('shows the count in the tab title', () => {
     expect(tabTitle('Needs you · Hivenod', 13)).toBe('(13) Needs you · Hivenod');

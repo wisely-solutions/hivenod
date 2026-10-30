@@ -4,7 +4,6 @@ import { Bot, KeyRound, MoreHorizontal, Pencil, Plus, ShieldOff, Trash2 } from '
 import { useEffect, useState } from 'react';
 import { useReady } from '../auth/context';
 import { PageHeader } from '../pages/Chrome';
-import { spendText } from '../shell/logic';
 import { useShellData } from '../shell/data';
 import type { Row } from '../lib/live';
 import { AgentAvatar } from '../ui/avatar';
@@ -16,8 +15,7 @@ import { Icon } from '../ui/icon';
 import { ActionMenu } from '../ui/menu';
 import { Dialog, useToast } from '../ui/overlay';
 import { revokeAgentFlow, rotateAgentFlow } from './flow';
-import { openRunsOf } from './openRuns';
-import { agentStatus, colorIndex, scopeText, statusText, todayStats } from './logic';
+import { agentStatus, colorIndex, statusText } from './logic';
 import { NewAgentModal } from './NewAgentModal';
 import { RemoveAgentDialog } from './RemoveAgentDialog';
 import { RenameAgentDialog } from './RenameAgentDialog';
@@ -31,9 +29,7 @@ interface Issued {
 
 export function AgentsPage() {
   const { session, actionContext, run } = useReady();
-  const { agents, projects, runs, items, loading, spend, agentsKnown } = useShellData();
-  // Today's runs and cost are only final once every project's runs are confirmed by the server.
-  const runsKnown = spend.known;
+  const { agents, loading, agentsKnown } = useShellData();
   const toast = useToast();
   const { isAdmin, workspaceId } = session;
 
@@ -74,7 +70,7 @@ export function AgentsPage() {
     if (!target || !ctx) return;
     setBusy(true);
     try {
-      await revokeAgentFlow(ctx, run, target.id, await openRunsOf(workspaceId, target.id));
+      await revokeAgentFlow(ctx, run, target.id);
       setRevoking(null);
       toast.push({ message: `${target.data.name} is revoked.` });
     } catch {
@@ -90,14 +86,7 @@ export function AgentsPage() {
     if (!target || !ctx) return;
     setBusy(true);
     try {
-      const token = await rotateAgentFlow(
-        ctx,
-        run,
-        target.id,
-        target.data,
-        projects,
-        await openRunsOf(workspaceId, target.id),
-      );
+      const token = await rotateAgentFlow(ctx, run, target.id, target.data);
       setRotating(null);
       setIssued({ name: target.data.name, token, rotated: true });
     } catch {
@@ -136,7 +125,7 @@ export function AgentsPage() {
           title="No agents yet"
           description={
             isAdmin
-              ? 'Connect a terminal running Claude Code. It picks up work from your projects.'
+              ? 'Connect a terminal running Claude Code. It picks up work from your Inbox threads.'
               : 'An admin creates agents. They show up here.'
           }
           action={
@@ -153,8 +142,7 @@ export function AgentsPage() {
           className="overflow-hidden rounded-card border border-line bg-surface shadow-e1"
         >
           {ordered.map((a, i) => {
-            const status = agentStatus(a.id, a.data, runs, items, now);
-            const stats = todayStats(a.id, runs, now);
+            const status = agentStatus(a.data, now);
             const isRevoked = status.kind === 'revoked';
             const prev = a.data.previousAgentUid
               ? agents.find((x) => x.id === a.data.previousAgentUid)
@@ -209,26 +197,20 @@ export function AgentsPage() {
                         {statusText(status, now)}
                       </p>
                     )}
-                    <p className="truncate text-13 text-text-2">
-                      {scopeText(a.data, projects)}
-                      {prev ? ` · rotated from ${prev.data.tokenHint}` : ''}
-                    </p>
+                    {a.data.scope === 'inbox' || prev ? (
+                      <p className="truncate text-13 text-text-2">
+                        {[
+                          a.data.scope === 'inbox' ? 'Inbox only' : '',
+                          prev ? `rotated from ${prev.data.tokenHint}` : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
                 <dl className="flex items-center gap-5 text-13 sm:justify-end">
-                  <div>
-                    <dt className="text-text-2">Runs today</dt>
-                    <dd className="font-medium tabular-nums text-ink">
-                      {runsKnown ? stats.runs : '…'}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-text-2">Cost today</dt>
-                    <dd className="font-medium tabular-nums text-ink">
-                      {spendText(stats.cost, runsKnown, `a.${a.id}`)}
-                    </dd>
-                  </div>
                   <div>
                     <dt className="text-text-2">Token</dt>
                     <dd className="font-mono font-medium text-ink">
@@ -337,7 +319,7 @@ export function AgentsPage() {
         open={rotating !== null}
         onOpenChange={(o) => !o && !busy && setRotating(null)}
         title={`Rotate the token for ${rotating?.data.name ?? ''}?`}
-        description="You get a new token for the same agent: same name, colour and projects, linked to its history. The old token stops working now."
+        description="You get a new token for the same agent: same name, colour and settings, linked to its history. The old token stops working now."
         footer={
           <>
             <Button variant="ghost" onClick={() => setRotating(null)} disabled={busy}>

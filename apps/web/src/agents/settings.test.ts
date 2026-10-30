@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent } from '@hive/shared';
-import { projectsToRelink } from './flow';
 import { parseCount, settingsChanged, settingsDraft, settingsErrors } from './settings';
 
 const agent = { projectIds: ['p1'] } as unknown as Agent;
@@ -41,14 +40,6 @@ describe('agent settings form', () => {
     expect(settingsChanged(d, { ...d, projectIds: ['p1'] })).toBe(false);
     expect(settingsChanged(d, { ...d, maxFailedRuns: '4' })).toBe(true);
     expect(settingsChanged(d, { ...d, allProjects: true })).toBe(false);
-  });
-  it('a rotated agent takes over the steps limited to the old identity', () => {
-    const projects: { id: string; data: { stepAgents: Record<string, string[]> } }[] = [
-      { id: 'a', data: { stepAgents: { s1: ['old'] } } },
-      { id: 'b', data: { stepAgents: { s1: ['other'] } } },
-      { id: 'c', data: { stepAgents: {} } },
-    ];
-    expect(projectsToRelink(projects, 'old').map((p) => p.id)).toEqual(['a']);
   });
 });
 

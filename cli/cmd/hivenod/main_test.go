@@ -75,6 +75,16 @@ func TestCommands(t *testing.T) {
 	if code, _, errs := call("mcp", "--channel", "--max-items", "11"); code != 1 || !strings.Contains(errs, "from 1 to 10") {
 		t.Fatalf("max-items range: %q", errs)
 	}
+	// Projects were removed (item OE8Fm slice 11): create-item and --project/--step say so.
+	if code, _, errs := call("create-item", "--project", "p1", "--title", "x"); code != 1 || !strings.Contains(errs, "Projects were removed from Hivenod; work arrives as Inbox threads") {
+		t.Fatalf("create-item: %d %q", code, errs)
+	}
+	if code, _, errs := call("mcp", "--channel", "--project", "p1"); code != 2 || !strings.Contains(errs, "Projects were removed from Hivenod") {
+		t.Fatalf("--project: %d %q", code, errs)
+	}
+	if code, _, errs := call("mcp", "--channel", "--step", "build"); code != 2 || !strings.Contains(errs, "Drop --project and --step") {
+		t.Fatalf("--step: %d %q", code, errs)
+	}
 }
 
 func TestServerFlag(t *testing.T) {

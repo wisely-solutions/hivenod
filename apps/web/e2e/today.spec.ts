@@ -82,12 +82,10 @@ test.describe('desktop 1440', () => {
       // The urgent thread with a due date is the first decision card.
       await expect(card(page)).toHaveAttribute('aria-label', /Sign off the Q4 price list/);
       await expect(card(page).locator('[data-rank="1"]')).toHaveText('Urgent · due Wed');
-      await expect(card(page).locator('[data-sentence]')).toHaveText(
-        'Create the item “Review and sign off the Q4 price list”',
-      );
+      await expect(card(page).locator('[data-sentence]')).toHaveText(/^Hand it over to Finance/);
       await expect(card(page).locator('[data-confidence="high"]')).toContainText('Sure');
       await expect(card(page).locator('[data-reason]')).toContainText('A real review');
-      await expect(card(page).getByRole('button', { name: /Create item/ })).toBeVisible();
+      await expect(card(page).getByRole('button', { name: /Hand over/ })).toBeVisible();
       await expect(stack(page).locator('[data-thread-row]')).toHaveCount(3);
       await expect(stack(page)).toContainText('Move the payments review to Tuesday');
 
@@ -159,7 +157,7 @@ test.describe('desktop 1440', () => {
     test.setTimeout(120_000);
     const s = await open(page);
     try {
-      const approve = card(page).getByRole('button', { name: /Create item/ });
+      const approve = card(page).getByRole('button', { name: /Hand over/ });
       await approve.click();
       await expect(card(page).locator('button[data-undo]')).toContainText(/Undo · \d/);
       await expect(page.locator('[data-toast-region] > *')).toHaveCount(0);
@@ -169,8 +167,10 @@ test.describe('desktop 1440', () => {
       expect(await outcomeState(s, s.outcomes.price)).toBe('proposed');
       await approve.click();
       await expect(stack(page).locator('[data-done-row]')).toContainText(
-        'Approved · Make it work',
-        { timeout: UNDO_WAIT + 5000 },
+        'Handed over · Hand over',
+        {
+          timeout: UNDO_WAIT + 5000,
+        },
       );
       expect(await outcomeState(s, s.outcomes.price)).toBe('approved');
       await expect(page.locator('[data-toast-region] > *')).toHaveCount(0);

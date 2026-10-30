@@ -391,8 +391,8 @@ export async function seedInbox(page: Page, name = 'Cara Lindqvist') {
   await agent.due(price, at(2, 12).toISOString(), 'Ava: sign-off by Wednesday noon');
   const oPrice = await agent.propose(
     price,
-    'make_it_work',
-    { title: 'Review and sign off the Q4 price list' },
+    'handover',
+    { to: 'Finance', note: 'Review and sign off the Q4 price list' },
     'A real review, not a reply: 38 lines changed and 4 are below margin.',
     {
       confidence: 'high',

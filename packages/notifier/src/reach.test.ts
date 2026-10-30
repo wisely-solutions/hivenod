@@ -7,7 +7,7 @@ const M = 60_000;
 const H = 60 * M;
 
 /** A fake clock with timers, and a fake world the ports act on. */
-function world(over: { live?: boolean; delivery?: Delivery } = {}) {
+function world(over: { delivery?: Delivery } = {}) {
   const t = { now: Date.UTC(2026, 9, 30, 10, 0, 0) };
   const timers = new Map<number, { at: number; fn: () => void }>();
   let nextId = 1;
@@ -17,8 +17,6 @@ function world(over: { live?: boolean; delivery?: Delivery } = {}) {
     told: [] as { uid: string; notice: Notice; at: number }[],
     bells: [] as string[],
     reads: [] as number[],
-    releases: [] as number[],
-    live: [] as number[],
   };
   const found = { ms: null as number | null };
   const ports: ReachPorts = {
@@ -35,11 +33,6 @@ function world(over: { live?: boolean; delivery?: Delivery } = {}) {
     },
     ask: async () => void calls.asks.push(t.now),
     flag: async (_w, f) => void calls.flags.push(f),
-    sessionLive: async () => {
-      calls.live.push(t.now);
-      return over.live ?? false;
-    },
-    release: async () => void calls.releases.push(t.now),
     deliver: async (uid, notice) => {
       const d = over.delivery ?? 'sent';
       if (d === 'sent') calls.told.push({ uid, notice, at: t.now });
@@ -71,40 +64,38 @@ function world(over: { live?: boolean; delivery?: Delivery } = {}) {
 }
 
 const watched = (t: { now: number }, over: Partial<Watched> = {}): Watched => ({
-  key: 'w/i1',
-  ref: { kind: 'item', wid: 'w', pid: 'p', iid: 'i1', runId: 'r1' },
-  run: 'r1',
-  kind: 'held',
+  key: 'w/o/o1',
+  ref: { kind: 'step', wid: 'w', oid: 'o1', tid: 't1' },
+  run: 'o1',
   activityMs: t.now,
   askMs: null,
   flag: null,
   agentUid: 'hive',
   agentName: 'Hive',
   title: 'Dark mode for the board',
-  where: 'Build',
-  url: '/p/p?item=i1',
+  where: 'Reply, step 2 of 3',
+  url: '/inbox/w/t/t1',
   last: { text: 'tests green, opening the PR', atMs: t.now },
   to: ['ana'],
-  bell: { projectId: 'p', projectName: 'Hive', itemId: 'i1' },
   ...over,
 });
 
-describe('reach out on an item in agent hands (fake clock)', () => {
+describe('reach out on a thread step in agent hands (fake clock)', () => {
   it('the design timeline: ask at 30 min, the answer resets, asks again, silent 10 min later, one message', async () => {
     const w = world();
     const start = w.t.now;
     let doc = watched(w.t);
     w.reach.upsert(doc);
-    // One timer per item, to the next due time; nothing read or written before it.
+    // One timer per step, to the next due time; nothing read or written before it.
     expect(w.timers.size).toBe(1);
     await w.advance(29 * M);
     expect(w.calls.asks).toEqual([]);
     expect(w.calls.reads).toEqual([]);
     await w.advance(M);
-    // 10:30: the log is read once (nothing newer), then the request goes out.
+    // 10:30: the thread is read once (nothing newer), then the request goes out.
     expect(w.calls.reads).toEqual([start]);
     expect(w.calls.asks).toEqual([start + 30 * M]);
-    // The listener sees the request on the item.
+    // The listener sees the request on the outcome.
     doc = { ...doc, askMs: start + 30 * M };
     w.reach.upsert(doc);
     // 10:31: the agent answers with a status: the timer moves to 11:01.
@@ -134,10 +125,10 @@ describe('reach out on an item in agent hands (fake clock)', () => {
     expect(w.calls.told).toHaveLength(1);
     expect(w.calls.told[0]!.notice).toEqual({
       title: 'Hive is silent on "Dark mode for the board"',
-      body: 'No update for 40 min at Build; no answer to a status check 10 min ago. Last: "tests green, opening the PR" (40 min ago).',
-      url: '/p/p?item=i1',
+      body: 'No update for 40 min at Reply, step 2 of 3; no answer to a status check 10 min ago. Last: "tests green, opening the PR" (40 min ago).',
+      url: '/inbox/w/t/t1',
     });
-    expect(w.calls.bells).toEqual([`ana/n-i1-r1_${start + 31 * M}`]);
+    expect(w.calls.bells).toEqual([`ana/n-t1-o1_${start + 31 * M}`]);
     // Still silent: no more requests or messages until the 2-hour reminder; then exactly one.
     doc = { ...doc, flag: w.calls.flags[0]! };
     w.reach.upsert(doc);
@@ -159,7 +150,7 @@ describe('reach out on an item in agent hands (fake clock)', () => {
     expect(w.calls.flags.at(-1)).toBeNull();
   });
 
-  it('a busy agent (log lines the doc does not show) is never asked; one read per 30 min', async () => {
+  it('a busy agent (thread activity the outcome does not show) is never asked; one read per 30 min', async () => {
     const w = world();
     w.reach.upsert(watched(w.t));
     for (let i = 0; i < 8; i++) {
@@ -171,58 +162,22 @@ describe('reach out on an item in agent hands (fake clock)', () => {
     expect(w.calls.reads.length).toBeLessThanOrEqual(8);
   });
 
-  it('parked items are checked every 2 h', async () => {
-    const w = world();
-    w.reach.upsert(watched(w.t, { kind: 'parked' }));
-    await w.advance(2 * H - M);
-    expect(w.calls.asks).toEqual([]);
-    await w.advance(M);
-    expect(w.calls.asks).toHaveLength(1);
-  });
-
-  it('a stale claim without a live session goes back to the queue 30 min after it went stale', async () => {
-    const w = world();
-    const hb = w.t.now - 10 * M; // just went stale
-    w.reach.upsert(watched(w.t, { kind: 'stale', heartbeatMs: hb, activityMs: w.t.now - 10 * M }));
-    await w.advance(20 * M);
-    // The status request came first (30 min quiet), then the release.
-    expect(w.calls.asks).toHaveLength(1);
-    expect(w.calls.releases).toEqual([]);
-    await w.advance(10 * M);
-    expect(w.calls.releases).toEqual([hb + 40 * M]);
-    expect(w.reach.size()).toBe(0);
-  });
-
-  it('a stale claim whose agent has a live session is not released; checked again 30 min later', async () => {
-    const w = world({ live: true });
-    const hb = w.t.now - 40 * M;
-    w.reach.upsert(watched(w.t, { kind: 'stale', heartbeatMs: hb, askMs: w.t.now, flag: null }));
-    await w.advance(0);
-    expect(w.calls.live).toHaveLength(1);
-    expect(w.calls.releases).toEqual([]);
-    await w.advance(10 * M);
-    // The unanswered request: silent at +10 min, the release check again at +30.
-    expect(w.calls.flags).toHaveLength(1);
-    await w.advance(20 * M);
-    expect(w.calls.live).toHaveLength(2);
-  });
-
   it('quiet hours: flagged now, the message goes out on a later try', async () => {
     const w = world({ delivery: 'held' });
     w.reach.upsert(watched(w.t, { askMs: w.t.now }));
     await w.advance(10 * M);
     expect(w.calls.flags[0]).toMatchObject({ told: null });
     expect(w.calls.told).toEqual([]);
-    expect(w.reach.next('w/i1')).toMatchObject({ do: 'remind', at: w.t.now + REACH_RETRY_MS });
+    expect(w.reach.next('w/o/o1')).toMatchObject({ do: 'remind', at: w.t.now + REACH_RETRY_MS });
   });
 
-  it('a new claim (another run) starts over; removed items keep no timer', async () => {
+  it('another step starts over; removed steps keep no timer', async () => {
     const w = world();
     w.reach.upsert(watched(w.t, { askMs: w.t.now }));
-    w.reach.upsert(watched(w.t, { run: 'r2' }));
+    w.reach.upsert(watched(w.t, { run: 'o2' }));
     await w.advance(10 * M);
     expect(w.calls.flags).toEqual([]);
-    w.reach.remove('w/i1');
+    w.reach.remove('w/o/o1');
     expect(w.timers.size).toBe(0);
     await w.advance(3 * H);
     expect(w.calls.asks).toEqual([]);
@@ -230,27 +185,10 @@ describe('reach out on an item in agent hands (fake clock)', () => {
 });
 
 describe('the silent message keyboard', () => {
-  it('Ping again · Release to queue / Stop · Open on an item; Ping again · Open on a thread step', async () => {
+  it('Ping again · Open on a thread step', async () => {
     const { reachKeyboard } = await import('./telegram');
-    const item = reachKeyboard(
-      'c1',
-      {
-        kind: 'reach',
-        uid: 'ana',
-        ref: { kind: 'item', wid: 'w', pid: 'p', iid: 'i', runId: 'r' },
-      },
-      'https://app/p/p?item=i',
-    );
-    expect(item.map((r) => r.map((b) => b.text))).toEqual([
-      ['Ping again', 'Release to queue'],
-      ['Stop', 'Open'],
-    ]);
-    expect(item[0]![0]!.callback_data).toBe('rp:c1');
-    const step = reachKeyboard(
-      'c2',
-      { kind: 'reach', uid: 'ana', ref: { kind: 'step', wid: 'w', oid: 'o', tid: 't' } },
-      'https://app/i/w/t',
-    );
+    const step = reachKeyboard('c2', 'https://app/inbox/w/t/t');
     expect(step.map((r) => r.map((b) => b.text))).toEqual([['Ping again', 'Open']]);
+    expect(step[0]![0]!.callback_data).toBe('rp:c2');
   });
 });

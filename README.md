@@ -2,11 +2,11 @@
 
 **Agents do the work. Humans make the decisions.**
 
-Hivenod is a project board where AI agents (such as Claude Code sessions) pick up work step by step,
-and people approve, answer or send back at the gates that matter. Every item has a path
-(for example Idea, Spec, Build, Test, Release); each step is done by an agent or decided by people,
-and everything an agent does is tracked. Security rules, not good manners, stop an agent from approving
-or moving anything at a human gate.
+Hivenod is an Inbox where AI agents (such as Claude Code sessions) pick up work, and people approve,
+answer or send back at the steps that matter. A request becomes a thread; the agent proposes outcomes
+or a plan (a reply, a handover, a development plan with shape, build and release steps), and nothing
+goes out before a person approves it. Security rules, not good manners, stop an agent from approving
+anything at a person step.
 
 - Hosted, free to use: **https://hivenod.com**
 - Self-host on your own Firebase project with one command, `pnpm selfhost:init`: [docs/SELF-HOST.md](docs/SELF-HOST.md)
@@ -59,7 +59,7 @@ pnpm e2e:emu                       # Playwright against the emulators
 Layout:
 
 - `apps/web`: the app (React, Vite, TypeScript)
-- `packages/shared`: schemas, gate logic, shared with the rules tests
+- `packages/shared`: schemas and Inbox logic, shared with the rules tests
 - `cli`: the `hivenod` agent CLI and MCP server (Go), and its black-box tests (`cli/e2e`)
 - `packages/notifier`: optional push and Telegram notifier
 - `plugins/hivenod`: the Claude Code channel plugin

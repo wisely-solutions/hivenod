@@ -5,29 +5,22 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"cloud.google.com/go/firestore"
-	"google.golang.org/api/iterator"
 
 	"github.com/wisely-solutions/hivenod/cli/internal/actions"
 	"github.com/wisely-solutions/hivenod/cli/internal/auth"
 	"github.com/wisely-solutions/hivenod/cli/internal/credentials"
 	"github.com/wisely-solutions/hivenod/cli/internal/model"
 	"github.com/wisely-solutions/hivenod/cli/internal/pairing"
-	"github.com/wisely-solutions/hivenod/cli/internal/plan"
 	"github.com/wisely-solutions/hivenod/cli/internal/store"
 	"github.com/wisely-solutions/hivenod/cli/internal/token"
 	"github.com/wisely-solutions/hivenod/cli/internal/update"
 )
-
-// HeartbeatInterval: how often an open run beats while this process lives.
-var HeartbeatInterval = 60 * time.Second
 
 // Client is a signed-in agent (HiveClient in client.ts).
 type Client struct {
@@ -40,16 +33,7 @@ type Client struct {
 
 	mu          sync.Mutex
 	agent       model.Agent
-	timers      map[string]context.CancelFunc
-	lastBeat    map[string]int64
-	nextLog     map[string]int
-	itemProject map[string]string
-	arrivalKeys map[string]arrivalKey // the hand-out order key of each work row seen
-	// AutoHeartbeatError is the last problem an automatic heartbeat hit.
-	AutoHeartbeatError string
-	clockOffset        time.Duration
-	// Creates is the create_item rate limit (item DhsO9); defaults to the shared file.
-	Creates *CreateLimiter
+	clockOffset time.Duration
 	// WebURL is the Hivenod site (https://hivenod.com), for links to items.
 	WebURL string
 	// The channel session's presence identity (presence.go, item N0biX); "" outside one.
@@ -94,11 +78,6 @@ func Connect(ctx context.Context, cfg Config, tok string) (*Client, error) {
 		UID:         sess.UID(),
 		DB:          db,
 		sess:        sess,
-		timers:      map[string]context.CancelFunc{},
-		lastBeat:    map[string]int64{},
-		nextLog:     map[string]int{},
-		itemProject: map[string]string{},
-		arrivalKeys: map[string]arrivalKey{},
 		WebURL:      strings.TrimRight(cfg.WebURL, "/"),
 	}
 	a, err := c.readAgent(ctx)
@@ -118,14 +97,8 @@ func Connect(ctx context.Context, cfg Config, tok string) (*Client, error) {
 	return c, nil
 }
 
-// Close stops the heartbeats and the connection.
+// Close stops the connection.
 func (c *Client) Close() {
-	c.mu.Lock()
-	for _, stop := range c.timers {
-		stop()
-	}
-	c.timers = map[string]context.CancelFunc{}
-	c.mu.Unlock()
 	c.DB.Close()
 }
 
@@ -173,214 +146,7 @@ func (c *Client) RefreshAgent(ctx context.Context) (model.Agent, error) {
 	return a, nil
 }
 
-func pausedMessage(a model.Agent) string {
-	r := ""
-	if a.PausedReason != nil && *a.PausedReason != "" {
-		r = " (" + *a.PausedReason + ")"
-	}
-	return "This agent is paused" + r + ". It takes no new work until an admin resumes it on its page in Hivenod (Agents)."
-}
-
-func pausedNow(a model.Agent) string {
-	return fmt.Sprintf("This agent is now paused after %d failed runs in a row (limit %d). It takes no new work until an admin resumes it in Hivenod.", a.FailStreak+1, actions.GuardrailsOf(a).MaxFailedRuns)
-}
-
-func (c *Client) requireNotPaused(ctx context.Context) (model.Agent, error) {
-	a, err := c.RefreshAgent(ctx)
-	if err != nil {
-		return a, err
-	}
-	if actions.IsPaused(a) {
-		return a, Errf(pausedMessage(a))
-	}
-	return a, nil
-}
-
 // ---------- reading ----------
-
-// WriteDeniedMessage is the generic denial of a write; ReadDeniedMessage the one of a read.
-const (
-	WriteDeniedMessage = "Hivenod refused this change (permission denied). This agent may not be allowed on this project, or the item is no longer in the state it was read in. Read the item again with read_item."
-	ReadDeniedMessage  = "Hivenod refused to read this (permission denied): this agent may not use this project, or was revoked."
-)
-
-// read turns a permission error into a message a person can act on.
-func (c *Client) read(ctx context.Context, err error) error {
-	if err != nil && Denied(err) {
-		if m := c.diagnose(ctx, nil); m != WriteDeniedMessage {
-			return Errf(m)
-		}
-		return Errf(ReadDeniedMessage)
-	}
-	return err
-}
-
-func (c *Client) getProject(ctx context.Context, pid string) (model.Project, error) {
-	snap, err := c.DB.Doc(model.Paths.Project(c.WorkspaceID, pid)).Get(ctx)
-	if err != nil && !NotFound(err) {
-		return model.Project{}, c.read(ctx, err)
-	}
-	if err != nil || !snap.Exists() {
-		return model.Project{}, Errf(fmt.Sprintf("Project %s not found, or this agent may not use it", pid))
-	}
-	var p model.Project
-	if err := snap.DataTo(&p); err != nil {
-		return model.Project{}, err
-	}
-	return p, nil
-}
-
-func (c *Client) projectIDs(ctx context.Context) ([]string, error) {
-	a := c.Agent()
-	if !a.AllProjects() {
-		return a.ProjectList(), nil
-	}
-	docs, err := c.DB.Collection("workspaces/" + c.WorkspaceID + "/projects").Documents(ctx).GetAll()
-	if err != nil {
-		return nil, c.read(ctx, err)
-	}
-	out := make([]string, len(docs))
-	for i, d := range docs {
-		out[i] = d.Ref.ID
-	}
-	return out, nil
-}
-
-type loaded struct {
-	ProjectID string
-	ItemID    string
-	Project   model.Project
-	Item      model.Item
-}
-
-func (l *loaded) loc() *loc { return &loc{l.ProjectID, l.ItemID} }
-
-type loc struct{ ProjectID, ItemID string }
-
-// load finds an item by id in the projects this agent may use.
-func (c *Client) load(ctx context.Context, itemID, projectID string) (*loaded, error) {
-	var cands []string
-	if projectID != "" {
-		cands = []string{projectID}
-	} else {
-		c.mu.Lock()
-		if p, ok := c.itemProject[itemID]; ok {
-			cands = append(cands, p)
-		}
-		c.mu.Unlock()
-		ids, err := c.projectIDs(ctx)
-		if err != nil {
-			return nil, err
-		}
-		cands = append(cands, ids...)
-	}
-	seen := map[string]bool{}
-	for _, pid := range cands {
-		if seen[pid] {
-			continue
-		}
-		seen[pid] = true
-		snap, err := c.DB.Doc(model.Paths.Item(c.WorkspaceID, pid, itemID)).Get(ctx)
-		if err != nil {
-			if NotFound(err) {
-				continue
-			}
-			if e := c.read(ctx, err); e != nil {
-				var he *Error
-				if errors.As(e, &he) {
-					continue
-				}
-				return nil, e
-			}
-		}
-		if !snap.Exists() {
-			continue
-		}
-		it, err := model.DecodeItem(snap)
-		if err != nil {
-			return nil, err
-		}
-		c.mu.Lock()
-		c.itemProject[itemID] = pid
-		c.mu.Unlock()
-		p, err := c.getProject(ctx, pid)
-		if err != nil {
-			return nil, err
-		}
-		return &loaded{ProjectID: pid, ItemID: itemID, Project: p, Item: it}, nil
-	}
-	return nil, Errf(fmt.Sprintf("Item %s not found. Check the id (list_work) and that this agent may use its project.", itemID))
-}
-
-func (c *Client) loadRun(ctx context.Context, runID string) (model.Run, error) {
-	snap, err := c.DB.Doc(model.Paths.Run(c.WorkspaceID, runID)).Get(ctx)
-	if err != nil && !NotFound(err) {
-		return model.Run{}, c.read(ctx, err)
-	}
-	var r model.Run
-	if err == nil && snap.Exists() {
-		if err := snap.DataTo(&r); err != nil {
-			return model.Run{}, err
-		}
-	}
-	if err != nil || !snap.Exists() || r.AgentUID != c.UID {
-		return model.Run{}, Errf(fmt.Sprintf("Run %s not found (it must be one of your own)", runID))
-	}
-	return r, nil
-}
-
-// ---------- writing ----------
-
-// Write commits one plan. A denied write is explained (gate, someone else's claim, revoked, …).
-func (c *Client) Write(ctx context.Context, p plan.Plan, at *loc) error {
-	if err := plan.Apply(ctx, c.DB, p); err != nil {
-		if Denied(err) {
-			return Errf(c.diagnose(ctx, at))
-		}
-		return err
-	}
-	return nil
-}
-
-func (c *Client) diagnose(ctx context.Context, at *loc) string {
-	snap, err := c.DB.Doc(model.Paths.Agent(c.WorkspaceID, c.UID)).Get(ctx)
-	if err != nil || !snap.Exists() {
-		return RevokedMessage
-	}
-	var me model.Agent
-	_ = snap.DataTo(&me)
-	if me.RevokedAt != nil {
-		return RevokedMessage
-	}
-	if me.PausedAt != nil {
-		return pausedMessage(me)
-	}
-	if at != nil {
-		if l, err := c.load(ctx, at.ItemID, at.ProjectID); err == nil {
-			step := findStep(l.Project, l.Item.StepID)
-			if step != nil && step.Kind == "human" && !actions.IsUnshaped(l.Item) {
-				return GateMessage
-			}
-			if l.Item.AwaitingAnswer != nil {
-				return HeldMessage
-			}
-			if l.Item.WorkStopped != nil && l.Item.Claim == nil {
-				run, err := c.loadRun(ctx, l.Item.WorkStopped.RunID)
-				if err == nil && run.Status == "stopped" {
-					return StoppedMessage(str(run.Summary))
-				}
-				return OnHoldMessage
-			}
-			if l.Item.Claim == nil && !actions.AgentMayTakeStep(l.Project, l.Item.StepID, c.UID) {
-				return StepLimitedMessage
-			}
-			if l.Item.Claim != nil && l.Item.Claim.AgentUID != c.UID {
-				return TakenPrefix + "."
-			}
-		}
-	}
-	return WriteDeniedMessage
-}
 
 // wrap turns action errors into client errors (the same message).
 func wrap(err error) error {
@@ -391,13 +157,13 @@ func wrap(err error) error {
 	return err
 }
 
-func findStep(p model.Project, id string) *model.Step {
-	for i := range p.Steps {
-		if p.Steps[i].ID == id {
-			return &p.Steps[i]
+func contains(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 func str(p *string) string {
@@ -467,29 +233,4 @@ func isoPtr(t *time.Time) any {
 		return nil
 	}
 	return iso(*t)
-}
-
-func isoOrNull(t time.Time) any {
-	if t.IsZero() {
-		return nil
-	}
-	return iso(t)
-}
-
-func sortByAt[T any](xs []T, at func(T) time.Time) {
-	sort.SliceStable(xs, func(i, j int) bool { return at(xs[i]).Before(at(xs[j])) })
-}
-
-func allDocs(it *firestore.DocumentIterator) ([]*firestore.DocumentSnapshot, error) {
-	var out []*firestore.DocumentSnapshot
-	for {
-		d, err := it.Next()
-		if errors.Is(err, iterator.Done) {
-			return out, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, d)
-	}
 }

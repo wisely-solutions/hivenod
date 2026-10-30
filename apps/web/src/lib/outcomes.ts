@@ -1,24 +1,4 @@
-import { outcomeType, type Decision } from '@hive/shared';
-
-/**
- * One definition of "sent back" for every screen (Insights, agent profile, CSV):
- * only the sentBack outcome. A stop is counted separately, never as a send back.
- */
-export const isSentBack = (outcome: Decision['outcome']): boolean => outcome === 'sentBack';
-
-/** The app's label for a decision outcome (also used in the CSV Decision column). */
-export function outcomeName(outcome: Decision['outcome']): string {
-  switch (outcome) {
-    case 'approved':
-      return 'Approved';
-    case 'sentBack':
-      return 'Sent back';
-    case 'stopped':
-      return 'Stopped';
-    default:
-      return 'Answered';
-  }
-}
+import { outcomeType } from '@hive/shared';
 
 /**
  * "When you approve, <agent> will…" (item kt3E7u9EliL3q2veDDI0, design 3.8): 1-3 lines built
@@ -31,10 +11,14 @@ export function effectLines(
   ctx: { agent: string; channel?: string; to?: string },
 ): { lead: string; lines: string[] } {
   const t = outcomeType(type);
-  // Retired with Calendar (slice 5): old bookings are never approved now.
+  // Retired with Calendar (slice 5) and Projects (slice 11): old bookings and Build it steps are
+  // never approved now.
   if (t?.retired)
     return {
-      lead: 'Bookings were removed with Calendar:',
+      lead:
+        type === 'make_it_work'
+          ? 'Items were removed with Projects:'
+          : 'Bookings were removed with Calendar:',
       lines: ['This proposal can only be rejected'],
     };
   const s = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
@@ -57,11 +41,6 @@ export function effectLines(
       break;
     case 'nudge':
       lines.push(`Send the reminder${to}${on}, as you`);
-      break;
-    case 'make_it_work':
-      lines.push(
-        `Create the item “${s(fields.title)}”${s(fields.project) ? ` in ${s(fields.project)}` : ''}`,
-      );
       break;
     case 'handover':
       lines.push(`Hand it over to ${s(fields.to)}`);

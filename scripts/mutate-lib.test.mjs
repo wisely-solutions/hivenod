@@ -70,10 +70,10 @@ describe('mutate.mjs runner', () => {
     const before = readFileSync(rulesPath, 'utf8');
     const r = await run({
       MUTATE_SUITE_CMD: FAKE,
-      MUTATE_ONLY: 'claims never stale,log cap lifted',
+      MUTATE_ONLY: 'summary: 6 bullets,send back: any count',
     });
-    expect(r.out).toContain('caught    claims never stale');
-    expect(r.out).toContain('caught    log cap lifted');
+    expect(r.out).toContain('caught    summary: 6 bullets');
+    expect(r.out).toContain('caught    send back: any count');
     expect(r.out).toContain('2/2 mutations caught');
     expect(r.code).toBe(0);
     expect(readFileSync(rulesPath, 'utf8')).toBe(before);
@@ -87,7 +87,7 @@ describe('mutate.mjs runner', () => {
     const hang = `if grep -q MUTATED "$HIVE_RULES_FILE"; then touch ${ready}; sleep 60; else exit 0; fi`;
     const c = spawn('node', ['packages/shared/rules/mutate.mjs'], {
       cwd: ROOT,
-      env: { ...process.env, MUTATE_SUITE_CMD: hang, MUTATE_ONLY: 'log cap lifted' },
+      env: { ...process.env, MUTATE_SUITE_CMD: hang, MUTATE_ONLY: 'summary: 6 bullets' },
       stdio: 'ignore',
     });
     const exited = new Promise((res) => c.on('close', res));

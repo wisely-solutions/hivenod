@@ -1,10 +1,4 @@
-import {
-  eventSchema,
-  inboxEventSchema,
-  itemSchema,
-  type HiveEvent,
-  type InboxEvent,
-} from '@hive/shared';
+import { inboxEventSchema, type InboxEvent } from '@hive/shared';
 import { countReads } from '../lib/reads';
 import {
   collection,
@@ -24,14 +18,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { z } from 'zod';
 import { db } from '../lib/db';
-import type { Live, Row } from '../lib/live';
-import {
-  feedConstraints,
-  INDEX_BUILDING,
-  isIndexBuilding,
-  PAGE_SIZE,
-  type FeedFilters,
-} from './logic';
+import type { Row } from '../lib/live';
+import { isIndexBuilding, PAGE_SIZE } from './logic';
 import { threadFeedConstraints, type ThreadGroupId } from './threadLogic';
 
 /** A clock that re-renders every `ms` milliseconds. */
@@ -58,7 +46,7 @@ function parse<S extends z.ZodType>(
 
 // ---------- the feed: one listener on the newest page, older pages on demand ----------
 
-export interface Feed<T = HiveEvent> {
+export interface Feed<T = InboxEvent> {
   state: 'loading' | 'ready' | 'error';
   rows: Row<T>[];
   /** Ids that arrived live after the first load (they get the soft highlight). */
@@ -98,33 +86,8 @@ function emptyStore<T>(key: string): FeedStore<T> {
 }
 
 /**
- * The activity feed. Exactly one live listener (the newest 50 events for the filters); older
- * pages of 50 are read once, on demand, with a cursor. Rows seen once stay, so an event that
- * scrolls out of the live window is never lost.
- */
-export function useActivityFeed(wid: string, filters: FeedFilters, enabled: boolean): Feed {
-  const key = `${wid}|${filters.projectId}|${filters.actor}|${filters.group}`;
-  return usePagedFeed(
-    key,
-    (after) => {
-      const parts = [
-        collection(db, `workspaces/${wid}/events`),
-        ...feedConstraints(filters).map(([f, op, v]) => where(f, op, v)),
-        orderBy('at', 'desc'),
-        ...(after ? [startAfter(after)] : []),
-        limit(PAGE_SIZE),
-      ] as const;
-      const [col, ...rest] = parts;
-      return query(col, ...rest);
-    },
-    eventSchema,
-    enabled,
-  );
-}
-
-/**
  * Activity on threads (slice 9): the member's own thread events, newest first, live; the same
- * paging as the item feed. `group` narrows the types ('' = every type the feed shows).
+ * paging as before. `group` narrows the types ('' = every type the feed shows).
  */
 export function useThreadFeed(
   wid: string,
@@ -326,132 +289,5 @@ export function useThreadTitles(
   const settled = wanted.every((t) => threadTitleCache.has(`${wid}/${t}`));
   const titleOf = (tid: string | null) =>
     tid ? (threadTitleCache.get(`${wid}/${tid}`) ?? null) : null;
-  return Object.assign(titleOf, { settled });
-}
-
-// ---------- reads that a plain member can only make one project at a time ----------
-
-/**
- * Live rows for something the rules only let a member read per project (runs, decisions).
- * Admins use `admin` (one listener for the whole organization); members get one per project.
- */
-export function useScopedQuery<S extends z.ZodType>(opts: {
-  key: string;
-  enabled: boolean;
-  isAdmin: boolean;
-  projectIds: readonly string[];
-  admin: () => Query;
-  perProject: (pid: string) => Query;
-  schema: S;
-}): Live<Row<z.infer<S>>[]> {
-  const { key, enabled, isAdmin, projectIds, schema } = opts;
-  const adminRef = useRef(opts.admin);
-  const projRef = useRef(opts.perProject);
-  useEffect(() => {
-    adminRef.current = opts.admin;
-    projRef.current = opts.perProject;
-  });
-  const pkey = projectIds.join('|');
-  const full = `${key}|${isAdmin ? 'admin' : pkey}`;
-  const [state, setState] = useState<{
-    key: string;
-    parts: Record<string, Row<z.infer<S>>[]>;
-    error: boolean;
-    building: boolean;
-  }>({ key: '', parts: {}, error: false, building: false });
-
-  useEffect(() => {
-    if (!enabled) return;
-    const targets = isAdmin ? [''] : pkey ? pkey.split('|') : [];
-    const stops = targets.map((pid) =>
-      onSnapshot(
-        pid ? projRef.current(pid) : adminRef.current(),
-        (snap) => {
-          countReads(snap);
-          setState((cur) => ({
-            key: full,
-            parts: { ...(cur.key === full ? cur.parts : {}), [pid]: parse(snap.docs, schema) },
-            error: false,
-            building: false,
-          }));
-        },
-        (err) =>
-          setState((cur) => ({
-            key: full,
-            parts: cur.key === full ? cur.parts : {},
-            error: true,
-            building: isIndexBuilding(err),
-          })),
-      ),
-    );
-    return () => stops.forEach((s) => s());
-  }, [enabled, full, isAdmin, pkey, schema]);
-
-  return useMemo<Live<Row<z.infer<S>>[]>>(() => {
-    if (!enabled) return { state: 'loading' };
-    const targets = isAdmin ? [''] : pkey ? pkey.split('|') : [];
-    if (state.key === full && state.error)
-      return { state: 'error', code: state.building ? INDEX_BUILDING : 'denied' };
-    if (targets.length === 0) return { state: 'ready', data: [] };
-    if (state.key !== full || targets.some((t) => !state.parts[t])) return { state: 'loading' };
-    return { state: 'ready', data: targets.flatMap((t) => state.parts[t] ?? []) };
-  }, [enabled, isAdmin, pkey, state, full]);
-}
-
-// ---------- item titles ----------
-
-const titleCache = new Map<string, string | null>();
-
-/**
- * Titles of the items the given events point at. Titles the shell already knows are used first;
- * the rest are read once each (not listened to) and remembered.
- */
-export function useItemTitles(
-  wid: string,
-  events: ReadonlyArray<{ projectId: string | null; itemId: string | null }>,
-  known: (pid: string, iid: string) => string | undefined,
-): ((pid: string | null, iid: string | null) => string | null) & { settled: boolean } {
-  const [, bump] = useState(0);
-  const knownRef = useRef(known);
-  useEffect(() => {
-    knownRef.current = known;
-  });
-  const wanted = useMemo(() => {
-    const s = new Set<string>();
-    for (const e of events) if (e.projectId && e.itemId) s.add(`${e.projectId}/${e.itemId}`);
-    return [...s];
-  }, [events]);
-  useEffect(() => {
-    let live = true;
-    const missing = wanted.filter((k) => {
-      const [p, i] = k.split('/') as [string, string];
-      return !titleCache.has(`${wid}/${k}`) && !knownRef.current(p, i);
-    });
-    if (!missing.length) return;
-    void Promise.all(
-      missing.map(async (k) => {
-        const [p, i] = k.split('/') as [string, string];
-        try {
-          const snap = await getDoc(doc(db, `workspaces/${wid}/projects/${p}/items/${i}`));
-          const parsed = snap.exists() ? itemSchema.safeParse(snap.data()) : null;
-          titleCache.set(`${wid}/${k}`, parsed?.success ? parsed.data.title : null);
-        } catch {
-          titleCache.set(`${wid}/${k}`, null);
-        }
-      }),
-    ).then(() => live && bump((n) => n + 1));
-    return () => {
-      live = false;
-    };
-  }, [wid, wanted]);
-  // True once every title has an answer (found or not), so rows no longer change length.
-  const settled = wanted.every((k) => {
-    const [p, i] = k.split('/') as [string, string];
-    return titleCache.has(`${wid}/${k}`) || Boolean(known(p, i));
-  });
-  const titleOf = (pid: string | null, iid: string | null) => {
-    if (!pid || !iid) return null;
-    return known(pid, iid) ?? titleCache.get(`${wid}/${pid}/${iid}`) ?? null;
-  };
   return Object.assign(titleOf, { settled });
 }

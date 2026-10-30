@@ -369,7 +369,7 @@ const status = "status"
 
 func f() {
 	_ = db.Collection(base + "/runs").Where(status, "==", 1).OrderBy("at", firestore.Desc).Limit(3)
-	_ = db.Collection(actions.CalendarPaths.Busy(u)).Where("end", ">", t)
+	_ = db.Collection(model.Paths.InboxCollection(w, "inboxThreads")).Where("state", "==", s)
 	_ = db.Collection("runs").Documents(ctx)
 }
 `,
@@ -377,7 +377,7 @@ func f() {
     const r = guard(tmp, { goFiles: [file], config: { indexes: [] }, allowlist: [] });
     expect(r.results.map((x) => describeQuery(x.shape))).toEqual([
       "collection 'runs' where(status ==) orderBy(at desc)",
-      "collection 'busy' where(end >)",
+      "collection 'inboxThreads' where(state ==)",
     ]);
     expect(r.problems).toHaveLength(1);
   });
@@ -412,11 +412,11 @@ describe('the repository', () => {
     expect(results.length).toBeGreaterThan(10);
   });
 
-  it('scans the Go CLI queries (13, with the live plans and running steps of item qwFAW, the re-check watch of item bmNoI, the instruct watch of item w6O2K, the summaries watch of item OE8Fm and its thread attachment kinds; the calendar ones went with Calendar, OE8Fm slice 5)', () => {
+  it('scans the Go CLI queries (9 on Inbox threads, outcomes, plans and attachments; the calendar ones went with Calendar, OE8Fm slice 5, the item ones with Projects, slice 11)', () => {
     const { problems, results, unanalysable } = guard(root);
     expect(problems).toEqual([]);
     const go = results.filter((r) => r.file.startsWith('cli/'));
-    expect(go).toHaveLength(13);
+    expect(go).toHaveLength(9);
     expect(
       go.find((r) => r.shape.group === 'calendar' || r.shape.group === 'busy'),
     ).toBeUndefined();

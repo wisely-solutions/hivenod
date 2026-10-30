@@ -1,8 +1,8 @@
 # Notifications for a self-hosted Hivenod (optional)
 
 Hivenod works without this. The notifier is one small always-on process that sends Web Push pop-ups and
-Telegram messages (new approvals, agent questions, reminders, with Approve and Send back buttons in
-Telegram). It costs nothing: Web Push and Telegram bots are free and Firestore stays within the free
+Telegram messages (Inbox threads that need you: agent questions and proposals, with Approve and Ask for changes
+buttons in Telegram). It costs nothing: Web Push and Telegram bots are free and Firestore stays within the free
 quota. Details of what it does: [NOTIFIER.md](NOTIFIER.md).
 
 You need a machine that stays on (a small VPS, a home server, a laptop that stays awake), Node 22+ and
@@ -64,6 +64,6 @@ loginctl enable-linger "$USER"   # keeps it running without a login
 ## 5. Check
 
 In your Hivenod, open your profile's notification settings: turn on push on a device, or link Telegram
-(the bot name appears once the notifier runs). Then move an item to a gate you decide: the message
+(the bot name appears once the notifier runs). Then bring an Inbox thread to Your call or Needs you: the message
 arrives within seconds. After `git pull` and a new `pnpm selfhost:init`, rebuild and restart the notifier
 too.

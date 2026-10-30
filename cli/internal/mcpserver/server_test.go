@@ -53,15 +53,11 @@ func (c *pipeClient) next() map[string]any {
 
 func TestServer(t *testing.T) {
 	sf := LoadSurface()
-	if len(sf.Plain.Tools) != 43 || len(sf.Channel.Tools) != 44 { // channel: no wait_for_work, plus park and unpark (item QjTTL); create_item (item DhsO9); 13 inbox tools (item 4PEHr); calendar_* removed (item OE8Fm slice 5); status (item AzveC); thread_due (item kt3E7); plan_propose (item qwFAW); thread_recheck_done (item bmNoI); thread_answer_instruction and thread_suggest_chips (item w6O2K); thread_summary and thread_attach (item OE8Fm); plan_send_back (item OE8Fm slice 6); step_progress (slice 6b)
+	if len(sf.Plain.Tools) != 22 || len(sf.Channel.Tools) != 22 { // thread tools only: item tools removed with projects (item OE8Fm slice 11)
 		t.Fatalf("surface: %d plain, %d channel tools", len(sf.Plain.Tools), len(sf.Channel.Tools))
 	}
-	var spec ToolSpec
-	for _, ts := range sf.Plain.Tools {
-		if ts.Name == "progress" {
-			spec = ts
-		}
-	}
+	// A test tool with whole-number arguments.
+	spec := ToolSpec{Name: "progress", InputSchema: json.RawMessage(`{"type":"object","properties":{"itemId":{"type":"string","minLength":1},"done":{"type":"integer","minimum":0,"maximum":9007199254740991},"total":{"type":"integer","minimum":0,"maximum":9007199254740991}},"required":["itemId","done","total"]}`)}
 	initialized := make(chan bool, 1)
 	block := make(chan struct{})
 	s := &Server{
@@ -132,6 +128,12 @@ func TestServer(t *testing.T) {
 	s.Notify("notifications/claude/channel", map[string]any{"content": "x", "meta": map[string]string{"kind": "info"}})
 	if n := c.next(); n["method"] != "notifications/claude/channel" {
 		t.Fatalf("notify: %v", n)
+	}
+	// A tool removed with projects says so (item OE8Fm slice 11).
+	c.send(map[string]any{"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": map[string]any{"name": "claim", "arguments": map[string]any{}}})
+	r = c.next()["result"].(map[string]any)
+	if r["isError"] != true || !strings.Contains(r["content"].([]any)[0].(map[string]any)["text"].(string), "Projects were removed from Hivenod") {
+		t.Fatalf("removed tool: %v", r)
 	}
 	c.send(map[string]any{"jsonrpc": "2.0", "id": 7, "method": "nope"})
 	if e := c.next()["error"].(map[string]any); e["code"].(float64) != -32601 {

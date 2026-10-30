@@ -17,7 +17,8 @@ member approves it.** Hivenod itself connects to no external inbox. Code lives i
 
 ## Records
 
-All of these live under `workspaces/{wid}`. They are separate from projects and items.
+All of these live under `workspaces/{wid}`. Projects, items and runs no longer exist (slice 11 of
+item OE8FmrTaIxFVGcaeGG3N): the Inbox is where work arrives, including development work.
 
 ```
 inboxSubjects/{sid}   memberUid, name, area? (string|null, at most 60), label? (string|null, at most
@@ -35,7 +36,7 @@ inboxMessages/{mid}   memberUid, threadId, direction in|out, source, sender{name
 inboxOutcomes/{oid}   memberUid, threadId, type, fields{}, state, note, confidence? (high|medium|low),
                       checks?[] (at most 6), proposedBy, executor|null,
                       decision{byUid, at, edited, reason}|null,
-                      result{text, permalink, itemId, error, by, at}|null, planId? (absent: a single
+                      result{text, permalink, error, by, at}|null (older records may also hold itemId), planId? (absent: a single
                       outcome), createdAt, updatedAt, lastEventId
 inboxPlans/{pid}      memberUid, threadId, proposedBy, steps[] (outcome ids in order, 1 to 8), cursor
                       (the step whose turn it is; steps.length once through), state
@@ -49,14 +50,14 @@ inboxRelations/{rid}  memberUid, a, b (a < b), note, state, proposedBy{type,id},
 
 ### Thread states
 
-| State           | Meaning                                                         |
-| --------------- | --------------------------------------------------------------- |
-| `investigating` | An agent is digging in. Its notes go on the timeline.           |
-| `needsYou`      | The agent asked the member a question.                          |
-| `yourCall`      | Outcomes are proposed and wait for the member.                  |
-| `waiting`       | Waiting on them, on a third party, on an item, or until a date. |
-| `done`          | Finished.                                                       |
-| `ignored`       | The member chose to ignore it.                                  |
+| State           | Meaning                                                              |
+| --------------- | -------------------------------------------------------------------- |
+| `investigating` | An agent is digging in. Its notes go on the timeline.                |
+| `needsYou`      | The agent asked the member a question.                               |
+| `yourCall`      | Outcomes are proposed and wait for the member.                       |
+| `waiting`       | Waiting on them, on a third party, on running work, or until a date. |
+| `done`          | Finished.                                                            |
+| `ignored`       | The member chose to ignore it.                                       |
 
 A new message from them reopens a `waiting`, `done` or `ignored` thread. The thread goes back to
 `investigating`. A member's own reply doesn't reopen it.
@@ -96,15 +97,18 @@ member's own write. Never mark a type that sends as batchable.
 
 The initial types:
 
-| Type           | Fields                  | Carried out by           | Thread state when done   |
-| -------------- | ----------------------- | ------------------------ | ------------------------ |
-| `reply`        | text, holding?          | the home agent           | waiting on them          |
-| `no_reply`     | reason?                 | takes effect on approval | done                     |
-| `make_it_work` | title, brief?, project? | the home agent           | waiting on the item      |
-| `handover`     | to, note?               | the home agent           | waiting on a third party |
-| `snooze`       | until                   | takes effect on approval | waiting until the date   |
-| `nudge`        | text                    | the home agent           | waiting on them          |
-| `ignore`       | reason?                 | takes effect on approval | ignored                  |
+| Type       | Fields         | Carried out by           | Thread state when done   |
+| ---------- | -------------- | ------------------------ | ------------------------ |
+| `reply`    | text, holding? | the home agent           | waiting on them          |
+| `no_reply` | reason?        | takes effect on approval | done                     |
+| `handover` | to, note?      | the home agent           | waiting on a third party |
+| `snooze`   | until          | takes effect on approval | waiting until the date   |
+| `nudge`    | text           | the home agent           | waiting on them          |
+| `ignore`   | reason?        | takes effect on approval | ignored                  |
+
+`make_it_work` (Make it work) was retired with Projects (slice 11): it stays in the registry with
+`retired: true` so old records still read, but nobody proposes or approves one any more. To have
+something built, propose a Development plan (see "Plans").
 
 `reply_book` and `book` (bookings) were **retired with Calendar** (item OE8FmrTaIxFVGcaeGG3N,
 slice 5): they stay in the registry with `retired: true` so old records still read ("Booking
@@ -127,8 +131,8 @@ An outcome's life:
 ### Ask for changes (item L7OzWKMYZ1O2dX33Xkrj)
 
 Instead of rejecting a proposal and waiting for a new one, the member can ask the agent that
-proposed it to change it. It works on the types with text: `reply`, `nudge`, `handover` and
-`make_it_work`.
+proposed it to change it. It works on the types with text: `reply`, `nudge` and
+`handover`.
 
 1. **The member asks** (`requestRevision`, event `outcome.revise_requested`, member): quick
    chips (`shorter`, `formal`, `warmer`, `availability`) and/or an instruction of 1-500
@@ -256,8 +260,9 @@ holds the order (`steps`) and whose turn it is (`cursor`). The pure model is
 `packages/shared/src/plans.ts` (`planView`, `singlePlanView`, `planThreadState`); the actions are
 in `inbox.ts`.
 
-- **Step types.** A plan may hold reply, nudge, handover, make_it_work, snooze (as "wait
-  until") and approval, never no_reply or ignore (nor the retired bookings). `approval` (kind
+- **Step types.** A plan may hold reply, nudge, handover, snooze (as "wait
+  until"), approval and the Development steps shape, build and release, never no_reply or
+  ignore (nor the retired bookings and make_it_work). `approval` (kind
   `human`: what, detail?, link?) is a gate the member decides; it is plan-only:
   `outcome_propose` refuses it alone.
 - **Proposing** (`proposePlan`, agent): the plan, its steps and one `plan.proposed` event in one
@@ -270,8 +275,15 @@ in `inbox.ts`.
   reporting it done moves the cursor by exactly one. A gate is decided only at its
   turn and only by the member: Approve marks it done and moves the cursor; Not approved
   (`rejectOutcome`) stops the plan and the thread goes back to investigating.
-- **Build it.** `finishOutcome` with status `started` and the item id puts a `make_it_work` step
-  in `running` (the thread waits on the item); `done` later moves the plan on.
+- **Long steps.** Build and release are long steps: `finishOutcome` with status `started` puts the
+  step in `running` (the thread waits on the work); `done` later moves the plan on.
+- **Development plans.** The template `dev` (`packages/shared/src/planTemplates.ts`) is shape →
+  Approve idea → build → Ship it? → release → Accept on live. Shape researches the idea and writes
+  the proposal into the summary. Build ends with an open pull request, checks green, not merged.
+  Release merges it, releases and checks it live. The three approvals are the member's gates; a
+  member who asks for changes at a gate sends the plan back to an earlier step, and an agent can
+  send its own plan back with `plan_send_back`. Start one with `plan_propose` `template: "dev"`
+  or from the member's New thread.
 - **Wait until.** An approved snooze at the cursor makes the thread wait until its date;
   `wakeThread` then marks it done and moves the plan on.
 - **Failures.** A failed step blocks the plan (thread: Your call); the member retries
@@ -283,7 +295,7 @@ in `inbox.ts`.
 - **Reject plan** (`rejectPlan`): every step not started is rejected, the plan stops, the thread
   goes back to investigating.
 - **Thread state.** Every plan batch sets the thread from the plan (`planThreadState`): a step at
-  the cursor that needs the member → Your call; Build it running → waiting on the item; a wait
+  the cursor that needs the member → Your call; a long step running → waiting on the work; a wait
   until → waiting until its date; an approved agent step → the last agent step's after-state
   (Your call for the first); all through → the last agent step's after-state; stopped →
   investigating.
@@ -486,7 +498,7 @@ proposed[]` (links as `{subjectId, name, note}`), plus `total` before the limit.
 
 The home agent attaches files to its thread with `thread_attach {threadId, source, name?}` (CLI
 `hivenod thread attach ID FILE|URL [--name N]`; `packages/shared/src/threadattach.ts`): the same
-kinds and 900 KB inline limit as item attachments, kept inline in Firestore (no file storage):
+kinds and 900 KB inline limit as before, kept inline in Firestore (no file storage):
 
 ```
 workspaces/{wid}/inboxAttachments/{threadId}_{id}   immutable
@@ -522,7 +534,7 @@ creates (with its event), the member and the org's agents read, nobody updates o
 | `inbox_ask`                 | `hivenod inbox ask ID`                            | Asks the member a question. The thread waits in Needs you.                                                                                                                  |
 | `outcome_propose`           | `hivenod outcome propose ID`                      | Proposes an outcome of a type from the registry, with its fields. With `revises` (`--revises OID`): that outcome's next version.                                            |
 | `plan_propose`              | `hivenod plan propose ID`                         | Proposes a plan: 1-8 ordered steps in one call (`--steps-file F`, `-` for stdin). See "Plans: the agent side".                                                              |
-| `outcome_done`              | `hivenod outcome done OID`                        | The executor reports an approved outcome as done or failed; a Build it plan step as `started` (with its `itemId`) first.                                                    |
+| `outcome_done`              | `hivenod outcome done OID`                        | The executor reports an approved outcome as done or failed; a long plan step (build, release) as `started` first.                                                           |
 | `thread_wake`               | `hivenod thread wake ID`                          | Wakes a snoozed thread whose date has come.                                                                                                                                 |
 | `thread_flag`               | `hivenod thread flag ID`                          | Marks a thread urgent (or not, `urgent: false` / `--off`): the notifier pings the member at once, whatever the quiet hours.                                                 |
 | `thread_due`                | `hivenod thread due ID ISO`                       | Sets the deadline a message states (ISO 8601 with its offset), or clears it (`due: null` / `--clear`). Today ranks by it.                                                   |
@@ -568,16 +580,8 @@ confidence}`. Use it when the answer has more than one action or needs the perso
   content. A single action stays `outcome_propose`.
 - **`outcome_done`** on a plan step works only at its turn (the plan's cursor, the plan
   `proposed` or `active`): `done` moves the cursor on, `failed` blocks the plan (the member
-  retries, skips or stops). A `make_it_work` step (Build it) is reported `started` with
-  `result.itemId` once the item is made (the step is `running`, the thread waits on the item),
-  then `done` when the item is Done.
-- **Build it** (slice 6): `outcome_done status started` checks that the item exists in a project
-  the agent may use and, without a permalink, fills in the item's link
-  (`<site>/p/<project>?item=<item>`). The channel then watches the item (once a tick): when it is
-  **Done** it sends `item_done`; when it is stopped, archived or deleted, `item_stopped` (each
-  once, with `outcome_id`, `item_id`, `plan_id` and `step`). The agent reports the step done, or
-  failed with the reason (the plan is then blocked: Retry, Skip, Stop). Single `make_it_work`
-  outcomes are unchanged (done when the item is made).
+  retries, skips or stops). A long step (build, release) is reported `started` when it begins (the
+  step is `running`, the thread waits on the work), `step_progress` as it goes, then `done`.
 - **`thread_wake`** on a thread whose live plan waits at a `snooze` step marks that step done and
   moves the plan on (no `woke` event to investigate).
 - **`thread_read`** adds `plans`: each with `planId, state, cursor, progress` ("Step 3 of 5"),
@@ -589,8 +593,7 @@ confidence}`. Use it when the answer has more than one action or needs the perso
   step changes, its `planId` stays.
 - The Go actions are kept equal to the TypeScript ones by the contract cases (`proposePlan`,
   `finishOutcome/plan/…`, `wakeThread/plan/…`, `planThreadState`, `planView`); the golden
-  scenario "plans (item qwFAW)" in `cli/e2e/test/go.test.ts` runs a 4-step plan (reply, approval,
-  Build it, reply) through the Go CLI against the rules, and `channel.test.ts` checks one
+  scenario "plans (item qwFAW)" in `cli/e2e/test/go.test.ts` runs a plan through the Go CLI against the rules, and `channel.test.ts` checks one
   `carry_out` per step at its turn.
 - An older CLI sends `carry_out` for every approved step at once: `EVENT_MIN_VERSION.plan`
   (`cliversion.ts`) is the first CLI that handles plans, for the web app's hint.
@@ -621,9 +624,8 @@ The Development template (`packages/shared/src/planTemplates.ts`) has a long age
 ## Channel events (part 2)
 
 A channel session (`hivenod mcp --channel`, `cli/internal/hive/inboxfeed.go`) pushes `<channel source="hivenod" kind="inbox">` events for
-the threads that need agent work. They don't count toward `max_items` and are never claimed:
-the event carries the thread to work, and the channel instructions say to keep development items
-first. (In Claude Code, the plugin's `hivenod` skill runs each thread in a background sub-agent of its own.)
+the threads that need agent work. They don't count toward `max_items` (which limits the long plan steps running at once) and are
+never claimed: the event carries the thread to work. (In Claude Code, the plugin's `hivenod` skill runs each thread in a background sub-agent of its own.)
 
 **Who gets what.** Each event goes to exactly one agent's session:
 
@@ -653,8 +655,8 @@ first. (In Claude Code, the plugin's `hivenod` skill runs each thread in a backg
   the session also listens to the workspace's live plans (`inboxPlans`, state proposed, active
   or blocked) and sends a step's `carry_out` only when it is at its plan's cursor and the plan
   runs (not blocked). A step approved ahead waits; when the step before it is done (or the gate
-  before it passed) the cursor moves and its `carry_out` follows. A `make_it_work` step's text
-  says to report `started` with the item first.
+  before it passed) the cursor moves and its `carry_out` follows. A long step's text says
+  to report `started` first.
 - **A plan rejected or stopped** (`plan.rejected`, `plan.stopped`, or Not approved on a gate:
   `outcome.rejected` with `planId`) puts the thread back to investigating: `rejected` with
   `plan_id` (and `outcome_id`, `step` for a gate). The text says to re-plan (`plan_propose`,
@@ -708,7 +710,7 @@ last event id it handled (`lastEventId`):
   is drawn from the registry; its fields become editable with **Edit**, and **Approve** (the
   registry's word, e.g. Send for a reply) or **Reject** counts down on the pressed button with
   Undo before it is written. The member can also move the thread to another subject, mark it
-  done, ignore it, bring it back, mark it urgent or not (`flagThread`), and **Make it work**.
+  done, ignore it, bring it back, mark it urgent or not (`flagThread`).
   An old approved `reply_book` still shows the slot it booked.
 - **Ask for changes** (Today card, the thread page's agent panel and its phone bottom sheet,
   key C): a box with four toggle chips (Shorter, More formal, Warmer, Add my availability), a
@@ -739,13 +741,6 @@ last event id it handled (`lastEventId`):
   `hivenod update` before approving. On a phone the plan is in the bottom sheet ("k of N done")
   with one main button (Approve plan, Approve step k for a gate, Review step k, Retry step k),
   Reject plan (×) and a ⋯ menu (Add an approval step, Stop plan).
-- **Build it** (slice 6, `BuildItCard.tsx`): a `make_it_work` step reported `started` shows the
-  item it made: its project, title, the step it is at (or "Done: the agent reports it next") and
-  **Open** (same organization). The item is found through the step's link
-  (`<site>/p/<project>?item=<item>`, filled in by the CLI); a member who cannot read that project
-  sees what the step asked for and the item's id. The plan waits until the agent reports the step
-  done. Build it steps need a CLI that sends `item_done` (`EVENT_MIN_VERSION.item_done`): the
-  plan's update notice covers it.
 - **Today and plans** (slice 5): Today lists a thread with a live plan when the plan asks the
   member something now (`planAsksNow`): it is proposed, blocked (a step failed: listed even with
   nothing proposed), its step at the cursor waits, or an agent step can still be approved ahead.
@@ -758,18 +753,13 @@ last event id it handled (`lastEventId`):
   step** and **Stop plan**. Keys A (the main action), E, C and [ ] work as on any card, and
   **Open plan** opens the thread page. Plan steps never join a tidy-up batch. Single outcomes keep
   their card.
-- **Make it work** (the member's own): `makeItemFromThread` creates a Hivenod item with
-  `createItem`, the member as its creator, in one of their projects of the thread's
-  organization, and links it on the thread's timeline with a `thread.itemMade` event in the
-  same batch. The rules accept that event only for the member's own thread and an item they
-  created in that batch. The thread itself does not change.
 - Every query filters on `memberUid == me`; the rules allow nothing wider.
 
 ## Notices (notifier)
 
 A thread arriving at **Needs you** (an agent's question) or **Your call** (outcomes proposed)
 tells its member alone: a bell entry (`inboxAsk`, `inboxCall`; `projectId` is `inbox`, `itemId`
-the thread) and push and Telegram, linking to the thread page. One arrival is one notice: a new
+the thread: legacy field names) and push and Telegram, linking to the thread page. One arrival is one notice: a new
 question, or a new round of proposals after the earlier ones were decided, is a new arrival.
 A thread with `urgent: true` (`thread_flag`, or the member's Mark urgent) skips quiet hours and
 the summary.
