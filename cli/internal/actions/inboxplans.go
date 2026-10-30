@@ -273,6 +273,7 @@ func planWrites(ctx Ctx, pl, next PlanInput, forceState, eventID string) ([]plan
 	d := map[string]any{}
 	if p.Cursor != pl.Plan.Cursor {
 		d["cursor"] = p.Cursor
+		d["cursorAt"] = ServerTime()
 	}
 	if p.State != pl.Plan.State {
 		d["state"] = p.State
