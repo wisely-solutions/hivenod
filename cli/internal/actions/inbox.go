@@ -35,6 +35,8 @@ type OutcomeField struct {
 	Required bool   `json:"required"`
 	Max      int    `json:"max"`
 	Help     string `json:"help"`
+	// Pattern: a line must match it (Their reply's remindAfterDays).
+	Pattern string `json:"pattern,omitempty"`
 }
 
 // OutcomeType is one entry of OUTCOMES (fields in registry order).
@@ -237,6 +239,9 @@ func CleanOutcomeFields(typeID string, fields map[string]any) (map[string]any, e
 		if jsLen(s) > max {
 			return nil, fail(f.Name + " is at most " + strconv.Itoa(max) + " characters.")
 		}
+		if f.Pattern != "" && !regexp.MustCompile(f.Pattern).MatchString(s) {
+			return nil, fail(f.Name + ": " + f.Help + ".")
+		}
 		out[f.Name] = s
 	}
 	return out, nil
@@ -389,6 +394,8 @@ type OutcomeState struct {
 	Revise     *ReviseRequest   `json:"revise,omitempty"`
 	// PlanID: a step of that plan (item qwFAWxZM5xkcE7PPjAzi); nil: a single outcome.
 	PlanID *string `json:"planId,omitempty"`
+	// Ext: a Their reply step's state (theirreply.go); nil before its first message.
+	Ext *ExtState `json:"ext,omitempty"`
 }
 
 // ReviseAsk, ReviseRequest and OutcomeVersion are the stored shapes (model).
@@ -446,7 +453,7 @@ func OutcomeStateFrom(o model.InboxOutcome) OutcomeState {
 		f = map[string]any{}
 	}
 	s := OutcomeState{MemberUID: o.MemberUID, ThreadID: o.ThreadID, Type: o.Type, Fields: f, State: o.State, Executor: o.Executor,
-		ProposedBy: sp(o.ProposedBy), Note: sp(o.Note), Confidence: o.Confidence, Checks: o.Checks, Versions: o.Versions, Revise: o.Revise, PlanID: o.PlanID}
+		ProposedBy: sp(o.ProposedBy), Note: sp(o.Note), Confidence: o.Confidence, Checks: o.Checks, Versions: o.Versions, Revise: o.Revise, PlanID: o.PlanID, Ext: o.Ext}
 	return s
 }
 
@@ -1281,6 +1288,9 @@ type FinishInput struct {
 		Tokens  *float64 `json:"tokens"`
 		CostEur *float64 `json:"costEur"`
 	} `json:"usage"`
+	// Evidence (Their reply, done only): their reply, and that message as read.
+	Evidence        *FinishEvidence `json:"evidence"`
+	EvidenceMessage *ExtMessage     `json:"evidenceMessage"`
 }
 
 // cleanUsage is cleanUsage: whole tokens and euros (4 decimals), both optional; nil when empty.
@@ -1320,6 +1330,10 @@ func FinishOutcome(ctx Ctx, in FinishInput) (plan.Plan, error) {
 	o := in.Outcome
 	planned := o.PlanID != nil
 	usage, err := cleanUsage(in)
+	if err != nil {
+		return plan.Plan{}, err
+	}
+	ev, err := theirReplyEvidence(o, in)
 	if err != nil {
 		return plan.Plan{}, err
 	}
@@ -1398,11 +1412,20 @@ func FinishOutcome(ctx Ctx, in FinishInput) (plan.Plan, error) {
 		if usage != nil {
 			data["usage"] = usage
 		}
+		res := result
+		if ev != nil {
+			data["evidence"], data["confidence"] = ev.messageDocID, strOrNil(ev.confidence)
+			res = map[string]any{}
+			for k, v := range result {
+				res[k] = v
+			}
+			res["text"] = ev.quote
+		}
 		var werr error
 		p := InboxPlan(ctx, typ, o.MemberUID, sp(o.ThreadID), in.Thread.SubjectID, data, func(eventID string) []plan.Op {
 			ops, err := planWrites(ctx, pl, next, force, eventID)
 			werr = err
-			return append([]plan.Op{upd(model.Paths.InboxOutcome(ctx.WorkspaceID, in.OutcomeID), map[string]any{"state": state, "result": result}, eventID)}, ops...)
+			return append([]plan.Op{upd(model.Paths.InboxOutcome(ctx.WorkspaceID, in.OutcomeID), map[string]any{"state": state, "result": res}, eventID)}, ops...)
 		}, "")
 		return p, werr
 	}

@@ -243,6 +243,34 @@ type InboxOutcome struct {
 	Progress *InboxProgress `firestore:"progress" json:"progress"`
 	// CheckedAt: when the home agent last re-checked it and found it still good (nil: never).
 	CheckedAt *time.Time `firestore:"checkedAt" json:"checkedAt"`
+	// Ext: a Their reply step (packages/shared/src/theirreply.ts); nil before its first message.
+	Ext *InboxExt `firestore:"ext" json:"ext"`
+	// RemindDue: the ask number its reminder fired for (the notifier writes it).
+	RemindDue *int `firestore:"remindDue" json:"remindDue"`
+}
+
+// InboxExt is a Their reply step's state: the message in hand, the last send, their reply quoted.
+type InboxExt struct {
+	Ask   *InboxExtAsk   `firestore:"ask" json:"ask"`
+	OutAt *time.Time     `firestore:"outAt" json:"outAt"`
+	Sent  int            `firestore:"sent" json:"sent"`
+	Reply *InboxExtReply `firestore:"reply" json:"reply"`
+}
+
+// InboxExtAsk is the message to them: drafted (proposed), approved by the person, or sent.
+type InboxExtAsk struct {
+	N     int        `firestore:"n" json:"n"`
+	Kind  string     `firestore:"kind" json:"kind"`
+	Text  string     `firestore:"text" json:"text"`
+	State string     `firestore:"state" json:"state"`
+	By    string     `firestore:"by" json:"by"`
+	At    *time.Time `firestore:"at" json:"at"`
+}
+
+// InboxExtReply is their reply the agent quoted on the step.
+type InboxExtReply struct {
+	MessageDocID string `firestore:"messageDocId" json:"messageDocId"`
+	Quote        string `firestore:"quote" json:"quote"`
 }
 
 // InboxPlan is workspaces/{w}/inboxPlans/{pid}: the order of a plan's steps (outcome ids) and

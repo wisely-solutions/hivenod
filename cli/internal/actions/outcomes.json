@@ -308,6 +308,57 @@
     "planOnly": true,
     "long": true
   },
+  "their_reply": {
+    "label": "Their reply",
+    "approve": "Approve",
+    "description": "A plan step that waits on one person outside Hivenod (a client, a supplier) reached by a message: at its turn draft the ask in the member's voice with step_ask (nothing is sent before the member approves it), send it, report step_sent; their reply wakes you (external_reply): a clear yes is outcome_done with evidence (the inbound messageId and the quote), anything else a follow-up step_ask. One person per step.",
+    "fields": {
+      "who": {
+        "kind": "line",
+        "label": "Who",
+        "help": "Their name",
+        "required": true
+      },
+      "org": {
+        "kind": "line",
+        "label": "Organization",
+        "help": "Their company or team"
+      },
+      "channel": {
+        "kind": "line",
+        "label": "Channel",
+        "help": "Where you reach them: mail, teams, slack… (one you can send on)",
+        "required": true
+      },
+      "address": {
+        "kind": "line",
+        "label": "Address",
+        "help": "Their address or handle on that channel",
+        "required": true
+      },
+      "need": {
+        "kind": "line",
+        "label": "Need",
+        "help": "One line: what we need from them",
+        "required": true
+      },
+      "remindAfterDays": {
+        "kind": "line",
+        "label": "Remind after (working days)",
+        "help": "Working days without a reply before one reminder is drafted, 1-30 (default 3)",
+        "max": 2,
+        "pattern": "^([1-9]|[12][0-9]|30)$"
+      }
+    },
+    "executor": "agent",
+    "after": {
+      "state": "waiting",
+      "waitingOn": "them"
+    },
+    "external": true,
+    "plan": true,
+    "planOnly": true
+  },
   "approval": {
     "label": "Your approval",
     "approve": "Approve",

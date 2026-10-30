@@ -4865,7 +4865,7 @@
         ]
       },
       "output": {
-        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -4995,7 +4995,7 @@
         "stepIds": ["s1", "s2", "s3", "s4", "s5"]
       },
       "output": {
-        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -5166,7 +5166,7 @@
         ]
       },
       "output": {
-        "error": "Step 2: book is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 2: book is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -5291,7 +5291,7 @@
         ]
       },
       "output": {
-        "error": "Step 2: no_reply is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 2: no_reply is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -5313,7 +5313,7 @@
         "steps": [{ "type": "launch", "fields": {} }]
       },
       "output": {
-        "error": "Step 1: launch is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 1: launch is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -5531,7 +5531,7 @@
         "stepIds": ["s1", "s1", "s3", "s4", "s5"]
       },
       "output": {
-        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, approval."
+        "error": "Step 4: make_it_work is not a plan step. Plan steps: reply, handover, snooze, nudge, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {
@@ -15926,7 +15926,7 @@
       "action": "cleanOutcomeFields",
       "input": { "type": "x", "fields": {} },
       "output": {
-        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, shape, build, keepgreen, release, approval."
+        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, shape, build, keepgreen, release, their_reply, approval."
       }
     },
     {

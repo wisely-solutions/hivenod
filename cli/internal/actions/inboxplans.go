@@ -108,7 +108,18 @@ func PlanThreadState(p PlanState, outcomes map[string]OutcomeState) (map[string]
 		return yourCall, nil
 	}
 	if o.State == "running" {
-		return map[string]any{"state": "waiting", "waiting": map[string]any{"on": "item", "until": nil}}, nil
+		// Their reply (theirreply.go): a draft to approve, a message to send, or their answer.
+		on := "item"
+		if o.Type == TheirReply {
+			switch extAskState(o.Ext) {
+			case "proposed":
+				return yourCall, nil
+			case "approved":
+				return map[string]any{"state": "waiting", "waiting": map[string]any{"on": "agent", "until": nil}}, nil
+			}
+			on = "them"
+		}
+		return map[string]any{"state": "waiting", "waiting": map[string]any{"on": on, "until": nil}}, nil
 	}
 	if o.State != "approved" || OutcomeKind(o.Type) == "human" {
 		return yourCall, nil
@@ -165,6 +176,10 @@ func stepUI(o *OutcomeState, atCursor bool, planState string) string {
 		}
 		return "skipped"
 	case "running", "revising":
+		// Their reply: a drafted message waits for the person's approval.
+		if o.State == "running" && extAskState(o.Ext) == "proposed" {
+			return "waitingForYou"
+		}
 		return o.State
 	case "approved":
 		if atCursor && planState == "blocked" {
