@@ -11,8 +11,8 @@ test('a new screen gets its own title and keyboard focus, and a dialog gives foc
   await page.goto('/');
   await expect(page).toHaveTitle(/Today · Hivenod$/);
 
-  await page.getByRole('link', { name: 'Projects', exact: true }).click();
-  await expect(page).toHaveTitle(/^(\(\d+\) )?Projects · Hivenod$/);
+  await page.getByRole('link', { name: 'Agents', exact: true }).click();
+  await expect(page).toHaveTitle(/^(\(\d+\) )?Agents · Hivenod$/);
   await expect(page.locator('#content')).toBeFocused();
 
   await page.getByRole('link', { name: 'Activity' }).click();
@@ -20,15 +20,15 @@ test('a new screen gets its own title and keyboard focus, and a dialog gives foc
   await expect(page.locator('#content')).toBeFocused();
 
   // Skip link is the first stop and works from the keyboard.
-  await page.goto('/projects');
+  await page.goto('/agents');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
   await page.keyboard.press('Enter');
 
   // A dialog opened from the keyboard traps focus, closes on Escape and returns focus.
-  await page.goto('/p/blog');
-  const trigger = page.getByRole('button', { name: 'New item' });
+  await page.goto('/inbox');
+  const trigger = page.getByRole('button', { name: 'New thread' });
   await trigger.focus();
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog');

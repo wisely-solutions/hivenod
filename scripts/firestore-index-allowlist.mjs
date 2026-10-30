@@ -38,12 +38,6 @@ export const ALLOWLIST = [
     reason: 'First page of the org export, see the entry above.',
   },
   {
-    file: 'apps/web/src/board/eraseItem.ts',
-    text: 'query(collection(db, col), limit(max))',
-    reason:
-      'Item delete walks its subcollections (log lines, messages, files) in batches: a plain collection read with only limit(), no where/orderBy, so it needs no composite index.',
-  },
-  {
     file: 'cli/internal/hive/inbox.go',
     text: 'c.DB.Collection(model.Paths.InboxCollection(c.WorkspaceID, coll)).Where(field, op, value)',
     reason:

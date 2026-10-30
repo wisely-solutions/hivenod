@@ -159,7 +159,7 @@ function Frame({ children }: { children?: ReactNode }) {
   useEffect(() => {
     if (!firstData) return;
     const warm = () => {
-      for (const to of ['/projects', '/activity', '/agents', '/insights'] as const) {
+      for (const to of ['/inbox', '/activity', '/agents', '/insights'] as const) {
         void router.preloadRoute({ to }).catch(() => undefined);
       }
       void router
@@ -286,21 +286,17 @@ function Frame({ children }: { children?: ReactNode }) {
 }
 
 /**
- * Three page widths, by kind of screen: the board and its list use the whole window; overviews
- * (Needs you, projects, activity, agents, insights, process) sit at 1120 px; forms and single
- * records (Me, an agent, members, groups) at 720 px.
+ * Two page widths, by kind of screen: overviews (Today, activity, agents, insights, a thread) sit
+ * at 1120 px; forms and single records (Me, an agent, members, groups) at 720 px.
  */
 function pageWidth(path: string): string {
-  if (/^\/p\/[^/]+\/?$/.test(path) || path === '/items') return 'max-w-[120rem]';
   if (
     path === '/' ||
-    path === '/projects' ||
     path === '/activity' ||
     path === '/agents' ||
     // An Inbox thread or subject: the conversation and the agent panel (item kt3E7).
     /^\/inbox\/[^/]+\/[ts]\/[^/]+\/?$/.test(path) ||
-    path.endsWith('/insights') ||
-    path.endsWith('/process')
+    path.endsWith('/insights')
   )
     return 'max-w-[70rem]';
   return 'max-w-[45rem]';

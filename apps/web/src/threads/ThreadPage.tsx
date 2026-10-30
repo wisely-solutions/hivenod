@@ -10,34 +10,27 @@ import {
   planView,
   summaryPaths,
   closeThread,
-  createItem,
   dueThread,
   flagThread,
   ignoreThread,
-  makeItemFromThread,
   moveThread,
-  projectSchema,
   restoreThread,
-  shapesNewItems,
   type ActionPlan,
 } from '@hive/shared';
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
-import { collection, query, where } from 'firebase/firestore';
 import {
   ArrowRightLeft,
   Ban,
   CalendarClock,
   CircleCheck,
   Flag,
-  ListChecks,
   MoreHorizontal,
   RotateCcw,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { isOnline } from '../agents/logic';
 import { useReady } from '../auth/context';
-import { db } from '../lib/db';
-import { useLiveCollection, useLiveDoc, useLiveQuery } from '../lib/live';
+import { useLiveCollection, useLiveDoc } from '../lib/live';
 import { useShortcut } from '../shell/shortcuts';
 import type { DecisionCardHandle } from '../today/DecisionCard';
 import { useNeedsAll } from '../needs/data';
@@ -49,10 +42,10 @@ import { Pill } from '../ui/badge';
 import { Button, IconButton } from '../ui/button';
 import { cn } from '../ui/cn';
 import { Skeleton } from '../ui/feedback';
-import { Input, Select, Textarea } from '../ui/form';
+import { Input, Select } from '../ui/form';
 import { Icon } from '../ui/icon';
 import { ActionMenu } from '../ui/menu';
-import { Dialog, useToast } from '../ui/overlay';
+import { Dialog } from '../ui/overlay';
 import { BriefingBar } from './BriefingBar';
 import { useMySubjects, useThread } from './data';
 import {
@@ -78,9 +71,6 @@ import { PlanPanel } from './PlanPanel';
 import { LabelChip } from './labels';
 import { timeline } from './logic';
 import { BackLink, errorText, StateChip } from './parts';
-
-const myProjectsIn = (wid: string, uid: string) =>
-  query(collection(db, `workspaces/${wid}/projects`), where('memberUids', 'array-contains', uid));
 
 const WIDE = '(min-width: 1024px)';
 function subscribeWide(cb: () => void) {
@@ -118,7 +108,6 @@ export function ThreadPage() {
   }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [makeOpen, setMakeOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [dueOpen, setDueOpen] = useState(false);
   // The folds (design 3.1): More detail and Everything start folded; D and E toggle them.
@@ -346,7 +335,6 @@ export function ThreadPage() {
       icon: CalendarClock,
       onSelect: () => setDueOpen(true),
     },
-    { id: 'make', label: 'Make it work…', icon: ListChecks, onSelect: () => setMakeOpen(true) },
     ...(closed
       ? [
           {
@@ -574,15 +562,6 @@ export function ThreadPage() {
           )
         }
       />
-      <MakeItWork
-        open={makeOpen}
-        onOpenChange={setMakeOpen}
-        wid={wid}
-        tid={tid}
-        thread={t}
-        subjectName={subjectName}
-        firstText={msgs[0]?.text ?? ''}
-      />
     </div>
   );
 }
@@ -700,133 +679,6 @@ function DueDialog({
         value={value}
         onChange={(e) => setValue(e.target.value)}
       />
-    </Dialog>
-  );
-}
-
-function MakeItWork({
-  open,
-  onOpenChange,
-  wid,
-  tid,
-  thread,
-  subjectName,
-  firstText,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  wid: string;
-  tid: string;
-  thread: Parameters<typeof makeItemFromThread>[1]['thread'] & { title: string };
-  subjectName: string;
-  firstText: string;
-}) {
-  const { session, actionContext, run } = useReady();
-  const uid = session.me.uid;
-  const toast = useToast();
-  const navigate = useNavigate();
-  const projects = useLiveQuery(
-    open ? `mw:${wid}:${uid}` : null,
-    () => myProjectsIn(wid, uid),
-    projectSchema,
-  );
-  const live = projects.state === 'ready' ? projects.data.filter((p) => !p.data.archivedAt) : [];
-  const [pid, setPid] = useState('');
-  const [title, setTitle] = useState(thread.title);
-  const [brief, setBrief] = useState(() => firstText.slice(0, 2000));
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const chosen = live.find((p) => p.id === pid) ?? live[0];
-
-  async function create() {
-    const ctx = actionContext(wid);
-    if (!ctx || !chosen) return;
-    setError(null);
-    let plan;
-    try {
-      const link = `${window.location.origin}/inbox/${wid}/t/${tid}`;
-      const item = createItem(ctx, {
-        project: chosen.data,
-        projectId: chosen.id,
-        title: title.trim(),
-        type: 'task',
-        summary:
-          `${brief.trim()}\n\nFrom Inbox${subjectName ? ` (${subjectName})` : ''}: ${link}`.trim(),
-        source: { kind: 'inbox', label: subjectName.slice(0, 200) || 'Inbox' },
-        unshaped: shapesNewItems(chosen.data),
-      });
-      if (!title.trim()) throw new Error('The item needs a title.');
-      plan = makeItemFromThread(ctx, {
-        threadId: tid,
-        thread,
-        item,
-        projectId: chosen.id,
-        title: title.trim(),
-      });
-    } catch (e) {
-      setError(errorText(e));
-      return;
-    }
-    setBusy(true);
-    try {
-      await run(plan);
-      onOpenChange(false);
-      const itemId = plan.itemId;
-      const projectId = chosen.id;
-      toast.push({
-        message: `Item made in ${chosen.data.name}.`,
-        actionLabel: 'Open',
-        onAction: () =>
-          void navigate({ to: '/p/$pid', params: { pid: projectId }, search: { item: itemId } }),
-      });
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Make it work"
-      description="A Hivenod item in one of your projects, made by you and linked on this thread. Its project's people see what you put in it."
-      footer={
-        <>
-          <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            loading={busy}
-            disabled={!chosen || !title.trim()}
-            onClick={() => void create()}
-          >
-            Create item
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        {projects.state === 'ready' && live.length === 0 ? (
-          <p className="text-14 text-text-2">You are in no project of this organization.</p>
-        ) : (
-          <Select
-            label="Project"
-            value={chosen?.id ?? ''}
-            onValueChange={setPid}
-            options={live.map((p) => ({ value: p.id, label: p.data.name }))}
-          />
-        )}
-        <Input label="Item title" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <Textarea label="Brief" value={brief} onChange={(e) => setBrief(e.target.value)} />
-        {error ? (
-          <p role="alert" className="text-14 text-sendback">
-            {error}
-          </p>
-        ) : null}
-      </div>
     </Dialog>
   );
 }

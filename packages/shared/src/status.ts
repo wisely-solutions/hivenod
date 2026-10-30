@@ -136,7 +136,7 @@ export function reportStatus(
   const prev = statusOf(input.item);
   if (prev && Date.now() - prev.at.toMillis() < STATUS_MIN_GAP_MS)
     throw new ActionError(
-      'You reported a status less than 30 seconds ago: wait a little before the next one',
+      'You reported a status on this item less than 30 seconds ago (the limit is per item): wait a little before the next one',
     );
   const repeat = !!prev && prev.text === text && (prev.pct ?? null) === pct;
   const statusUpdate = { runId: claim.runId, text, pct, at: SERVER_TIME, by: ctx.actor.id };

@@ -199,7 +199,7 @@ export function InviteModal({ open, onClose }: { open: boolean; onClose: () => v
               {
                 value: 'member',
                 title: 'Member',
-                description: 'Works on the projects an admin adds them to.',
+                description: 'Has their own Inbox; an admin manages the organization.',
               },
               {
                 value: 'admin',

@@ -8,6 +8,8 @@
 import {
   inboxEventSchema,
   inboxMessageSchema,
+  inboxOutcomeSchema,
+  stepSilentText,
   inboxSubjectSchema,
   type InboxEvent,
   type InboxMessage,
@@ -19,6 +21,37 @@ import { mySubjectsQuery, useAcross } from '../threads/data';
 
 /** At most this many threads per organization are looked up by id (Firestore's `in` limit). */
 const IN_MAX = 30;
+
+/** The member's thread steps in agent hands (item KZ6O9): approved or running outcomes. */
+const stepsInHandsQuery = (wid: string, uid: string) =>
+  query(
+    collection(db, `workspaces/${wid}/inboxOutcomes`),
+    where('memberUid', '==', uid),
+    where('state', 'in', ['approved', 'running']),
+  );
+
+/**
+ * Reach out (item KZ6O9): the member's threads whose step in agent hands went silent, by
+ * `wid/threadId`, with the flag's text ("Scout silent for 41 min").
+ */
+export function useSilentThreads(uid: string, wids: readonly string[], now: number) {
+  const r = useAcross(
+    'steps-in-hands',
+    wids,
+    uid,
+    stepsInHandsQuery,
+    inboxOutcomeSchema,
+    (wid, _id, data) => ({ key: `${wid}/${data.threadId}`, data }),
+  );
+  return useMemo(() => {
+    const out = new Map<string, string>();
+    for (const row of r.rows) {
+      const text = stepSilentText(row.data, now);
+      if (text) out.set(row.key, text);
+    }
+    return out;
+  }, [r.rows, now]);
+}
 
 const messagesSinceQuery = (wid: string, uid: string, since: number) =>
   query(

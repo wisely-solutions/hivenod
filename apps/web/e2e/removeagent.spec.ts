@@ -95,11 +95,6 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(live).toBeVisible();
     await axe(page);
 
-    // Past work keeps the name.
-    await page.goto('/activity');
-    await expect(page.getByText('Old Bot').first()).toBeVisible();
-    await axe(page);
-
     // From the agent's page: the button leads back to the list.
     await page.goto('/agents/gone');
     await expect(page.getByRole('heading', { name: 'Gone Bot' })).toBeVisible();

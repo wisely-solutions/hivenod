@@ -510,6 +510,22 @@ export const inboxOutcomeSchema = z.object({
     .optional(),
   /** When the home agent last re-checked it and found it still good (absent: never). */
   checkedAt: timestamp.optional(),
+  /**
+   * Reach out (item KZ6O9), written by the notifier only: a status request to the executing agent
+   * on a step in its hands that went quiet (byUid 'hivenod', or the person who pressed Ping
+   * again), and the silence flag when it did not answer.
+   */
+  statusAsk: z.object({ byUid: z.string(), at: timestamp }).nullable().optional(),
+  silence: z
+    .object({
+      since: z.number(),
+      at: z.number(),
+      asked: z.number().nullable().optional(),
+      agent: z.string().max(200).optional(),
+      told: z.number().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
   lastEventId: z.string(),
@@ -558,6 +574,8 @@ export type ThreadStateOf = Pick<
     Record<string, { state: 'pending' | 'answered'; at?: { toMillis(): number } | null }>
   >;
   instruct?: { state: 'pending' | 'done'; id: string; at?: { toMillis(): number } | null } | null;
+  /** The summary mirror (slice 9): its version and recommended action go on decision events. */
+  summary?: { version: number; recAction: string | null } | null;
 };
 export type OutcomeStateOf = Pick<
   InboxOutcome,
@@ -568,9 +586,20 @@ export type OutcomeStateOf = Pick<
       InboxOutcome,
       'proposedBy' | 'note' | 'confidence' | 'checks' | 'versions' | 'revise' | 'planId'
     >
-  >;
+  > & {
+    /** When it was last written (its latest version): a proposal's wait starts there (slice 9). */
+    updatedAt?: { toMillis(): number } | null;
+    createdAt?: { toMillis(): number } | null;
+  };
 /** What the plan actions need of a plan (a listener's data). */
-export type PlanOf = PlanStateOf & { memberUid: string; threadId: string };
+export type PlanOf = PlanStateOf & {
+  memberUid: string;
+  threadId: string;
+  /** When the cursor last moved (slice 9; absent on older plans: createdAt). */
+  cursorAt?: { toMillis(): number } | null;
+  createdAt?: { toMillis(): number } | null;
+  templateId?: string | null;
+};
 /** A plan with its steps' outcomes (by id), as the plan actions take it. */
 export interface PlanInput {
   planId: string;
@@ -766,7 +795,10 @@ function planWrites(
 ): WriteOp[] {
   const plan = forceState ? { ...next.plan, state: forceState } : next.plan;
   const d: Record<string, unknown> = {};
-  if (plan.cursor !== pl.plan.cursor) d.cursor = plan.cursor;
+  if (plan.cursor !== pl.plan.cursor) {
+    d.cursor = plan.cursor;
+    d.cursorAt = SERVER_TIME;
+  }
   if (plan.state !== pl.plan.state) d.state = plan.state;
   if (JSON.stringify(plan.steps) !== JSON.stringify(pl.plan.steps)) d.steps = plan.steps;
   return [
@@ -1712,6 +1744,65 @@ export function retitleThread(
   );
 }
 
+// ---------- decision facts (item OE8FmrTaIxFVGcaeGG3N, slice 9, design 6.7) ----------
+
+/** What every decision event records for Decision insights. */
+export interface DecisionFacts {
+  /** The step decided ("Ship it?", "Build", "Approve plan"), or null. */
+  stepLabel: string | null;
+  templateId: string | null;
+  /** How long it waited for the member, in ms (null: unknown). */
+  waitedMs: number | null;
+  /** The summary's recommended action at that moment (null: none). */
+  recommended: string | null;
+  /** The summary version on show (null: none). */
+  summaryVersion: number | null;
+}
+
+/** A step's label: an approval's own words, else the outcome type's name. */
+export function stepLabelOf(o: Pick<OutcomeStateOf, 'type' | 'fields'> | undefined): string | null {
+  if (!o) return null;
+  const what =
+    o.type === 'approval' && typeof o.fields?.what === 'string' ? o.fields.what.trim() : '';
+  return (what || outcomeType(o.type)?.label || o.type).slice(0, 80);
+}
+
+const ms = (t: { toMillis(): number } | null | undefined) =>
+  t && typeof t.toMillis === 'function' ? t.toMillis() : null;
+
+/**
+ * The facts of a decision: on a plan step (`plan` given) the wait runs from when the cursor
+ * reached it (`cursorAt`, older plans: `createdAt`); on a single proposal from its latest version
+ * (`updatedAt`); on the whole plan (`step` null) from the plan's creation.
+ */
+export function decisionFacts(input: {
+  thread: ThreadStateOf;
+  plan?: PlanOf | null;
+  outcome?: OutcomeStateOf | null;
+  stepLabel?: string | null;
+  summaryVersion?: number | null;
+  nowMs?: number;
+}): DecisionFacts {
+  const now = input.nowMs ?? Date.now();
+  const p = input.plan ?? null;
+  const o = input.outcome ?? null;
+  const from = o
+    ? p
+      ? (ms(p.cursorAt) ?? ms(p.createdAt))
+      : (ms(o.updatedAt) ?? ms(o.createdAt))
+    : p
+      ? ms(p.createdAt)
+      : null;
+  const s = input.thread.summary ?? null;
+  return {
+    stepLabel: input.stepLabel !== undefined ? input.stepLabel : stepLabelOf(o ?? undefined),
+    templateId: p?.templateId ?? null,
+    waitedMs: from === null ? null : Math.max(0, Math.round(now - from)),
+    recommended: s?.recAction ?? null,
+    summaryVersion: input.summaryVersion ?? s?.version ?? null,
+  };
+}
+
 // ---------- the member ----------
 
 /** The member answers the agent's question: the agent goes on investigating. */
@@ -1831,7 +1922,12 @@ export function approveOutcome(
       ...(edited ? { fields } : {}),
       ...(version !== null ? { version } : {}),
       ...(pl ? { planId: pl.planId } : {}),
-      ...(gate && sv !== null ? { summaryVersion: sv } : {}),
+      ...decisionFacts({
+        thread: input.thread,
+        plan: pl?.plan,
+        outcome: o,
+        ...(sv !== null ? { summaryVersion: sv } : {}),
+      }),
     },
     (eventId) => [
       upd(
@@ -1922,7 +2018,13 @@ export function rejectOutcome(
       ctx,
       'outcome.rejected',
       { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
-      { outcomeId: input.outcomeId, type: o.type, reason, planId: pl.planId },
+      {
+        outcomeId: input.outcomeId,
+        type: o.type,
+        reason,
+        planId: pl.planId,
+        ...decisionFacts({ thread: input.thread, plan: pl.plan, outcome: o }),
+      },
       (eventId) => [
         upd(
           inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
@@ -1941,7 +2043,12 @@ export function rejectOutcome(
     ctx,
     'outcome.rejected',
     { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
-    { outcomeId: input.outcomeId, type: o.type, reason },
+    {
+      outcomeId: input.outcomeId,
+      type: o.type,
+      reason,
+      ...decisionFacts({ thread: input.thread, outcome: o }),
+    },
     (eventId) => [
       upd(
         inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
@@ -2005,7 +2112,11 @@ export function approvePlan(
     ctx,
     'plan.approved',
     planScope(pl, input.thread),
-    { planId: pl.planId, approved: ids },
+    {
+      planId: pl.planId,
+      approved: ids,
+      ...decisionFacts({ thread: input.thread, plan: pl.plan, stepLabel: 'Approve plan' }),
+    },
     (eventId) => [
       ...ids.map((id) => {
         const n = pl.outcomes[id]!.versions?.length ?? 0;
@@ -2049,7 +2160,12 @@ export function rejectPlan(
     ctx,
     'plan.rejected',
     planScope(pl, input.thread),
-    { planId: pl.planId, rejected: ids, reason },
+    {
+      planId: pl.planId,
+      rejected: ids,
+      reason,
+      ...decisionFacts({ thread: input.thread, plan: pl.plan, stepLabel: 'Approve plan' }),
+    },
     (eventId) => [
       ...ids.map((id) =>
         upd(
@@ -2278,7 +2394,14 @@ export function stopPlan(
     ctx,
     'plan.stopped',
     planScope(pl, input.thread),
-    { planId: pl.planId },
+    {
+      planId: pl.planId,
+      ...decisionFacts({
+        thread: input.thread,
+        plan: pl.plan,
+        outcome: pl.outcomes[pl.plan.steps[pl.plan.cursor] ?? ''] ?? null,
+      }),
+    },
     (eventId) => planWrites(ctx, pl, nextPlan(pl, {}), 'stopped', eventId),
   );
 }
@@ -2526,7 +2649,22 @@ export function sendBackPlan(
     ctx,
     'plan.sent_back',
     planScope(pl, input.thread),
-    { planId: pl.planId, outcomeId: tid, from: p.cursor, to, reset, reason, n },
+    {
+      planId: pl.planId,
+      outcomeId: tid,
+      from: p.cursor,
+      to,
+      reset,
+      reason,
+      n,
+      // A person's decision (slice 9): what it was, and the step it went back to.
+      ...(agent
+        ? {}
+        : {
+            ...decisionFacts({ thread: input.thread, plan: p, outcome: o }),
+            toLabel: stepLabelOf(target),
+          }),
+    },
     (eventId) => [
       ...reset.map((id) =>
         upd(
@@ -2539,6 +2677,7 @@ export function sendBackPlan(
         inboxPaths.plan(ctx.workspaceId, pl.planId),
         {
           cursor: to,
+          cursorAt: SERVER_TIME,
           state: next.plan.state,
           sentBack: { n, to: tid, reason, by: ctx.actor.id, at: SERVER_TIME },
         },
@@ -2605,7 +2744,13 @@ export function requestRevision(
     ctx,
     'outcome.revise_requested',
     { memberUid: o.memberUid, threadId: o.threadId, subjectId: input.thread.subjectId },
-    { outcomeId: input.outcomeId, type: o.type, instruction, chips },
+    {
+      outcomeId: input.outcomeId,
+      type: o.type,
+      instruction,
+      chips,
+      ...decisionFacts({ thread: input.thread, outcome: o }),
+    },
     (eventId) => [
       upd(
         inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
@@ -2948,7 +3093,7 @@ export function notNowThread(
     ctx,
     'thread.not_now',
     { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
-    { key, until: input.until },
+    { key, until: input.until, ...decisionFacts({ thread: t, stepLabel: null }) },
     (eventId) => [
       {
         kind: 'update',

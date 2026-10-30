@@ -1,5 +1,4 @@
 import {
-  allowedAgentsFor,
   canEditAgentSettings,
   guardrailsOf,
   MAX_FAILED_RUNS_LIMIT,
@@ -8,7 +7,6 @@ import {
   type Agent,
   type Project,
 } from '@hive/shared';
-import { Link } from '@tanstack/react-router';
 import { Play, Save } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useReady } from '../auth/context';
@@ -116,11 +114,11 @@ export function PausedBanner({
 export function AgentSettings({
   agentId,
   agent,
-  projects,
 }: {
   agentId: string;
   agent: Agent;
-  projects: Row<Project>[];
+  /** Legacy (Projects were removed, item OE8FmrTaIxFVGcaeGG3N slice 10): not used. */
+  projects?: readonly Row<Project>[];
 }) {
   const { session, actionContext, run } = useReady();
   const toast = useToast();
@@ -133,7 +131,6 @@ export function AgentSettings({
   const [tried, setTried] = useState(false);
   const errors = settingsErrors(d);
   const dirty = draft !== null && settingsChanged(base, d);
-  const live = projects.filter((p) => !p.data.archivedAt);
   const set = (patch: Partial<SettingsDraft>) => setDraft({ ...d, ...patch });
   const g = guardrailsOf(agent);
 
@@ -147,9 +144,6 @@ export function AgentSettings({
         updateAgentSettings(ctx, {
           agentUid: agentId,
           name: agent.name,
-          ...(d.inboxOnly
-            ? { scope: 'inbox' as const }
-            : { projectIds: d.allProjects ? ('*' as const) : d.projectIds }),
           guardrails: {
             maxFailedRuns: parseCount(d.maxFailedRuns) ?? g.maxFailedRuns,
           },
@@ -165,15 +159,13 @@ export function AgentSettings({
     }
   }
 
-  const inScope = d.allProjects ? live : live.filter((p) => d.projectIds.includes(p.id));
-
   return (
     <section
       aria-labelledby="settings-h"
       className="mb-8 rounded-panel border border-line bg-surface p-4 shadow-e1 sm:p-5"
     >
       <h2 id="settings-h" className="mb-4">
-        <Eyebrow>Allowed to work on</Eyebrow>
+        <Eyebrow>Works on</Eyebrow>
       </h2>
 
       <div className="flex flex-col gap-5">
@@ -185,111 +177,11 @@ export function AgentSettings({
             Inbox only. This agent brings in requests for this organization; it never works on
             development items. This was set when it was connected and cannot be changed.
           </p>
-        ) : null}
-        <div hidden={d.inboxOnly}>
-          <p className="mb-2 text-13 font-medium text-ink">Projects</p>
-          <div role="group" aria-label="Projects" className="flex flex-wrap gap-2">
-            <ToggleChip
-              on={d.allProjects}
-              disabled={!canEdit}
-              onClick={() => set({ allProjects: !d.allProjects })}
-            >
-              All projects
-            </ToggleChip>
-            {live.map((p) => {
-              const on = d.allProjects || d.projectIds.includes(p.id);
-              return (
-                <ToggleChip
-                  key={p.id}
-                  on={on}
-                  disabled={!canEdit || d.allProjects}
-                  onClick={() =>
-                    set({
-                      projectIds: on
-                        ? d.projectIds.filter((x) => x !== p.id)
-                        : [...d.projectIds, p.id],
-                    })
-                  }
-                >
-                  <span aria-hidden>{p.data.emoji}</span>
-                  {p.data.name}
-                </ToggleChip>
-              );
-            })}
-          </div>
-          {tried && errors.projects ? (
-            <p className="mt-1.5 text-13 text-sendback">{errors.projects}</p>
-          ) : null}
-        </div>
-
-        <div hidden={d.inboxOnly}>
-          <p className="mb-1 text-13 font-medium text-ink">Steps (agent steps only)</p>
-          <p className="mb-2 text-13 text-text-2">
-            A step can be limited to some agents in its project’s process. Gates are never decided
-            by agents.
+        ) : (
+          <p className="rounded-btn border border-line bg-canvas px-3 py-2.5 text-14 text-ink">
+            The threads and plans of the Inbox it is connected to, development plans included.
           </p>
-          {inScope.length === 0 ? (
-            <p className="text-13 text-text-2">No projects chosen.</p>
-          ) : (
-            <ul className="flex flex-col gap-3" aria-label="Steps this agent may take">
-              {inScope.map((p) => {
-                const agentSteps = p.data.steps.filter((s) => s.kind === 'agent');
-                return (
-                  <li key={p.id} className="flex flex-col gap-1.5">
-                    <span className="flex flex-wrap items-baseline gap-x-2 text-13 text-text-2">
-                      <span className="font-medium text-ink">
-                        {p.data.emoji} {p.data.name}
-                      </span>
-                      <Link
-                        to="/p/$pid/process"
-                        params={{ pid: p.id }}
-                        className="inline-flex min-h-11 items-center underline underline-offset-4 hov:text-ink"
-                      >
-                        Process
-                      </Link>
-                    </span>
-                    <span className="flex flex-wrap gap-2">
-                      {agentSteps.length === 0 ? (
-                        <span className="text-13 text-text-2">No agent steps.</span>
-                      ) : (
-                        agentSteps.map((s) => {
-                          const only = allowedAgentsFor(p.data, s.id);
-                          const mayTake = only.length === 0 || only.includes(agentId);
-                          return (
-                            <span
-                              key={s.id}
-                              data-step={s.id}
-                              data-allowed={mayTake ? 'yes' : 'no'}
-                              className={cn(
-                                'inline-flex min-h-8 items-center rounded-full border px-3 text-13 font-medium',
-                                mayTake
-                                  ? 'border-agent bg-agent-soft text-ink'
-                                  : 'border-line bg-canvas text-text-3 line-through',
-                              )}
-                              title={
-                                mayTake
-                                  ? only.length
-                                    ? 'Limited to some agents, including this one'
-                                    : 'Any agent on this project'
-                                  : 'Limited to other agents'
-                              }
-                            >
-                              {s.name}
-                              <span className="sr-only">
-                                {mayTake ? '' : ' (limited to other agents)'}
-                              </span>
-                            </span>
-                          );
-                        })
-                      )}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-
+        )}
         <div className="border-t border-line pt-5">
           <h3 className="mb-3">
             <Eyebrow>Guardrails</Eyebrow>

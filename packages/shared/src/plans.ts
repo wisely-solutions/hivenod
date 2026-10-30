@@ -41,6 +41,8 @@ export const inboxPlanSchema = z.object({
   steps: z.array(z.string()).min(1).max(PLAN_LIMITS.steps),
   /** The index of the step whose turn it is; steps.length once every step is through. */
   cursor: z.number().int().min(0).max(PLAN_LIMITS.steps),
+  /** When the cursor last moved (slice 9, decision insights); absent on older plans. */
+  cursorAt: timestamp.nullable().optional(),
   state: z.enum(PLAN_STATES),
   /** The agent's why for the whole plan. */
   note: z.string().max(PLAN_LIMITS.note),

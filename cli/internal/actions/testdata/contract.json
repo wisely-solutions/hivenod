@@ -2481,7 +2481,7 @@
         "text": "More tests"
       },
       "output": {
-        "error": "You reported a status less than 30 seconds ago: wait a little before the next one"
+        "error": "You reported a status on this item less than 30 seconds ago (the limit is per item): wait a little before the next one"
       }
     },
     {
@@ -23669,6 +23669,7 @@
             "path": "workspaces/w1/inboxPlans/pl1",
             "data": {
               "cursor": 1,
+              "cursorAt": { "__hive": "serverTime" },
               "state": "active",
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
@@ -23793,7 +23794,12 @@
           {
             "kind": "update",
             "path": "workspaces/w1/inboxPlans/pl1",
-            "data": { "cursor": 2, "updatedAt": { "__hive": "serverTime" }, "lastEventId": "id01" }
+            "data": {
+              "cursor": 2,
+              "cursorAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
           },
           {
             "kind": "update",
@@ -23914,7 +23920,12 @@
           {
             "kind": "update",
             "path": "workspaces/w1/inboxPlans/pl1",
-            "data": { "cursor": 1, "updatedAt": { "__hive": "serverTime" }, "lastEventId": "id01" }
+            "data": {
+              "cursor": 1,
+              "cursorAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
           },
           {
             "kind": "update",
@@ -24026,7 +24037,12 @@
           {
             "kind": "update",
             "path": "workspaces/w1/inboxPlans/pl1",
-            "data": { "cursor": 1, "updatedAt": { "__hive": "serverTime" }, "lastEventId": "id01" }
+            "data": {
+              "cursor": 1,
+              "cursorAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
           },
           {
             "kind": "update",
@@ -24149,6 +24165,7 @@
             "path": "workspaces/w1/inboxPlans/pl1",
             "data": {
               "cursor": 3,
+              "cursorAt": { "__hive": "serverTime" },
               "state": "done",
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
@@ -24275,6 +24292,7 @@
             "path": "workspaces/w1/inboxPlans/pl1",
             "data": {
               "cursor": 3,
+              "cursorAt": { "__hive": "serverTime" },
               "state": "done",
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
@@ -24617,7 +24635,12 @@
           {
             "kind": "update",
             "path": "workspaces/w1/inboxPlans/pl1",
-            "data": { "cursor": 1, "updatedAt": { "__hive": "serverTime" }, "lastEventId": "id01" }
+            "data": {
+              "cursor": 1,
+              "cursorAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
           },
           {
             "kind": "update",
@@ -25157,7 +25180,12 @@
           {
             "kind": "update",
             "path": "workspaces/w1/inboxPlans/pl1",
-            "data": { "cursor": 2, "updatedAt": { "__hive": "serverTime" }, "lastEventId": "id01" }
+            "data": {
+              "cursor": 2,
+              "cursorAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
           },
           {
             "kind": "update",
@@ -25256,6 +25284,7 @@
             "path": "workspaces/w1/inboxPlans/pl1",
             "data": {
               "cursor": 2,
+              "cursorAt": { "__hive": "serverTime" },
               "state": "done",
               "updatedAt": { "__hive": "serverTime" },
               "lastEventId": "id01"
@@ -26417,6 +26446,7 @@
             "path": "workspaces/w1/inboxPlans/pl1",
             "data": {
               "cursor": 2,
+              "cursorAt": { "__hive": "serverTime" },
               "state": "active",
               "sentBack": {
                 "n": 1,
@@ -26572,6 +26602,7 @@
             "path": "workspaces/w1/inboxPlans/pl1",
             "data": {
               "cursor": 2,
+              "cursorAt": { "__hive": "serverTime" },
               "state": "active",
               "sentBack": {
                 "n": 1,
@@ -26747,6 +26778,7 @@
             "path": "workspaces/w1/inboxPlans/pl1",
             "data": {
               "cursor": 0,
+              "cursorAt": { "__hive": "serverTime" },
               "state": "active",
               "sentBack": {
                 "n": 1,
@@ -26912,6 +26944,7 @@
             "path": "workspaces/w1/inboxPlans/pl1",
             "data": {
               "cursor": 2,
+              "cursorAt": { "__hive": "serverTime" },
               "state": "active",
               "sentBack": {
                 "n": 1,
@@ -27068,6 +27101,7 @@
             "path": "workspaces/w1/inboxPlans/pl1",
             "data": {
               "cursor": 2,
+              "cursorAt": { "__hive": "serverTime" },
               "state": "blocked",
               "sentBack": {
                 "n": 3,
@@ -27471,7 +27505,12 @@
           {
             "kind": "update",
             "path": "workspaces/w1/inboxPlans/pl1",
-            "data": { "cursor": 3, "updatedAt": { "__hive": "serverTime" }, "lastEventId": "id01" }
+            "data": {
+              "cursor": 3,
+              "cursorAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
           },
           {
             "kind": "update",

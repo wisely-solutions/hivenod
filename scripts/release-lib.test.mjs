@@ -6,6 +6,8 @@ import {
   isRules409,
   rulesDeployDecision,
   liveRulesMatch,
+  liveRulesState,
+  stepOneDecision,
   deployPlan,
   compareVersions,
   versionRegressions,
@@ -314,5 +316,46 @@ describe('deployPlan', () => {
     const p = deployPlan('p', 'abcdef123');
     expect(p[1]).toContain('--only firestore');
     expect(p[2]).toContain('--only hosting');
+  });
+});
+
+describe('liveRulesState and stepOneDecision', () => {
+  const local = 'rules_version = "2";\nservice cloud.firestore {}\n';
+  const mk = (content) => async (url) =>
+    url.endsWith('/releases/cloud.firestore')
+      ? { rulesetName: 'projects/p/rulesets/r1' }
+      : { source: { files: [{ name: 'firestore.rules', content }] } };
+  it('same only for a byte-equal source', async () => {
+    expect(await liveRulesState({ project: 'p', localSource: local, getJson: mk(local) })).toBe(
+      'same',
+    );
+    expect(
+      await liveRulesState({ project: 'p', localSource: local, getJson: mk(local + ' ') }),
+    ).toBe('changed');
+  });
+  it('unknown on a failing GET', async () => {
+    const boom = async () => {
+      throw new Error('GET: 503');
+    };
+    expect(await liveRulesState({ project: 'p', localSource: local, getJson: boom })).toBe(
+      'unknown',
+    );
+  });
+  it('decides what to deploy', () => {
+    expect(stepOneDecision({ rulesState: 'same', indexesChanged: false })).toEqual({
+      rules: false,
+      indexes: false,
+      only: null,
+    });
+    expect(stepOneDecision({ rulesState: 'same', indexesChanged: true }).only).toBe(
+      'firestore:indexes',
+    );
+    expect(stepOneDecision({ rulesState: 'changed', indexesChanged: false }).only).toBe(
+      'firestore:rules',
+    );
+    expect(stepOneDecision({ rulesState: 'unknown', indexesChanged: true }).only).toBe('firestore');
+    expect(
+      stepOneDecision({ rulesState: 'same', indexesChanged: false, forceRules: true }).only,
+    ).toBe('firestore:rules');
   });
 });

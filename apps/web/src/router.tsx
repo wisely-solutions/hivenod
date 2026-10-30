@@ -25,6 +25,9 @@ const ActionPage = lazy(() =>
 // The signed-out front page and the Privacy page are their own pieces: signed-in loads skip them.
 const LandingPage = lazy(() => import('./landing/LandingPage'));
 const PrivacyPage = lazy(() => import('./landing/PrivacyPage'));
+const LegacyProjectLink = lazy(() =>
+  import('./threads/LegacyProjectLink').then((m) => ({ default: m.LegacyProjectLink })),
+);
 const JoinPage = lazy(() => import('./pages/JoinPage').then((m) => ({ default: m.JoinPage })));
 
 function Root() {
@@ -159,12 +162,15 @@ const groupsRoute = legacyMe('/me/groups', 'groups');
 const notificationsRoute = legacyMe('/me/notifications', 'notifications');
 const rangeSearch = (s: Record<string, unknown>): { range?: 7 | 30 | 90 } =>
   s.range === 7 || s.range === 30 || s.range === 90 ? { range: s.range } : {};
+const toInbox = () => {
+  throw redirect({ to: '/inbox', replace: true });
+};
+// Projects were removed (item OE8FmrTaIxFVGcaeGG3N, slice 10). Old links and bookmarks go to Inbox;
+// an item moved to Inbox by the migration opens its thread (LegacyProjectLink).
 const projectsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/projects',
-  validateSearch: (s: Record<string, unknown>): { new?: 1 } =>
-    s.new === 1 || s.new === '1' ? { new: 1 } : {},
-  component: lazyRouteComponent(() => import('./projects/ProjectsPage'), 'ProjectsPage'),
+  beforeLoad: toInbox,
 });
 const bellRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -174,7 +180,7 @@ const bellRoute = createRoute({
 const allItemsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/items',
-  component: lazyRouteComponent(() => import('./board/AllItemsPage'), 'AllItemsPage'),
+  beforeLoad: toInbox,
 });
 const projectRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -183,17 +189,24 @@ const projectRoute = createRoute({
     ...(s.view === 'list' ? { view: 'list' as const } : {}),
     ...(typeof s.item === 'string' && s.item ? { item: s.item } : {}),
   }),
-  component: lazyRouteComponent(() => import('./board/BoardPage'), 'ProjectPage'),
+  component: function OldProjectLink() {
+    const { pid } = projectRoute.useParams();
+    const { item } = projectRoute.useSearch();
+    return <LegacyProjectLink pid={pid} {...(item ? { iid: item } : {})} />;
+  },
 });
 const viewerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/p/$pid/i/$iid/view/$aid',
-  component: lazyRouteComponent(() => import('./review/ViewerPage'), 'ViewerPage'),
+  component: function OldViewerLink() {
+    const { pid, iid } = viewerRoute.useParams();
+    return <LegacyProjectLink pid={pid} iid={iid} />;
+  },
 });
 const processRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/p/$pid/process',
-  component: lazyRouteComponent(() => import('./process/ProcessPage'), 'ProcessPage'),
+  beforeLoad: toInbox,
 });
 const insightsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -208,7 +221,9 @@ const projectInsightsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/p/$pid/insights',
   validateSearch: rangeSearch,
-  component: lazyRouteComponent(() => import('./insights/InsightsPage'), 'ProjectInsightsPage'),
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: '/insights', search, replace: true });
+  },
 });
 // The organization hub (item icVly): the phone's fifth tab, the organization in the switcher.
 const orgHubRoute = createRoute({

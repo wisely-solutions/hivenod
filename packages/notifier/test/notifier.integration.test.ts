@@ -18,6 +18,8 @@ import {
   W,
 } from '../../shared/rules/harness';
 import { Engine } from '../src/engine';
+import { ReachOut } from '../src/reach';
+import { firestoreReachPorts } from '../src/reachStore';
 import { firestorePorts, watchAll } from '../src/store';
 import { TelegramApi, TelegramBot } from '../src/telegram';
 
@@ -716,15 +718,16 @@ describe('decision points on threads end to end (slice 3, design 9b)', () => {
   });
 });
 
-describe('silence end to end (item AzveC)', () => {
-  const run = (itemId: string, startedAt: ReturnType<typeof minutesAgo>) => ({
+describe('reach out end to end (item KZ6O9; Firestore emulator, fake clock)', () => {
+  const ago = minutesAgo;
+  const run = (itemId: string, startedAt: ReturnType<typeof minutesAgo>, hb = ago(1)) => ({
     agentUid: 'agentA',
     projectId: 'p1',
     itemId,
     stepId: 'draft',
     startedAt,
-    heartbeatAt: minutesAgo(1),
-    heartbeatEventAt: minutesAgo(1),
+    heartbeatAt: hb,
+    heartbeatEventAt: hb,
     endedAt: null,
     status: 'running',
     costEur: 0,
@@ -748,108 +751,233 @@ describe('silence end to end (item AzveC)', () => {
     data: {},
     at,
   });
-  it('flags a silent worked item on the item and tells the decider once on Telegram', async () => {
-    const ago = minutesAgo;
+  const people = () => ({
+    [notifyPath.telegram('alice')]: { chatId: 43, username: null, linkedAt: 1 },
+    [notifyPath.prefs('alice')]: {
+      push: false,
+      telegram: true,
+      digest: false,
+      quiet: { enabled: false, from: '22:00', to: '08:00', tz: 'UTC' },
+    },
+    [paths.member(W, 'alice')]: { name: 'Alice', email: 'a@x.test', photoURL: null, color: 'c1' },
+  });
+
+  /** The notifier with reach out on real Firestore, its clock and timers under the test's control. */
+  function start() {
+    const { calls, bot } = fakeTelegram();
+    const engine = new Engine(
+      firestorePorts(db, {
+        sendPush: async () => ({ result: 'error' as const, attempts: 0 }),
+        sendTelegram: (c, n, a) => bot.send(c, n, a),
+        log: () => undefined,
+      }),
+    );
+    const skew = { ms: 0 };
+    const timers = new Map<number, { at: number; fn: () => void }>();
+    let id = 0;
+    const real = firestoreReachPorts(db, engine, () => undefined);
+    const reach = new ReachOut({
+      ...real,
+      now: () => Date.now() + skew.ms,
+      setTimer: (fn, ms) => {
+        timers.set(++id, { at: Date.now() + skew.ms + ms, fn });
+        return id;
+      },
+      clearTimer: (h) => void timers.delete(h as number),
+    });
+    /** Runs the timers due now (after moving the clock by `ms`). */
+    const advance = (ms = 0) => {
+      skew.ms += ms;
+      const now = Date.now() + skew.ms;
+      for (const [k, t] of [...timers]) {
+        if (t.at > now) continue;
+        timers.delete(k);
+        t.fn();
+      }
+    };
+    const stop = watchAll(
+      db,
+      engine,
+      () => undefined,
+      () => undefined,
+      reach,
+    );
+    return { calls, bot, reach, advance, stop: () => (stop(), reach.stop()) };
+  }
+
+  it('quiet item: a status request, then silent with one message whose buttons ping and release', async () => {
     await put({
-      [notifyPath.telegram('alice')]: { chatId: 43, username: null, linkedAt: 1 },
-      [notifyPath.prefs('alice')]: {
-        push: false,
-        telegram: true,
-        digest: false,
-        quiet: { enabled: false, from: '22:00', to: '08:00', tz: 'UTC' },
-      },
-      [paths.run(W, 'run-s')]: {
-        agentUid: 'agentA',
-        projectId: 'p1',
-        itemId: 'quiet',
-        stepId: 'draft',
-        startedAt: ago(45),
-        heartbeatAt: ago(1),
-        heartbeatEventAt: ago(1),
-        endedAt: null,
-        status: 'running',
-        costEur: 0,
-        tokensIn: 0,
-        tokensOut: 0,
-        model: null,
-        summary: null,
-        lastEventId: 'seed',
-      },
+      ...people(),
+      [paths.run(W, 'run-s')]: run('quiet', ago(45)),
       [I('quiet')]: itemDoc({
         title: 'Quiet one',
         stepId: 'draft',
         status: 'working',
+        updatedAt: ago(45),
         claim: { runId: 'run-s', agentUid: 'agentA', heartbeatAt: ago(1) },
       }),
       // Heartbeats are not activity.
       [paths.event(W, 'hb-s')]: event('quiet', 'run-s', 'run.heartbeat', ago(2)),
-      // Busy: a log line 5 minutes ago, no status at all.
+      // Busy: a log line 5 minutes ago (not on the item), no status at all.
       [paths.run(W, 'run-l')]: run('logs', ago(60)),
       [paths.logLine(W, 'run-l', 0)]: { at: ago(5), level: 'info', text: 'Running tests' },
       [I('logs')]: itemDoc({
         title: 'Logging one',
         stepId: 'draft',
         status: 'working',
+        updatedAt: ago(60),
         claim: { runId: 'run-l', agentUid: 'agentA', heartbeatAt: ago(1) },
       }),
-      // Busy: a note 3 minutes ago (an event of the agent), behind newer heartbeats.
-      [paths.run(W, 'run-n')]: run('notes', ago(60)),
-      [paths.event(W, 'note-n')]: event('notes', 'run-n', 'message.posted', ago(3)),
-      [paths.event(W, 'hb-n')]: event('notes', 'run-n', 'run.heartbeat', ago(1)),
-      [I('notes')]: itemDoc({
-        title: 'Noting one',
+    });
+    const { calls, bot, advance, stop } = start();
+    const item = async (iid: string) => (await db.doc(I(iid)).get()).data()!;
+    try {
+      // 45 min quiet: the timer is due at once; Hivenod's status request lands on the item.
+      await until(async () => {
+        advance();
+        return !!(await item('quiet')).statusAsk;
+      });
+      expect((await item('quiet')).statusAsk).toMatchObject({ runId: 'run-s', byUid: 'hivenod' });
+      // The busy one is not asked: its log line was found by the one read at its due time.
+      advance();
+      await new Promise((r) => setTimeout(r, 500));
+      expect((await item('logs')).statusAsk ?? null).toBeNull();
+      // No answer in 10 minutes: flagged, and Alice (the next decider) gets one message.
+      const toAlice = () =>
+        calls.filter((c) => c.method === 'sendMessage' && /is silent on/.test(c.body.text ?? ''));
+      await until(async () => {
+        advance(11 * 60_000);
+        return toAlice().length > 0;
+      });
+      expect(toAlice()[0]!.body.text).toContain('Agent is silent on "Quiet one"');
+      await until(async () => !!(await item('quiet')).silence);
+      expect((await item('quiet')).silence).toMatchObject({ runId: 'run-s', agent: 'Agent' });
+      const kb = JSON.stringify(toAlice()[0]!.body.reply_markup);
+      expect(kb).toContain('Ping again');
+      expect(kb).toContain('Release to queue');
+      expect(kb).toContain('Stop');
+      // Still silent: no second message on the next timers.
+      advance(30 * 60_000);
+      await new Promise((r) => setTimeout(r, 500));
+      expect(toAlice()).toHaveLength(1);
+
+      // Ping again: a fresh status request by Alice (the clock moved 40 min; the emulator's not).
+      await db
+        .doc(I('quiet'))
+        .update({ 'statusAsk.at': Timestamp.fromMillis(Date.now() - 12 * 60_000) });
+      await press(bot, 43, buttonCode(calls, 'rp:')!);
+      await until(async () => (await item('quiet')).statusAsk?.byUid === 'alice');
+      // Release to queue: the claim goes, a note says why, the flag is cleared.
+      await press(bot, 43, buttonCode(calls, 'rr:')!);
+      await until(async () => (await item('quiet')).status === 'queued');
+      const after = await item('quiet');
+      expect(after.claim).toBeNull();
+      expect(after.silence).toBeNull();
+      const notes = await db.collection(`${I('quiet')}/messages`).get();
+      expect(notes.docs.map((d) => d.data().text).join(' ')).toMatch(
+        /Alice put the item back in the queue from Telegram/,
+      );
+      // A second press: the item moved on.
+      await press(bot, 43, buttonCode(calls, 'rr:')!);
+      await until(() =>
+        calls.some(
+          (c) => c.method === 'answerCallbackQuery' && /moved on/.test(String(c.body.text)),
+        ),
+      );
+    } finally {
+      stop();
+    }
+  });
+
+  it('a stale claim without a live session goes back to the queue with a note', async () => {
+    await put({
+      [paths.run(W, 'run-x')]: run('stale', ago(90), ago(45)),
+      [I('stale')]: itemDoc({
+        title: 'Stale one',
         stepId: 'draft',
         status: 'working',
-        claim: { runId: 'run-n', agentUid: 'agentA', heartbeatAt: ago(1) },
+        updatedAt: ago(90),
+        claim: { runId: 'run-x', agentUid: 'agentA', heartbeatAt: ago(45) },
       }),
     });
-    const { calls, bot } = fakeTelegram();
-    const ports = firestorePorts(db, {
-      sendPush: async () => ({ result: 'error' as const, attempts: 0 }),
-      sendTelegram: (c, n, a) => bot.send(c, n, a),
-      log: () => undefined,
-    });
-    const engine = new Engine(ports);
-    // One sweep at a time, as in main.ts.
-    let chain = Promise.resolve();
-    const sweep = () => (chain = chain.then(() => engine.sweep()));
-    const stop = watchAll(
-      db,
-      engine,
-      () => void sweep(),
-      () => undefined,
-    );
-    const toAlice = () =>
-      calls.filter(
-        (c) =>
-          c.method === 'sendMessage' &&
-          c.body.chat_id === 43 &&
-          /No update/.test(c.body.text ?? ''),
-      );
+    const { advance, stop } = start();
     try {
-      await until(() => toAlice().length > 0);
-      expect(toAlice()[0]!.body.text).toContain('Quiet one');
-      await until(async () => !!(await db.doc(I('quiet')).get()).data()!.silence);
-      const flag = (await db.doc(I('quiet')).get()).data()!.silence;
-      expect(flag).toMatchObject({ runId: 'run-s' });
-      expect(Date.now() - flag.since).toBeGreaterThan(44 * 60_000);
-      await sweep();
-      await sweep();
-      expect(toAlice()).toHaveLength(1);
-      // The items with recent activity (a log line, a note) are not silent.
-      expect((await db.doc(I('logs')).get()).data()!.silence ?? null).toBeNull();
-      expect((await db.doc(I('notes')).get()).data()!.silence ?? null).toBeNull();
-      // A status ends it: the flag is cleared.
-      await db.doc(I('quiet')).update({
-        statusUpdate: {
-          runId: 'run-s',
-          text: 'Tests',
-          pct: null,
-          at: Timestamp.now(),
-          by: 'agentA',
-        },
+      await until(async () => {
+        advance();
+        return (await db.doc(I('stale')).get()).data()!.status === 'queued';
       });
-      await until(async () => (await db.doc(I('quiet')).get()).data()!.silence === null);
+      const it = (await db.doc(I('stale')).get()).data()!;
+      expect(it.claim).toBeNull();
+      expect((await db.doc(paths.run(W, 'run-x')).get()).data()!.status).toBe('released');
+      const notes = await db.collection(`${I('stale')}/messages`).get();
+      expect(notes.docs.map((d) => d.data().text).join(' ')).toMatch(
+        /no live session .* Hivenod put the item back in the queue/,
+      );
+    } finally {
+      stop();
+    }
+  });
+
+  it('a thread step in agent hands: a status request on the outcome, then silent with Ping again · Open', async () => {
+    const old = ago(40);
+    await put({
+      ...people(),
+      [inboxPaths.thread(W, 'rt1')]: {
+        memberUid: 'alice',
+        subjectId: null,
+        state: 'investigating',
+        waiting: null,
+        question: null,
+        title: 'Invoice from the printer',
+        refs: ['r1'],
+        lastMessageAt: old,
+        fetchedBy: 'agentA',
+        createdAt: old,
+        updatedAt: old,
+        lastEventId: 'e1',
+      },
+      [inboxPaths.outcome(W, 'ro1')]: {
+        memberUid: 'alice',
+        threadId: 'rt1',
+        type: 'reply',
+        fields: { text: 'Paid, thanks.' },
+        state: 'approved',
+        note: '',
+        proposedBy: 'agentA',
+        executor: 'agentA',
+        decision: { byUid: 'alice', at: old, edited: false, reason: null },
+        result: null,
+        createdAt: old,
+        updatedAt: old,
+        lastEventId: 'e1',
+      },
+    });
+    const { calls, advance, stop } = start();
+    const o = async () => (await db.doc(inboxPaths.outcome(W, 'ro1')).get()).data()!;
+    try {
+      await until(async () => {
+        advance();
+        return !!(await o()).statusAsk;
+      });
+      expect((await o()).statusAsk).toMatchObject({ byUid: 'hivenod' });
+      await until(async () => {
+        advance(11 * 60_000);
+        return calls.some(
+          (c) => c.method === 'sendMessage' && /is silent on/.test(c.body.text ?? ''),
+        );
+      });
+      const msg = calls.find((c) => /is silent on/.test(c.body.text ?? ''))!.body;
+      expect(msg.text).toContain('Agent is silent on "Invoice from the printer"');
+      const kb = JSON.stringify(msg.reply_markup);
+      expect(kb).toContain('Ping again');
+      expect(kb).not.toContain('Release to queue');
+      await until(async () => !!(await o()).silence);
+      // The thread moving (a note by the agent) clears the flag at the next check.
+      await db.doc(inboxPaths.outcome(W, 'ro1')).update({ updatedAt: Timestamp.now() });
+      await until(async () => {
+        advance();
+        return (await o()).silence === null;
+      });
     } finally {
       stop();
     }

@@ -15,10 +15,8 @@
  *    Telegram. An urgent thread skips quiet hours and the summary.
  *  - After the gate's remindAfterHours a reminder goes out once, and only then is `remindedAt` set,
  *    which the app shows as "reminder sent".
- *  - Silence (item AzveC): an actively worked item with no activity (log line, tool write, status)
- *    for its project's silenceAfter minutes (or 10 minutes after a person asked) is flagged on the
- *    item, and its deciders are told once per silence (bell, push, Telegram). Any activity ends
- *    the silence; the next one is a new silence.
+ *  - Silence (items AzveC, KZ6O9): items and thread steps in agent hands are watched by
+ *    ReachOut (reach.ts) with one timer each, not by the sweep. It uses `deliver` and `addBells`.
  */
 import {
   approvalNotice,
@@ -34,10 +32,6 @@ import {
   gateKey,
   questionNotice,
   reminderDue,
-  silenceDeciders,
-  silenceDue,
-  silenceNotice,
-  type Silence,
   summaryNotice,
   notifyPath,
   DEFAULT_NOTIFY_PREFS,
@@ -51,6 +45,7 @@ import {
 } from '@hive/shared';
 import type { PushOutcome } from './push.js';
 import type { ThreadAction } from './threadDecide.js';
+import type { ReachRef } from './reach.js';
 
 export const FRESH_MS = 30 * 60_000;
 /** More than this many messages for one person in one pass become one summary. */
@@ -74,25 +69,7 @@ export interface Ports {
   setNotified(wid: string, key: string, value: Notified): Promise<void>;
   /** 'gone' = the endpoint is dead and should be forgotten. */
   sendPush(sub: PushSub, notice: Notice): Promise<PushOutcome>;
-  sendTelegram(
-    chatId: number,
-    notice: Notice,
-    action?: ApprovalAction | ThreadTelegram,
-  ): Promise<boolean>;
-  /** Sets or clears the silence flag on an item (item AzveC). */
-  setSilence(wid: string, pid: string, iid: string, silence: Silence | null): Promise<void>;
-  /**
-   * The holder's newest activity on a run after `afterMs` (item AzveC), in ms: its newest log
-   * line, or its newest tool write on the item (an event of the agent, heartbeats aside). Null:
-   * none since then.
-   */
-  lastActivity(
-    wid: string,
-    iid: string,
-    runId: string,
-    agentUid: string,
-    afterMs: number,
-  ): Promise<number | null>;
+  sendTelegram(chatId: number, notice: Notice, action?: TelegramAction): Promise<boolean>;
   /** Writes a bell entry unless one with this id exists (users/{uid}/notifications/{id}). */
   addBell(uid: string, id: string, entry: BellEntry): Promise<void>;
   log(line: string): void;
@@ -110,22 +87,16 @@ export interface WaitingItem {
   project: Project;
   item: Item;
 }
-/** An item an agent holds (item AzveC), with its run's start. */
-/** The last activity of a silent-looking item is read again after this long (item AzveC). */
-export const ACTIVITY_READ_EVERY_MS = 55_000;
-const ACTIVITY_OVERLAP_MS = 2 * 60_000;
-
-export interface WorkingItem {
-  wid: string;
-  pid: string;
-  iid: string;
-  project: Project;
-  item: Item;
-  /** When the run started (ms): the claim time. */
-  startedMs: number;
-  /** The agent's name, for the message. */
-  agentName: string;
+/**
+ * The buttons of a silent message (item KZ6O9): Ping again · Release to queue · Stop · Open on an
+ * item, Ping again · Open on a thread step.
+ */
+export interface ReachTelegram {
+  kind: 'reach';
+  uid: string;
+  ref: ReachRef;
 }
+export type TelegramAction = ApprovalAction | ThreadTelegram | ReachTelegram;
 export interface QuestionMsg {
   wid: string;
   pid: string;
@@ -253,13 +224,17 @@ export class Engine {
   private waiting = new Map<string, WaitingItem>();
   private inbox = new Map<string, InboxWaiting>();
   private questions = new Map<string, QuestionMsg>();
-  private working = new Map<string, WorkingItem>();
   /** Channels that already got a message, by `key|uid|channel` (kept for the process's life). */
   private chanDone = new Set<string>();
   private tries = new Map<string, number>();
   private prefsCache = new Map<string, { at: number; prefs: NotifyPrefs }>();
 
   constructor(private p: Ports) {}
+
+  /** Bell entries for these people (one each; an existing one is kept). */
+  async addBells(uids: readonly string[], id: string, entry: BellEntry): Promise<void> {
+    return this.bell(uids, id, entry);
+  }
 
   private async bell(uids: readonly string[], id: string, entry: BellEntry): Promise<void> {
     for (const uid of uids) {
@@ -307,32 +282,6 @@ export class Engine {
     if (t) this.inbox.set(key, t);
     else this.inbox.delete(key);
   }
-  /**
-   * The last activity per item (item AzveC): the newest found so far and up to when it was read.
-   * Each read only asks for what came after the last one, at most once a minute.
-   */
-  private activityCache = new Map<
-    string,
-    { runId: string; ms: number | null; readAt: number; readTo: number }
-  >();
-  private async activity(w: WorkingItem, runId: string, agentUid: string): Promise<number | null> {
-    const key = `${w.wid}/${w.iid}`;
-    const now = this.p.now();
-    let hit = this.activityCache.get(key);
-    if (hit && hit.runId !== runId) hit = undefined;
-    if (hit && now - hit.readAt < ACTIVITY_READ_EVERY_MS) return hit.ms;
-    // A little overlap: server times and the notifier's clock may differ by a few seconds.
-    const after = hit ? hit.readTo - ACTIVITY_OVERLAP_MS : w.startedMs;
-    const found = await this.p.lastActivity(w.wid, w.iid, runId, agentUid, after);
-    const ms = Math.max(hit?.ms ?? 0, found ?? 0) || null;
-    this.activityCache.set(key, { runId, ms, readAt: now, readTo: now });
-    return ms;
-  }
-
-  setWorking(w: WorkingItem | null, key: string) {
-    if (w) this.working.set(key, w);
-    else this.working.delete(key);
-  }
   setQuestion(q: QuestionMsg | null, key: string) {
     if (q) this.questions.set(key, q);
     else this.questions.delete(key);
@@ -354,7 +303,7 @@ export class Engine {
   async deliver(
     uid: string,
     notice: Notice,
-    action?: ApprovalAction | ThreadTelegram,
+    action?: TelegramAction,
     key = '',
     urgent = false,
   ): Promise<Delivery> {
@@ -610,90 +559,6 @@ export class Engine {
         this.p.log(`inbox ${t.tid}: ${String(e)}`);
       }
     }
-    const workingNow = new Set([...this.working.values()].map((w) => `${w.wid}/${w.iid}`));
-    for (const k of this.activityCache.keys()) if (!workingNow.has(k)) this.activityCache.delete(k);
-    for (const w of [...this.working.values()]) {
-      try {
-        const at = { item: w.item, project: w.project, startedMs: w.startedMs, nowMs: now };
-        // Silence counts from the last activity. The item alone gives an upper bound, so the
-        // log and the events are only read when the item would be silent without them.
-        let due = silenceDue({ ...at, activityMs: null });
-        if (due && w.item.claim) {
-          const activityMs = await this.activity(w, w.item.claim.runId, w.item.claim.agentUid);
-          due = silenceDue({ ...at, activityMs });
-        }
-        const flag = w.item.silence ?? null;
-        if (!due) {
-          if (flag) {
-            await this.p.setSilence(w.wid, w.pid, w.iid, null);
-            w.item = { ...w.item, silence: null };
-          }
-          continue;
-        }
-        if (!flag || flag.runId !== due.runId || flag.since !== due.since) {
-          const next = { runId: due.runId, since: due.since, at: now };
-          await this.p.setSilence(w.wid, w.pid, w.iid, next);
-          w.item = { ...w.item, silence: next };
-        }
-        const key = `${due.runId}:${due.since}`;
-        const deciders = silenceDeciders(w.project, w.item);
-        const r = await record(w.wid, notifyPath.notifiedSilence(w.iid), () => ({
-          itemId: w.iid,
-          projectId: w.pid,
-          gateKey: key,
-          sent: [],
-          remindedAt: null,
-          at: now,
-        }));
-        if (!r) continue;
-        let fresh = r.dirty;
-        if (r.rec.gateKey !== key) {
-          // A status ended the last silence: this is a new one.
-          r.rec = { ...r.rec, gateKey: key, sent: [], at: now };
-          r.dirty = true;
-          fresh = true;
-        }
-        const minutes = Math.max(1, Math.floor((now - due.since) / 60_000));
-        if (fresh)
-          await this.bell(deciders, bellId.silence(w.iid, key), {
-            kind: 'silence',
-            workspaceId: w.wid,
-            projectId: w.pid,
-            itemId: w.iid,
-            projectName: w.project.name,
-            itemTitle: clipText(w.item.title, 300),
-            stepName: '',
-            actorName: clipText(w.agentName, 200),
-            text: `no activity for ${minutes} min`,
-            at: now,
-            readAt: null,
-          });
-        const notice = silenceNotice({
-          projectName: w.project.name,
-          itemTitle: w.item.title,
-          agentName: w.agentName,
-          minutes,
-          projectId: w.pid,
-          itemId: w.iid,
-        });
-        const rec = r.rec;
-        for (const uid of deciders) {
-          if (rec.sent.includes(uid)) continue;
-          cands.push({
-            uid,
-            notice,
-            key: `sil|${w.iid}|${key}`,
-            done: () => {
-              rec.sent = [...rec.sent, uid];
-              r.dirty = true;
-            },
-          });
-        }
-      } catch (e) {
-        this.p.log(`working ${w.iid}: ${String(e)}`);
-      }
-    }
-
     const byUid = new Map<string, Candidate[]>();
     for (const c of cands) byUid.set(c.uid, [...(byUid.get(c.uid) ?? []), c]);
     for (const [uid, all] of byUid) {
@@ -729,7 +594,7 @@ export class Engine {
 interface Candidate {
   uid: string;
   notice: Notice;
-  action?: ApprovalAction | ThreadTelegram;
+  action?: TelegramAction;
   key: string;
   urgent?: boolean;
   done: () => void;

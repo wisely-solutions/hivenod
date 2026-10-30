@@ -28,6 +28,8 @@ import {
   isRulesApi503,
   liveRulesMatch,
   rulesDeployDecision,
+  liveRulesState,
+  stepOneDecision,
   nextReleaseTag,
   pendingIndexes,
   siteUrls,
@@ -83,7 +85,7 @@ function cliProtocolOf(cwd) {
 /** Build, stamp dist/version.json with the commit, deploy hosting + firestore rules/indexes. */
 async function deployProd(
   cwd = process.cwd(),
-  { guardVersions = false, compileGuard = true } = {},
+  { guardVersions = false, compileGuard = true, skipUnchanged = false } = {},
 ) {
   const commit = out('git', ['rev-parse', 'HEAD'], cwd);
   run('pnpm', ['build'], cwd);
@@ -161,89 +163,117 @@ async function deployProd(
     return res.json();
   };
   // Step 1: rules + indexes alone, so a Google rules hiccup never blocks (or half-ships) the site.
-  console.log('Deploy step 1/2: Firestore rules and indexes');
   const rulesSource = readFileSync(join(cwd, 'firestore.rules'), 'utf8');
-  // Google compiles rules within a ~6 s backend deadline and answers 503 when it runs out, which
-  // firebase-tools retries in vain. Time the compile first (read-only `:test` calls; a tiny
-  // ruleset tells an outage apart) and stop with the real reason (docs/DEPLOY.md "Rules size and
-  // compile time").
-  const compile = await measureCompileTime({
-    project,
-    source: rulesSource,
-    getToken: accessToken,
-  }).catch((e) => {
-    console.warn(`Deploy step 1/2: rules compile probe failed (${e.message}); deploying anyway`);
-    return null;
-  });
-  if (compile) {
-    if (compile.verdict === 'borderline')
-      console.warn(`Deploy step 1/2: WARNING ${compile.message}`);
-    else console.log(`Deploy step 1/2: ${compile.message}`);
-    // A rollback goes on regardless: its rules may be live already (a 409 "already current").
-    if (!['ok', 'borderline'].includes(compile.verdict) && compileGuard)
-      die(`Deploy step 1/2 FAILED: ${compile.message}. Nothing was deployed.`);
-  }
-  // Google refuses to release rules of 256000 compiled bytes or more, and firebase-tools then
-  // reports a misleading 409 "already exists". Measure first (scripts/rules-size.mjs; a throwaway
-  // ruleset and release, deleted again) and stop with the real reason.
-  const probeSize = async () => {
-    try {
-      return await measureRulesSize({ project, source: rulesSource, getToken: accessToken });
-    } catch (e) {
-      console.warn(`Deploy step 1/2: rules size probe failed (${e.message}); deploying anyway`);
-      return undefined;
+  let step1 = { rules: true, indexes: true, only: 'firestore' };
+  if (skipUnchanged) {
+    // Google's rules API is slow and flaky for big rulesets: a release that does not change the
+    // rules must not depend on it (docs/DEPLOY.md "Skipping unchanged rules").
+    const rulesState = await liveRulesState({ project, localSource: rulesSource, getJson });
+    if (rulesState === 'unknown')
+      console.warn('Deploy step 1/2: WARNING could not read the live ruleset; deploying rules');
+    let indexesChanged = true;
+    const last = releaseTags().at(-1);
+    if (last) {
+      const d = spawnSync(
+        'git',
+        ['diff', '--quiet', `${last}..HEAD`, '--', 'firestore.indexes.json'],
+        { cwd },
+      );
+      if (d.status === 0) indexesChanged = false;
     }
-  };
-  let compiledSize = await probeSize();
-  if (compiledSize != null) {
-    console.log(`Deploy step 1/2: ${rulesSizeVerdict(compiledSize)}`);
-    if (compiledSize >= RULES_COMPILED_LIMIT)
-      die(`Deploy step 1/2 FAILED: ${rulesSizeVerdict(compiledSize)}. Nothing was deployed.`);
-  }
-  let retries503 = 0;
-  let retries409 = 0;
-  for (;;) {
-    const r = fbDeploy('firestore');
-    if (r.status === 0) {
-      console.log('Deploy step 1/2: rules released');
-      break;
-    }
-    const remoteMatches = isRules409(r.output)
-      ? await liveRulesMatch({ project, localSource: rulesSource, getJson })
-      : undefined;
-    // A 409 that is not "already current" may hide the PATCH 400 "too big": measure again.
-    if (isRules409(r.output) && remoteMatches !== true && compiledSize == null)
-      compiledSize = await probeSize();
-    const d = rulesDeployDecision({
-      output: r.output,
-      retries503,
-      retries409,
-      remoteMatches,
-      compiledSize,
+    step1 = stepOneDecision({
+      rulesState,
+      indexesChanged,
+      forceRules: process.argv.includes('--force-rules'),
     });
-    if (d === 'too-big') {
-      const size = parseCompiledSize(r.output) ?? compiledSize;
-      die(
-        `Deploy step 1/2 FAILED: ${rulesSizeVerdict(size)} (Google's PATCH releases/cloud.firestore 400, reported by firebase-tools as a 409). Hosting was not deployed.`,
-      );
+    if (!step1.rules) console.log('Deploy step 1/2: rules unchanged (live = local), skipped');
+    if (!step1.indexes)
+      console.log('Deploy step 1/2: indexes unchanged since the last release tag, skipped');
+  }
+  console.log(`Deploy step 1/2: Firestore ${step1.only ?? 'nothing to deploy'}`);
+  if (step1.only) {
+    // Google compiles rules within a ~6 s backend deadline and answers 503 when it runs out, which
+    // firebase-tools retries in vain. Time the compile first (read-only `:test` calls; a tiny
+    // ruleset tells an outage apart) and stop with the real reason (docs/DEPLOY.md "Rules size and
+    // compile time").
+    const compile = await measureCompileTime({
+      project,
+      source: rulesSource,
+      getToken: accessToken,
+    }).catch((e) => {
+      console.warn(`Deploy step 1/2: rules compile probe failed (${e.message}); deploying anyway`);
+      return null;
+    });
+    if (compile) {
+      if (compile.verdict === 'borderline')
+        console.warn(`Deploy step 1/2: WARNING ${compile.message}`);
+      else console.log(`Deploy step 1/2: ${compile.message}`);
+      // A rollback goes on regardless: its rules may be live already (a 409 "already current").
+      if (!['ok', 'borderline'].includes(compile.verdict) && compileGuard)
+        die(`Deploy step 1/2 FAILED: ${compile.message}. Nothing was deployed.`);
     }
-    if (d === 'success') {
-      console.log(
-        'Deploy step 1/2: 409 "already exists", live ruleset equals firestore.rules: already current',
-      );
-      break;
+    // Google refuses to release rules of 256000 compiled bytes or more, and firebase-tools then
+    // reports a misleading 409 "already exists". Measure first (scripts/rules-size.mjs; a throwaway
+    // ruleset and release, deleted again) and stop with the real reason.
+    const probeSize = async () => {
+      try {
+        return await measureRulesSize({ project, source: rulesSource, getToken: accessToken });
+      } catch (e) {
+        console.warn(`Deploy step 1/2: rules size probe failed (${e.message}); deploying anyway`);
+        return undefined;
+      }
+    };
+    let compiledSize = await probeSize();
+    if (compiledSize != null) {
+      console.log(`Deploy step 1/2: ${rulesSizeVerdict(compiledSize)}`);
+      if (compiledSize >= RULES_COMPILED_LIMIT)
+        die(`Deploy step 1/2 FAILED: ${rulesSizeVerdict(compiledSize)}. Nothing was deployed.`);
     }
-    if (d === 'retry') {
-      if (isRulesApi503(r.output)) retries503++;
-      else retries409++;
-      console.log(
-        `Deploy step 1/2: retrying after ${isRulesApi503(r.output) ? 'a Google 503' : 'a 409 with a different live ruleset'} (waiting 60 s)`,
-      );
-      await new Promise((res) => setTimeout(res, 60_000));
-      continue;
+    let retries503 = 0;
+    let retries409 = 0;
+    for (;;) {
+      const r = fbDeploy(step1.only);
+      if (r.status === 0) {
+        console.log('Deploy step 1/2: rules released');
+        break;
+      }
+      const remoteMatches = isRules409(r.output)
+        ? await liveRulesMatch({ project, localSource: rulesSource, getJson })
+        : undefined;
+      // A 409 that is not "already current" may hide the PATCH 400 "too big": measure again.
+      if (isRules409(r.output) && remoteMatches !== true && compiledSize == null)
+        compiledSize = await probeSize();
+      const d = rulesDeployDecision({
+        output: r.output,
+        retries503,
+        retries409,
+        remoteMatches,
+        compiledSize,
+      });
+      if (d === 'too-big') {
+        const size = parseCompiledSize(r.output) ?? compiledSize;
+        die(
+          `Deploy step 1/2 FAILED: ${rulesSizeVerdict(size)} (Google's PATCH releases/cloud.firestore 400, reported by firebase-tools as a 409). Hosting was not deployed.`,
+        );
+      }
+      if (d === 'success') {
+        console.log(
+          'Deploy step 1/2: 409 "already exists", live ruleset equals firestore.rules: already current',
+        );
+        break;
+      }
+      if (d === 'retry') {
+        if (isRulesApi503(r.output)) retries503++;
+        else retries409++;
+        console.log(
+          `Deploy step 1/2: retrying after ${isRulesApi503(r.output) ? 'a Google 503' : 'a 409 with a different live ruleset'} (waiting 60 s)`,
+        );
+        await new Promise((res) => setTimeout(res, 60_000));
+        continue;
+      }
+      console.error('Deploy step 1/2 FAILED (rules/indexes); hosting was not deployed.');
+      process.exit(r.status ?? 1);
     }
-    console.error('Deploy step 1/2 FAILED (rules/indexes); hosting was not deployed.');
-    process.exit(r.status ?? 1);
   }
   console.log('Deploy step 2/2: hosting');
   const h = fbDeploy('hosting', ['--message', `commit ${commit.slice(0, 7)}`]);
@@ -558,7 +588,7 @@ if (mode === 'preview') {
   fb(['hosting:channel:deploy', name, '--expires', '14d']);
   console.log('Preview channel on every hosting site; the app is on the site `hivenod`.');
 } else if (mode === 'prod') {
-  await deployProd(undefined, { guardVersions: true });
+  await deployProd(undefined, { guardVersions: true, skipUnchanged: true });
 } else if (mode === 'release') {
   run('git', ['fetch', '--tags', 'origin', 'main']);
   if (out('git', ['status', '--porcelain']))
@@ -571,7 +601,7 @@ if (mode === 'preview') {
   }
   const tags = releaseTags();
   const previous = tags.at(-1);
-  const commit = await deployProd(undefined, { guardVersions: true });
+  const commit = await deployProd(undefined, { guardVersions: true, skipUnchanged: true });
   if (!(await smoke(commit))) {
     if (previous) {
       console.error(`Smoke test FAILED; rolling back to ${previous}`);

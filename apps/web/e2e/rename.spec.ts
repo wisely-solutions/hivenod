@@ -38,7 +38,6 @@ test('every main screen says Hivenod, never Hive', async ({ page }) => {
   expect(await oldNameOn(page)).toEqual([]);
 
   for (const [path, title] of [
-    ['/projects', /^Projects · Hivenod$/],
     ['/activity', /^Activity · Hivenod$/],
     ['/insights', /· Hivenod$/],
     ['/agents', /· Hivenod$/],

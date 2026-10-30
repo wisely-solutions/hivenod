@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AgentAvatar } from '../ui/avatar';
 import { Badge, Eyebrow, NumberRoll, Pill } from '../ui/badge';
 import { Button, IconButton } from '../ui/button';
-import { ItemCard, type ItemCardData } from '../ui/card';
+import { ItemCard, type ItemCardData } from './ItemCard';
 import { FoldedColumn, Stepper } from '../ui/feedback';
 import { Textarea } from '../ui/form';
 import { Icon } from '../ui/icon';
