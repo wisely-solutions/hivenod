@@ -1196,7 +1196,7 @@
       },
       {
         "name": "plan_propose",
-        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. For one action alone, use outcome_propose. Step types: reply, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
+        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. Development work (code, a release): give template \"dev\" for the Development plan: shape (research it, write the proposal into the summary, size S/M/L) → approval Approve idea → build (in a worktree; end with an open pull request, local checks green, NOT merged) → approval Ship it? → release (merge the approved PR(s), release, check it live; report merge sha, release number, live URL, screenshots) → approval Accept on live. With a template, steps gives each step's fields in order and may be left out or shorter (e.g. [{\"type\": \"shape\", \"fields\": {\"idea\": \"...\"}}]). When the person asks for changes at a gate, the plan goes back to an earlier step and you get its carry_out again with why sent_back and the reason. From a step you carry out, plan_send_back sends the plan back yourself (Release finds a bug: back to Build). For one action alone, use outcome_propose. Step types: reply, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1204,6 +1204,13 @@
               "type": "string",
               "minLength": 1,
               "description": "Thread id"
+            },
+            "template": {
+              "type": "string",
+              "enum": [
+                "dev"
+              ],
+              "description": "A plan template: dev (Development: Shape, Approve idea, Build, Ship it?, Release + live check, Accept on live)"
             },
             "note": {
               "description": "Why this plan, in 1-2 sentences: the person reads it first",
@@ -1220,9 +1227,9 @@
               ]
             },
             "steps": {
-              "description": "The steps, in the order they run (1-8)",
+              "description": "The steps, in the order they run (1-8); with a template, the fields of its steps in order",
               "type": "array",
-              "minItems": 1,
+              "minItems": 0,
               "maxItems": 8,
               "items": {
                 "type": "object",
@@ -1235,6 +1242,9 @@
                       "handover",
                       "snooze",
                       "nudge",
+                      "shape",
+                      "build",
+                      "release",
                       "approval"
                     ],
                     "description": "The step's outcome type"
@@ -1292,6 +1302,37 @@
         },
         "execution": {
           "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "plan_send_back",
+        "description": "Send a plan back from the step you are carrying out to an earlier agent step that is done, with the reason (e.g. Release finds a bug: back to Build). The steps from there on start again: the agent steps stay approved and you get their carry_out again (why sent_back), the person decides the gates in between again. The third send back of a plan leaves it blocked until the person retries or stops it. Only the agent carrying out the step at the plan's turn may send it back.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "description": "What is wrong and what the earlier step must change"
+            },
+            "toStep": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "The step number to go back to (e.g. 3 for Build of the Development plan); default: the nearest earlier agent step"
+            }
+          },
+          "required": [
+            "threadId",
+            "reason"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
         }
       },
       {
@@ -3024,7 +3065,7 @@
       },
       {
         "name": "plan_propose",
-        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. For one action alone, use outcome_propose. Step types: reply, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
+        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. Development work (code, a release): give template \"dev\" for the Development plan: shape (research it, write the proposal into the summary, size S/M/L) → approval Approve idea → build (in a worktree; end with an open pull request, local checks green, NOT merged) → approval Ship it? → release (merge the approved PR(s), release, check it live; report merge sha, release number, live URL, screenshots) → approval Accept on live. With a template, steps gives each step's fields in order and may be left out or shorter (e.g. [{\"type\": \"shape\", \"fields\": {\"idea\": \"...\"}}]). When the person asks for changes at a gate, the plan goes back to an earlier step and you get its carry_out again with why sent_back and the reason. From a step you carry out, plan_send_back sends the plan back yourself (Release finds a bug: back to Build). For one action alone, use outcome_propose. Step types: reply, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -3032,6 +3073,13 @@
               "type": "string",
               "minLength": 1,
               "description": "Thread id"
+            },
+            "template": {
+              "type": "string",
+              "enum": [
+                "dev"
+              ],
+              "description": "A plan template: dev (Development: Shape, Approve idea, Build, Ship it?, Release + live check, Accept on live)"
             },
             "note": {
               "description": "Why this plan, in 1-2 sentences: the person reads it first",
@@ -3048,9 +3096,9 @@
               ]
             },
             "steps": {
-              "description": "The steps, in the order they run (1-8)",
+              "description": "The steps, in the order they run (1-8); with a template, the fields of its steps in order",
               "type": "array",
-              "minItems": 1,
+              "minItems": 0,
               "maxItems": 8,
               "items": {
                 "type": "object",
@@ -3063,6 +3111,9 @@
                       "handover",
                       "snooze",
                       "nudge",
+                      "shape",
+                      "build",
+                      "release",
                       "approval"
                     ],
                     "description": "The step's outcome type"
@@ -3120,6 +3171,37 @@
         },
         "execution": {
           "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "plan_send_back",
+        "description": "Send a plan back from the step you are carrying out to an earlier agent step that is done, with the reason (e.g. Release finds a bug: back to Build). The steps from there on start again: the agent steps stay approved and you get their carry_out again (why sent_back), the person decides the gates in between again. The third send back of a plan leaves it blocked until the person retries or stops it. Only the agent carrying out the step at the plan's turn may send it back.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Thread id"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000,
+              "description": "What is wrong and what the earlier step must change"
+            },
+            "toStep": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "The step number to go back to (e.g. 3 for Build of the Development plan); default: the nearest earlier agent step"
+            }
+          },
+          "required": [
+            "threadId",
+            "reason"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
         }
       },
       {

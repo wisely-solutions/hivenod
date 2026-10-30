@@ -69,6 +69,18 @@ type FeedPlan struct {
 	ID, ThreadID, State string
 	Steps               []string
 	Cursor              int
+	// SentBack (slice 6): how many send backs so far, the step the last one went to, and why.
+	SentBack               int
+	SentBackTo, SentBackOf string
+}
+
+// round is the plan's send-back count: a step carried out before a send back is carried out
+// again after it (the feed remembers carry_outs per step and round).
+func (f *InboxFeed) round(o FeedOutcome) string {
+	if o.PlanID == "" {
+		return o.ID
+	}
+	return o.ID + "#" + strconv.Itoa(f.plans[o.PlanID].SentBack)
 }
 
 // stepOf is "3 of 5" for a step of the plan ("" when it is not one).
@@ -182,6 +194,8 @@ type InboxEventInfo struct {
 	PlanEnd string `json:"planEnd"`
 	// InstructionID: the person's request (reason instruct; its text is Instruction, a chip Chips[0]).
 	InstructionID string `json:"instructionId"`
+	// SentBack (reason carry_out, slice 6): the plan was sent back to this step; Why says why.
+	SentBack bool `json:"sentBack"`
 }
 
 // instructChipText is INSTRUCT_CHIP_TEXT: what a chip asks.
@@ -197,7 +211,9 @@ var instructChipText = map[string]string{
 var reviseChipText = map[string]string{"shorter": "shorter", "formal": "more formal", "warmer": "warmer", "availability": "add my availability"}
 
 var inboxTriggers = map[string]string{
-	"inbox.added":      "message",
+	"inbox.added": "message",
+	// New thread (slice 6): the person wrote to this agent from Hivenod.
+	"thread.created":   "new",
 	"thread.answered":  "answered",
 	"thread.woke":      "woke",
 	"thread.restored":  "restored",
@@ -271,6 +287,9 @@ func InboxText(e InboxEventInfo) string {
 	case "carry_out":
 		if e.PlanID != "" {
 			lines = append(lines, fmt.Sprintf("Step %s of plan %s on thread %s is approved and its turn: a %s (outcome %s).", or(e.Step, "?"), e.PlanID, e.ThreadID, or(e.OutcomeType, "?"), or(e.OutcomeID, "?")))
+			if e.SentBack {
+				lines = append(lines, "The plan was sent back to this step: "+clip(or(e.Why, "no reason given"), 1000)+". Do it again with that change; the steps after it run again in order.")
+			}
 		} else {
 			lines = append(lines, fmt.Sprintf("The person approved a %s outcome (outcome %s) on thread %s.", or(e.OutcomeType, "?"), or(e.OutcomeID, "?"), e.ThreadID))
 		}
@@ -314,6 +333,14 @@ func InboxText(e InboxEventInfo) string {
 		what = fmt.Sprintf("carry out outcome %s exactly as approved (its fields, as the person left them), then report it with outcome_done", or(e.OutcomeID, "?"))
 		if e.PlanID != "" && e.OutcomeType == "make_it_work" {
 			what += " status started with result.itemId once the item is made (the plan waits until the item is Done; then report it done)"
+		}
+		switch e.OutcomeType {
+		case "shape":
+			what += " (Shape: research the idea, write the proposal into the summary with ask \"Build this?\", attach drafts with thread_attach, give the size S/M/L; report done)"
+		case "build":
+			what += " (Build: build what Approve idea approved, in a worktree; end with an open pull request, local checks green, NOT merged; report done with the PR link as result.permalink and what changed and which checks ran as result.text; then write the summary with ask \"Ship it?\" and before/after screenshots)"
+		case "release":
+			what += " (Release + live check: merge the approved pull request(s), run the release checks, release, check it live; report done with the merge sha, release number, live commit and production URL; attach screenshots with thread_attach. A bug: plan_send_back to Build with the reason)"
 		}
 	case "item_done":
 		what = fmt.Sprintf("report the step done: outcome_done %s status done with result.itemId %s; the plan then moves to its next step", or(e.OutcomeID, "?"), or(e.ItemID, "?"))
@@ -729,13 +756,17 @@ func (f *InboxFeed) Evaluate() {
 	for _, id := range f.oorder {
 		o := f.outcomes[id]
 		slot := "o:" + o.ID
-		if f.carried[o.ID] || f.due[slot] != nil || !f.atTurn(o) {
+		if f.carried[f.round(o)] || f.due[slot] != nil || !f.atTurn(o) {
 			continue
 		}
 		oc := o
 		info := InboxEventInfo{Reason: "carry_out", ThreadID: o.ThreadID, OutcomeID: o.ID, OutcomeType: o.Type}
 		if o.PlanID != "" {
-			info.PlanID, info.Step = o.PlanID, f.plans[o.PlanID].stepOf(o.ID)
+			p := f.plans[o.PlanID]
+			info.PlanID, info.Step = o.PlanID, p.stepOf(o.ID)
+			if p.SentBack > 0 && p.SentBackTo == o.ID {
+				info.SentBack, info.Why = true, p.SentBackOf
+			}
 		}
 		f.due[slot] = &feedDue{slot: slot, reason: "carry_out", threadID: o.ThreadID, atMs: o.CreatedAtMs, memberUID: o.MemberUID, outcome: &oc, info: info}
 	}
@@ -1019,7 +1050,7 @@ func (f *InboxFeed) pump() []Event {
 		}
 		delete(f.due, key)
 		if d.outcome != nil {
-			f.carried[d.outcome.ID] = true
+			f.carried[f.round(*d.outcome)] = true
 		}
 		if d.revise != nil {
 			f.revised[d.revise.ID] = d.revise.AtMs
@@ -1062,6 +1093,9 @@ func (f *InboxFeed) pump() []Event {
 		if d.info.PlanID != "" && d.info.Step == "" && d.info.OutcomeID != "" {
 			// The plans may arrive after the step (a fresh listener): look again when it goes out.
 			d.info.Step = f.plans[d.info.PlanID].stepOf(d.info.OutcomeID)
+		}
+		if d.info.SentBack {
+			meta["why"] = "sent_back"
 		}
 		if d.info.PlanID != "" {
 			meta["plan_id"] = d.info.PlanID
@@ -1370,6 +1404,13 @@ func feedPlanOf(id string, m map[string]any) FeedPlan {
 				p.Steps = append(p.Steps, v)
 			}
 		}
+	}
+	if sb, ok := m["sentBack"].(map[string]any); ok {
+		if n, ok := sb["n"].(int64); ok {
+			p.SentBack = int(n)
+		}
+		p.SentBackTo, _ = sb["to"].(string)
+		p.SentBackOf, _ = sb["reason"].(string)
 	}
 	return p
 }

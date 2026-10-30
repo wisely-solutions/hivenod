@@ -78,6 +78,13 @@ var inboxHelp = `hivenod inbox / thread / subject / outcome / plan: a person's H
                            stdin), either [{type, fields, note?, confidence?, checks?}, ...]
                            or {"steps": [...], "note": ..., "confidence": ...}; step types:
                            ` + strings.Join(actions.PlanOutcomeTypes(), ", ") + `
+  hivenod plan propose THREAD --template dev [--steps-file F|-] [--note N]
+                           proposes the Development plan (Shape, Approve idea, Build, Ship
+                           it?, Release + live check, Accept on live); the steps file then
+                           gives the steps' fields in order, e.g. [{"fields": {"idea": "..."}}]
+  hivenod plan send-back THREAD --reason R [--to-step N]
+                           from the plan step you carry out, sends the plan back to an
+                           earlier agent step (N, e.g. 3 for Build; default: the nearest)
   hivenod outcome done OUTCOME --status done|failed|started [--text T] [--permalink URL] [--item-id I] [--error E]
                            after carrying out an outcome the person approved; started (with
                            --item-id) is for a Build it plan step whose item is made
@@ -97,7 +104,7 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("hivenod "+group+" "+verb, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	str := map[string]*string{}
-	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file", "ref", "file", "base-version"} {
+	for _, f := range []string{"source", "sender", "handle", "thread-ref", "received-at", "text", "text-file", "message-id", "permalink", "reply-ref", "member", "thread", "title", "subject-id", "name", "area", "label", "type", "note", "status", "item-id", "error", "active-days", "limit", "reason", "confidence", "revises", "steps-file", "ref", "file", "base-version", "template", "to-step"} {
 		str[f] = fs.String(f, "", "")
 	}
 	fromMember := fs.Bool("from-member", false, "")
@@ -328,10 +335,31 @@ func runInbox(args []string, stdout, stderr io.Writer) int {
 			a["baseVersion"] = float64(n)
 		}
 		a["summary"] = sum
+	case "plan send-back":
+		tool = "plan_send_back"
+		if id == "" || *str["reason"] == "" {
+			return usage()
+		}
+		a["threadId"], a["reason"] = id, *str["reason"]
+		if set["to-step"] {
+			n, err := strconv.Atoi(*str["to-step"])
+			if err != nil {
+				fmt.Fprintf(stderr, "hivenod: --to-step is a step number\n")
+				return 2
+			}
+			a["toStep"] = float64(n)
+		}
 	case "plan propose":
 		tool = "plan_propose"
-		if id == "" || *str["steps-file"] == "" {
+		if id == "" || (*str["steps-file"] == "" && *str["template"] == "") {
 			return usage()
+		}
+		opt(a, "template", "template")
+		if *str["steps-file"] == "" {
+			a["threadId"], a["steps"] = id, []any{}
+			opt(a, "note", "note")
+			opt(a, "confidence", "confidence")
+			break
 		}
 		var b []byte
 		var err error

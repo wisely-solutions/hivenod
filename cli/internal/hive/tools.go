@@ -220,7 +220,7 @@ var ToolRuns = map[string]Run{
 	"plan_propose": func(ctx context.Context, c *Client, a Args) (any, error) {
 		var steps []PlanStepArg
 		arr, ok := a["steps"].([]any)
-		if !ok {
+		if !ok && a.S("template") == "" {
 			return nil, Errf("steps is a list of 1 to 8 steps: {type, fields, note?, confidence?, checks?}.")
 		}
 		for _, e := range arr {
@@ -231,7 +231,10 @@ var ToolRuns = map[string]Run{
 			}
 			steps = append(steps, PlanStepArg{Type: m.S("type"), Fields: f, Note: m.SP("note"), Confidence: m.SP("confidence"), Checks: m.Strings("checks")})
 		}
-		return c.PlanPropose(ctx, a.S("threadId"), a.SP("note"), a.SP("confidence"), steps)
+		return c.PlanPropose(ctx, a.S("threadId"), a.SP("note"), a.SP("confidence"), steps, a.SP("template"))
+	},
+	"plan_send_back": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.PlanSendBack(ctx, a.S("threadId"), a.S("reason"), a.F("toStep"))
 	},
 	"thread_wake": func(ctx context.Context, c *Client, a Args) (any, error) { return c.ThreadWake(ctx, a.S("threadId")) },
 	// park / unpark exist in channel sessions only (ChannelTools gives them the session).
