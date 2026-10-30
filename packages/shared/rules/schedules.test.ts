@@ -14,6 +14,8 @@ import {
   inboxPaths,
   proposeOutcome,
   rejectOutcome,
+  requestRevision,
+  reviseOutcome,
   type OutcomeStateOf,
   type ThreadStateOf,
 } from '../src/inbox';
@@ -25,6 +27,7 @@ import {
   pauseSchedule,
   proposeSchedule,
   resumeSchedule,
+  reviseSchedule,
   setAgentsOff,
   type ScheduleInput,
 } from '../src/scheduleActions';
@@ -385,6 +388,109 @@ describe('an agent proposes, the member approves', () => {
     expect(s.rule).toEqual({ freq: 'monthly', at: '10:00', tz: 'Europe/Lisbon', monthDay: 2 });
     expect(s.version).toBe(2);
     expect(s.state).toBe('active');
+  });
+});
+
+describe('Ask for changes: the agent revises its proposal (slice 5)', () => {
+  /** A proposal the member asked changes for, and the agent's revision of it. */
+  async function asked() {
+    const { a, p, tid } = await proposal();
+    await ok(a.run(p));
+    const m = as('alice');
+    const o = (await snap(O('osp1'))) as unknown as OutcomeStateOf;
+    await ok(
+      m.run(
+        requestRevision(m.ctx, {
+          outcomeId: 'osp1',
+          outcome: o,
+          thread: await thread(tid),
+          instruction: 'At 08:30, please',
+        }),
+      ),
+    );
+    const revise = async (who: As = a) =>
+      reviseSchedule(who.ctx, {
+        ...INVOICES,
+        rule: { ...INVOICES.rule, at: '08:30' },
+        outcomeId: 'osp1',
+        outcome: (await snap(O('osp1'))) as unknown as OutcomeStateOf,
+        thread: await thread(tid),
+        schedule: { id: 'sp1', data: await schedule('sp1') },
+        note: 'Moved to 08:30.',
+      });
+    return { a, m, tid, revise };
+  }
+
+  it('rewrites the proposed schedule with the outcome’s next version; approving it activates v2', async () => {
+    const { a, m, tid, revise } = await asked();
+    await ok(a.run(await revise()));
+    const s = await snap(S('sp1'));
+    expect(s.rule).toEqual({ ...INVOICES.rule, at: '08:30' });
+    expect(s).toMatchObject({ state: 'proposed', version: 2 });
+    const o = (await snap(O('osp1'))) as unknown as OutcomeStateOf;
+    expect(o.state).toBe('proposed');
+    expect(o.fields.sentence).toBe('Monthly · day 1 · 08:30');
+    expect(o.versions).toHaveLength(2);
+    await ok(
+      m.run(
+        approveOutcome(m.ctx, {
+          outcomeId: 'osp1',
+          outcome: o,
+          thread: await thread(tid),
+          schedule: { id: 'sp1', data: await schedule('sp1') },
+        }),
+      ),
+    );
+    expect(await snap(S('sp1'))).toMatchObject({ state: 'active', version: 3 });
+  });
+
+  it('refuses the schedule without the outcome’s revision, activating, retargeting or another agent', async () => {
+    const { a, revise } = await asked();
+    const p = await revise();
+    await denied(a.run(tamper(p, O('osp1'), null)));
+    await denied(a.run(tamper(p, S('sp1'), (d) => ({ ...d, state: 'active' }))));
+    await denied(a.run(tamper(p, S('sp1'), (d) => ({ ...d, agentUid: AGENTS.star }))));
+    await denied(a.run(tamper(p, S('sp1'), (d) => ({ ...d, version: 5 }))));
+    await denied(
+      a.run(tamper(p, S('sp1'), (d) => ({ ...d, rule: { freq: 'hourly', at: '08:30' } }))),
+    );
+    // Another agent of the org cannot rewrite it (nor the outcome: it did not propose it).
+    const b = as(AGENTS.star);
+    const o = (await snap(O('osp1'))) as unknown as OutcomeStateOf;
+    const sc = await schedule('sp1');
+    const byB = reviseSchedule(b.ctx, {
+      ...INVOICES,
+      outcomeId: 'osp1',
+      outcome: { ...o, proposedBy: AGENTS.star },
+      thread: (await snap(T('itr1'))) as unknown as ThreadStateOf,
+      schedule: { id: 'sp1', data: { ...sc, agentUid: AGENTS.star } },
+    });
+    await denied(b.run(byB));
+    await denied(b.run(tamper(byB, O('osp1'), null)));
+    await ok(a.run(p));
+  });
+
+  it('refuses a revision nobody asked for, and outcome_propose on a schedule', async () => {
+    const { a, p, tid } = await proposal();
+    await ok(a.run(p));
+    const o = (await snap(O('osp1'))) as unknown as OutcomeStateOf;
+    // Hand-built: the outcome as if revising, written over a proposed one.
+    const fake = reviseSchedule(a.ctx, {
+      ...INVOICES,
+      outcomeId: 'osp1',
+      outcome: {
+        ...o,
+        state: 'revising',
+        revise: { instruction: 'x', chips: [] },
+      } as OutcomeStateOf,
+      thread: await thread(tid),
+      schedule: { id: 'sp1', data: await schedule('sp1') },
+    });
+    await denied(a.run(fake));
+    const t = await thread(tid);
+    expect(() =>
+      reviseOutcome(a.ctx, { outcomeId: 'osp1', outcome: o, thread: t, fields: {} }),
+    ).toThrow(/schedule_propose/);
   });
 });
 

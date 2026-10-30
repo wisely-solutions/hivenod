@@ -1049,6 +1049,43 @@ const MUTATIONS = [
       ],
     ],
   ],
+  // Slice 5: the agent revises its own proposal after Ask for changes, with the outcome.
+  [
+    'schedule revise: any version',
+    [
+      [
+        'return schedOk(d) && d.version == r.version + 1',
+        'return schedOk(d)',
+      ],
+    ],
+  ],
+  [
+    'schedule revise: without the outcome revision',
+    [
+      [
+        "\n          && getAfter(inboxDoc('inboxOutcomes', r.proposal.outcomeId)).data.lastEventId == d.lastEventId;",
+        ';',
+      ],
+    ],
+  ],
+  [
+    'schedule revise: rewrites any field',
+    [
+      [
+        "touched(['title', 'what', 'rule', 'runTitle', 'steps', 'templateId', 'subjectId', 'version'])\n          && inboxTracked(d.lastEventId, ['outcome.revised']",
+        "true\n          && inboxTracked(d.lastEventId, ['outcome.revised']",
+      ],
+    ],
+  ],
+  [
+    'revise ask: schedule refused',
+    [
+      [
+        "r.type in ['reply', 'nudge', 'handover', 'make_it_work', 'schedule']",
+        "r.type in ['reply', 'nudge', 'handover', 'make_it_work']",
+      ],
+    ],
+  ],
   [
     'run: decided by another member',
     [

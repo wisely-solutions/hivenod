@@ -360,7 +360,6 @@ func ProposePlan(ctx Ctx, in ProposePlanInput) (ProposePlanResult, error) {
 	if err := need(in.Confidence == nil || inList(*in.Confidence, OutcomeConfidence...), "The confidence is high, medium or low."); err != nil {
 		return ProposePlanResult{}, err
 	}
-	planTypes := PlanOutcomeTypes()
 	raw := in.Steps
 	if tpl != "" {
 		var err error
@@ -368,38 +367,9 @@ func ProposePlan(ctx Ctx, in ProposePlanInput) (ProposePlanResult, error) {
 			return ProposePlanResult{}, err
 		}
 	}
-	if err := need(len(raw) >= 1 && len(raw) <= PlanMaxSteps, "A plan has 1 to "+strconv.Itoa(PlanMaxSteps)+" steps."); err != nil {
+	steps, err := cleanPlanSteps(raw)
+	if err != nil {
 		return ProposePlanResult{}, err
-	}
-	steps := make([]cleanStep, len(raw))
-	for i, st := range raw {
-		n := "Step " + strconv.Itoa(i+1)
-		if !inList(st.Type, planTypes...) {
-			return ProposePlanResult{}, fail(n + ": " + st.Type + " is not a plan step. Plan steps: " + strings.Join(planTypes, ", ") + ".")
-		}
-		f := st.Fields
-		if f == nil {
-			f = map[string]any{}
-		}
-		fields, err := CleanOutcomeFields(st.Type, f)
-		if err != nil {
-			return ProposePlanResult{}, fail(n + ": " + err.Error())
-		}
-		sn := ""
-		if st.Note != nil {
-			sn = jsTrim(*st.Note)
-		}
-		if err := need(jsLen(sn) <= InboxMaxOutcomeNote, n+": "+tooLong("the note", InboxMaxOutcomeNote)); err != nil {
-			return ProposePlanResult{}, err
-		}
-		if err := need(st.Confidence == nil || inList(*st.Confidence, OutcomeConfidence...), n+": the confidence is high, medium or low."); err != nil {
-			return ProposePlanResult{}, err
-		}
-		checks, err := cleanLines("checks", st.Checks, InboxMaxChecks, InboxMaxCheck)
-		if err != nil {
-			return ProposePlanResult{}, err
-		}
-		steps[i] = cleanStep{st.Type, fields, sn, st.Confidence, checks}
 	}
 	planID := ""
 	if in.PlanID != nil {
@@ -463,6 +433,44 @@ func ProposePlan(ctx Ctx, in ProposePlanInput) (ProposePlanResult, error) {
 		)
 	}, "")
 	return ProposePlanResult{Plan: p, PlanID: planID, StepIDs: stepIDs}, nil
+}
+
+// cleanPlanSteps is cleanPlanSteps: 1-8 plan steps, their types, fields, note, confidence, checks.
+func cleanPlanSteps(raw []PlanStepInput) ([]cleanStep, error) {
+	if err := need(len(raw) >= 1 && len(raw) <= PlanMaxSteps, "A plan has 1 to "+strconv.Itoa(PlanMaxSteps)+" steps."); err != nil {
+		return nil, err
+	}
+	steps := make([]cleanStep, len(raw))
+	for i, st := range raw {
+		n := "Step " + strconv.Itoa(i+1)
+		if !inList(st.Type, PlanOutcomeTypes()...) {
+			return nil, fail(n + ": " + st.Type + " is not a plan step. Plan steps: " + strings.Join(PlanOutcomeTypes(), ", ") + ".")
+		}
+		f := st.Fields
+		if f == nil {
+			f = map[string]any{}
+		}
+		fields, err := CleanOutcomeFields(st.Type, f)
+		if err != nil {
+			return nil, fail(n + ": " + err.Error())
+		}
+		sn := ""
+		if st.Note != nil {
+			sn = jsTrim(*st.Note)
+		}
+		if err := need(jsLen(sn) <= InboxMaxOutcomeNote, n+": "+tooLong("the note", InboxMaxOutcomeNote)); err != nil {
+			return nil, err
+		}
+		if err := need(st.Confidence == nil || inList(*st.Confidence, OutcomeConfidence...), n+": the confidence is high, medium or low."); err != nil {
+			return nil, err
+		}
+		checks, err := cleanLines("checks", st.Checks, InboxMaxChecks, InboxMaxCheck)
+		if err != nil {
+			return nil, err
+		}
+		steps[i] = cleanStep{st.Type, fields, sn, st.Confidence, checks}
+	}
+	return steps, nil
 }
 
 func evData(planID string, stepIDs, types []string, tpl string) map[string]any {

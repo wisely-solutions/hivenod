@@ -1170,6 +1170,15 @@ type ReviseResult struct {
 // ReviseOutcome is reviseOutcome: the proposing agent writes the next version of an outcome the
 // member asked changes for; it is proposed again in the same slot.
 func ReviseOutcome(ctx Ctx, in ReviseInput) (ReviseResult, error) {
+	if t := OutcomeTypeOf(in.Outcome.Type); t != nil && t.OwnTool != "" {
+		return ReviseResult{}, fail("A " + in.Outcome.Type + " is revised with " + t.OwnTool + " (revises), not outcome_propose.")
+	}
+	return reviseOutcomeOps(ctx, in)
+}
+
+// reviseOutcomeOps is reviseOutcomeOps: ReviseOutcome without the own-tool check (ReviseSchedule
+// adds the schedule's own write to its batch).
+func reviseOutcomeOps(ctx Ctx, in ReviseInput) (ReviseResult, error) {
 	if err := RequireAgent(ctx); err != nil {
 		return ReviseResult{}, err
 	}

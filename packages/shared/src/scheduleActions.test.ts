@@ -8,6 +8,8 @@ import {
   inboxThreadSchema,
   proposeOutcome,
   rejectOutcome,
+  requestRevision,
+  reviseOutcome,
   type OutcomeStateOf,
   type ThreadStateOf,
 } from './inbox';
@@ -23,6 +25,7 @@ import {
   pauseSchedule,
   proposeSchedule,
   resumeSchedule,
+  reviseSchedule,
   setAgentsOff,
   type ScheduleInput,
 } from './scheduleActions';
@@ -246,6 +249,75 @@ describe('an agent proposes, the member decides', () => {
     expect(op(c.ops, 'schedules/s1').data).toMatchObject({ version: 5, activeFrom: SERVER_TIME });
     expect(c.ops.find((x) => x.path.endsWith('schedules/sp1'))!.kind).toBe('delete');
     expect(op(c.ops, 'inboxEvents').data!.data).toMatchObject({ scheduleId: 's1' });
+  });
+
+  it('carries confidence and checks like outcome_propose', () => {
+    const p = proposeSchedule(agent, {
+      ...INPUT,
+      threadId: 't1',
+      thread,
+      confidence: 'high',
+      checks: ['Same steps as I did by hand on 1 Oct'],
+    });
+    expect(op(p.ops, 'inboxOutcomes').data).toMatchObject({
+      confidence: 'high',
+      checks: ['Same steps as I did by hand on 1 Oct'],
+    });
+    expect(inboxOutcomeSchema.parse(stored(op(p.ops, 'inboxOutcomes').data))).toBeTruthy();
+    expect(() =>
+      proposeSchedule(agent, { ...INPUT, threadId: 't1', thread, confidence: 'sure' }),
+    ).toThrow(/high, medium or low/);
+  });
+
+  it('Ask for changes, then the agent revises its schedule and the outcome in one batch', () => {
+    const p = proposed();
+    const o = stored(op(p.ops, 'inboxOutcomes').data!) as unknown as OutcomeStateOf;
+    const s = asSchedule(op(p.ops, 'schedules').data!);
+    const ask = requestRevision(human, {
+      outcomeId: 'o1',
+      outcome: o,
+      thread,
+      instruction: 'Make it 08:30',
+    });
+    expect(op(ask.ops, 'inboxOutcomes/o1').data).toMatchObject({ state: 'revising' });
+    const revising = {
+      ...o,
+      state: 'revising',
+      revise: { instruction: 'Make it 08:30', chips: [] },
+    } as OutcomeStateOf;
+    const input = {
+      ...INPUT,
+      rule: { ...INPUT.rule, at: '08:30' },
+      outcomeId: 'o1',
+      outcome: revising,
+      thread,
+      schedule: { id: 'sp1', data: s },
+      note: 'Moved to 08:30.',
+    };
+    const r = reviseSchedule(agent, input);
+    expect(r.version).toBe(2);
+    expect(r.sentence).toBe('Monthly · day 1 · 08:30');
+    expect(op(r.ops, 'schedules/sp1')).toMatchObject({
+      kind: 'update',
+      data: { rule: { at: '08:30' }, version: 2, lastEventId: r.eventId },
+    });
+    expect(op(r.ops, 'inboxOutcomes/o1').data).toMatchObject({
+      state: 'proposed',
+      fields: { scheduleId: 'sp1', sentence: 'Monthly · day 1 · 08:30' },
+    });
+    const ev = r.ops[r.ops.length - 1]!;
+    expect(ev.data).toMatchObject({ type: 'outcome.revised', data: { outcomeId: 'o1' } });
+    // outcome_propose cannot revise it (the schedule doc would not follow).
+    expect(() =>
+      reviseOutcome(agent, { outcomeId: 'o1', outcome: revising, thread, fields: {} }),
+    ).toThrow(/schedule_propose/);
+    expect(() => reviseSchedule(agent, { ...input, outcome: o })).toThrow(/Nobody asked/);
+    expect(() =>
+      reviseSchedule(agent, { ...input, schedule: { id: 'sp1', data: { ...s, state: 'active' } } }),
+    ).toThrow(/no longer a proposal/);
+    expect(() => reviseSchedule(agent, { ...input, schedule: { id: 'other', data: s } })).toThrow(
+      /names/,
+    );
   });
 
   it('rejecting it deletes the proposal under its delete event', () => {

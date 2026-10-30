@@ -86,6 +86,34 @@ var runners = map[string]runner{
 	}) (any, error) {
 		return CheckSummary(in.Summary)
 	}),
+	// Scheduled tasks, slice 5
+	"proposeSchedule": act(ProposeSchedule),
+	"reviseSchedule":  act(ReviseSchedule),
+	"checkRule": pure(func(in struct {
+		Rule any `json:"rule"`
+	}) (any, error) {
+		return CheckRule(in.Rule), nil
+	}),
+	"ruleSentence": pure(func(in struct {
+		Rule any `json:"rule"`
+	}) (any, error) {
+		r, err := RuleOf(in.Rule)
+		if err != nil {
+			return nil, err
+		}
+		return RuleSentence(r), nil
+	}),
+	"nextRuns": pure(func(in struct {
+		Rule   any   `json:"rule"`
+		FromMs int64 `json:"fromMs"`
+		N      int   `json:"n"`
+	}) (any, error) {
+		r, err := RuleOf(in.Rule)
+		if err != nil {
+			return nil, err
+		}
+		return NextRuns(r, in.FromMs, in.N), nil
+	}),
 	"wakeThread":   act(WakeThread),
 	"proposePlan":  act(ProposePlan),
 	"sendBackPlan": act(SendBackPlan),
