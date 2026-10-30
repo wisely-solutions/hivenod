@@ -1,0 +1,535 @@
+{
+  "calls": [
+    {
+      "tool": "inbox_add",
+      "ok": true,
+      "out": {
+        "duplicate": false,
+        "member": "owner",
+        "messageId": "im7cfaa444ee5f2c719050d8ed",
+        "newThread": true,
+        "note": "Brought into Inbox as a new thread. File it under a subject (subject_list, then subject_assign) and investigate.",
+        "state": "investigating",
+        "threadId": "itf3e1ac934d3610fb64cd9d89"
+      }
+    },
+    {
+      "tool": "schedule_list",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Active schedules run by themselves (Hivenod starts each run and sends its carry_out to the agent that runs it). Before proposing, check that the same thing is not scheduled already; to change one you run, schedule_propose with replaces.",
+        "schedules": []
+      }
+    },
+    {
+      "tool": "schedule_propose",
+      "ok": false,
+      "out": "The rule: weekly needs weekdays."
+    },
+    {
+      "tool": "outcome_propose",
+      "ok": false,
+      "out": "MCP error -32602: Input validation error: Invalid arguments for tool outcome_propose: type: must be one of \"reply\", \"no_reply\", \"handover\", \"snooze\", \"nudge\", \"ignore\""
+    },
+    {
+      "tool": "schedule_propose",
+      "ok": true,
+      "out": {
+        "nextRuns": "<3 runs>",
+        "note": "Proposed. The person sees the schedule, its next runs and the plan of each run, and approves it (Set up schedule), asks for changes or says not now. Nothing runs before; once approved Hivenod starts each run at its time as a new thread with this plan and sends you its carry_out. Keep no timer of your own.",
+        "outcomeId": "<id>",
+        "scheduleId": "<id>",
+        "sentence": "Monthly · day 1 · 09:00",
+        "state": "proposed",
+        "threadId": "itf3e1ac934d3610fb64cd9d89"
+      }
+    },
+    {
+      "tool": "schedule_list",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Active schedules run by themselves (Hivenod starts each run and sends its carry_out to the agent that runs it). Before proposing, check that the same thing is not scheduled already; to change one you run, schedule_propose with replaces.",
+        "schedules": [
+          {
+            "agent": "<agent>",
+            "nextRuns": "<3 runs>",
+            "proposal": {
+              "outcomeId": "<id>",
+              "threadId": "itf3e1ac934d3610fb64cd9d89"
+            },
+            "scheduleId": "<id>",
+            "sentence": "Monthly · day 1 · 09:00",
+            "state": "proposed",
+            "steps": [
+              "reply",
+              "approval"
+            ],
+            "subjectId": null,
+            "title": "Send invoices",
+            "what": "Prepare the invoices from the hours log, show the totals and send them after approval.",
+            "yours": true
+          }
+        ]
+      }
+    },
+    {
+      "tool": "thread_read",
+      "ok": true,
+      "out": {
+        "due": null,
+        "fetchedBy": "<agent>",
+        "fetchedByMe": true,
+        "member": "owner",
+        "messages": [
+          {
+            "attachments": [],
+            "direction": "out",
+            "messageId": "im7cfaa444ee5f2c719050d8ed",
+            "permalink": null,
+            "receivedAt": "<iso>",
+            "replyRef": null,
+            "sender": {
+              "handle": "cara@example.com",
+              "name": "Cara Owner"
+            },
+            "source": "teams",
+            "text": "Every 1st at 9, prepare the invoices and ask me before sending.",
+            "threadRef": "invoices-1"
+          }
+        ],
+        "next": "Waiting for the person to approve, edit or reject the proposed outcomes.",
+        "outcomes": [
+          {
+            "checks": [
+              "Ran it by hand on 1 Oct"
+            ],
+            "confidence": "high",
+            "decision": null,
+            "executor": null,
+            "executorIsMe": false,
+            "fields": {
+              "scheduleId": "<id>",
+              "sentence": "Monthly · day 1 · 09:00"
+            },
+            "note": "Same steps as by hand on 1 Oct.",
+            "outcomeId": "<id>",
+            "result": null,
+            "revise": {
+              "chips": [],
+              "instruction": "At 08:30, and on a weekend move it to Monday"
+            },
+            "state": "revising",
+            "type": "schedule",
+            "versions": 1
+          }
+        ],
+        "plans": [],
+        "question": null,
+        "state": "yourCall",
+        "subject": null,
+        "summary": null,
+        "summaryNext": "Your summary of this thread is missing: when you are done with it, write it with thread_summary (baseVersion 0).",
+        "threadId": "itf3e1ac934d3610fb64cd9d89",
+        "timeline": [],
+        "title": "Every 1st at 9, prepare the invoices and ask me before sending.",
+        "urgent": false,
+        "waiting": null
+      }
+    },
+    {
+      "tool": "schedule_propose",
+      "ok": true,
+      "out": {
+        "nextRuns": "<3 runs>",
+        "note": "Version 2 proposed in place of the earlier one. Nothing runs until the person approves it (Set up schedule); then Hivenod starts each run at its time and sends you its carry_out. Keep no timer of your own.",
+        "outcomeId": "<id>",
+        "scheduleId": "<id>",
+        "sentence": "Monthly · day 1 · 08:30 · Mon if weekend",
+        "state": "proposed",
+        "threadId": "itf3e1ac934d3610fb64cd9d89",
+        "version": 2
+      }
+    },
+    {
+      "tool": "schedule_list",
+      "ok": true,
+      "out": {
+        "member": "owner",
+        "note": "Active schedules run by themselves (Hivenod starts each run and sends its carry_out to the agent that runs it). Before proposing, check that the same thing is not scheduled already; to change one you run, schedule_propose with replaces.",
+        "schedules": [
+          {
+            "agent": "<agent>",
+            "nextRuns": "<3 runs>",
+            "proposal": {
+              "outcomeId": "<id>",
+              "threadId": "itf3e1ac934d3610fb64cd9d89"
+            },
+            "scheduleId": "<id>",
+            "sentence": "Monthly · day 1 · 08:30 · Mon if weekend",
+            "state": "active",
+            "steps": [
+              "reply",
+              "approval"
+            ],
+            "subjectId": null,
+            "title": "Send invoices",
+            "what": "Prepare the invoices from the hours log, show the totals and send them after approval.",
+            "yours": true
+          }
+        ]
+      }
+    },
+    {
+      "tool": "schedule_propose",
+      "ok": false,
+      "out": "This schedule is no longer a proposal."
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": null,
+        "runId": null,
+        "type": "workspace.created"
+      }
+    ],
+    "workspaces/w1/inboxThreads": [
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "f3e1ac934d3610fb64cd9d89"
+        ],
+        "state": "done",
+        "subjectId": null,
+        "title": "Every 1st at 9, prepare the invoices and ask me before sending.",
+        "updatedAt": "<ts>",
+        "waiting": null
+      }
+    ],
+    "workspaces/w1/inboxMessages": [
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "out",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "1793178000000",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": "cara@example.com",
+          "name": "Cara Owner"
+        },
+        "source": "teams",
+        "text": "Every 1st at 9, prepare the invoices and ask me before sending.",
+        "threadId": "itf3e1ac934d3610fb64cd9d89",
+        "threadRef": "invoices-1"
+      }
+    ],
+    "workspaces/w1/inboxOutcomes": [
+      {
+        "checks": [
+          "Ran it by hand on 1 Oct"
+        ],
+        "confidence": "high",
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "owner",
+          "edited": false,
+          "reason": null,
+          "version": 2
+        },
+        "executor": null,
+        "fields": {
+          "scheduleId": "<id>",
+          "sentence": "Monthly · day 1 · 08:30 · Mon if weekend"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "At 08:30; a weekend 1st moves to Monday.",
+        "proposedBy": "<agent>",
+        "result": null,
+        "revise": null,
+        "state": "done",
+        "threadId": "itf3e1ac934d3610fb64cd9d89",
+        "type": "schedule",
+        "updatedAt": "<ts>",
+        "versions": [
+          {
+            "asked": null,
+            "by": "<agent>",
+            "checks": [
+              "Ran it by hand on 1 Oct"
+            ],
+            "confidence": "high",
+            "eventId": null,
+            "fields": {
+              "scheduleId": "<id>",
+              "sentence": "Monthly · day 1 · 09:00"
+            },
+            "n": 1,
+            "note": "Same steps as by hand on 1 Oct."
+          },
+          {
+            "asked": {
+              "chips": [],
+              "instruction": "At 08:30, and on a weekend move it to Monday"
+            },
+            "by": "<agent>",
+            "checks": [
+              "Ran it by hand on 1 Oct"
+            ],
+            "confidence": "high",
+            "eventId": "<id>",
+            "fields": {
+              "scheduleId": "<id>",
+              "sentence": "Monthly · day 1 · 08:30 · Mon if weekend"
+            },
+            "n": 2,
+            "note": "At 08:30; a weekend 1st moves to Monday."
+          }
+        ]
+      }
+    ],
+    "workspaces/w1/inboxEvents": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "direction": "out",
+          "messageDocId": "im7cfaa444ee5f2c719050d8ed",
+          "newThread": true,
+          "sender": "Cara Owner",
+          "source": "teams"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "itf3e1ac934d3610fb64cd9d89",
+        "type": "inbox.added"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "fields": {
+            "scheduleId": "<id>",
+            "sentence": "Monthly · day 1 · 08:30 · Mon if weekend"
+          },
+          "outcomeId": "<id>",
+          "type": "schedule",
+          "version": 2
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "itf3e1ac934d3610fb64cd9d89",
+        "type": "outcome.revised"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "fields": {
+            "scheduleId": "<id>",
+            "sentence": "Monthly · day 1 · 09:00"
+          },
+          "outcomeId": "<id>",
+          "scheduleId": "<id>",
+          "type": "schedule"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "itf3e1ac934d3610fb64cd9d89",
+        "type": "outcome.proposed"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "chips": [],
+          "instruction": "At 08:30, and on a weekend move it to Monday",
+          "outcomeId": "<id>",
+          "recommended": null,
+          "stepLabel": "Schedule",
+          "summaryVersion": null,
+          "templateId": null,
+          "type": "schedule",
+          "waitedMs": "<ms>"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "itf3e1ac934d3610fb64cd9d89",
+        "type": "outcome.revise_requested"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "edited": false,
+          "outcomeId": "<id>",
+          "recommended": null,
+          "scheduleId": "<id>",
+          "stepLabel": "Schedule",
+          "summaryVersion": null,
+          "templateId": null,
+          "type": "schedule",
+          "version": 2,
+          "waitedMs": "<ms>"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "itf3e1ac934d3610fb64cd9d89",
+        "type": "outcome.approved"
+      }
+    ],
+    "workspaces/w1/schedules": [
+      {
+        "activeFrom": "<ts>",
+        "agentUid": "<agent>",
+        "createdAt": "<ts>",
+        "createdBy": {
+          "id": "<agent>",
+          "type": "agent"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "proposal": {
+          "by": "<agent>",
+          "outcomeId": "<id>",
+          "threadId": "itf3e1ac934d3610fb64cd9d89"
+        },
+        "replaces": null,
+        "rule": {
+          "at": "08:30",
+          "freq": "monthly",
+          "monthDay": 1,
+          "tz": "Europe/Lisbon",
+          "weekend": "after"
+        },
+        "runTitle": "Send invoices · {month} {year}",
+        "state": "active",
+        "steps": [
+          {
+            "fields": {
+              "text": "The invoices for {period} are ready."
+            },
+            "type": "reply"
+          },
+          {
+            "fields": {
+              "what": "Send the invoices for {period}"
+            },
+            "type": "approval"
+          }
+        ],
+        "subjectId": null,
+        "templateId": null,
+        "title": "Send invoices",
+        "updatedAt": "<ts>",
+        "version": 3,
+        "what": "Prepare the invoices from the hours log, show the totals and send them after approval."
+      }
+    ]
+  }
+}

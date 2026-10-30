@@ -319,3 +319,32 @@ type InboxProgress struct {
 	Check *string   `firestore:"check,omitempty" json:"check,omitempty"`
 	At    time.Time `firestore:"at" json:"at"`
 }
+
+// Schedule is workspaces/{w}/schedules/{sid} (scheduled tasks, packages/shared/src/scheduleDocs.ts):
+// a member's schedule; agents propose them (schedule_propose) and list them (schedule_list).
+type Schedule struct {
+	MemberUID  string         `firestore:"memberUid" json:"memberUid"`
+	AgentUID   string         `firestore:"agentUid" json:"agentUid"`
+	Title      string         `firestore:"title" json:"title"`
+	What       string         `firestore:"what" json:"what"`
+	Rule       map[string]any `firestore:"rule" json:"rule"`
+	RunTitle   string         `firestore:"runTitle" json:"runTitle"`
+	Steps      []ScheduleStep `firestore:"steps" json:"steps"`
+	TemplateID *string        `firestore:"templateId" json:"templateId"`
+	SubjectID  *string        `firestore:"subjectId" json:"subjectId"`
+	State      string         `firestore:"state" json:"state"`
+	ActiveFrom *time.Time     `firestore:"activeFrom" json:"activeFrom"`
+	Proposal   *struct {
+		ThreadID  string `firestore:"threadId" json:"threadId"`
+		OutcomeID string `firestore:"outcomeId" json:"outcomeId"`
+		By        string `firestore:"by" json:"by"`
+	} `firestore:"proposal" json:"proposal"`
+	Replaces *string `firestore:"replaces" json:"replaces"`
+	Version  int64   `firestore:"version" json:"version"`
+}
+
+// ScheduleStep is one step of each run's plan.
+type ScheduleStep struct {
+	Type   string         `firestore:"type" json:"type"`
+	Fields map[string]any `firestore:"fields" json:"fields"`
+}

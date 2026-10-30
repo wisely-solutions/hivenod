@@ -30,9 +30,9 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
   hivenod pair             pairs this machine with Hivenod (shows a code an admin confirms) and
                            saves the token; then install the hivenod plugin in Claude Code
   hivenod whoami           the agent this machine works as
-  hivenod inbox …, thread …, subject …, outcome …, plan …
+  hivenod inbox …, thread …, subject …, outcome …, plan …, schedule …
                            a person's Inbox: bring messages in, file, note, ask, propose
-                           outcomes, report them done
+                           outcomes and schedules, report them done
                            (hivenod inbox --help)
   hivenod logout           forgets the token saved by pairing
   hivenod mcp              MCP stdio server for Claude Code
@@ -116,7 +116,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	// `hivenod inbox|subject …` have flags of their own (item 4PEHrOW5IfXBQWgOK9wo).
-	if len(args) > 0 && (args[0] == "inbox" || args[0] == "thread" || args[0] == "subject" || args[0] == "outcome" || args[0] == "plan") {
+	if len(args) > 0 && (args[0] == "inbox" || args[0] == "thread" || args[0] == "subject" || args[0] == "outcome" || args[0] == "plan" || args[0] == "schedule") {
 		return runInbox(args, stdout, stderr)
 	}
 	o, pos, err := parse(args)

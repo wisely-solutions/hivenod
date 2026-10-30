@@ -20,6 +20,11 @@ import {
   finishOutcome,
   proposeOutcome,
   proposePlan,
+  proposeSchedule,
+  reviseSchedule,
+  schedulePaths,
+  type ScheduleInput,
+  type ScheduleOf,
   stepProgress,
   recheckDone,
   answerInstruction,
@@ -297,6 +302,30 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
         summary: content,
         basis: { lastEventId: null, planCursor: null },
         attachments,
+      });
+      await run(p);
+      return p.version;
+    },
+    /** schedule_propose (scheduled tasks, slice 5): a proposed schedule and its outcome. */
+    async schedule(
+      tid: string,
+      input: ScheduleInput & { note?: string; confidence?: string; checks?: string[] },
+    ) {
+      const p = proposeSchedule(ctx, { ...input, threadId: tid, thread: await thread(tid) });
+      await run(p);
+      return { scheduleId: p.scheduleId, outcomeId: p.outcomeId };
+    },
+    /** schedule_propose revises: the next version after Ask for changes. */
+    async reviseSchedule(oid: string, input: ScheduleInput & { note?: string }) {
+      const o = (await getDoc(doc(db, inboxPaths.outcome(wid, oid)))).data() as OutcomeStateOf;
+      const sid = String(o.fields.scheduleId);
+      const data = (await getDoc(doc(db, schedulePaths.schedule(wid, sid)))).data() as ScheduleOf;
+      const p = reviseSchedule(ctx, {
+        ...input,
+        outcomeId: oid,
+        outcome: o,
+        thread: await thread(o.threadId),
+        schedule: { id: sid, data },
       });
       await run(p);
       return p.version;
