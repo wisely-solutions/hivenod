@@ -623,6 +623,32 @@ The Development template (`packages/shared/src/planTemplates.ts`) has a long age
   `plan.sent_back` from a blocked plan whose cursor step failed (it is reset to approved). CLI:
   `EVENT_MIN_VERSION.keepgreen`.
 
+### Their reply (a step that waits on someone outside Hivenod)
+
+`their_reply` (packages/shared/src/theirreply.ts) is a plan step for one person outside Hivenod
+reached by a message: `who`, `org?`, `channel`, `address`, `need` and `remindAfterDays` (working
+days, default 3). The member approves every message that goes out:
+
+1. At its turn (`carry_out`) the home agent drafts the ask (`step_ask`, kind ask): the step runs
+   with `ext.ask` proposed and the thread is the member's call.
+2. The member approves it (maybe edited) on the decision page or from the notifier (Approve
+   follow-up · Mark done · Open): the agent gets `ask_approved`, sends it exactly as approved and
+   reports `step_sent` (`ext.outAt`, `ext.sent`); the thread waits on them and the step shows a
+   purple "waiting on Ana · 2 d".
+3. Their reply comes in with `inbox_add` and reopens the thread; the CLI pushes
+   `external_reply` with the step's outcome id. A clear yes is `outcome_done` with `evidence`
+   (their message's id and a quote; the quote becomes the result); unsure is `inbox_ask`; partial
+   or unclear is a `step_ask` follow_up quoting the reply. The member can Mark done anyway.
+4. No reply: the notifier keeps one in-memory timer per waiting step (send time + working days)
+   and writes `remindDue` = the message number once when it fires; the CLI pushes `nudge_due`
+   with the step and the agent drafts one reminder. Nothing more fires until another message
+   goes out. The thread-level 3-day nudge is skipped while a Their reply step waits.
+
+Rules (`inboxExt`, `inboxExtEvidence`): only the executor drafts and reports sent, only after the
+member's approval; only the member approves or marks done; done only with evidence that names a
+message from them on this thread created after `ext.outAt` (mutation tests in mutate.mjs). Cost:
+no polling; one timer write per waiting step; one model turn per reply.
+
 ## Channel events (part 2)
 
 A channel session (`hivenod mcp --channel`, `cli/internal/hive/inboxfeed.go`) pushes `<channel source="hivenod" kind="inbox">` events for

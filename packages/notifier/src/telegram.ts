@@ -1,5 +1,5 @@
 /** Telegram Bot API over fetch: sending, long polling, linking a chat and the thread quick actions. */
-import { randomId, notifyPath, type Notice } from '@hive/shared';
+import { EXT_ASK_LABEL, randomId, notifyPath, type Notice } from '@hive/shared';
 import type { Firestore } from 'firebase-admin/firestore';
 import type { ReachTelegram, TelegramAction, ThreadTelegram } from './engine';
 import { decideReach } from './reachDecide';
@@ -24,7 +24,8 @@ type Button = { text: string; callback_data?: string; url?: string };
  * The keyboard of a thread message (slice 3, design 9b): Approve · Not now / Ask for changes ·
  * Open for a person step; the answers (two a row), then Reply · Not now / Open for a question.
  * Callback data: `t<kind>:<code>` (ta approve, tn not now, tc ask for changes, tr reply, to<i>
- * answer i). Pure: the tests render it.
+ * answer i, td mark done). A Their reply draft: Approve follow-up · Mark done / Open. Pure: the
+ * tests render it.
  */
 export function threadKeyboard(code: string, a: ThreadTelegram, open: string): Button[][] {
   const openB: Button = { text: 'Open', url: open };
@@ -40,6 +41,17 @@ export function threadKeyboard(code: string, a: ThreadTelegram, open: string): B
     rows.push([openB]);
     return rows;
   }
+  if (a.ext)
+    return [
+      [
+        {
+          text: `Approve ${(EXT_ASK_LABEL[a.ext] ?? 'message').toLowerCase()}`,
+          callback_data: `ta:${code}`,
+        },
+        { text: 'Mark done', callback_data: `td:${code}` },
+      ],
+      [openB],
+    ];
   return [
     [{ text: 'Approve', callback_data: `ta:${code}` }, notNow],
     [{ text: 'Ask for changes', callback_data: `tc:${code}` }, openB],
@@ -368,11 +380,13 @@ export class TelegramBot {
     const d: ThreadDecision | null =
       kind === 'ta'
         ? { kind: 'approve' }
-        : kind === 'tn'
-          ? { kind: 'notNow' }
-          : opt
-            ? { kind: 'option', index: Number(opt[1]) }
-            : null;
+        : kind === 'td'
+          ? { kind: 'markDone' }
+          : kind === 'tn'
+            ? { kind: 'notNow' }
+            : opt
+              ? { kind: 'option', index: Number(opt[1]) }
+              : null;
     if (!d) return void (await this.api.call('answerCallbackQuery', { callback_query_id: q.id }));
     const r = await decideThread(this.db, a, d, this.now());
     await this.api.call('answerCallbackQuery', {

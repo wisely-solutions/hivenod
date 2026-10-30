@@ -32,6 +32,7 @@ import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } fro
 import { useLiveDoc, type Row } from '../lib/live';
 import { effectLines } from '../lib/outcomes';
 import { ProposalPanel, QuestionPanel, type DecisionCardHandle } from '../today/DecisionCard';
+import { TheirReplyBody } from './TheirReply';
 import { Pill } from '../ui/badge';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
@@ -184,7 +185,12 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
       agent,
     });
     const asks = top.kind === 'person' || top.kind === 'question';
-    const shownProposal = top.kind === 'person' && !main ? proposals[0] : undefined;
+    // A schedule proposal goes first (slice 6): it has its own card even when another proposal
+    // waits next to it; the others show once it is decided.
+    const shownProposal =
+      top.kind === 'person' && !main
+        ? (proposals.find((p) => p.data.type === 'schedule') ?? proposals[0])
+        : undefined;
     // A schedule proposal (scheduled tasks, slice 5) has a card of its own.
     const scheduleProposal = shownProposal?.data.type === 'schedule' ? shownProposal : undefined;
     const kicker =
@@ -441,6 +447,23 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           ) : null}
         </>
       );
+    } else if (stepRow && view && stepRow.data.type === 'their_reply') {
+      // Their reply: the drafted message waits for the member (Approve, Edit, Mark done anyway).
+      const s = view.steps[main!.index]!;
+      widget = (
+        <div className="mt-2">
+          <TheirReplyBody
+            o={stepRow.data}
+            now={now}
+            live={live}
+            atCursor
+            agent={agent}
+            counting={acts.counting}
+            onApprove={(label, text) => acts.approveAsk(s, label, text)}
+            onMarkDone={() => acts.markDone(s)}
+          />
+        </div>
+      );
     } else if (stepRow && pl && view) {
       const free = firstFree(pl);
       widget = (
@@ -476,6 +499,7 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           agentName={agentName}
           onDone={props.onDone}
           extra={notNow}
+          othersPending={proposals.length > 1}
         />
       );
     } else if (shownProposal) {

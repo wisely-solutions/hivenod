@@ -62,6 +62,12 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    */
   schedule: '0.2.244',
   /**
+   * Their reply (packages/shared/src/theirreply.ts): step_ask, step_sent, outcome_done evidence,
+   * and the inbox reasons external_reply, ask_approved and nudge_due on a step. An older CLI
+   * refuses the step type and never wakes on their reply.
+   */
+  their_reply: '0.2.251',
+  /**
    * The Off switch (scheduled tasks, slice 7): while the member has an agent Off, the channel
    * holds what it would do on its own (info off / on) and its tools refuse automated writes. An
    * older CLI is not silenced by Hivenod (the rules still refuse its step starts).

@@ -23,8 +23,8 @@ describe('phone tabs', () => {
 });
 
 describe('sidebar zones (item icVly, model A)', () => {
-  it('puts Today and Inbox under You, across every organization', () => {
-    expect(YOU_NAV.map((n) => n.label)).toEqual(['Today', 'Inbox']);
+  it('puts Today, Inbox and Schedules under You, across every organization', () => {
+    expect(YOU_NAV.map((n) => n.label)).toEqual(['Today', 'Inbox', 'Schedules']);
   });
   it('puts the organization pages under the switcher; Projects is gone (OE8Fm slice 10)', () => {
     expect(ORG_NAV.map((n) => n.label)).toEqual(['Agents', 'Activity', 'Decision insights']);

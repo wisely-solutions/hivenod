@@ -305,6 +305,8 @@ function pageWidth(path: string): string {
     path.endsWith('/insights')
   )
     return 'max-w-[70rem]';
+  // Schedules (slice 6): the week, the list and the detail side by side.
+  if (path === '/schedules') return 'max-w-[86rem]';
   return 'max-w-[45rem]';
 }
 

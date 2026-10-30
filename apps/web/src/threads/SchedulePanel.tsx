@@ -48,6 +48,11 @@ export interface SchedulePanelProps {
   onDone: (label: string) => void;
   /** Not now, next to the buttons. */
   extra?: ReactNode;
+  /**
+   * Other proposals wait on the same thread (slice 6): deciding this one leaves the thread on
+   * Your call for them.
+   */
+  othersPending?: boolean;
 }
 
 const H = 'font-mono text-12 font-medium uppercase tracking-[0.08em] text-text-3';
@@ -120,7 +125,7 @@ export const SchedulePanel = forwardRef<DecisionCardHandle, SchedulePanelProps>(
                 : null,
           },
           ...(o.data.versions?.length ? { version: nv } : {}),
-          othersPending: false,
+          othersPending: props.othersPending ?? false,
         });
       } catch (e) {
         setError(errorText(e));
@@ -139,7 +144,7 @@ export const SchedulePanel = forwardRef<DecisionCardHandle, SchedulePanelProps>(
           outcomeId: o.id,
           outcome: o.data,
           thread: { ...thread.data },
-          othersPending: false,
+          othersPending: props.othersPending ?? false,
         });
       } catch (e) {
         setError(errorText(e));

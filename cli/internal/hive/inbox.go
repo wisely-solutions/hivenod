@@ -501,6 +501,17 @@ func (c *Client) ThreadRead(ctx context.Context, id string) (map[string]any, err
 		if o.CheckedAt != nil {
 			row["checkedAt"] = isoPtr(o.CheckedAt)
 		}
+		// Their reply: the message in hand (to approve, approved to send, or sent), their reply quoted.
+		if e := o.Ext; e != nil {
+			ext := map[string]any{"sent": e.Sent, "outAt": isoPtr(e.OutAt), "ask": nil, "reply": nil}
+			if e.Ask != nil {
+				ext["ask"] = map[string]any{"n": e.Ask.N, "kind": e.Ask.Kind, "text": e.Ask.Text, "state": e.Ask.State}
+			}
+			if e.Reply != nil {
+				ext["reply"] = map[string]any{"messageId": e.Reply.MessageDocID, "quote": e.Reply.Quote}
+			}
+			row["ext"] = ext
+		}
 		// Ask for changes: how many versions, and what the person asks while revising.
 		if len(o.Versions) > 0 || revise != nil {
 			row["versions"] = max(len(o.Versions), 1)
@@ -898,6 +909,8 @@ func (c *Client) outcomeRevise(ctx context.Context, id, typ string, fields map[s
 // OutcomeResult is outcome_done's result.
 type OutcomeResult struct {
 	Text, Permalink, ItemID, Error *string
+	// Evidence (Their reply, done only): their message (doc id), a quote and a confidence.
+	EvidenceID, Quote, Confidence *string
 	// Usage (slice 6b): what carrying it out cost.
 	Tokens, CostEur *float64
 }
@@ -946,6 +959,16 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 			Tokens  *float64 `json:"tokens"`
 			CostEur *float64 `json:"costEur"`
 		}{res.Tokens, res.CostEur}
+	}
+	if res.EvidenceID != nil {
+		ev := &actions.FinishEvidence{MessageDocID: *res.EvidenceID, Confidence: res.Confidence}
+		if res.Quote != nil {
+			ev.Quote = *res.Quote
+		}
+		in.Evidence = ev
+		if in.EvidenceMessage, err = c.extMessage(ctx, *res.EvidenceID); err != nil {
+			return nil, err
+		}
 	}
 	p, err := actions.FinishOutcome(c.actx(), in)
 	if err != nil {

@@ -1208,7 +1208,7 @@
       },
       {
         "name": "outcome_done",
-        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, keepgreen, release): report status started when you begin, step_progress as you go, then done. Keep green: done once the PR is green and current with main (Ship it? is offered); failed with the evidence (failing check, log excerpt, what you tried) when it is not solvable: a rebase conflict that needs a product decision, the same check failing after 3 fixes, or an infrastructure failure.",
+        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, keepgreen, release): report status started when you begin, step_progress as you go, then done. Their reply: done only with evidence, their message that settles the step's need (evidence.messageId as thread_read shows it, a short quote, your confidence), which must have come in after your last message to them; not sure: inbox_ask the person instead. Keep green: done once the PR is green and current with main (Ship it? is offered); failed with the evidence (failing check, log excerpt, what you tried) when it is not solvable: a rebase conflict that needs a product decision, the same check failing after 3 fixes, or an infrastructure failure.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1261,6 +1261,36 @@
                 }
               },
               "description": "What carrying it out cost, when you know it (shown in the timeline)"
+            },
+            "evidence": {
+              "type": "object",
+              "properties": {
+                "messageId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500,
+                  "description": "Their message (its id as thread_read shows it)"
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000,
+                  "description": "The words that settle it, quoted"
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                }
+              },
+              "required": [
+                "messageId",
+                "quote"
+              ],
+              "description": "Their reply, done only: their reply that settles it"
             }
           },
           "required": [
@@ -1309,6 +1339,80 @@
           "required": [
             "outcomeId",
             "line"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        }
+      },
+      {
+        "name": "step_ask",
+        "description": "Their reply step (a plan step that waits on someone outside Hivenod): draft the next message to them for the person's approval. kind ask at the step's turn (its carry_out), follow_up after their reply (external_reply) when it is partial or unclear (give reply: the messageId of their message as thread_read shows it and a short quote; the person can still mark the step done), nudge when its reminder is due (nudge_due with the step). Write it in the person's voice, to the step's who, asking for its need. Nothing is sent before the person approves it: once approved you get ask_approved, send it exactly as approved, then step_sent. A draft not approved yet may be replaced by a new one.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcomeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The Their reply step"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "ask",
+                "follow_up",
+                "nudge"
+              ]
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20000,
+              "description": "The message, ready to send as written"
+            },
+            "reply": {
+              "type": "object",
+              "properties": {
+                "messageId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500,
+                  "description": "Their message (its id as thread_read shows it)"
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000,
+                  "description": "The words that matter, quoted"
+                }
+              },
+              "required": [
+                "messageId",
+                "quote"
+              ],
+              "description": "Follow-up only: their reply this answers (quoted on the step)"
+            }
+          },
+          "required": [
+            "outcomeId",
+            "kind",
+            "text"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        }
+      },
+      {
+        "name": "step_sent",
+        "description": "Their reply step: you sent the approved message (ask_approved) exactly as approved, on the step's channel to its address. The step then waits on them (the person sees \"waiting on <who> · N d\"); their reply wakes you (external_reply), and with no reply one reminder is due after the step's remindAfterDays working days (nudge_due).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcomeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The Their reply step"
+            }
+          },
+          "required": [
+            "outcomeId"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         }
@@ -2544,7 +2648,7 @@
       },
       {
         "name": "outcome_done",
-        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, keepgreen, release): report status started when you begin, step_progress as you go, then done. Keep green: done once the PR is green and current with main (Ship it? is offered); failed with the evidence (failing check, log excerpt, what you tried) when it is not solvable: a rebase conflict that needs a product decision, the same check failing after 3 fixes, or an infrastructure failure.",
+        "description": "Report an approved outcome you carried out (inbox_list toCarryOut, or thread_read): done, with what you did (result.permalink of the reply you posted, result.text), or failed, with result.error. Only for an outcome the person approved and that you carry out; a plan step only at its turn (its carry_out). A plan step done moves the plan to its next step; failed blocks the plan until the person retries, skips or stops it. A long plan step (build, keepgreen, release): report status started when you begin, step_progress as you go, then done. Their reply: done only with evidence, their message that settles the step's need (evidence.messageId as thread_read shows it, a short quote, your confidence), which must have come in after your last message to them; not sure: inbox_ask the person instead. Keep green: done once the PR is green and current with main (Ship it? is offered); failed with the evidence (failing check, log excerpt, what you tried) when it is not solvable: a rebase conflict that needs a product decision, the same check failing after 3 fixes, or an infrastructure failure.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2597,6 +2701,36 @@
                 }
               },
               "description": "What carrying it out cost, when you know it (shown in the timeline)"
+            },
+            "evidence": {
+              "type": "object",
+              "properties": {
+                "messageId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500,
+                  "description": "Their message (its id as thread_read shows it)"
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000,
+                  "description": "The words that settle it, quoted"
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                }
+              },
+              "required": [
+                "messageId",
+                "quote"
+              ],
+              "description": "Their reply, done only: their reply that settles it"
             }
           },
           "required": [
@@ -2645,6 +2779,80 @@
           "required": [
             "outcomeId",
             "line"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        }
+      },
+      {
+        "name": "step_ask",
+        "description": "Their reply step (a plan step that waits on someone outside Hivenod): draft the next message to them for the person's approval. kind ask at the step's turn (its carry_out), follow_up after their reply (external_reply) when it is partial or unclear (give reply: the messageId of their message as thread_read shows it and a short quote; the person can still mark the step done), nudge when its reminder is due (nudge_due with the step). Write it in the person's voice, to the step's who, asking for its need. Nothing is sent before the person approves it: once approved you get ask_approved, send it exactly as approved, then step_sent. A draft not approved yet may be replaced by a new one.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcomeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The Their reply step"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "ask",
+                "follow_up",
+                "nudge"
+              ]
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20000,
+              "description": "The message, ready to send as written"
+            },
+            "reply": {
+              "type": "object",
+              "properties": {
+                "messageId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500,
+                  "description": "Their message (its id as thread_read shows it)"
+                },
+                "quote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000,
+                  "description": "The words that matter, quoted"
+                }
+              },
+              "required": [
+                "messageId",
+                "quote"
+              ],
+              "description": "Follow-up only: their reply this answers (quoted on the step)"
+            }
+          },
+          "required": [
+            "outcomeId",
+            "kind",
+            "text"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        }
+      },
+      {
+        "name": "step_sent",
+        "description": "Their reply step: you sent the approved message (ask_approved) exactly as approved, on the step's channel to its address. The step then waits on them (the person sees \"waiting on <who> · N d\"); their reply wakes you (external_reply), and with no reply one reminder is due after the step's remindAfterDays working days (nudge_due).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcomeId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The Their reply step"
+            }
+          },
+          "required": [
+            "outcomeId"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         }

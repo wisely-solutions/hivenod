@@ -5,7 +5,7 @@ import { cn } from './cn';
 import { Icon } from './icon';
 import { tween } from './motion';
 
-export type Tone = 'neutral' | 'gate' | 'agent' | 'approve' | 'sendback';
+export type Tone = 'neutral' | 'gate' | 'agent' | 'approve' | 'sendback' | 'external';
 
 const tones: Record<Tone, string> = {
   neutral: 'bg-canvas text-text-2 border-line',
@@ -13,6 +13,7 @@ const tones: Record<Tone, string> = {
   agent: 'bg-agent-soft text-agent border-agent/30',
   approve: 'bg-approve-bg text-approve-text border-approve/40',
   sendback: 'bg-sendback-bg text-sendback border-sendback-border',
+  external: 'bg-external-bg text-external border-external/40',
 };
 
 /** Rolls to a new number: the old value slides up and out, the new one in from below. */

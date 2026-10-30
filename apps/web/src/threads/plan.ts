@@ -105,6 +105,8 @@ export function stepTitle(type: string | null, fields: Readonly<Record<string, u
       return str(fields.title) ? `Build it: ${clip(str(fields.title))}` : 'Build it';
     case 'handover':
       return `Hand over to ${clip(str(fields.to), 40)}`;
+    case 'their_reply':
+      return `${clip(str(fields.who), 30)}${str(fields.org) ? ` (${clip(str(fields.org), 30)})` : ''}: ${clip(str(fields.need), 50)}`;
     case 'snooze':
       return `Wait until ${when(fields.until)}`.trim();
     case 'nudge':

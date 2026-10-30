@@ -896,6 +896,43 @@ const MUTATIONS = [
     [["\n                      && d.decision.get('summaryVersion', 1) is int", '']],
   ],
   // Long steps (item OE8FmrTaIxFVGcaeGG3N, slice 6b): progress by the executor, in bounds.
+  // Their reply (packages/shared/src/theirreply.ts): done only on their reply, newer than the
+  // last send; nothing sent before the member approved it; only the member approves.
+  [
+    'their reply: done without evidence',
+    [
+      [
+        "\n                          && (r.type != 'their_reply' || inboxExtEvidence(r, e.data))",
+        '',
+      ],
+    ],
+  ],
+  [
+    'their reply: evidence older than the send',
+    [
+      [
+        "\n            && get(inboxDoc('inboxMessages', e.evidence)).data.createdAt > r.ext.outAt",
+        '',
+      ],
+    ],
+  ],
+  [
+    'their reply: evidence from the member',
+    [["return m.threadId == tid && m.direction == 'in';", 'return m.threadId == tid;']],
+  ],
+  [
+    'their reply: sent without approval',
+    [
+      [
+        "q.ask.state == (e.op == 'sent' ? 'approved' : 'proposed')",
+        "q.ask.state in ['approved', 'proposed']",
+      ],
+    ],
+  ],
+  [
+    'their reply: the agent approves',
+    [["e.op == 'approve' && inboxOwner(r) && x.ask.state", "e.op == 'approve' && x.ask.state"]],
+  ],
   [
     'step progress: any agent',
     [

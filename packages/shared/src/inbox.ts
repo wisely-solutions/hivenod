@@ -52,6 +52,7 @@ import {
 } from './plans';
 import { planTemplate, sendBackTarget, templateSendBack, templateSteps } from './planTemplates';
 import { timestamp } from './schema';
+import type { ExtStateOf } from './theirreply';
 import {
   scheduleApprovalOps,
   scheduleDeleteEventId,
@@ -151,6 +152,9 @@ export const INBOX_EVENT_TYPES = [
   'plan.sent_back',
   // Long steps (slice 6b): the executing agent's progress line and heartbeat on a running step
   'step.progress',
+  // Their reply (./theirreply.ts): the agent drafts or sends an ask, the member approves it or
+  // marks the step done (data.op: ask, approve, sent, done)
+  'step.external',
   'subject.created',
   'subject.renamed',
   'subject.merged',
@@ -545,6 +549,26 @@ export const inboxOutcomeSchema = z.object({
     .optional(),
   /** When the home agent last re-checked it and found it still good (absent: never). */
   checkedAt: timestamp.optional(),
+  /** Their reply (./theirreply.ts): the ask in hand, the last send, the reply quoted. */
+  ext: z
+    .object({
+      ask: z
+        .object({
+          n: z.number().int().min(1),
+          kind: z.enum(['ask', 'follow_up', 'nudge']),
+          text: z.string().max(20_000),
+          state: z.enum(['proposed', 'approved', 'sent']),
+          by: z.string(),
+          at: timestamp,
+        })
+        .nullable(),
+      outAt: timestamp.nullable(),
+      sent: z.number().int().min(0),
+      reply: z.object({ messageDocId: z.string(), quote: z.string().max(1000) }).nullable(),
+    })
+    .optional(),
+  /** Their reply: the ask number its reminder fired for (written by the notifier only). */
+  remindDue: z.number().int().optional(),
   /**
    * Reach out (item KZ6O9), written by the notifier only: a status request to the executing agent
    * on a step in its hands that went quiet (byUid 'hivenod', or the person who pressed Ping
@@ -624,12 +648,21 @@ export type OutcomeStateOf = Pick<
   Partial<
     Pick<
       InboxOutcome,
-      'proposedBy' | 'note' | 'confidence' | 'checks' | 'versions' | 'revise' | 'planId'
+      | 'proposedBy'
+      | 'note'
+      | 'confidence'
+      | 'checks'
+      | 'versions'
+      | 'revise'
+      | 'planId'
+      | 'remindDue'
     >
   > & {
     /** When it was last written (its latest version): a proposal's wait starts there (slice 9). */
     updatedAt?: { toMillis(): number } | null;
     createdAt?: { toMillis(): number } | null;
+    /** Their reply (./theirreply.ts); times as listeners read them. */
+    ext?: ExtStateOf | null;
   };
 /** What the plan actions need of a plan (a listener's data). */
 export type PlanOf = PlanStateOf & {
@@ -781,7 +814,7 @@ const upd = (path: string, data: Record<string, unknown>, eventId: string): Writ
 // ---------- plans (item qwFAWxZM5xkcE7PPjAzi) ----------
 
 /** The plan of a plan step, checked against the step. */
-function planFor(pl: PlanInput | undefined, o: OutcomeStateOf, oid: string): PlanInput {
+export function planFor(pl: PlanInput | undefined, o: OutcomeStateOf, oid: string): PlanInput {
   need(pl !== undefined, 'This outcome is a step of a plan: give its plan.');
   need(pl!.planId === o.planId, `Outcome ${oid} is a step of plan ${o.planId}, not ${pl!.planId}.`);
   need(
@@ -819,14 +852,19 @@ function nextPlan(
   return { plan: { ...pl.plan, steps, cursor, state }, outcomes };
 }
 /** Step `oid` takes `state`; `through`: its turn is over and the cursor moves on. */
-function advance(pl: PlanInput, oid: string, state: PlanOutcomeOf['state'], through: boolean) {
+export function advance(
+  pl: PlanInput,
+  oid: string,
+  state: PlanOutcomeOf['state'],
+  through: boolean,
+) {
   return nextPlan(pl, {
     outcomes: { [oid]: { state } },
     ...(through ? { cursor: pl.plan.cursor + 1 } : {}),
   });
 }
 /** The writes of a plan change: the plan (when it changed) and the thread's state. */
-function planWrites(
+export function planWrites(
   ctx: ActionContext,
   pl: PlanInput,
   next: PlanNext,
@@ -1444,12 +1482,19 @@ export function finishOutcome(
     plan?: PlanInput;
     /** What carrying it out cost (slice 6b), recorded on the event. */
     usage?: { tokens?: number | null; costEur?: number | null } | null;
+    /**
+     * Their reply (./theirreply.ts), done only: their message that settles it (its doc id, a quote)
+     * and that message as read; it must be from them, on this thread, newer than the last send.
+     */
+    evidence?: { messageDocId: string; quote: string; confidence?: string | null } | null;
+    evidenceMessage?: { threadId: string; direction: 'in' | 'out'; createdAtMs: number } | null;
   },
 ): ActionPlan {
   requireAgent(ctx);
   const o = input.outcome;
   const planned = o.planId !== undefined && o.planId !== null;
   const usage = cleanUsage(input.usage);
+  const ev = theirReplyEvidence(o, input);
   need(
     o.state === 'approved' || (planned && o.state === 'running' && input.status !== 'started'),
     o.state === 'proposed' || o.state === 'revising'
@@ -1518,9 +1563,14 @@ export function finishOutcome(
         itemId,
         ...(error ? { error } : {}),
         ...(usage ? { usage } : {}),
+        ...(ev ? { evidence: ev.messageDocId, confidence: ev.confidence } : {}),
       },
       (eventId) => [
-        upd(inboxPaths.outcome(ctx.workspaceId, input.outcomeId), { state, result }, eventId),
+        upd(
+          inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
+          { state, result: ev ? { ...result, text: ev.quote } : result },
+          eventId,
+        ),
         ...planWrites(ctx, pl, next, input.status === 'failed' ? 'blocked' : null, eventId),
       ],
     );
@@ -1550,6 +1600,43 @@ export function finishOutcome(
       upd(inboxPaths.thread(ctx.workspaceId, o.threadId), after, eventId),
     ],
   );
+}
+
+/**
+ * Their reply done: only with evidence, a message from them on this thread that came in after the
+ * last message went out (firestore.rules checks the same). Null for other types and statuses.
+ */
+function theirReplyEvidence(
+  o: OutcomeStateOf,
+  input: Parameters<typeof finishOutcome>[1],
+): { messageDocId: string; quote: string; confidence: string | null } | null {
+  if (o.type !== 'their_reply') return null;
+  need(input.status !== 'started', 'A Their reply step starts with step_ask, not status started.');
+  if (input.status !== 'done') return null;
+  const e = input.evidence;
+  need(
+    !!e && typeof e.messageDocId === 'string' && e.messageDocId.length > 0,
+    'Give the evidence: the messageId of their reply (as thread_read shows it) and a quote.',
+  );
+  const quote = (e!.quote ?? '').trim().replace(/\s+/g, ' ');
+  need(quote.length > 0 && quote.length <= 1000, 'The quote is 1 to 1000 characters.');
+  const confidence = e!.confidence ?? null;
+  need(
+    confidence === null || (OUTCOME_CONFIDENCE as readonly string[]).includes(confidence),
+    'The confidence is high, medium or low.',
+  );
+  const out = o.ext?.outAt as { toMillis?: () => number } | null | undefined;
+  const outMs = typeof out?.toMillis === 'function' ? out.toMillis() : null;
+  const m = input.evidenceMessage;
+  need(
+    o.ext?.ask?.state === 'sent' && outMs !== null,
+    'Nothing was sent to them yet: draft the ask with step_ask first.',
+  );
+  need(
+    !!m && m.threadId === o.threadId && m.direction === 'in' && m.createdAtMs > outMs!,
+    'The evidence is a message from them on this thread that came in after your last message.',
+  );
+  return { messageDocId: e!.messageDocId, quote, confidence };
 }
 
 /** A run's usage (outcome_done usage, slice 6b): whole tokens and euros, both optional. */
@@ -2037,7 +2124,9 @@ export function approveOutcome(
             eventId,
           )
         : []),
-      ...(immediate && !pl
+      // A schedule set up next to another open proposal (slice 6) leaves the thread on Your call
+      // for that one: setting up a schedule does not end the conversation.
+      ...(immediate && !pl && !(o.type === 'schedule' && input.othersPending === true)
         ? [
             upd(
               inboxPaths.thread(ctx.workspaceId, o.threadId),

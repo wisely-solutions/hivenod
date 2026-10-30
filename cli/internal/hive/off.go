@@ -205,8 +205,8 @@ func (f *InboxFeed) held(d *feedDue) bool {
 	case "carry_out":
 		// A step the member approved after turning Off is his saying something.
 		return d.outcome == nil || d.outcome.DecidedAtMs <= since
-	case "instruct", "revise", "recheck":
-		return false
+	case "instruct", "revise", "recheck", "ask_approved":
+		return false // his request, or his approval of a Their reply message
 	}
 	return !d.byMember
 }
