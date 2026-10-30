@@ -31,6 +31,7 @@ import {
   filterByAreas,
   filterByLabels,
   findSubjectRows,
+  agentsTurn,
   forMember,
   groupByState,
   labelCounts,
@@ -524,7 +525,8 @@ function SubjectItem({
   ask: { text: string; summary: boolean };
   now: number;
 }) {
-  const working = row.threads.some((t) => t.data.state === 'investigating');
+  // Waiting on the agent (an approved step it has yet to carry out) is the agent working.
+  const working = row.threads.some((t) => agentsTurn(t.data));
   const waitingOn = row.threads.some((t) => t.data.state === 'waiting');
   const urgent = row.threads.some((t) => t.data.urgent && forMember(t.data.state));
   let chip: ReactNode = null;

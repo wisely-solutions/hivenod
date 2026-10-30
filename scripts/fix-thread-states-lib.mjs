@@ -50,7 +50,13 @@ export function needsRepair(thread, plans, outcomes) {
   if (live) {
     if (live.state === 'blocked') return false;
     const o = outcomes[live.steps[live.cursor]];
-    return !!o && o.state === 'approved' && byAgent(o.type);
+    // An agent step still to approve ahead keeps Your call (Approve plan), as planThreadState.
+    const ahead = live.steps.some(
+      (id) =>
+        outcomes[id]?.state === 'proposed' &&
+        (OUTCOMES[outcomes[id].type]?.kind ?? 'agent') === 'agent',
+    );
+    return !!o && o.state === 'approved' && byAgent(o.type) && !ahead;
   }
   const all = Object.values(outcomes);
   if (all.some((o) => o.state === 'proposed' || o.state === 'revising')) return false;

@@ -375,7 +375,7 @@ describe('order', () => {
     await denied(a.run(s1.ops.filter((op) => op.path !== PL('pl1'))));
     await ok(a.run(s1));
     expect(await snap(PL('pl1'))).toMatchObject({ cursor: 1, state: 'active' });
-    expect(await snap(T('itr1'))).toMatchObject({ state: 'waiting', waiting: { on: 'them' } });
+    expect(await snap(T('itr1'))).toMatchObject({ state: 'waiting', waiting: { on: 'agent' } });
     // another agent cannot report it
     const star = as(AGENTS.star);
     await denied(

@@ -282,20 +282,30 @@ describe('planThreadState', () => {
   });
   const onAgent = { state: 'waiting', waiting: { on: 'agent', until: null } };
   it('an approved agent step at the cursor, not started: waiting on the agent, never Your call', () => {
-    // the first step (nothing done before it)
-    expect(planThreadState(plan(0), example(Array(5).fill('approved')))).toEqual(onAgent);
-    // the plan still proposed as a whole, but its first step approved and its turn
+    // the first step (nothing done before it); the gate still proposed is not its turn
     expect(
-      planThreadState(plan(0, 'proposed'), example(['approved', ...Array(4).fill('proposed')])),
+      planThreadState(
+        plan(0),
+        example(['approved', 'approved', 'proposed', 'approved', 'approved']),
+      ),
     ).toEqual(onAgent);
     // a later step, after a done agent step (not that step's after-state)
     expect(
-      planThreadState(plan(1), example(['done', 'approved', 'proposed', 'proposed', 'proposed'])),
+      planThreadState(plan(1), example(['done', 'approved', 'proposed', 'approved', 'approved'])),
     ).toEqual(onAgent);
     // past the gate
     expect(
       planThreadState(plan(3), example(['done', 'done', 'done', 'approved', 'approved'])),
     ).toEqual(onAgent);
+  });
+  it('an agent step still to approve ahead: Your call (Approve plan), even while one runs next', () => {
+    // the plan still proposed as a whole, its first step approved
+    expect(
+      planThreadState(plan(0, 'proposed'), example(['approved', ...Array(4).fill('proposed')])),
+    ).toEqual(yourCall);
+    expect(
+      planThreadState(plan(1), example(['done', 'approved', 'proposed', 'proposed', 'approved'])),
+    ).toEqual(yourCall);
   });
   it('a done step moves the cursor on: the next step decides', () => {
     // next is an approved agent step: the agent's turn

@@ -11,8 +11,11 @@ const plan = (states, cursor, state = 'active', types) => ({
 
 describe('needsRepair', () => {
   it('an approved agent step at the cursor: repair', () => {
-    const p = plan(['done', 'approved', 'proposed'], 1);
+    const p = plan(['done', 'approved', 'proposed'], 1, 'active', ['reply', 'reply', 'approval']);
     expect(needsRepair(YC, [p.plan], p.outcomes)).toBe(true);
+    // an agent step still to approve ahead: Your call stays
+    const ahead = plan(['done', 'approved', 'proposed'], 1);
+    expect(needsRepair(YC, [ahead.plan], ahead.outcomes)).toBe(false);
   });
   it('a person step, an unapproved step, a wait-until step, a blocked plan: leave', () => {
     const gate = plan(['done', 'proposed'], 1, 'active', ['reply', 'approval']);
