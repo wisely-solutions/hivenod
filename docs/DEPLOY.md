@@ -144,7 +144,27 @@ Release tags: `pnpm release` tags `release-<max+1>` (numeric, so a stray `releas
 idempotent: a commit that already has a release tag keeps it, a taken name moves on to the next free
 number, and existing tags are never moved or deleted.
 
-## Rules size
+## Exporting an organization's data (JSON)
+
+Before the old Projects and Calendar data is deleted (Inbox item OE8Fm, slices 10-11), each organization's
+data is exported to one JSON file. Two ways, same format (`"format": "hivenod-org-export"`, `"version": 1`,
+`workspace`, `members`, `groups`, `agents`, `events`, `runs` (each with its `log`), `projects` (each with
+`items` > `attachments`, `messages`, plus `decisions` and `stepProposals`), `calendar`, `busy`, `agentHomes`,
+and a trailing `counts` object with the number of documents per collection, for checking against a deletion):
+
+- **In the app:** an admin opens Settings > Organization > "Export organization data (JSON)". The browser
+  reads what the rules let an admin read, page by page, shows progress and saves the file. `busy` and
+  `agentHomes` are `null` there: no browser may read them (the rules deny it; they were not widened).
+- **Operator script (complete):** `node scripts/export-org.mjs --org <workspaceId> --out <file>`. Admin access
+  through the REST API with the service account (`GOOGLE_APPLICATION_CREDENTIALS`), read-only; it also exports the
+  busy blocks in the members' stores and `agentHomes`. Production runs need the owner's OK at run time. Test it
+  against the emulator with `--emulator host:port` (project `demo-hive`, token `owner`), e.g.
+  `node scripts/emu-exec.mjs "node scripts/export-org.mjs --org <id> --out /tmp/x.json --emulator \$FIRESTORE_EMULATOR_HOST"`.
+  Timestamps are written as `{"$timestamp": "<ISO>"}`.
+
+Check the file before deleting anything: `counts` per collection must match what the console shows.
+
+## Rules size and compile time
 
 Google refuses to **release** Firestore rules whose compiled executables are 256000 bytes or more
 ("Total size of compiled executables must be smaller than 256000 bytes (actual: N bytes)", a 400 on
@@ -173,6 +193,76 @@ misleading 409 "release already exists". This is a size limit for the whole file
   read its wildcards (`wid`, `pid`, `iid`, ...) instead of taking them as parameters; `touched(keys)` is
   `changed(keys + ['updatedAt', 'lastEventId'])`; repeated unrolled checks become a small function.
   Re-fit the estimate if the probe and the estimate drift apart by more than about 2000 bytes.
+
+### Compile time
+
+Google also compiles the rules within a backend deadline of about **6 s**. Past it, `:test`,
+`rulesets.create` and the release all answer **503 "The service is currently unavailable"**, every
+time, while a tiny ruleset still compiles in under a second. firebase-tools reports it as a Google
+hiccup and retries in vain. On 2026-10-30 the rules of release 178 (232846 compiled bytes, under the
+size limit) hit this deadline and no release could go out.
+
+- **What costs time:** every function is compiled with the functions it calls inlined, again for
+  each call site, and unused functions are compiled too. So a token costs once per function above it
+  in the call chain, plus once for the `allow` that uses it: deep chains of wrappers (a function that
+  only routes to other functions, `allow update: if xOk()` around a big `xOk()`) and nested unrolled
+  loops (`gap0` calling `gap1` calling `gap2`) multiply the cost. Comments and whitespace cost a
+  little (the request is about 200 KB). Flat is cheap: put the routing in the `allow` expression or
+  in one function, join unrolled chunks side by side instead of nesting them, and inline a helper
+  that has one caller when its `let`s match the caller's. Never trade it for the expression budget:
+  substituting a `let p = get(...)` by `get(...)` at each use evaluates it again at run time
+  (`test:rules:headroom`), and index arithmetic like `x[o + 1]` costs expressions too.
+- **Measure:** `node scripts/rules-compile-time.mjs [file] [tries]` (default 5 tries) times
+  `POST projects/<p>:test` with the source only; it creates nothing. It prints the status and
+  milliseconds of each try and exits 1 when no try compiles. Compare variants interleaved: Google's
+  speed drifts by a second or more over the day (the same file took 3.6 s and then timed out an
+  hour later). Measured on 2026-10-30 around 12:50, 10 tries each,
+  interleaved: release 178's rules compiled 1 of 10 times (5775 ms), main before the fix 3 of 10
+  (5342-6029 ms), the flattened rules 10 of 10 (median 4525 ms, 3609-5838 ms), a tiny ruleset 10 of 10
+  (median 635 ms).
+- **Release guard:** `pnpm release` runs the probe (3 tries) before the rules go out. When no try
+  compiles but a tiny ruleset does, it stops with "rules compile too slow: N ms (Google times out
+  ~6 s)" and deploys nothing; when the tiny ruleset fails too it says Google's rules API is
+  unavailable. A median over 4500 ms (`RULES_COMPILE_BUDGET_MS`) or a try that times out still
+  releases, with a warning to trim the rules. Rules with a compile error are refused.
+
+## Migrating a project's open items to Inbox threads
+
+Before Projects are removed (Inbox item OE8Fm, slice 8), the open items of a project become Inbox threads with
+a Development plan (`dev` template), filed under the subject "Hivenod development" (findings under "Hive
+findings"):
+
+```sh
+node scripts/migrate-project-to-threads.mjs --org <wid> --project <pid> --member <uid> --agent <agentId> --dry-run
+node scripts/migrate-project-to-threads.mjs --org <wid> --project <pid> --member <uid> --agent <agentId> --yes
+```
+
+| Item now                                                    | Becomes                                                                                                      |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| waiting at a person step named Approve...                   | thread, plan at 2 Approve idea (Shape done)                                                                  |
+| waiting at a person step named Accept...                    | thread, plan at 6 Accept on live (steps 1-5 done: PR link, release number, live commit taken from the notes) |
+| open finding (status suggested) of the last 30 days         | thread (source `finding`) with a Development plan proposed by the agent (Approve plan = accept)              |
+| at an agent step (Shape, Build, Release, Test)              | skipped: nothing is migrated mid-flight; finish it in the project, then rerun                                |
+| done, stopped, archived, older findings, other person steps | skipped (they are in the export)                                                                             |
+
+Each thread's first message is the item's description, a link back to the old item, its notes (oldest
+dropped past 50 000 characters) and decisions; the item's attachments are copied as thread attachments where
+they fit the thread rules (an SVG image or a non-https link is reported and left out). The dry run prints
+the mapping table and builds and checks every document without writing. The documents are made by the shared
+Inbox actions (`createMemberThread`, `approveOutcome`, `finishOutcome`, `addInboxMessage`, `proposePlan`,
+`assignSubject`, `threadAttach`) replayed in memory, then checked against the shared zod schemas (the Admin
+API skips the rules, so the script validates itself). Ids derive from the item; each item is one atomic
+commit (attachments may follow in further commits) and the item gets `migratedTo {threadId, planId, at, by}`
+last, so a rerun skips migrated items and finishes a half-written one. Nothing is deleted (slice 11 does).
+Afterwards the home agent writes a summary for each thread.
+
+Admin access through the REST API with the service account (`GOOGLE_APPLICATION_CREDENTIALS`); a production
+run needs `--yes` and the owner's OK at run time, after he saw the dry-run table. Against the emulator:
+`--emulator host:port` (project `demo-hive`, or `--firebase-project`; token `owner`). The emulator test
+(`scripts/migrate-project.emu.test.mjs`, in `pnpm test:rules`) seeds items at Shape, Approve, Build and
+Accept plus findings, runs it twice and checks threads, plans and no duplicates. The script loads
+`packages/shared/src/*.ts` directly (Node 22 strips the types; `scripts/ts-resolve-hook.mjs` adds the `.ts`
+extension to their imports).
 
 ## GitHub Actions
 
