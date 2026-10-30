@@ -486,7 +486,12 @@
           ],
           "instruction": "Mention 14:00 as a backup",
           "outcomeId": "<id>",
-          "type": "reply"
+          "recommended": null,
+          "stepLabel": "Reply",
+          "summaryVersion": null,
+          "templateId": null,
+          "type": "reply",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -506,7 +511,12 @@
           ],
           "instruction": null,
           "outcomeId": "<id>",
-          "type": "reply"
+          "recommended": null,
+          "stepLabel": "Reply",
+          "summaryVersion": null,
+          "templateId": null,
+          "type": "reply",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -523,8 +533,13 @@
         "data": {
           "edited": false,
           "outcomeId": "<id>",
+          "recommended": null,
+          "stepLabel": "Reply",
+          "summaryVersion": null,
+          "templateId": null,
           "type": "reply",
-          "version": 1
+          "version": 1,
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,

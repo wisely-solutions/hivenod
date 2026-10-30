@@ -255,7 +255,7 @@ func SendBackPlan(ctx Ctx, in SendBackPlanInput) (SendBackPlanResult, error) {
 		}
 		return append(ops,
 			upd(model.Paths.InboxPlan(ctx.WorkspaceID, in.PlanID), map[string]any{
-				"cursor": to, "state": next.Plan.State,
+				"cursor": to, "cursorAt": ServerTime(), "state": next.Plan.State,
 				"sentBack": map[string]any{"n": n, "to": target, "reason": reason, "by": ctx.Actor.ID, "at": ServerTime()},
 			}, eventID),
 			upd(model.Paths.InboxThread(ctx.WorkspaceID, p.ThreadID), th, eventID),

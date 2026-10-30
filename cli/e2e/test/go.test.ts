@@ -230,7 +230,14 @@ function mask(v: unknown, uid: string): unknown {
     if (typeof (v as { toMillis?: unknown }).toMillis === 'function') return '<ts>';
     return Object.fromEntries(
       Object.entries(v)
-        .map(([k, x]) => [mask(k, uid) as string, mask(x, uid)] as const)
+        // A decision's wait (slice 9) is a duration measured at run time.
+        .map(
+          ([k, x]) =>
+            [
+              mask(k, uid) as string,
+              k === 'waitedMs' && typeof x === 'number' ? '<ms>' : mask(x, uid),
+            ] as const,
+        )
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
     );
   }

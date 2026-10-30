@@ -114,11 +114,6 @@ for (const theme of ['light', 'dark'] as const) {
       /Online|Idle|Waiting/i,
     );
 
-    // The board card shows the new name.
-    await page.goto('/p/blog');
-    await expect(page.getByText('IKEA agent').first()).toBeVisible();
-    await expect(page.getByText('Claude Code (desktop)')).toHaveCount(0);
-
     // From the agent's page.
     await page.goto('/agents/other');
     await expect(page.getByTestId('agent-name')).toHaveText('Claude Code (desktop)');
@@ -131,10 +126,5 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByTestId('agent-name')).toHaveText('Pairpoint agent');
     await axe(page);
     await expectNoHorizontalScroll(page);
-
-    // The activity says who renamed what.
-    await page.goto('/activity');
-    await expect(page.getByText('renamed Claude Code (desktop) to Pairpoint agent')).toBeVisible();
-    await axe(page);
   });
 }

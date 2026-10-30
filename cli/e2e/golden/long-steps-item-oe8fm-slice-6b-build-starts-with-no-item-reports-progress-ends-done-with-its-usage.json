@@ -1296,7 +1296,12 @@
           "edited": false,
           "outcomeId": "l2",
           "planId": "lp1",
-          "type": "approval"
+          "recommended": null,
+          "stepLabel": "Approve idea",
+          "summaryVersion": null,
+          "templateId": "dev",
+          "type": "approval",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -1316,11 +1321,17 @@
           "outcomeId": "l3",
           "planId": "lp1",
           "reason": "Fix the lint in Build",
+          "recommended": null,
           "reset": [
             "l3",
             "l4"
           ],
-          "to": 2
+          "stepLabel": "Keep green",
+          "summaryVersion": null,
+          "templateId": "dev",
+          "to": 2,
+          "toLabel": "Build",
+          "waitedMs": "<ms>"
         },
         "memberUid": "owner",
         "subjectId": null,
@@ -1332,6 +1343,7 @@
       {
         "createdAt": "<ts>",
         "cursor": 2,
+        "cursorAt": "<ts>",
         "lastEventId": "<id>",
         "memberUid": "owner",
         "note": "",

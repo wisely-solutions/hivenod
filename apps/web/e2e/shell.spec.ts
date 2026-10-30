@@ -42,23 +42,32 @@ test('the shell frames the app and has no accessibility violations', async ({ pa
     for (const l of await tabs.getByRole('link').all()) {
       expect((await l.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
-    // The + in the middle is the quick-capture button (card M3ipmzNY).
-    const add = tabs.getByRole('button', { name: 'Add an item' });
+    // The + in the middle opens New thread (Projects removed, OE8Fm slice 10).
+    const add = tabs.getByRole('button', { name: 'New thread' });
     await expect(add).toBeVisible();
     expect((await add.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   } else {
     const side = page.getByRole('complementary', { name: 'Main' });
     await expect(side).toBeVisible();
-    for (const name of ['Today', 'Projects', 'Decision insights', 'Activity', 'Agents']) {
+    for (const name of ['Today', 'Inbox', 'Decision insights', 'Activity', 'Agents']) {
       await expect(side.getByRole('link', { name, exact: true })).toBeVisible();
     }
+    // Projects was removed (OE8Fm slice 10): no entry, and its old addresses go to Inbox.
+    await expect(side.getByRole('link', { name: 'Projects', exact: true })).toHaveCount(0);
+    for (const old of ['/projects', '/items', '/p/gone', '/p/gone/process', '/p/gone?item=x']) {
+      await page.goto(old);
+      await expect(page).toHaveURL(/\/inbox$/);
+    }
+    await page.goto('/p/gone/insights');
+    await expect(page).toHaveURL(/\/insights$/);
+    await page.goto('/');
     // Calendar was removed (OE8Fm slice 5): no entry, and /calendar is not a page.
     await expect(side.getByRole('link', { name: 'Calendar', exact: true })).toHaveCount(0);
     await page.goto('/calendar');
     await expect(page).toHaveURL(/\/$/);
     await expect(side.getByRole('link', { name: 'Today', exact: true })).toBeVisible();
     await expect(side.getByText('0 agents working · 0 idle')).toBeVisible();
-    await expect(side.getByText(/^Spend this month €0$/)).toBeVisible();
+    await expect(side.getByText(/Spend this month/)).toHaveCount(0);
     await expect(page.getByRole('navigation', { name: 'Tabs' })).toBeHidden();
   }
   await settle(page);
@@ -78,7 +87,7 @@ test('the sidebar collapses to icons below 1280 px', async ({ page }) => {
 test('every screen route renders inside the shell', async ({ page }) => {
   await enter(page);
   for (const [path, heading] of [
-    ['/projects', 'Projects'],
+    ['/inbox', 'Inbox'],
     ['/insights', 'Decision insights'],
     ['/activity', 'Activity'],
     ['/agents', 'Agents'],
@@ -104,9 +113,9 @@ test('the command palette jumps to a screen and runs actions', async ({ page }) 
 
   if (isPhone()) await page.getByRole('button', { name: 'Search' }).click();
   else await page.keyboard.press('Control+K');
-  await page.getByPlaceholder(/Jump to/).fill('new item');
+  await page.getByPlaceholder(/Jump to/).fill('new thread');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('dialog', { name: 'New item' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'New thread' })).toBeVisible();
   if (isPhone()) await page.getByRole('button', { name: 'Close' }).first().click();
   else await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toBeHidden();
@@ -124,8 +133,8 @@ test('keyboard shortcuts navigate and "?" shows the sheet', async ({ page }) => 
   test.skip(isPhone(), 'keyboard shortcuts need a keyboard');
   await enter(page);
   await page.keyboard.press('g');
-  await page.keyboard.press('p');
-  await expect(page).toHaveURL(/\/projects$/);
+  await page.keyboard.press('e');
+  await expect(page).toHaveURL(/\/agents$/);
   await settle(page);
   await page.keyboard.press('?');
   const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
@@ -206,9 +215,9 @@ test('the palette gives focus back to what opened it, by button and by shortcut'
   page,
 }) => {
   await enter(page);
-  // Enter on Needs you means "open item" (a shortcut), so use a screen without that.
-  await page.goto('/projects');
-  await expect(page.getByRole('heading', { name: 'Projects', level: 1 })).toBeVisible();
+  // Enter on Today means "open" (a shortcut), so use a screen without that.
+  await page.goto('/agents');
+  await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible();
   const search = page.getByRole('button', { name: 'Search' }).first();
   const input = page.getByPlaceholder(/Jump to/);
   const active = () =>

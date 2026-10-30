@@ -160,7 +160,7 @@ export function NewOrgModal({ open, onClose }: { open: boolean; onClose: () => v
         if (!o && !busy) onClose();
       }}
       title="New organization"
-      description="A separate group of people and projects. You become its admin."
+      description="A separate group of people and agents. You become its admin."
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
@@ -271,7 +271,7 @@ export function OrgSwitcher({
         >
           <Icon icon={Info} size={15} className="mt-0.5 shrink-0" />
           <span>
-            Switching changes the Organization section: projects, agents, settings. Today and Inbox
+            Switching changes the Organization section: agents, activity, settings. Today and Inbox
             stay across all your organizations.
           </span>
         </p>

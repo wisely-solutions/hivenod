@@ -1346,7 +1346,7 @@ service cloud.firestore {
           let d = request.resource.data;
           let r = resource.data;
           return d.updatedAt == request.time
-          && touched(['steps', 'cursor', 'state', 'sentBack'])
+          && touched(['steps', 'cursor', 'cursorAt', 'state', 'sentBack'])
           && d.steps is list && d.steps.size() >= 1
           && d.steps.size() <= 8
           && d.cursor is int && d.cursor >= 0

@@ -253,7 +253,7 @@ export function MembersPage() {
         open={removing !== null}
         onOpenChange={(o) => !o && setRemoving(null)}
         title={`Remove ${displayName(removingProfile, removing ?? '')}?`}
-        description="They lose access to this organization, its projects and every group. Their past decisions stay in the log."
+        description="They lose access to this organization, its agents and every group. Their past decisions stay in the log."
         footer={
           <>
             <Button variant="ghost" onClick={() => setRemoving(null)}>

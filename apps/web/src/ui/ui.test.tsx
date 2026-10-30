@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentAvatar, agentColorIndex } from './avatar';
 import { Badge, StepPill } from './badge';
 import { Button, IconButton } from './button';
-import { sentBackText } from './card';
+import { sentBackText } from '../kit/ItemCard';
 import { Stepper } from './feedback';
 import { Input, Segmented, Select } from './form';
 import { MotionProvider } from './motion';

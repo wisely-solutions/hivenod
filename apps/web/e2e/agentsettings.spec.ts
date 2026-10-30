@@ -126,9 +126,7 @@ test.beforeEach(async ({ page }) => {
   await freezeClock(page);
 });
 
-test('Agent settings: paused + Resume, guardrails saved, tokens and model shown', async ({
-  page,
-}) => {
+test('Agent settings: paused + Resume, guardrails saved, no project scope', async ({ page }) => {
   const { base } = await seed(page);
   await page.goto('/agents');
   const row = page.getByRole('listitem', { name: 'Scout' });
@@ -147,24 +145,16 @@ test('Agent settings: paused + Resume, guardrails saved, tokens and model shown'
   await expect(banner).toContainText('3 failed runs in a row');
 
   // Settings start from the defaults for an agent that never had them.
-  const settings = page.getByRole('region', { name: 'Allowed to work on' });
+  const settings = page.getByRole('region', { name: 'Works on' });
   await expect(settings.getByLabel('Stop after failed runs in a row')).toHaveValue('3');
   // No token limit and no permission chips: usage is tracked only, permissions are Claude Code's.
   await expect(settings.getByLabel(/Token limit/)).toHaveCount(0);
   await expect(settings.getByText(/Allowed when unattended/)).toHaveCount(0);
   await expect(settings.getByText(/set in that machine’s Claude Code settings/)).toBeVisible();
-  await expect(settings.getByRole('button', { name: 'All projects' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  // Projects were removed (OE8Fm slice 10): no project or step picker.
+  await expect(settings.getByRole('button', { name: 'All projects' })).toHaveCount(0);
+  await expect(settings.getByText(/threads and plans of the Inbox/)).toBeVisible();
   await expect(settings.getByText('Ask in Hivenod (Needs you)')).toBeVisible();
-  await expect(
-    settings.getByText('Gates are never decided by agents.', { exact: false }),
-  ).toBeVisible();
-
-  // Tokens: new = 50,000 - 40,000 cached + 2,000 out; the model.
-  await expect(page.getByTestId('kpi-tokens')).toHaveText('12k');
-  await expect(page.getByTestId('kpi-models')).toHaveText('claude-opus-5-5');
   await expectNoHorizontalScroll(page);
   await shot(page, 'agent-settings');
 
@@ -175,9 +165,7 @@ test('Agent settings: paused + Resume, guardrails saved, tokens and model shown'
     .toBe('0');
   expect((await adminDoc(`${base}/agents/scout`))?.fields.pausedAt?.nullValue).toBeNull();
 
-  // Change the guardrails, limit it to one project.
-  await settings.getByRole('button', { name: 'All projects' }).click();
-  await settings.getByRole('button', { name: /Blog/ }).click();
+  // Change the guardrails.
   await settings.getByLabel('Stop after failed runs in a row').fill('0');
   await settings.getByRole('button', { name: 'Save settings' }).click();
   await expect(settings.getByText('A whole number from 1 to 20.')).toBeVisible();
@@ -190,22 +178,8 @@ test('Agent settings: paused + Resume, guardrails saved, tokens and model shown'
   const doc = await adminDoc(`${base}/agents/scout`);
   // Nothing is written for permissions any more.
   expect(doc?.fields.permissions).toBeUndefined();
-  expect(
-    doc?.fields.projectIds?.arrayValue.values.map((v: { stringValue: string }) => v.stringValue),
-  ).toEqual(['blog']);
-
-  // Run details: new tokens in / out, cache reads apart, the model.
-  const runs = page.getByRole('list', { name: 'Runs' });
-  await runs.getByRole('button', { name: /Launch post/ }).click();
-  await expect(page.getByTestId('run-tokens')).toHaveText('10,000 / 2,000');
-  await expect(page.getByTestId('run-cached')).toHaveText('40,000');
-  // The run's Remote Control session opens on claude.ai/code (card OPpbi0MS).
-  await expect(page.getByTestId('run-remote')).toHaveAttribute(
-    'href',
-    'https://claude.ai/code/session_01FakeRemoteSession42',
-  );
-  await expect(runs.getByText('claude-opus-5-5')).toBeVisible();
-  await shot(page, 'agent-run-tokens');
+  // The legacy project scope is left as it was.
+  expect(doc?.fields.projectIds?.stringValue).toBe('*');
 
   await settle(page);
   const { violations } = await new AxeBuilder({ page })
@@ -214,164 +188,4 @@ test('Agent settings: paused + Resume, guardrails saved, tokens and model shown'
   expect(
     violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
   ).toEqual([]);
-});
-
-test('Process editor: an agent step limited to one agent; the other agent page shows it', async ({
-  page,
-}) => {
-  const { base } = await seed(page);
-  await page.goto('/p/blog/process');
-  await page.getByRole('button', { name: 'Edit Draft' }).click();
-  const who = page.getByTestId('who-can-do');
-  await expect(who.getByRole('radio', { name: /Any agent on this project/ })).toBeChecked();
-  await who.getByRole('radio', { name: /Only these agents/ }).click();
-  await who.getByRole('button', { name: 'Writer' }).click();
-  await expect(who.getByRole('button', { name: 'Writer' })).toHaveAttribute('aria-pressed', 'true');
-  await expectNoHorizontalScroll(page);
-  await shot(page, 'process-who-can-do');
-  // Phones edit in a sheet: close it to reach the save bar.
-  const done = page.getByRole('dialog').getByRole('button', { name: 'Done' });
-  if (await done.isVisible().catch(() => false)) await done.click();
-  await page.getByRole('button', { name: 'Save process' }).click();
-  await expect(page.getByText('Process saved.')).toBeVisible();
-  await expect
-    .poll(async () => (await adminDoc(`${base}/projects/blog`))?.fields.stepAgents?.mapValue)
-    .toEqual({ fields: { draft: { arrayValue: { values: [{ stringValue: 'writer' }] } } } });
-  await expect(page.getByText('Only Writer')).toBeVisible();
-
-  // Scout may not take Draft in Blog any more; Writer may.
-  await page.goto('/agents/scout');
-  const blogSteps = page.getByRole('list', { name: 'Steps this agent may take' });
-  await expect(blogSteps.locator('[data-step="draft"]').first()).toHaveAttribute(
-    'data-allowed',
-    'no',
-  );
-  await page.goto('/agents/writer');
-  await expect(
-    page.getByRole('list', { name: 'Steps this agent may take' }).locator('[data-step="draft"]'),
-  ).toHaveAttribute('data-allowed', 'yes');
-});
-
-test('Held for an answer (an old token-limit hold): the item says so and an admin can let agents take it', async ({
-  page,
-}) => {
-  const { base, uid, wid } = await seed(page);
-  await adminSet(`${base}/projects/blog/items/i1/messages/q1`, {
-    workspaceId: wid,
-    projectId: 'blog',
-    itemId: 'i1',
-    by: { type: 'agent', id: 'scout' },
-    kind: 'question',
-    text: 'I stopped: this run used 12,000 new tokens, over this agent’s limit of 10,000 per item.',
-    at: ago(2),
-    answered: false,
-    replyTo: null,
-    lastEventId: 'seed',
-  });
-  await adminSet(`${base}/projects/blog/items/i1`, {
-    ...launchPost(uid),
-    awaitingAnswer: { questionId: 'q1', agentUid: 'scout', at: ago(2), reason: 'tokenLimit' },
-  });
-  await page.goto('/p/blog?item=i1');
-  const held = page.getByTestId('held-banner').first();
-  await expect(held).toContainText('Waiting for an answer.');
-  // An old hold with reason 'tokenLimit' (a guardrail that no longer exists) reads as an
-  // ordinary open question, so nothing is stuck (card rifzGl8M).
-  await expect(held).toContainText('The agent asked a question and gave the item back');
-  await expect(held).not.toContainText('token limit');
-  // The item's Runs panel shows tokens and model, like the agent page (tester finding 9).
-  await expect(page.getByTestId('run-tokens').first()).toHaveText('12k tokens');
-  await expect(page.getByTestId('run-model').first()).toHaveText('claude-opus-5-5');
-  await expect(page.getByTestId('run-remote').first()).toHaveText('Open in Claude');
-  await expect(page.getByTestId('run-remote').first()).toHaveAttribute(
-    'href',
-    'https://claude.ai/code/session_01FakeRemoteSession42',
-  );
-  await expectNoHorizontalScroll(page);
-  await shot(page, 'item-held');
-  await held.getByRole('button', { name: 'Let agents take it' }).click();
-  await expect(held).toBeHidden();
-  await expect
-    .poll(
-      async () =>
-        (await adminDoc(`${base}/projects/blog/items/i1`))?.fields.awaitingAnswer?.nullValue,
-    )
-    .toBe(null);
-});
-
-test('Held for the agent’s own question: the banner says the agent asked', async ({ page }) => {
-  const { base, uid, wid } = await seed(page);
-  await adminSet(`${base}/projects/blog/items/i1/messages/q2`, {
-    workspaceId: wid,
-    projectId: 'blog',
-    itemId: 'i1',
-    by: { type: 'agent', id: 'scout' },
-    kind: 'question',
-    text: 'I stopped: this run used 12,000 new tokens, over this agent’s limit of 10,000 per item.',
-    at: ago(2),
-    answered: false,
-    replyTo: null,
-    lastEventId: 'seed',
-  });
-  await adminSet(`${base}/projects/blog/items/i1`, {
-    ...launchPost(uid),
-    awaitingAnswer: { questionId: 'q2', agentUid: 'scout', at: ago(2) },
-  });
-  await page.goto('/p/blog?item=i1');
-  const held = page.getByTestId('held-banner').first();
-  await expect(held).toContainText('The agent asked a question and gave the item back');
-  await expect(held).not.toContainText('guardrail');
-});
-
-test('Process editor: two agents share one step; both stay after a reload and both agent pages show it', async ({
-  page,
-}) => {
-  const { base } = await seed(page);
-  await page.goto('/p/blog/process');
-  await page.getByRole('button', { name: 'Edit Draft' }).click();
-  const who = page.getByTestId('who-can-do');
-  await who.getByRole('radio', { name: /Only these agents/ }).click();
-  await who.getByRole('button', { name: 'Writer' }).click();
-  await who.getByRole('button', { name: 'Scout' }).click();
-  await expect(who.getByRole('button', { name: 'Writer' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(who.getByRole('button', { name: 'Scout' })).toHaveAttribute('aria-pressed', 'true');
-  await expectNoHorizontalScroll(page);
-  const done = page.getByRole('dialog').getByRole('button', { name: 'Done' });
-  if (await done.isVisible().catch(() => false)) await done.click();
-  await page.getByRole('button', { name: 'Save process' }).click();
-  await expect(page.getByText('Process saved.')).toBeVisible();
-  await expect
-    .poll(async () => {
-      const v = (await adminDoc(`${base}/projects/blog`))?.fields.stepAgents?.mapValue?.fields
-        ?.draft?.arrayValue?.values as { stringValue: string }[] | undefined;
-      return (v ?? []).map((x) => x.stringValue).sort();
-    })
-    .toEqual(['scout', 'writer']);
-
-  await page.reload();
-  await page.getByRole('button', { name: 'Edit Draft' }).click();
-  const again = page.getByTestId('who-can-do');
-  await expect(again.getByRole('button', { name: 'Writer' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await expect(again.getByRole('button', { name: 'Scout' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await expectNoHorizontalScroll(page);
-
-  // Both agent pages: the step is limited to some agents, including this one.
-  for (const agent of ['writer', 'scout']) {
-    await page.goto(`/agents/${agent}`);
-    const steps = page.getByRole('list', { name: 'Steps this agent may take' });
-    await expect(steps.locator('[data-step="draft"]').first()).toHaveAttribute(
-      'data-allowed',
-      'yes',
-    );
-    await expect(
-      steps.getByTitle('Limited to some agents, including this one').first(),
-    ).toBeVisible();
-    await expectNoHorizontalScroll(page);
-  }
 });
