@@ -35,6 +35,7 @@ import {
 import type { PushOutcome } from './push.js';
 import type { ThreadAction } from './threadDecide.js';
 import type { ReachRef } from './reach.js';
+import type { RunTelegram } from './scheduler.js';
 
 export const FRESH_MS = 30 * 60_000;
 /** More than this many messages for one person in one pass become one summary. */
@@ -50,7 +51,13 @@ export interface Ports {
   setNotified(wid: string, key: string, value: Notified): Promise<void>;
   /** 'gone' = the endpoint is dead and should be forgotten. */
   sendPush(sub: PushSub, notice: Notice): Promise<PushOutcome>;
-  sendTelegram(chatId: number, notice: Notice, action?: TelegramAction): Promise<boolean>;
+  /** `silent`: delivered without a notification sound (Telegram disable_notification). */
+  sendTelegram(
+    chatId: number,
+    notice: Notice,
+    action?: TelegramAction,
+    silent?: boolean,
+  ): Promise<boolean>;
   /** Writes a bell entry unless one with this id exists (users/{uid}/notifications/{id}). */
   addBell(uid: string, id: string, entry: BellEntry): Promise<void>;
   log(line: string): void;
@@ -67,7 +74,7 @@ export interface ReachTelegram {
   uid: string;
   ref: ReachRef;
 }
-export type TelegramAction = ThreadTelegram | ReachTelegram;
+export type TelegramAction = ThreadTelegram | ReachTelegram | RunTelegram;
 
 /**
  * The quick actions of a thread message (slice 3): what the buttons decide, and which ones the
@@ -208,13 +215,15 @@ export class Engine {
     action?: TelegramAction,
     key = '',
     urgent = false,
+    /** A quiet line (scheduled tasks: a daily miss after the digest): Telegram only, no sound. */
+    silent = false,
   ): Promise<Delivery> {
     const prefs = await this.prefs(uid);
     if (!urgent && inQuietHours(prefs.quiet, new Date(this.p.now()))) return 'held';
     const id = `${key}|${uid}`;
     let sent = this.chanDone.has(`${id}|push`) || this.chanDone.has(`${id}|tg`);
     let pushFailed = false;
-    if (prefs.push && !this.chanDone.has(`${id}|push`)) {
+    if (prefs.push && !silent && !this.chanDone.has(`${id}|push`)) {
       let pushOk = false;
       let failed = false;
       for (const { id: subId, sub } of await this.p.getPushSubs(uid)) {
@@ -234,7 +243,7 @@ export class Engine {
     }
     if (prefs.telegram && !this.chanDone.has(`${id}|tg`)) {
       const tg = await this.p.getTelegram(uid);
-      if (tg && (await this.p.sendTelegram(tg.chatId, notice, action))) {
+      if (tg && (await this.p.sendTelegram(tg.chatId, notice, action, silent || undefined))) {
         sent = true;
         this.chanDone.add(`${id}|tg`);
       }

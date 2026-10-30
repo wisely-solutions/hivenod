@@ -123,6 +123,20 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "scheduleRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "scheduleId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dueAt",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
