@@ -438,9 +438,7 @@ export function watchSchedules(db: Firestore, s: Scheduler, log: (l: string) => 
     const planStops = new Map<string, () => void>();
     const syncPlans = () => {
       const want = new Set<string>();
-      for (const r of s.openRuns())
-        if (r.wid === wid && r.threadId && ['fired', 'running', 'cantRun'].includes(r.state))
-          want.add(r.id);
+      for (const r of s.openRuns()) if (r.wid === wid && r.threadId) want.add(r.id);
       for (const [id, stop] of planStops)
         if (!want.has(id)) {
           stop();

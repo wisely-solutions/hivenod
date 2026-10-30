@@ -254,6 +254,8 @@ export class Scheduler {
   private lastDue = new Map<string, number | null>();
   /** Plan views at or before this time are stale for that run (it was re-run since). */
   private planFloor = new Map<string, number>();
+  /** The newest plan view seen per run (kept when its listener stops for a while). */
+  private planSeen = new Map<string, number>();
   private notBefore = new Map<string, number>();
   /** Members whose daily digest went out, by local date. */
   private digested = new Map<string, string>();
@@ -299,6 +301,8 @@ export class Scheduler {
     this.kick();
   }
   setPlan(v: PlanView | null, wid: string, runId: string) {
+    const k = kname(wid, runId);
+    if (v) this.planSeen.set(k, Math.max(this.planSeen.get(k) ?? 0, v.updatedAtMs));
     if (v) this.plans.set(kname(wid, runId), v);
     else this.plans.delete(kname(wid, runId));
     this.kick();
@@ -598,7 +602,7 @@ export class Scheduler {
         }))
       )
         return;
-      this.planFloor.set(k, this.plans.get(k)?.updatedAtMs ?? 0);
+      this.planFloor.set(k, this.planSeen.get(k) ?? 0);
       this.local(k, { state: 'fired', why: null, firedAtMs: now, attempts: r.attempts + 1 });
       const how = await this.p.rerun(v.wid, { ...r, state: 'fired' });
       this.p.log(`scheduler ${k}: run again (${how})`);
