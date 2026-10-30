@@ -27,6 +27,8 @@ import {
   type Ports,
   type SummaryTop,
 } from './engine';
+import type { ReachOut } from './reach';
+import { itemWatched, stepDoc, stepWatched, type StepDoc } from './reachStore';
 
 /** Old bell entries are pruned when a person gets a new one, at most once an hour per person. */
 const PRUNE_EVERY_MS = 3_600_000;
@@ -66,48 +68,6 @@ export function firestorePorts(
     },
     async setNotified(wid, key, value: Notified) {
       await db.doc(notifyPath.notified(wid, key)).set(value);
-    },
-    async setSilence(wid, pid, iid, silence) {
-      try {
-        await db.doc(`workspaces/${wid}/projects/${pid}/items/${iid}`).update({ silence });
-      } catch (e) {
-        // NOT_FOUND: the item is gone meanwhile. Nothing to flag.
-        if ((e as { code?: number }).code !== 5) throw e;
-      }
-    },
-    async lastActivity(wid, iid, runId, agentUid, afterMs) {
-      const after = Timestamp.fromMillis(afterMs);
-      const ms = (v: unknown) => (v as { toMillis?: () => number } | undefined)?.toMillis?.() ?? 0;
-      let best = 0;
-      const log = await db
-        .collection(`workspaces/${wid}/runs/${runId}/log`)
-        .where('at', '>', after)
-        .orderBy('at', 'desc')
-        .limit(1)
-        .get();
-      for (const d of log.docs) best = Math.max(best, ms(d.data().at));
-      // The agent's tool writes on the item (progress, notes, attachments, status...): its events,
-      // heartbeats aside. Newest first, page by page, only those after `afterMs`.
-      let q = db
-        .collection(`workspaces/${wid}/events`)
-        .where('itemId', '==', iid)
-        .where('at', '>', after)
-        .orderBy('at', 'desc')
-        .limit(100);
-      for (;;) {
-        const page = await q.get();
-        const hit = page.docs.find((d) => {
-          const e = d.data();
-          return e.actor?.id === agentUid && e.type !== 'run.heartbeat';
-        });
-        if (hit) {
-          best = Math.max(best, ms(hit.data().at));
-          break;
-        }
-        if (page.size < 100) break;
-        q = q.startAfter(page.docs[page.size - 1]!);
-      }
-      return best || null;
     },
     async addBell(uid, id, entry) {
       try {
@@ -158,6 +118,8 @@ export function watchAll(
   engine: Engine,
   kick: () => void,
   log: (s: string) => void,
+  /** Reach out (item KZ6O9): items and thread steps in agent hands. */
+  reach?: ReachOut,
 ) {
   const stops: (() => void)[] = [];
   const orgs = new Map<string, () => void>();
@@ -429,13 +391,72 @@ export function watchAll(
           }
           plans = next;
           void publish().catch((e) => log(`inbox ${wid}: ${String(e)}`));
+          void publishSteps().catch((e) => log(`inbox steps ${wid}: ${String(e)}`));
         },
         (e) => log(`inbox plans ${wid}: ${String(e)}`),
       );
+    // Reach out (item KZ6O9): the steps in agent hands (approved outcomes, running long steps).
+    let steps = new Map<string, StepDoc>();
+    const stepKeys = new Set<string>();
+    const titles = new Map<string, string>();
+    const threadTitle = async (tid: string) => {
+      const hit = titles.get(tid);
+      if (hit !== undefined) return hit;
+      const d = await db.doc(`workspaces/${wid}/inboxThreads/${tid}`).get();
+      const t = (d.data()?.title as string | undefined) ?? '';
+      titles.set(tid, t);
+      return t;
+    };
+    const publishSteps = async () => {
+      if (!reach) return;
+      const now = new Set<string>();
+      for (const o of steps.values()) {
+        const p = o.planId ? [...plans.values()].find((x) => x.id === o.planId) : undefined;
+        const w = stepWatched({
+          wid,
+          o,
+          plan: p
+            ? {
+                steps: p.plan.steps,
+                cursor: p.plan.cursor,
+                state: p.plan.state,
+                updatedAtMs: p.updatedAt,
+              }
+            : null,
+          threadTitle: await threadTitle(o.threadId),
+          agentName: o.executor ? await nameOf(wid, o.executor) : '',
+        });
+        if (!w) continue;
+        now.add(w.key);
+        reach.upsert(w);
+      }
+      for (const k of stepKeys) if (!now.has(k)) reach.remove(k);
+      stepKeys.clear();
+      now.forEach((k) => stepKeys.add(k));
+    };
+    const stopSteps = reach
+      ? db
+          .collection(`workspaces/${wid}/inboxOutcomes`)
+          .where('state', 'in', ['approved', 'running'])
+          .onSnapshot(
+            (snap) => {
+              const next = new Map<string, StepDoc>();
+              for (const d of snap.docs) {
+                const o = stepDoc(d.id, d.data());
+                if (o) next.set(d.id, o);
+              }
+              steps = next;
+              void publishSteps().catch((e) => log(`inbox steps ${wid}: ${String(e)}`));
+            },
+            (e) => log(`inbox steps ${wid}: ${String(e)}`),
+          )
+      : () => undefined;
     return () => {
       stopThreads();
       stopOutcomes();
       stopPlans();
+      stopSteps();
+      stepKeys.forEach((k) => reach?.remove(k));
       clearTimeout(holdTimer);
       keys.forEach((k) => engine.setInbox(null, k));
     };
@@ -574,7 +595,7 @@ export function watchAll(
         },
         (e) => log(`decisions ${wid}/${pid}: ${String(e)}`),
       );
-    // Items agents are working (item AzveC): the silence check.
+    // Items agents are working (items AzveC, KZ6O9): reach out keeps one timer per item.
     const stopWorking = db
       .collection(`workspaces/${wid}/projects/${pid}/items`)
       .where('status', '==', 'working')
@@ -584,31 +605,30 @@ export function watchAll(
           for (const d of snap.docs) {
             const item = itemSchema.safeParse(d.data());
             if (!item.success || !item.data.claim) continue;
-            const key = `${wid}/${pid}/${d.id}`;
+            const key = `${wid}/${d.id}`;
             try {
               const startedMs = await runStart(wid, item.data.claim.runId);
               if (startedMs === null) continue;
+              const w = itemWatched({
+                wid,
+                pid,
+                iid: d.id,
+                project,
+                item: item.data,
+                startedMs,
+                agentName: await nameOf(wid, item.data.claim.agentUid),
+                nowMs: Date.now(),
+              });
+              if (!w) continue;
               now.add(key);
-              engine.setWorking(
-                {
-                  wid,
-                  pid,
-                  iid: d.id,
-                  project,
-                  item: item.data,
-                  startedMs,
-                  agentName: await nameOf(wid, item.data.claim.agentUid),
-                },
-                key,
-              );
+              reach?.upsert(w);
             } catch (e) {
               log(`working ${key}: ${String(e)}`);
             }
           }
-          for (const k of wkeys) if (!now.has(k)) engine.setWorking(null, k);
+          for (const k of wkeys) if (!now.has(k)) reach?.remove(k);
           wkeys.clear();
           now.forEach((k) => wkeys.add(k));
-          kick();
         },
         (e) => log(`working ${wid}/${pid}: ${String(e)}`),
       );
@@ -618,7 +638,7 @@ export function watchAll(
       stopQs();
       stopDecisions();
       keys.forEach((k) => engine.setWaiting(null, k));
-      wkeys.forEach((k) => engine.setWorking(null, k));
+      wkeys.forEach((k) => reach?.remove(k));
       qkeys.forEach((k) => engine.setQuestion(null, k));
     };
   };

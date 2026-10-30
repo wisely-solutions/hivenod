@@ -70,7 +70,7 @@ export interface ReachInput {
   askMs: number | null;
   /** The silence flag on this claim, or null. */
   flag: ReachFlag | null;
-  /** The claim's last heartbeat (ms); only for 'stale'. */
+  /** The claim's last heartbeat (ms; items only): a stale claim goes back to the queue. */
   heartbeatMs?: number;
 }
 
@@ -90,7 +90,12 @@ export type ReachStep =
 export function reachNext(i: ReachInput): ReachStep {
   const steps: ReachStep[] = [];
   if (i.flag && i.activityMs > i.flag.since) steps.push({ do: 'clear', at: i.activityMs });
-  else if (i.flag) steps.push({ do: 'remind', at: (i.flag.told ?? i.flag.at) + REACH_REMIND_MS });
+  // told null: the message is still to go out (quiet hours); undefined: an older flag, told then.
+  else if (i.flag)
+    steps.push({
+      do: 'remind',
+      at: i.flag.told === null ? i.flag.at : (i.flag.told ?? i.flag.at) + REACH_REMIND_MS,
+    });
   else if (i.askMs !== null && i.askMs >= i.activityMs)
     steps.push({ do: 'silent', at: i.askMs + REACH_ANSWER_MS, askMs: i.askMs });
   else
@@ -98,7 +103,8 @@ export function reachNext(i: ReachInput): ReachStep {
       do: 'ask',
       at: i.activityMs + (i.kind === 'parked' ? REACH_PARKED_MS : REACH_QUIET_MS),
     });
-  if (i.kind === 'stale' && i.heartbeatMs !== undefined)
+  // A claim's heartbeat (items): it goes stale with no write, so its release is always timed.
+  if (i.heartbeatMs !== undefined)
     steps.push({ do: 'release', at: i.heartbeatMs + STALE_MS + REACH_STALE_RELEASE_MS });
   return steps.reduce((a, b) => (b.at < a.at ? b : a));
 }
