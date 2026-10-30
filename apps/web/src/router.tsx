@@ -243,8 +243,10 @@ const calendarGoneRoute = createRoute({
 const inboxRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/inbox',
-  validateSearch: (s: Record<string, unknown>): { org?: string } =>
-    typeof s.org === 'string' && s.org ? { org: s.org } : {},
+  validateSearch: (s: Record<string, unknown>): { org?: string; view?: 'waiting' } => ({
+    ...(typeof s.org === 'string' && s.org ? { org: s.org } : {}),
+    ...(s.view === 'waiting' ? { view: 'waiting' as const } : {}),
+  }),
   component: lazyRouteComponent(() => import('./threads/InboxListPage'), 'InboxListPage'),
 });
 const inboxSubjectRoute = createRoute({

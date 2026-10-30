@@ -19,7 +19,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 import { EmptyState, Skeleton } from '../ui/feedback';
-import { Input, Select } from '../ui/form';
+import { Input, Segmented, Select } from '../ui/form';
 import { Icon } from '../ui/icon';
 import { Popover, Sheet } from '../ui/overlay';
 import { waitLabel } from '../inbox/logic';
@@ -44,6 +44,8 @@ import { summaryLine } from './decision';
 import { LabelChip } from './labels';
 import { StateChip, UrgentMark } from './parts';
 import { NewThreadDialog } from './NewThread';
+import { waitingThreads } from './bulkRecheck';
+import { WaitingView } from './WaitingView';
 
 const DAYS = [
   { value: '0', label: 'Any time' },
@@ -110,6 +112,7 @@ export function InboxListPage() {
   const search = useSearch({ from: '/inbox' });
   const navigate = useNavigate();
   const scope = search.org && orgs.some((o) => o.id === search.org) ? search.org : '';
+  const view = search.view === 'waiting' ? 'waiting' : 'all';
   const wids = useMemo(
     () => (scope ? [scope] : orgs.filter((o) => !o.deleting).map((o) => o.id)),
     [scope, orgs],
@@ -177,6 +180,12 @@ export function InboxListPage() {
   const groups = useMemo(() => groupByState(shown, quietDays, now), [shown, quietDays, now]);
   const orgName = (wid: string) => orgs.find((o) => o.id === wid)?.name ?? '';
   const waiting = countWaitingThreads(rows);
+  // The Waiting view (bulk Re-check): the member's threads waiting on someone or something.
+  const waitingOn = useMemo(() => waitingThreads(inbox.threads), [inbox.threads]);
+  const subjectNames = useMemo(
+    () => new Map(inbox.subjects.map((x) => [`${x.wid}/${x.id}`, x.data.name])),
+    [inbox.subjects],
+  );
   const active =
     (waitingForMe ? 1 : 0) +
     (hasOpen ? 1 : 0) +
@@ -215,7 +224,19 @@ export function InboxListPage() {
   };
 
   const setScope = (v: string) =>
-    void navigate({ to: '/inbox', search: v === 'all' ? {} : { org: v }, replace: true });
+    void navigate({
+      to: '/inbox',
+      search: { ...(v === 'all' ? {} : { org: v }), ...(view === 'waiting' ? { view } : {}) },
+      replace: true,
+    });
+  const setView = (v: string) =>
+    void navigate({
+      to: '/inbox',
+      search: { ...(scope ? { org: scope } : {}), ...(v === 'waiting' ? { view: 'waiting' } : {}) },
+      replace: true,
+    });
+  const orgOf = (wid: string) =>
+    scope || orgs.length < 2 ? null : { name: orgName(wid), color: orgColor(wid, colorOrgs) };
   const filterPanel = (
     <div className="flex flex-col gap-4">
       <div role="group" aria-label="Filters" className="flex flex-wrap items-center gap-2">
@@ -357,30 +378,43 @@ export function InboxListPage() {
         onChange={(w) => setScope(w ?? 'all')}
         hint="Tap an organization to see only its threads"
       />
-      <div className="mb-4 flex items-end gap-2">
-        <div className="min-w-0 flex-1">
-          <Input
-            label="Find subjects"
-            type="search"
-            placeholder="Find a subject, a person, a channel, words"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+      <Segmented
+        tabs
+        label="View"
+        className="mb-3"
+        value={view}
+        onValueChange={setView}
+        options={[
+          { value: 'all', label: 'All' },
+          { value: 'waiting', label: 'Waiting', count: waitingOn.length },
+        ]}
+      />
+      {view === 'waiting' ? null : (
+        <div className="mb-4 flex items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <Input
+              label="Find subjects"
+              type="search"
+              placeholder="Find a subject, a person, a channel, words"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+          {phone ? (
+            filtersTrigger
+          ) : (
+            <Popover
+              label="Filters"
+              align="end"
+              contentClassName="w-[min(28rem,calc(100vw-16px))] p-4"
+              trigger={filtersTrigger}
+            >
+              {filterPanel}
+            </Popover>
+          )}
         </div>
-        {phone ? (
-          filtersTrigger
-        ) : (
-          <Popover
-            label="Filters"
-            align="end"
-            contentClassName="w-[min(28rem,calc(100vw-16px))] p-4"
-            trigger={filtersTrigger}
-          >
-            {filterPanel}
-          </Popover>
-        )}
-      </div>
-      {phone ? (
+      )}
+      {phone && view !== 'waiting' ? (
         <Sheet open={filtersOpen} onOpenChange={setFiltersOpen} title="Filters">
           <div className="pb-4">{filterPanel}</div>
         </Sheet>
@@ -400,6 +434,14 @@ export function InboxListPage() {
           <Skeleton className="h-16" />
           <Skeleton className="h-16" />
         </div>
+      ) : view === 'waiting' ? (
+        <WaitingView
+          threads={waitingOn}
+          subjectName={(t) =>
+            t.data.subjectId ? (subjectNames.get(`${t.wid}/${t.data.subjectId}`) ?? null) : null
+          }
+          org={orgOf}
+        />
       ) : rows.length === 0 ? (
         <EmptyState
           icon={Mails}
