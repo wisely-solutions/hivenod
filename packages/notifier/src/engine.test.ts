@@ -8,8 +8,10 @@ import {
   type Project,
 } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
+import { threadKeyboard } from './telegram';
 import {
   Engine,
+  threadAction,
   type InboxWaiting,
   type Ports,
   type WaitingItem,
@@ -22,7 +24,7 @@ const ts = (ms: number) => ({ seconds: ms / 1000, nanoseconds: 0, toMillis: () =
 function world(over: { prefs?: Record<string, NotifyPrefs>; remindAfterHours?: number } = {}) {
   const t = { now: Date.UTC(2026, 0, 10, 12, 0, 0) };
   const sentPush: { endpoint: string; notice: Notice }[] = [];
-  const sentTg: { chatId: number; notice: Notice; hasAction: boolean }[] = [];
+  const sentTg: { chatId: number; notice: Notice; hasAction: boolean; action?: unknown }[] = [];
   const store = new Map<string, Notified>();
   const deleted: string[] = [];
   const bells = new Map<string, BellEntry>();
@@ -59,7 +61,7 @@ function world(over: { prefs?: Record<string, NotifyPrefs>; remindAfterHours?: n
       return { result: 'ok', status: 201, attempts: 1 };
     },
     sendTelegram: async (chatId, notice, action) => {
-      sentTg.push({ chatId, notice, hasAction: !!action });
+      sentTg.push({ chatId, notice, hasAction: !!action, action });
       return true;
     },
     setSilence: async (_w, _p, iid, silence) => void silences.push({ iid, silence }),
@@ -695,5 +697,131 @@ describe('silence (item AzveC)', () => {
     w.engine.setWorking(item, 'k');
     await w.engine.sweep();
     expect(w.sentPush.map((p) => p.endpoint)).toEqual(['https://p/ana']);
+  });
+});
+
+describe('decision points on threads (slice 3, design 9b)', () => {
+  const gate = {
+    kind: 'step' as const,
+    key: 's:p1:o2',
+    planId: 'p1',
+    outcomeId: 'o2',
+    gate: true,
+    number: 4,
+    total: 6,
+    type: 'approval',
+    what: 'Ship it?',
+  };
+  const summary = {
+    headline: 'Release 175 is ready',
+    ask: 'Ship release 175 to hivenod.com?',
+    answer: 'Everything passed: 612 of 612 checks',
+    recAction: 'Approve',
+    confidence: 'high',
+  };
+  const thread = (w: ReturnType<typeof world>, over: Partial<InboxWaiting> = {}): InboxWaiting => ({
+    wid: 'w',
+    tid: 't1',
+    memberUid: 'ana',
+    state: 'yourCall',
+    title: 'Release 175',
+    subjectName: 'Hivenod',
+    text: 'Ship it? · step 4 of 6',
+    byName: 'Hive',
+    arrival: gate.key,
+    sinceMs: w.t.now - 60_000,
+    urgent: false,
+    ask: gate,
+    summary,
+    summaryFresh: true,
+    agentName: 'Hive',
+    ...over,
+  });
+
+  it('the one-liner on top, the recommendation under it, the quick actions on Telegram', async () => {
+    const w = world();
+    w.engine.setInbox(thread(w), 't1');
+    await w.engine.sweep();
+    expect(w.sentPush[0]!.notice).toMatchObject({
+      title: 'Ship release 175 to hivenod.com?',
+      body: 'Hive recommends Approve · confidence high',
+      url: '/inbox/w/t/t1',
+    });
+    expect(w.sentTg[0]!.notice.title).toBe('Ship release 175 to hivenod.com?');
+    expect(w.sentTg[0]!.action).toEqual({
+      kind: 'thread',
+      wid: 'w',
+      tid: 't1',
+      uid: 'ana',
+      arrival: 's:p1:o2',
+      ask: 'step',
+      options: [],
+    });
+  });
+
+  it('without a fresh summary: the app line, still with the buttons', async () => {
+    const w = world();
+    w.engine.setInbox(thread(w, { summaryFresh: false }), 't1');
+    await w.engine.sweep();
+    expect(w.sentPush[0]!.notice.title).toBe('Your call: Release 175');
+    expect(w.sentPush[0]!.notice.body).toBe('Hivenod · Ship it? · step 4 of 6');
+    expect(w.sentTg[0]!.hasAction).toBe(true);
+  });
+
+  it('waits for the summary that follows a change, then tells once', async () => {
+    const w = world();
+    w.engine.setInbox(thread(w, { summaryFresh: false, holdUntil: w.t.now + 30_000 }), 't1');
+    await w.engine.sweep();
+    expect(w.sentPush).toHaveLength(0);
+    expect(w.bells.size).toBe(0);
+    w.engine.setInbox(thread(w), 't1');
+    await w.engine.sweep();
+    await w.engine.sweep();
+    expect(w.sentPush.map((p) => p.notice.title)).toEqual(['Ship release 175 to hivenod.com?']);
+  });
+
+  it('the next step at its turn is a new arrival; a blocked plan has no quick actions', async () => {
+    const w = world();
+    w.engine.setInbox(thread(w), 't1');
+    await w.engine.sweep();
+    const next = { ...gate, key: 's:p1:o3', outcomeId: 'o3', number: 5 };
+    w.engine.setInbox(thread(w, { ask: next, arrival: next.key }), 't1');
+    await w.engine.sweep();
+    expect(w.sentTg).toHaveLength(2);
+    const retry = { kind: 'retry' as const, key: 'r:p1:4', planId: 'p1', number: 5, total: 6 };
+    expect(threadAction(thread(w, { ask: retry, arrival: retry.key }))).toBeUndefined();
+  });
+
+  it('a question offers its answers as buttons', () => {
+    const w = world();
+    const q = {
+      kind: 'question' as const,
+      key: 'q1',
+      text: 'Which day?',
+      options: ['Thu', 'Fri', 'Mon'],
+    };
+    const a = threadAction(thread(w, { state: 'needsYou', ask: q, arrival: 'q1' }))!;
+    expect(threadKeyboard('CODE', a, 'https://app/x')).toEqual([
+      [
+        { text: 'Thu', callback_data: 'to0:CODE' },
+        { text: 'Fri', callback_data: 'to1:CODE' },
+      ],
+      [{ text: 'Mon', callback_data: 'to2:CODE' }],
+      [
+        { text: 'Reply', callback_data: 'tr:CODE' },
+        { text: 'Not now', callback_data: 'tn:CODE' },
+      ],
+      [{ text: 'Open', url: 'https://app/x' }],
+    ]);
+    expect(threadKeyboard('CODE', threadAction(thread(w))!, 'https://app/x')).toEqual([
+      [
+        { text: 'Approve', callback_data: 'ta:CODE' },
+        { text: 'Not now', callback_data: 'tn:CODE' },
+      ],
+      [
+        { text: 'Ask for changes', callback_data: 'tc:CODE' },
+        { text: 'Open', url: 'https://app/x' },
+      ],
+    ]);
   });
 });

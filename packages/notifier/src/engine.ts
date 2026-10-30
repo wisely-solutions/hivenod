@@ -22,6 +22,9 @@
  */
 import {
   approvalNotice,
+  askApproves,
+  decisionLines,
+  type ThreadAsk,
   bellId,
   clipText,
   type BellEntry,
@@ -47,6 +50,7 @@ import {
   type TelegramLink,
 } from '@hive/shared';
 import type { PushOutcome } from './push.js';
+import type { ThreadAction } from './threadDecide.js';
 
 export const FRESH_MS = 30 * 60_000;
 /** More than this many messages for one person in one pass become one summary. */
@@ -70,7 +74,11 @@ export interface Ports {
   setNotified(wid: string, key: string, value: Notified): Promise<void>;
   /** 'gone' = the endpoint is dead and should be forgotten. */
   sendPush(sub: PushSub, notice: Notice): Promise<PushOutcome>;
-  sendTelegram(chatId: number, notice: Notice, action?: ApprovalAction): Promise<boolean>;
+  sendTelegram(
+    chatId: number,
+    notice: Notice,
+    action?: ApprovalAction | ThreadTelegram,
+  ): Promise<boolean>;
   /** Sets or clears the silence flag on an item (item AzveC). */
   setSilence(wid: string, pid: string, iid: string, silence: Silence | null): Promise<void>;
   /**
@@ -149,6 +157,27 @@ export interface DecisionMsg {
   creatorUid: string | null;
 }
 
+/**
+ * The quick actions of a thread message (slice 3): what the buttons decide, and which ones the
+ * message shows (Approve and Ask for changes for a person step, the answers of a question).
+ */
+export interface ThreadTelegram extends ThreadAction {
+  ask: ThreadAsk['kind'];
+  options: string[];
+}
+
+/** The summary mirror's top line (inboxThreads/{tid}.summary). */
+export interface SummaryTop {
+  headline: string;
+  ask: string | null;
+  answer: string | null;
+  recAction: string | null;
+  confidence: string | null;
+}
+
+/** A thread waits this long for its summary before it is told without one (ms). */
+export const SUMMARY_WAIT_MS = 45_000;
+
 /** An Inbox thread waiting for its member (Needs you or Your call). */
 export interface InboxWaiting {
   wid: string;
@@ -166,6 +195,58 @@ export interface InboxWaiting {
   /** When it arrived (ms). */
   sinceMs: number;
   urgent: boolean;
+  /** What waits (slice 3): its key is `arrival`; the quick actions follow its kind. */
+  ask?: ThreadAsk | null;
+  /** The summary's top line, and whether it was written after the thread's last change. */
+  summary?: SummaryTop | null;
+  summaryFresh?: boolean;
+  /** Not told before this time (ms): the summary that follows a change may still come. */
+  holdUntil?: number;
+  /** The home agent's name ("Hive recommends …"). */
+  agentName?: string;
+}
+
+/**
+ * The message of a waiting thread (slice 3, design 9b): with a fresh summary, the bold one-liner
+ * is its ask (or headline) and the second line the recommendation and confidence; without one,
+ * the app's own lines.
+ */
+export function threadNotice(t: InboxWaiting): Notice {
+  const base = inboxNotice({
+    kind: t.state,
+    subjectName: t.subjectName,
+    threadTitle: t.title,
+    text: t.text,
+    workspaceId: t.wid,
+    threadId: t.tid,
+    urgent: t.urgent,
+  });
+  if (!t.ask || !t.summary || !t.summaryFresh) return base;
+  const l = decisionLines({
+    ask: t.ask,
+    title: t.title,
+    subjectName: t.subjectName,
+    agentName: t.agentName ?? '',
+    summary: t.summary,
+    fresh: true,
+  });
+  return { ...base, title: `${t.urgent ? 'Urgent · ' : ''}${l.line}`, body: l.detail };
+}
+
+/** The buttons of a waiting thread's Telegram message, or none (nothing to decide in one tap). */
+export function threadAction(t: InboxWaiting): ThreadTelegram | undefined {
+  const a = t.ask;
+  if (!a) return undefined;
+  if (!askApproves(a) && a.kind !== 'question') return undefined;
+  return {
+    kind: 'thread',
+    wid: t.wid,
+    tid: t.tid,
+    uid: t.memberUid,
+    arrival: t.arrival,
+    ask: a.kind,
+    options: a.kind === 'question' ? a.options : [],
+  };
 }
 
 export class Engine {
@@ -273,7 +354,7 @@ export class Engine {
   async deliver(
     uid: string,
     notice: Notice,
-    action?: ApprovalAction,
+    action?: ApprovalAction | ThreadTelegram,
     key = '',
     urgent = false,
   ): Promise<Delivery> {
@@ -479,6 +560,8 @@ export class Engine {
 
     for (const t of [...this.inbox.values()]) {
       try {
+        // The summary written right after a change may still come: wait for it a little.
+        if (t.holdUntil && now < t.holdUntil) continue;
         const key = `i-${t.tid}`;
         const r = await record(t.wid, key, () => ({
           itemId: t.tid,
@@ -491,7 +574,9 @@ export class Engine {
         if (!r) continue;
         let arrived = r.dirty;
         if (r.rec.gateKey !== t.arrival) {
-          r.rec = { ...r.rec, gateKey: t.arrival, sent: [], remindedAt: null, at: now };
+          // A new arrival; an old one (a restart, or keys of an earlier release) is not replayed.
+          const sent = now - t.sinceMs > FRESH_MS ? [t.memberUid] : [];
+          r.rec = { ...r.rec, gateKey: t.arrival, sent, remindedAt: null, at: now };
           r.dirty = true;
           arrived = true;
         }
@@ -512,15 +597,8 @@ export class Engine {
         if (r.rec.sent.includes(t.memberUid)) continue;
         cands.push({
           uid: t.memberUid,
-          notice: inboxNotice({
-            kind: t.state,
-            subjectName: t.subjectName,
-            threadTitle: t.title,
-            text: t.text,
-            workspaceId: t.wid,
-            threadId: t.tid,
-            urgent: t.urgent,
-          }),
+          notice: threadNotice(t),
+          action: threadAction(t),
           key: `in|${t.tid}|${t.arrival}`,
           urgent: t.urgent,
           done: () => {
@@ -651,7 +729,7 @@ export class Engine {
 interface Candidate {
   uid: string;
   notice: Notice;
-  action?: ApprovalAction;
+  action?: ApprovalAction | ThreadTelegram;
   key: string;
   urgent?: boolean;
   done: () => void;

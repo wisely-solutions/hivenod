@@ -2,10 +2,49 @@
 import { randomId, notifyPath, type Notice } from '@hive/shared';
 import type { Firestore } from 'firebase-admin/firestore';
 import { canSendBack, decide, whyNot } from './decide';
-import type { ApprovalAction } from './engine';
+import type { ApprovalAction, ThreadTelegram } from './engine';
+import { decideThread, threadCheck, type ThreadAction, type ThreadDecision } from './threadDecide';
 import { itemSchema, projectSchema, paths } from '@hive/shared';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** A button's text is kept short (Telegram cuts long ones anyway). */
+const label = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}…` : s);
+
+type Button = { text: string; callback_data?: string; url?: string };
+
+/**
+ * The keyboard of a thread message (slice 3, design 9b): Approve · Not now / Ask for changes ·
+ * Open for a person step; the answers (two a row), then Reply · Not now / Open for a question.
+ * Callback data: `t<kind>:<code>` (ta approve, tn not now, tc ask for changes, tr reply, to<i>
+ * answer i). Pure: the tests render it.
+ */
+export function threadKeyboard(code: string, a: ThreadTelegram, open: string): Button[][] {
+  const openB: Button = { text: 'Open', url: open };
+  const notNow: Button = { text: 'Not now', callback_data: `tn:${code}` };
+  if (a.ask === 'question') {
+    const rows: Button[][] = [];
+    a.options.forEach((o, i) => {
+      const b = { text: label(o), callback_data: `to${i}:${code}` };
+      if (i % 2 === 0) rows.push([b]);
+      else rows[rows.length - 1]!.push(b);
+    });
+    rows.push([{ text: 'Reply', callback_data: `tr:${code}` }, notNow]);
+    rows.push([openB]);
+    return rows;
+  }
+  return [
+    [{ text: 'Approve', callback_data: `ta:${code}` }, notNow],
+    [{ text: 'Ask for changes', callback_data: `tc:${code}` }, openB],
+  ];
+}
+
+const isThread = (a: ApprovalAction | ThreadTelegram): a is ThreadTelegram =>
+  (a as { kind?: string }).kind === 'thread';
+
+/** The message text: the bold one-liner, then the second line. */
+export function noticeText(notice: Notice): string {
+  return `<b>${esc(notice.title)}</b>\n${esc(notice.body)}`;
+}
 export const LINK_TTL_MS = 15 * 60_000;
 
 export class TelegramApi {
@@ -58,11 +97,20 @@ export class TelegramBot {
   }
 
   /** The Ports.sendTelegram implementation. */
-  async send(chatId: number, notice: Notice, action?: ApprovalAction): Promise<boolean> {
-    const text = `<b>${esc(notice.title)}</b>\n${esc(notice.body)}`;
+  async send(
+    chatId: number,
+    notice: Notice,
+    action?: ApprovalAction | ThreadTelegram,
+  ): Promise<boolean> {
+    const text = noticeText(notice);
     const row1 = [{ text: 'Open', url: `${this.appUrl}${notice.url}` }];
-    const rows: unknown[][] = [row1];
-    if (action) {
+    let rows: unknown[][] = [row1];
+    if (action && isThread(action)) {
+      const code = randomId(12);
+      const { ask: _ask, options: _options, ...doc } = action;
+      await this.db.doc(`telegramActions/${code}`).set({ ...doc, chatId, createdAt: this.now() });
+      rows = threadKeyboard(code, action, `${this.appUrl}${notice.url}`);
+    } else if (action) {
       const code = randomId(12);
       await this.db
         .doc(`telegramActions/${code}`)
@@ -172,9 +220,92 @@ export class TelegramBot {
     await this.say(chatId, 'Unlinked. You will not get messages here any more.');
   }
 
+  private async threadAction(code: string, chatId: number): Promise<ThreadAction | null> {
+    const d = (await this.db.doc(`telegramActions/${code}`).get()).data() as
+      (ThreadAction & { chatId: number }) | undefined;
+    if (!d || d.kind !== 'thread' || d.chatId !== chatId) return null;
+    const link = (await this.db.doc(notifyPath.telegram(d.uid)).get()).data() as
+      { chatId?: number } | undefined;
+    return link?.chatId === chatId ? d : null;
+  }
+
+  /** The buttons of a thread message (slice 3). */
+  private async onThreadButton(
+    q: NonNullable<Update['callback_query']>,
+    chatId: number,
+    kind: string,
+    code: string,
+  ) {
+    const a = await this.threadAction(code, chatId);
+    if (!a)
+      return void (await this.api.call('answerCallbackQuery', {
+        callback_query_id: q.id,
+        text: 'This button has expired.',
+        show_alert: true,
+      }));
+    const clear = async () => {
+      if (q.message)
+        await this.api
+          .call('editMessageReplyMarkup', {
+            chat_id: chatId,
+            message_id: q.message.message_id,
+            reply_markup: { inline_keyboard: [] },
+          })
+          .catch(() => undefined);
+    };
+    // Ask for changes and Reply need a text: ask for it as a reply to a prompt.
+    if (kind === 'tc' || kind === 'tr') {
+      const why = await threadCheck(this.db, a);
+      if (why) {
+        await this.api.call('answerCallbackQuery', {
+          callback_query_id: q.id,
+          text: why.slice(0, 190),
+          show_alert: true,
+        });
+        return clear();
+      }
+      await this.api.call('answerCallbackQuery', { callback_query_id: q.id });
+      const sent = await this.say(
+        chatId,
+        kind === 'tc'
+          ? 'What should change? Reply to this message.'
+          : 'Your answer? Reply to this message.',
+        {
+          reply_markup: {
+            force_reply: true,
+            input_field_placeholder: kind === 'tc' ? 'What should change?' : 'Your answer',
+          },
+        },
+      );
+      await this.db
+        .doc(`telegramActions/${code}`)
+        .update({ promptMessageId: sent.message_id, prompt: kind === 'tc' ? 'changes' : 'answer' });
+      return;
+    }
+    const opt = /^to(\d)$/.exec(kind);
+    const d: ThreadDecision | null =
+      kind === 'ta'
+        ? { kind: 'approve' }
+        : kind === 'tn'
+          ? { kind: 'notNow' }
+          : opt
+            ? { kind: 'option', index: Number(opt[1]) }
+            : null;
+    if (!d) return void (await this.api.call('answerCallbackQuery', { callback_query_id: q.id }));
+    const r = await decideThread(this.db, a, d, this.now());
+    await this.api.call('answerCallbackQuery', {
+      callback_query_id: q.id,
+      text: r.text.slice(0, 190),
+      ...(r.ok ? {} : { show_alert: true }),
+    });
+    await clear();
+    if (r.ok) await this.say(chatId, r.text);
+  }
+
   private async action(code: string, chatId: number): Promise<ApprovalAction | null> {
     const snap = await this.db.doc(`telegramActions/${code}`).get();
-    const d = snap.data() as (ApprovalAction & { chatId: number }) | undefined;
+    const d = snap.data() as (ApprovalAction & { chatId: number; kind?: string }) | undefined;
+    if (d?.kind === 'thread') return null;
     // The chat must be the one the message was sent to, and still the person's linked chat.
     if (!d || d.chatId !== chatId) return null;
     const link = (await this.db.doc(notifyPath.telegram(d.uid)).get()).data() as
@@ -185,6 +316,7 @@ export class TelegramBot {
   private async onButton(q: NonNullable<Update['callback_query']>) {
     const chatId = q.message?.chat.id;
     const [kind, code] = (q.data ?? '').split(':');
+    if (chatId && code && kind?.startsWith('t')) return this.onThreadButton(q, chatId, kind, code);
     if (!chatId || !code || (kind !== 'a' && kind !== 's'))
       return void (await this.api.call('answerCallbackQuery', { callback_query_id: q.id }));
     const a = await this.action(code, chatId);
@@ -253,6 +385,16 @@ export class TelegramBot {
       .get();
     const doc = q.docs[0];
     if (!doc) return;
+    if (doc.data().kind === 'thread') {
+      const ta = await this.threadAction(doc.id, chatId);
+      if (!ta) return;
+      const d: ThreadDecision =
+        doc.data().prompt === 'answer' ? { kind: 'answer', text } : { kind: 'changes', text };
+      const r = await decideThread(this.db, ta, d, this.now());
+      if (r.ok) await doc.ref.delete().catch(() => undefined);
+      await this.say(chatId, r.ok ? r.text : `${r.text} Reply to my question again.`);
+      return;
+    }
     const a = await this.action(doc.id, chatId);
     if (!a) return;
     const r = await decide(this.db, a, 'sendback', text, this.now());
