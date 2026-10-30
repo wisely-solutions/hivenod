@@ -10,6 +10,7 @@ import {
   rejectOutcome,
   rejectPlan,
   retryPlanStep,
+  sendBackPlan,
   skipPlanStep,
   stopPlan,
   type ActionPlan,
@@ -17,6 +18,7 @@ import {
   type PlanEdit,
   type PlanInput,
   type PlanStepView,
+  type SendBackOf,
 } from '@hive/shared';
 import { useState } from 'react';
 import { useReady } from '../auth/context';
@@ -28,7 +30,7 @@ import { errorText } from './parts';
 export function usePlanActions(
   wid: string,
   thread: Row<InboxThread>,
-  pl: PlanInput,
+  pl: PlanInput & { plan: SendBackOf },
   onDone?: (label: string) => void,
 ) {
   const { session, actionContext, run } = useReady();
@@ -84,7 +86,8 @@ export function usePlanActions(
       commit(() => approvePlan(ctx(), { ...pl, thread: th() }), 'Plan approved', 'Plan approved'),
     rejectAll: () =>
       commit(() => rejectPlan(ctx(), { ...pl, thread: th() }), 'Plan rejected', 'Plan rejected'),
-    gate: (s: Pick<PlanStepView, 'outcomeId' | 'number'>, yes: boolean) =>
+    /** A gate: Approve (pinning the summary version on screen, slice 6) or Not approved. */
+    gate: (s: Pick<PlanStepView, 'outcomeId' | 'number'>, yes: boolean, summaryVersion?: number) =>
       commit(
         () =>
           yes
@@ -93,6 +96,7 @@ export function usePlanActions(
                 outcome: pl.outcomes[s.outcomeId]!,
                 thread: th(),
                 plan: pl,
+                ...(summaryVersion ? { summaryVersion } : {}),
               })
             : rejectOutcome(ctx(), {
                 outcomeId: s.outcomeId,
@@ -103,6 +107,13 @@ export function usePlanActions(
               }),
         yes ? `Step ${s.number} approved` : `Step ${s.number} not approved: the plan stops`,
         yes ? `Approved step ${s.number}` : `Not approved: step ${s.number}`,
+      ),
+    /** Ask for changes on a gate (slice 6): the plan goes back to an earlier step, with the text. */
+    sendBack: (reason: string, toStep: number) =>
+      commit(
+        () => sendBackPlan(ctx(), { ...pl, thread: th(), reason, toStep }),
+        `Sent back to step ${toStep + 1}`,
+        `Sent back to step ${toStep + 1}`,
       ),
     retry: () => commit(() => retryPlanStep(ctx(), { ...pl, thread: th() }), 'Retrying', 'Retry'),
     skip: () =>

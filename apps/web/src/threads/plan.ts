@@ -11,6 +11,8 @@ import {
   type PlanInput,
   type PlanStepView,
   type PlanView,
+  sendBackTarget,
+  type SendBackOf,
 } from '@hive/shared';
 import type { Row } from '../lib/live';
 import type { Tone } from '../ui/badge';
@@ -20,7 +22,7 @@ import { dayLabel, hhmm } from '../today/logic';
 export function planInputOf(
   plan: Row<InboxPlan>,
   outcomes: readonly Row<InboxOutcome>[],
-): PlanInput {
+): PlanInput & { plan: SendBackOf } {
   const by: Record<string, PlanInput['outcomes'][string]> = {};
   for (const o of outcomes) if (plan.data.steps.includes(o.id)) by[o.id] = o.data;
   return {
@@ -31,8 +33,37 @@ export function planInputOf(
       steps: [...plan.data.steps],
       cursor: plan.data.cursor,
       state: plan.data.state,
+      // Development plans (slice 6): where a gate sends back to, and how often it was.
+      ...(plan.data.sendBackTo ? { sendBackTo: plan.data.sendBackTo } : {}),
+      ...(plan.data.sentBack ? { sentBack: { n: plan.data.sentBack.n } } : {}),
     },
     outcomes: by,
+  };
+}
+
+/**
+ * Ask for changes on the gate at `index` (slice 6): the steps it may send the plan back to (the
+ * earlier agent steps that are done, nearest first) and the default one; empty when there is
+ * none (a plain approval with no agent step before it).
+ */
+export function sendBackChoices(
+  pl: PlanInput & { plan: SendBackOf },
+  index: number,
+): { choices: { index: number; label: string }[]; target: number | null } {
+  const types = Object.fromEntries(pl.plan.steps.map((id) => [id, pl.outcomes[id]?.type]));
+  const target = sendBackTarget(pl.plan.steps, types, index, pl.plan.sendBackTo ?? null);
+  const choices: { index: number; label: string }[] = [];
+  for (let i = index - 1; i >= 0; i--) {
+    const o = pl.outcomes[pl.plan.steps[i]!];
+    if (o && o.state === 'done' && outcomeKind(o.type) === 'agent')
+      choices.push({ index: i, label: `Step ${i + 1}: ${outcomeType(o.type)?.label ?? o.type}` });
+  }
+  return {
+    choices,
+    target:
+      target !== null && choices.some((c) => c.index === target)
+        ? target
+        : (choices[0]?.index ?? null),
   };
 }
 

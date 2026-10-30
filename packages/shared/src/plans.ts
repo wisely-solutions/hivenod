@@ -139,7 +139,8 @@ function stepUi(o: PlanOutcomeOf | null, atCursor: boolean, planState: PlanState
     case 'revising':
       return 'revising';
     case 'approved':
-      return atCursor ? 'running' : 'approved';
+      // At the cursor of a plan blocked by its third send back (slice 6): it waits for the member.
+      return atCursor ? (planState === 'blocked' ? 'blocked' : 'running') : 'approved';
     case 'proposed':
       return atCursor ? 'waitingForYou' : 'proposed';
   }

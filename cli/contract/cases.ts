@@ -2342,6 +2342,7 @@ function build(): ContractCase[] {
         })),
       };
     });
+  pv('blocked by send backs', PL([['reply', 'done'], ['build', 'approved']], 1, 'blocked'));
   pv(
     'mixed',
     PL(

@@ -164,6 +164,9 @@ func stepUI(o *OutcomeState, atCursor bool, planState string) string {
 	case "running", "revising":
 		return o.State
 	case "approved":
+		if atCursor && planState == "blocked" {
+			return "blocked"
+		}
 		if atCursor {
 			return "running"
 		}

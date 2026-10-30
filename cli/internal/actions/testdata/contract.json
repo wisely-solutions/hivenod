@@ -27977,6 +27977,66 @@
       "output": { "error": "No earlier agent step to send it back to." }
     },
     {
+      "name": "planView/blocked by send backs",
+      "action": "planView",
+      "input": {
+        "plan": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "steps": ["o1", "o2"],
+          "cursor": 1,
+          "state": "blocked"
+        },
+        "outcomes": {
+          "o1": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "reply",
+            "fields": { "text": "x" },
+            "state": "done",
+            "executor": "agentA",
+            "planId": "pl1"
+          },
+          "o2": {
+            "memberUid": "joao",
+            "threadId": "it1",
+            "type": "build",
+            "fields": {},
+            "state": "approved",
+            "executor": "agentA",
+            "planId": "pl1"
+          }
+        }
+      },
+      "output": {
+        "state": "blocked",
+        "cursor": 1,
+        "total": 2,
+        "through": 1,
+        "progress": "Step 2 of 2",
+        "steps": [
+          {
+            "number": 1,
+            "outcomeId": "o1",
+            "type": "reply",
+            "kind": "agent",
+            "label": "Reply",
+            "ui": "done",
+            "atCursor": false
+          },
+          {
+            "number": 2,
+            "outcomeId": "o2",
+            "type": "build",
+            "kind": "agent",
+            "label": "Build",
+            "ui": "blocked",
+            "atCursor": true
+          }
+        ]
+      }
+    },
+    {
       "name": "planView/mixed",
       "action": "planView",
       "input": {

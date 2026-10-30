@@ -48,6 +48,7 @@ import { ActionMenu, type MenuAction } from '../ui/menu';
 import { Dialog } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
 import { BuildItCard } from './BuildItCard';
+import { GateAsk } from './GateAsk';
 import { FieldView } from './OutcomeCard';
 import { usePlanActions } from './usePlanActions';
 import { RecheckButton, RecheckLine, StaleChip, useRecheck } from './Recheck';
@@ -57,6 +58,7 @@ import {
   planLive,
   planMain,
   planSummary,
+  sendBackChoices,
   STEP_UI_TEXT,
   stepTitle,
   BAR,
@@ -118,11 +120,11 @@ export function PlanPanel(props: PlanPanelProps) {
       .sort(compareVersions)
       .pop() ?? '';
 
-  const { counting, error, edit, approveAll, rejectAll, gate, retry, skip, stop } = usePlanActions(
-    wid,
-    thread,
-    pl,
-  );
+  const { counting, error, edit, approveAll, rejectAll, gate, retry, skip, stop, sendBack } =
+    usePlanActions(wid, thread, pl);
+  // Ask for changes on the gate at its turn (slice 6): the step it sends the plan back to.
+  const [askingGate, setAskingGate] = useState<string | null>(null);
+  const summaryVersion = thread.data.summary?.version;
 
   // Re-check (item bmNoIvvqKCdAorLSShE9): the plan's steps that have not run, checked again.
   const rc = useRecheck(wid, thread, props.now);
@@ -136,7 +138,20 @@ export function PlanPanel(props: PlanPanelProps) {
   const stepMenu = (s: PlanStepView): MenuAction[] => {
     if (!movable(s.index)) return [];
     const n = view.total;
+    const gateNow = s.kind === 'human' && s.atCursor && s.outcome?.state === 'proposed';
     return [
+      // A gate at its turn: Not approved stops the plan (out of the way, slice 6).
+      ...(gateNow
+        ? [
+            {
+              id: 'not-approved',
+              label: 'Not approved: stop the plan',
+              icon: X,
+              tone: 'danger' as const,
+              onSelect: () => gate(s, false),
+            },
+          ]
+        : []),
       ...(s.index > free
         ? [
             {
@@ -283,31 +298,80 @@ export function PlanPanel(props: PlanPanelProps) {
         ) : null}
         {s.kind === 'human' && o.state === 'proposed' && live ? (
           s.atCursor ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {counting ? (
-                <UndoButton countdown={counting} variant="approve" />
-              ) : (
-                <>
-                  <Button
-                    variant="approve"
-                    data-gate-approve=""
-                    onClick={() => gate(s, true)}
-                    leading={<Icon icon={Check} size={16} />}
-                  >
-                    Approve
-                  </Button>
-                  <Button variant="sendback" data-gate-reject="" onClick={() => gate(s, false)}>
-                    Not approved
-                  </Button>
-                </>
-              )}
-            </div>
+            <>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {counting ? (
+                  <UndoButton countdown={counting} variant="approve" />
+                ) : (
+                  <>
+                    <Button
+                      variant="approve"
+                      data-gate-approve=""
+                      onClick={() => gate(s, true, summaryVersion)}
+                      leading={<Icon icon={Check} size={16} />}
+                    >
+                      Approve
+                    </Button>
+                    {sendBackChoices(pl, s.index).target !== null ? (
+                      <Button
+                        variant="secondary"
+                        data-gate-ask-open=""
+                        aria-expanded={askingGate === s.outcomeId}
+                        onClick={() =>
+                          setAskingGate(askingGate === s.outcomeId ? null : s.outcomeId)
+                        }
+                      >
+                        Ask for changes
+                      </Button>
+                    ) : null}
+                  </>
+                )}
+              </div>
+              {askingGate === s.outcomeId &&
+              !counting &&
+              sendBackChoices(pl, s.index).target !== null ? (
+                <GateAsk
+                  choices={sendBackChoices(pl, s.index).choices}
+                  target={sendBackChoices(pl, s.index).target!}
+                  sentBefore={plan.data.sentBack?.n ?? 0}
+                  agent={agentName(thread.data.fetchedBy)}
+                  onCancel={() => setAskingGate(null)}
+                  onSend={(reason, to) => {
+                    setAskingGate(null);
+                    sendBack(reason, to);
+                  }}
+                />
+              ) : null}
+            </>
           ) : (
             <p className="mt-3 text-13 text-text-2">
               Waits for you when step {s.number} is reached; the steps after it run only once you
               approve.
             </p>
           )
+        ) : null}
+        {o.state === 'approved' && s.atCursor && plan.data.state === 'blocked' ? (
+          <div data-sent-back-blocked="" className="mt-3">
+            <p className="text-13 text-text-2 [overflow-wrap:anywhere]">
+              Sent back {plan.data.sentBack?.n ?? 0} times
+              {plan.data.sentBack?.reason ? `: “${plan.data.sentBack.reason}”` : ''}. It waits for
+              you before {agentName(thread.data.fetchedBy)} does it again.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {counting ? (
+                <UndoButton countdown={counting} variant="approve" />
+              ) : (
+                <>
+                  <Button variant="approve" data-retry="" onClick={retry}>
+                    Go on
+                  </Button>
+                  <Button variant="sendback" data-stop="" onClick={stop}>
+                    Stop plan
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
         ) : null}
         {o.state === 'failed' && plan.data.state === 'blocked' ? (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -551,17 +615,16 @@ export function PlanPanel(props: PlanPanelProps) {
                   </Button>
                 ) : null}
               </span>
-              <Button
-                variant="secondary"
-                aria-label="Reject plan"
-                disabled={!!counting}
-                onClick={rejectAll}
-              >
-                <Icon icon={X} size={16} />
-              </Button>
               <ActionMenu
                 label="Plan actions"
                 actions={[
+                  {
+                    id: 'reject',
+                    label: 'Reject plan',
+                    icon: X,
+                    tone: 'danger',
+                    onSelect: rejectAll,
+                  },
                   ...(view.total < 8
                     ? [
                         {
@@ -595,14 +658,28 @@ export function PlanPanel(props: PlanPanelProps) {
                   Add an approval step
                 </Button>
               ) : null}
-              <Button
-                variant="ghost"
-                className="ml-auto text-sendback"
-                disabled={!!counting}
-                onClick={rejectAll}
-              >
-                Reject plan
-              </Button>
+              <ActionMenu
+                label="Plan actions"
+                actions={[
+                  {
+                    id: 'reject',
+                    label: 'Reject plan',
+                    icon: X,
+                    tone: 'danger',
+                    onSelect: rejectAll,
+                  },
+                ]}
+                trigger={
+                  <Button
+                    variant="ghost"
+                    className="ml-auto"
+                    aria-label="Plan actions"
+                    disabled={!!counting}
+                  >
+                    <Icon icon={MoreHorizontal} size={16} />
+                  </Button>
+                }
+              />
             </>
           )}
         </div>
