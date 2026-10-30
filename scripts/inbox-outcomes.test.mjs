@@ -8,10 +8,12 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { OUTCOMES, outcomeRulesBlock } from '../packages/shared/src/outcomes.ts';
+import { PLAN_TEMPLATES } from '../packages/shared/src/planTemplates.ts';
 
 const root = join(import.meta.dirname, '..');
 const rulesFile = join(root, 'firestore.rules');
 const goFile = join(root, 'cli/internal/actions/outcomes.json');
+const goTemplates = join(root, 'cli/internal/actions/plantemplates.json');
 const update = process.env.UPDATE_GO_CONTRACT === '1';
 const hint = 'out of date: run UPDATE_GO_CONTRACT=1 pnpm test:scripts';
 
@@ -37,4 +39,16 @@ it('the Go CLI embeds the same registry', () => {
     /* missing: fails below */
   }
   expect(have === want, `${goFile} ${hint}`).toBe(true);
+});
+
+it('the Go CLI embeds the same plan templates (slice 6)', () => {
+  const want = `${JSON.stringify(PLAN_TEMPLATES, null, 2)}\n`;
+  if (update) writeFileSync(goTemplates, want);
+  let have = '';
+  try {
+    have = readFileSync(goTemplates, 'utf8');
+  } catch {
+    /* missing: fails below */
+  }
+  expect(have === want, `${goTemplates} ${hint}`).toBe(true);
 });

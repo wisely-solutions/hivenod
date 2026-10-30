@@ -19,7 +19,7 @@ func TestOutcomeKindsAndPlanTypes(t *testing.T) {
 			t.Errorf("%s is plan-only but not a plan type", typ.ID)
 		}
 	}
-	wantPlan := []string{"reply", "make_it_work", "handover", "snooze", "nudge", "approval"}
+	wantPlan := []string{"reply", "make_it_work", "handover", "snooze", "nudge", "shape", "build", "release", "approval"}
 	if got := PlanOutcomeTypes(); !reflect.DeepEqual(got, wantPlan) {
 		t.Errorf("plan types %v, want %v", got, wantPlan)
 	}
