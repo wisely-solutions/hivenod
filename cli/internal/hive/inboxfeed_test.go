@@ -348,7 +348,7 @@ func TestInboxFeedRecheck(t *testing.T) {
 	r.mu.Lock()
 	e := r.pushed[0]
 	r.mu.Unlock()
-	for _, w := range []string{"check \"Review move\" (thread t7) again", "calendar_free", "outcome_propose revises=<outcomeId>", "thread_recheck_done", "inbox_ask"} {
+	for _, w := range []string{"check \"Review move\" (thread t7) again", "outcome_propose revises=<outcomeId>", "thread_recheck_done", "inbox_ask"} {
 		if !strings.Contains(e.Content, w) {
 			t.Fatalf("%q lacks %q", e.Content, w)
 		}

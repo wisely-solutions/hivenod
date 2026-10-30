@@ -155,7 +155,7 @@ export const EVENT_TYPES = [
   'step.rejected',
   // Agent send-back (card KLCTVnX8)
   'item.sentBack',
-  // Calendar (Inbox item w9SAf): events and busy blocks written, no titles in the event
+  // Calendar (Inbox item w9SAf), removed in slice 5 of OE8Fm: old events only, never written now
   'calendar.changed',
 ] as const;
 export const eventType = z.enum(EVENT_TYPES);
@@ -177,7 +177,6 @@ export const AGENT_EVENT_TYPES = [
   'item.pathChanged',
   'step.proposed',
   'item.sentBack',
-  'calendar.changed',
 ] as const satisfies readonly EventType[];
 
 // ---------- users & workspaces ----------
@@ -276,8 +275,7 @@ export const DEFAULT_AGENT_PERMISSIONS: readonly AgentPermission[] = [
 ];
 
 /**
- * What an agent may work on (Inbox item fJnu6). Absent: projects (its `projectIds`), plus Inbox and
- * Calendar. `'inbox'`: Inbox and Calendar only, never development items (a personal assistant,
+ * What an agent may work on (Inbox item fJnu6). Absent: projects (its `projectIds`), plus Inbox. `'inbox'`: Inbox only, never development items (a personal assistant,
  * e.g. the personal agent in a "Personal" organization). Set when the agent is created, kept on
  * rotation, never changed afterwards; its `projectIds` stays `[]`. Enforced by firestore.rules
  * (`agentCanProject`), mirrored by `inboxOnly()` in packages/shared/src/agents.ts.
@@ -291,7 +289,7 @@ export const agentSchema = z.object({
   color: z.string().max(32),
   /** Allowed project ids, or '*' for every project. */
   projectIds: z.union([z.array(id).max(100), z.literal('*')]),
-  /** Optional (item fJnu6): 'inbox' = Inbox and Calendar only. Absent = projects too. */
+  /** Optional (item fJnu6): 'inbox' = Inbox only. Absent = projects too. */
   scope: agentScope.optional(),
   createdBy: uid,
   createdAt: timestamp,

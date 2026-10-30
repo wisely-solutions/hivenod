@@ -41,8 +41,8 @@ import {
   SINGLE_TYPES,
   OutcomeFieldError,
   outcomeType,
+  isRetiredOutcome,
 } from './outcomes';
-import { calendarEventId, calendarUpsert } from './calendar';
 import {
   PLAN_LIMITS,
   planThreadState,
@@ -257,10 +257,13 @@ export const REVISE_CHIP_LABELS: Record<ReviseChip, string> = {
   warmer: 'Warmer',
   availability: 'Add my availability',
 };
+/** The refusal for a retired outcome type (bookings went with Calendar, slice 5). */
+export const RETIRED_MESSAGE = (type: string) =>
+  `${type} was retired with Calendar: bookings are no longer made through Hivenod. Reject it, or propose a reply that suggests times.`;
+
 /** The outcome types with text worth revising (the others are a one-tap decision). */
 export const REVISABLE_TYPES: readonly string[] = [
   'reply',
-  'reply_book',
   'nudge',
   'handover',
   'make_it_work',
@@ -1100,6 +1103,7 @@ export function proposeOutcome(
   liveThread(t);
   const type = outcomeType(input.type);
   need(type !== null, `Unknown outcome type ${input.type}. Types: ${SINGLE_TYPES.join(', ')}.`);
+  need(type!.retired !== true, RETIRED_MESSAGE(input.type));
   need(
     type!.planOnly !== true,
     `${input.type} is only a step of a plan (plan_propose). Types alone: ${SINGLE_TYPES.join(', ')}.`,
@@ -1615,6 +1619,7 @@ export function approveOutcome(
     o.state === 'proposed' || o.state === 'revising',
     'Only a proposed outcome can be approved.',
   );
+  need(!isRetiredOutcome(o.type), RETIRED_MESSAGE(o.type));
   // A plan step: an agent step may be approved any time before it runs (it still runs only at
   // its turn); a person step (approval) only at its turn, and passing it moves the plan on.
   const pl = o.planId ? planFor(input.plan, o, input.outcomeId) : null;
@@ -1699,54 +1704,7 @@ export function approveOutcome(
         : []),
     ],
   );
-  if (o.type !== 'reply_book' && o.type !== 'book') return approval;
-  // The booking goes into the member's calendar in the same batch (Inbox item w9SAf).
-  const booking = bookingPlan(ctx, input.outcomeId, o.memberUid, fields);
-  return { eventId: approval.eventId, ops: [...approval.ops, ...booking.ops] };
-}
-
-/** The calendar event of an approved reply_book outcome: source hivenod, id from the outcome. */
-export function bookingEventId(memberUid: string, outcomeId: string): string {
-  return calendarEventId(memberUid, BOOKING_SOURCE, outcomeId);
-}
-export const BOOKING_SOURCE = 'hivenod';
-
-function bookingPlan(
-  ctx: ActionContext,
-  outcomeId: string,
-  memberUid: string,
-  fields: Readonly<Record<string, string | boolean>>,
-): ActionPlan {
-  const str = (k: string) => (typeof fields[k] === 'string' ? (fields[k] as string) : '');
-  const start = new Date(str('start'));
-  const end = new Date(str('end'));
-  need(
-    !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start,
-    'The meeting must end after it starts.',
-  );
-  const who = str('with');
-  const attendees = who
-    .split(/[,;]/)
-    .map((a) => a.trim())
-    .filter((a) => a !== '');
-  try {
-    return calendarUpsert(ctx, {
-      memberUid,
-      events: [
-        {
-          source: BOOKING_SOURCE,
-          sourceEventId: outcomeId,
-          title: str('title') || `Meeting with ${who}`,
-          start,
-          end,
-          attendees,
-        },
-      ],
-    });
-  } catch (e) {
-    if (e instanceof ActionError) throw new ActionError(`The booking: ${e.message}`);
-    throw e;
-  }
+  return approval;
 }
 
 /** The member turns a proposal down; with none left, the agent investigates again. */
@@ -1866,9 +1824,7 @@ export function approvePlan(
     outcomes: changes,
     ...(pl.plan.state === 'proposed' ? { state: 'active' as const } : {}),
   });
-  const bookings = ids
-    .filter((id) => ['reply_book', 'book'].includes(pl.outcomes[id]!.type))
-    .map((id) => bookingPlan(ctx, id, pl.plan.memberUid, pl.outcomes[id]!.fields));
+  for (const id of ids) need(!isRetiredOutcome(pl.outcomes[id]!.type), RETIRED_MESSAGE(pl.outcomes[id]!.type));
   const p = inboxPlan(
     ctx,
     'plan.approved',
@@ -1889,7 +1845,7 @@ export function approvePlan(
       ...planWrites(ctx, pl, next, null, eventId),
     ],
   );
-  return { eventId: p.eventId, ops: [...p.ops, ...bookings.flatMap((b) => b.ops)] };
+  return p;
 }
 
 /** Reject plan: every step not started is rejected, the plan stops and the agent re-plans. */
@@ -2273,6 +2229,7 @@ export function reviseOutcome(
         : `This outcome was already decided (${o.state}): your revision is not needed.`,
   );
   need(o.proposedBy === ctx.actor.id, 'Only the agent that proposed this outcome revises it.');
+  need(!isRetiredOutcome(o.type), RETIRED_MESSAGE(o.type));
   let fields: Record<string, string | boolean>;
   try {
     fields = cleanOutcomeFields(o.type, input.fields);
@@ -2376,7 +2333,7 @@ export function recheckPending(t: Pick<ThreadStateOf, 'recheck'>, nowMs: number)
 
 /**
  * The member asks the thread's home agent to check it again (Re-check): re-read the thread, the
- * new messages, the calendar and the context, then confirm or revise the open proposals (and
+ * new messages and the context, then confirm or revise the open proposals (and
  * the steps of a live plan that have not run). Only on a thread with something open (Your call
  * or waiting); a request the agent has not answered may be made again after 30 minutes. The
  * agent gets a `recheck` inbox event. Nothing runs by itself.

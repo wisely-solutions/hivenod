@@ -2,7 +2,6 @@ package hive
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -283,46 +282,6 @@ var ToolRuns = map[string]Run{
 			}
 		}
 		return c.ProposeStep(ctx, a.S("itemId"), p, a.S("project"))
-	},
-	"calendar_upsert": func(ctx context.Context, c *Client, a Args) (any, error) {
-		var events []CalendarEventArg
-		if arr, ok := a["events"].([]any); ok {
-			for _, e := range arr {
-				m, _ := e.(map[string]any)
-				ea := Args(m)
-				ev := CalendarEventArg{Source: ea.S("source"), SourceEventID: ea.S("sourceEventId"), Title: ea.SP("title"), Start: ea.S("start"), End: ea.S("end"), Attendees: ea.Strings("attendees")}
-				if v, ok := m["allDay"].(bool); ok {
-					ev.AllDay = &v
-				}
-				if v, ok := m["busyOnly"].(bool); ok {
-					ev.BusyOnly = &v
-				}
-				events = append(events, ev)
-			}
-		}
-		return c.CalendarUpsert(ctx, a.S("member"), events)
-	},
-	"calendar_delete": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.CalendarDelete(ctx, a.Strings("ids"), a.S("member"), a.S("source"), a.Strings("sourceEventIds"))
-	},
-	"calendar_free": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.CalendarFree(ctx, a.S("member"), a.S("from"), a.S("to"), a.F("minMinutes"))
-	},
-	"calendar_sync": func(ctx context.Context, c *Client, a Args) (any, error) {
-		b, _ := json.Marshal(map[string]any{"items": a["events"]})
-		feed, err := ParseFeed(b, "events")
-		if err != nil {
-			return nil, err
-		}
-		if t := a.S("nextSyncToken"); t != "" {
-			feed.NextSyncToken = &t
-		}
-		inc, _ := a["incremental"].(bool)
-		busy, _ := a["busyOnly"].(bool)
-		return c.CalendarSync(ctx, SyncArgs{Member: a.S("member"), Source: a.S("source"), From: a.S("from"), To: a.S("to"), Incremental: inc, BusyOnly: busy, Feed: feed})
-	},
-	"calendar_mirror": func(ctx context.Context, c *Client, a Args) (any, error) {
-		return c.CalendarMirror(ctx, MirrorArgs{OutcomeID: a.S("outcomeId"), SourceEventID: a.S("sourceEventId"), Source: a.S("source"), Start: a.S("start"), End: a.S("end"), Title: a.SP("title")})
 	},
 	"report_usage": func(ctx context.Context, c *Client, a Args) (any, error) {
 		u := Usage{TokensIn: *a.F("tokensIn"), TokensOut: *a.F("tokensOut"), TokensCached: a.F("tokensCached")}

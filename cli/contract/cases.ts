@@ -89,7 +89,6 @@ import {
   type Step,
 } from '../../packages/shared/src/index';
 
-import { calendarCases } from './calendarCases';
 import { summaryCases } from './summaryCases';
 
 export const NOW_MS = 1_800_000_000_000;
@@ -1598,6 +1597,7 @@ function build(): ContractCase[] {
     fields: { text: 'On it.', holding: true },
     note: ' Buying time ',
   });
+  // Retired with Calendar (item OE8FmrTaIxFVGcaeGG3N, slice 5): refused.
   propose('reply_book', AGENT, {
     type: 'reply_book',
     fields: {
@@ -1625,10 +1625,7 @@ function build(): ContractCase[] {
     fields: { start: '2026-11-05T10:00:00Z', end: '2026-11-05T11:00:00Z', with: 'Sam' },
   });
   propose('unknown field', AGENT, { fields: { text: 'x', bcc: 'all' } });
-  propose('missing field', AGENT, {
-    type: 'reply_book',
-    fields: { text: 'x', start: '2026-11-05T10:00:00Z', with: 'y' },
-  });
+  propose('missing field', AGENT, { type: 'handover', fields: { note: 'x' } });
   propose('field not text', AGENT, { fields: { text: 3 } });
   propose('field not boolean', AGENT, { fields: { text: 'x', holding: 'yes' } });
   propose('field too long', AGENT, { type: 'handover', fields: { to: 't'.repeat(301) } });
@@ -1769,9 +1766,9 @@ function build(): ContractCase[] {
       confidence: 'high',
     },
     {
-      type: 'book',
-      fields: { start: '2026-11-05T10:00:00+01:00', end: '2026-11-05T11:00:00+01:00', with: 'Sam' },
-      checks: [' Thu 10:00-11:00 free '],
+      type: 'nudge',
+      fields: { text: 'Any news on Thursday?' },
+      checks: [' Sam asked twice '],
     },
     { type: 'approval', fields: { what: ' New price list ', detail: 'A 10 → 12' } },
     { type: 'make_it_work', fields: { title: 'Update prices', project: 'Website' } },
@@ -1800,14 +1797,15 @@ function build(): ContractCase[] {
       { type: 'snooze', fields: { until: '2026-11-03T09:00:00+01:00' } },
       { type: 'nudge', fields: { text: 'Any news?' } },
       { type: 'handover', fields: { to: 'Maria' } },
+    ],
+  });
+  // Retired with Calendar (item OE8FmrTaIxFVGcaeGG3N, slice 5): no booking steps.
+  pp('booking step', AGENT, {
+    steps: [
+      STEPS[0]!,
       {
-        type: 'reply_book',
-        fields: {
-          text: 'Booked.',
-          start: '2026-11-05T10:00:00Z',
-          end: '2026-11-05T10:30:00Z',
-          with: 'Sam',
-        },
+        type: 'book',
+        fields: { start: '2026-11-05T10:00:00Z', end: '2026-11-05T10:30:00Z', with: 'Sam' },
       },
     ],
   });
@@ -2514,7 +2512,6 @@ function build(): ContractCase[] {
   search('limit', { filters: { limit: 2 } });
   search('limit 0 is the default', { filters: { limit: 0 } });
   search('limit over the top', { filters: { limit: 500 } });
-  calendarCases(act, pure, { agent: AGENT, human: HUMAN });
   summaryCases(act, pure, { agent: AGENT, other: OTHER, human: HUMAN });
 
   return cases;

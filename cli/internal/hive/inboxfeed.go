@@ -295,7 +295,7 @@ func InboxText(e InboxEventInfo) string {
 			lines = append(lines, "Only this step changes; the rest of the plan keeps its state.")
 		}
 	case "recheck":
-		lines = append(lines, "The person asked you to check "+t+" again: things may have changed since you proposed (new messages, their calendar, the facts).")
+		lines = append(lines, "The person asked you to check "+t+" again: things may have changed since you proposed (new messages, the facts).")
 	case "instruct":
 		asked := ""
 		if len(e.Chips) > 0 {
@@ -326,9 +326,9 @@ func InboxText(e InboxEventInfo) string {
 	case "revise":
 		what = fmt.Sprintf("revise it with outcome_propose revises=%s (same threadId and type): apply only what they asked and keep the rest; do not reject it or start a new outcome. If you cannot make the change, say why with inbox_ask on the thread", or(e.OutcomeID, "?"))
 	case "recheck":
-		what = "re-read the messages (new ones especially), calendar_free and the context; for each open proposal and each step of a live plan that has not run, keep it or write its next version with outcome_propose revises=<outcomeId> (only what changed), or ask with inbox_ask; then answer with thread_recheck_done (result still_good, revised or asked, with a one-line note)"
+		what = "re-read the messages (new ones especially) and the context; for each open proposal and each step of a live plan that has not run, keep it or write its next version with outcome_propose revises=<outcomeId> (only what changed), or ask with inbox_ask; then answer with thread_recheck_done (result still_good, revised or asked, with a one-line note)"
 	case "instruct":
-		what = fmt.Sprintf("do what they asked: investigate (inbox_note, calendar_free), then answer with thread_answer_instruction instructionId=%s: kind note (your answer in the note), ask (after inbox_ask), outcome (after outcome_propose, refId its outcomeId) or plan (after plan_propose, refId its planId)", or(e.InstructionID, "?"))
+		what = fmt.Sprintf("do what they asked: investigate (inbox_note), then answer with thread_answer_instruction instructionId=%s: kind note (your answer in the note), ask (after inbox_ask), outcome (after outcome_propose, refId its outcomeId) or plan (after plan_propose, refId its planId)", or(e.InstructionID, "?"))
 	case "summarize":
 		what = "re-read the thread and write its summary (thread_summary, baseVersion the summary version thread_read shows). Change nothing else"
 	case "nudge_due":
@@ -337,7 +337,7 @@ func InboxText(e InboxEventInfo) string {
 	if e.Update {
 		lines = append(lines, fmt.Sprintf("Thread %s is already being worked on: this adds to it (thread_read shows the current state).", e.ThreadID))
 	} else {
-		lines = append(lines, fmt.Sprintf(`Start with thread_read (threadId %s), then %s. Nothing is sent, booked or handed over without the person's approval. Inbox work does not count toward max_items and never holds up an item.`, e.ThreadID, what))
+		lines = append(lines, fmt.Sprintf(`Start with thread_read (threadId %s), then %s. Nothing is sent or handed over without the person's approval. Inbox work does not count toward max_items and never holds up an item.`, e.ThreadID, what))
 	}
 	return strings.Join(lines, "\n")
 }
