@@ -4,7 +4,7 @@ import { useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import { useReady } from '../auth/context';
 import { FILE_LIMIT, MAX_TITLE, fileKind, fileTooBigMessage } from '../capture/logic';
 import { readFile } from '../capture/readFile';
-import { Markdown } from '../process/markdown';
+import { Markdown } from '../ui/markdown';
 import { Button, IconButton } from '../ui/button';
 import { cn } from '../ui/cn';
 import { Input, Select, Textarea } from '../ui/form';

@@ -650,6 +650,8 @@ export interface ProposalPanelProps {
    * "May be out of date" chip; off where the plan panel shows them for the whole plan.
    */
   recheckUi?: boolean;
+  /** The thread page: E toggles Everything there, so Edit shows no key hint. */
+  noEditKey?: boolean;
 }
 
 /**
@@ -1206,7 +1208,7 @@ export const ProposalPanel = forwardRef<DecisionCardHandle, ProposalPanelProps>(
             <span className={editing ? undefined : 'max-sm:sr-only'}>
               {editing ? 'Cancel edit' : 'Edit'}
             </span>
-            {editing ? null : <Key>E</Key>}
+            {editing || props.noEditKey ? null : <Key>E</Key>}
           </Button>
           {revisable && revising ? (
             <Button
@@ -1438,12 +1440,15 @@ export function QuestionPanel({
   agentName,
   onDone,
   onSkip,
+  bare,
 }: {
   wid: string;
   thread: Row<InboxThread>;
   agentName: (id: string) => string;
   onDone: (label: string) => void;
   onSkip?: () => void;
+  /** The decision page's top card already shows who asks and the question. */
+  bare?: boolean;
 }) {
   const { actionContext, run } = useReady();
   const t: InboxThread = thread.data;
@@ -1469,14 +1474,20 @@ export function QuestionPanel({
     <>
       <div
         data-question=""
-        className="mt-3 rounded-card border border-gate/50 bg-gate-bg p-3.5 sm:p-4"
+        className={
+          bare ? 'mt-1' : 'mt-3 rounded-card border border-gate/50 bg-gate-bg p-3.5 sm:p-4'
+        }
       >
-        <p className="font-mono text-12 font-semibold uppercase tracking-[0.08em] text-gate-text">
-          {q ? `${agentName(q.by)} asks` : 'Question'}
-        </p>
-        <p className="mt-1.5 whitespace-pre-wrap text-15 leading-relaxed text-ink [overflow-wrap:anywhere]">
-          {q?.text}
-        </p>
+        {bare ? null : (
+          <>
+            <p className="font-mono text-12 font-semibold uppercase tracking-[0.08em] text-gate-text">
+              {q ? `${agentName(q.by)} asks` : 'Question'}
+            </p>
+            <p className="mt-1.5 whitespace-pre-wrap text-15 leading-relaxed text-ink [overflow-wrap:anywhere]">
+              {q?.text}
+            </p>
+          </>
+        )}
         {q?.options?.length ? (
           <div role="group" aria-label="Answers" className="mt-3 flex flex-wrap gap-2">
             {q.options.map((o) => (

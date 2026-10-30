@@ -115,8 +115,8 @@ test.describe('phone 390', () => {
     try {
       await setVersion(s, '0.2.159');
       await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
-      const sheet = page.locator('[data-agent-panel]');
-      await expect(sheet).toHaveAttribute('data-sheet', 'collapsed', { timeout: 20_000 });
+      const sheet = page.locator('[data-decision-page]');
+      await expect(sheet).toBeVisible({ timeout: 20_000 });
       await ask(sheet);
       await expect(sheet.locator('[data-cli-old]')).toContainText('needs a Hivenod update');
       await look(page, 'sheet-390');

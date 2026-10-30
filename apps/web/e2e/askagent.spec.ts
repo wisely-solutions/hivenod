@@ -100,7 +100,7 @@ test.describe('desktop 1440', () => {
     try {
       // The supplier visit: still investigating, nothing proposed, the last message is theirs.
       await page.goto(`/inbox/${s.wid}/t/${s.threads.visit}`);
-      const ask = box(page.locator('[data-agent-panel]'));
+      const ask = box(page.locator('[data-decision-page]'));
       await expect(ask).toBeVisible({ timeout: 20_000 });
       await expect(ask.locator('[data-ask-chip]')).toHaveCount(1);
       await expect(ask.locator('[data-ask-chip="draft_reply"]')).toHaveText('Draft a reply');
@@ -149,6 +149,7 @@ test.describe('desktop 1440', () => {
       await expect(page.locator(`[data-proposal="${oid}"]`)).toBeVisible();
       expect((await s.agent.outcome(oid)).state).toBe('proposed');
       // On the timeline: both.
+      await page.getByRole('button', { name: /^Everything/ }).click();
       const convo = page.getByRole('region', { name: 'Conversation' });
       await expect(convo).toContainText('You asked: “Tell Tom I am coming');
       await expect(convo).toContainText('Desk agent answered with a proposal');
@@ -166,7 +167,7 @@ test.describe('desktop 1440', () => {
     test.setTimeout(180_000);
     const s = await open(page);
     try {
-      const panel = page.locator('[data-agent-panel]');
+      const panel = page.locator('[data-decision-page]');
       const chips = box(panel).locator('[data-ask-chip]');
 
       // A meeting booked (the reply_book approved, Tuesday 10:00): Prepare for the meeting.
@@ -210,6 +211,8 @@ test.describe('desktop 1440', () => {
         lastMessageAt: new Date(NOW - 51 * H),
       });
       await page.goto(`/inbox/${s.client}/t/${s.threads.steer}`);
+      // A proposal waits: the box opens from "Ask Northwind agent…" under the top card.
+      await page.getByRole('button', { name: 'Ask Northwind agent…' }).click({ timeout: 20_000 });
       await expect(box(panel).locator('[data-ask-chip="recheck"]')).toBeVisible({
         timeout: 20_000,
       });
@@ -284,7 +287,7 @@ test.describe('phone 390', () => {
     const s = await open(page);
     try {
       await page.goto(`/inbox/${s.wid}/t/${s.threads.visit}`);
-      const ask = box(page.locator('[data-agent-panel]'));
+      const ask = box(page.locator('[data-decision-page]'));
       await expect(ask).toBeVisible({ timeout: 20_000 });
       await ask.locator('[data-ask-box]').fill('Summarize the visit plan.');
       await ask.getByRole('button', { name: /Ask/ }).click();
@@ -305,12 +308,12 @@ test.describe('phone 390', () => {
       );
       await look(page, 'answered-390');
 
-      // A thread with a decision: the bottom sheet shows the box once opened.
+      // A thread with a decision: the box opens from "Ask Desk agent…" under the top card.
       await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
-      const sheet = page.locator('[data-agent-panel]');
-      await expect(sheet).toHaveAttribute('data-sheet', 'collapsed', { timeout: 20_000 });
+      const sheet = page.locator('[data-decision-page]');
+      await expect(sheet).toBeVisible({ timeout: 20_000 });
       await expect(box(sheet)).toHaveCount(0);
-      await sheet.getByRole('button', { name: /Notes, outcomes and related/ }).click();
+      await sheet.getByRole('button', { name: 'Ask Desk agent…' }).click();
       await expect(box(sheet)).toBeVisible();
       await look(page, 'sheet-390');
     } finally {

@@ -107,7 +107,7 @@ test.describe('desktop 1440', () => {
     test.setTimeout(180_000);
     const s = await open(page);
     try {
-      const panel = page.locator('[data-agent-panel]');
+      const panel = page.locator('[data-decision-page]');
       // The slot has passed (the reply_book's start is before now).
       await adminUpdate(`workspaces/${s.wid}/inboxOutcomes/${s.outcomes.book}`, {
         fields: {
@@ -232,7 +232,7 @@ test.describe('desktop 1440', () => {
         'Confirm, then follow up.',
       );
       await page.goto(`/inbox/${s.wid}/t/${tid}`);
-      const plan = page.locator(`[data-agent-panel] [data-plan="${planId}"]`);
+      const plan = page.locator(`[data-decision-page] [data-plan="${planId}"]`);
       await plan.locator('[data-approve-plan]').click({ timeout: 20_000 });
       await page.waitForTimeout(UNDO_WAIT);
       await expect
@@ -268,8 +268,8 @@ test.describe('phone 390', () => {
     try {
       await written(s, s.threads.review, s.outcomes.book, 50, 51);
       await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
-      const sheet = page.locator('[data-agent-panel]');
-      await expect(sheet).toHaveAttribute('data-sheet', 'collapsed', { timeout: 20_000 });
+      const sheet = page.locator('[data-decision-page]');
+      await expect(sheet).toBeVisible({ timeout: 20_000 });
       await recheckFromMenu(sheet, page);
       await expect
         .poll(() => recheckState(s, s.threads.review), { timeout: UNDO_WAIT + 8000 })
@@ -282,8 +282,7 @@ test.describe('phone 390', () => {
       await expect(sheet.locator('[data-recheck-result="revised"]')).toBeVisible();
       await expect(sheet.getByRole('button', { name: /Send and book v2/ })).toBeInViewport();
       await look(page, 'v2-390');
-      // Opened: the stale flag of the thread page (2 days old) is gone with the new version.
-      await sheet.getByRole('button', { name: /Notes, outcomes and related/ }).click();
+      // The stale flag of the thread page (2 days old) is gone with the new version.
       await expect(sheet.locator('[data-stale]')).toHaveCount(0);
     } finally {
       await s.stop();

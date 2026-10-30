@@ -40,7 +40,7 @@ async function look(page: Page, name: string) {
   await page.emulateMedia({ colorScheme: 'light' });
 }
 
-const panel = (page: Page) => page.locator('[data-agent-panel]');
+const panel = (page: Page) => page.locator('[data-decision-page]');
 const field = async (path: string, name: string) =>
   (await adminDoc(path))?.fields[name] as
     | {
@@ -381,23 +381,24 @@ test.describe('phone 390', () => {
     }
   });
 
-  test('the plan is in the bottom sheet, its main button in reach', async ({ page }) => {
+  test('the plan is a fold; the top card holds its main button, in reach', async ({ page }) => {
     test.setTimeout(120_000);
     const { s, tid, planId, stepIds } = await seedPlan(page);
     try {
       await page.goto(`/inbox/${s.wid}/t/${tid}`);
-      const sheet = panel(page);
-      await expect(sheet).toHaveAttribute('data-sheet', 'collapsed', { timeout: 20_000 });
-      const plan = sheet.locator(`[data-plan="${planId}"]`);
+      const top = page.getByRole('region', { name: 'Decision' });
+      const main = top.locator('[data-approve-plan]');
+      await expect(main).toBeInViewport({ timeout: 20_000 });
+      await page.getByRole('button', { name: /^Plan/ }).click();
+      const plan = panel(page).locator(`[data-plan="${planId}"]`);
       await expect(plan.locator('li[data-step]')).toHaveCount(4);
-      const main = plan.locator('[data-approve-plan]');
-      await expect(main).toBeInViewport();
+      await page.evaluate(() => window.scrollTo(0, 0));
       await look(page, 'plan-390');
       await main.click();
       await page.waitForTimeout(UNDO_WAIT);
       await expect.poll(() => stateOf(s, stepIds[0]!)).toBe('approved');
       await s.agent.finishStep(planId, 'done');
-      const gate = plan.getByRole('button', { name: 'Approve step 2' });
+      const gate = top.locator('[data-gate-approve]');
       await expect(gate).toBeInViewport();
       await look(page, 'plan-gate-390');
     } finally {

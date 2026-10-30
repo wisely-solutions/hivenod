@@ -244,8 +244,8 @@ test.describe('phone 390', () => {
     const s = await open(page);
     try {
       await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
-      const sheet = page.locator('[data-agent-panel]');
-      await expect(sheet).toHaveAttribute('data-sheet', 'collapsed', { timeout: 20_000 });
+      const sheet = page.locator('[data-decision-page]');
+      await expect(sheet).toBeVisible({ timeout: 20_000 });
       const box = await askFor(sheet);
       await look(page, 'box-390');
       await box.getByRole('button', { name: /Ask agent/ }).click();
@@ -281,8 +281,8 @@ test.describe('phone 390', () => {
     const s = await open(page);
     try {
       await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
-      const sheet = page.locator('[data-agent-panel]');
-      await expect(sheet).toHaveAttribute('data-sheet', 'collapsed', { timeout: 20_000 });
+      const sheet = page.locator('[data-decision-page]');
+      await expect(sheet).toBeVisible({ timeout: 20_000 });
       await sheet.getByRole('button', { name: /^Edit/ }).click();
       await sheet.getByLabel('Reply', { exact: true }).fill('Tuesday 10:00 works, Sam.');
       await sheet.getByRole('button', { name: /Send and book/ }).click();

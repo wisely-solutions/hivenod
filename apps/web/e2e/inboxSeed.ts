@@ -25,6 +25,7 @@ import {
   answerInstruction,
   suggestChips,
   reviseOutcome,
+  writeSummary,
   type PlanInput,
   type PlanStepInput,
   type ActionContext,
@@ -232,6 +233,21 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
         }),
       );
       return oid;
+    },
+    /** Writes the thread's next summary (thread_summary, item OE8FmrTaIxFVGcaeGG3N). */
+    async summary(tid: string, content: Record<string, unknown>) {
+      const th = await thread(tid);
+      const v = (th as { summary?: { version: number } }).summary?.version ?? 0;
+      const p = writeSummary(ctx, {
+        threadId: tid,
+        thread: th,
+        current: v ? { version: v } : null,
+        baseVersion: v,
+        summary: content,
+        basis: { lastEventId: null, planCursor: null },
+      });
+      await run(p);
+      return p.version;
     },
     cal: (memberUid: string, events: Parameters<typeof calendarUpsert>[1]['events']) =>
       run(calendarUpsert(ctx, { memberUid, events })),

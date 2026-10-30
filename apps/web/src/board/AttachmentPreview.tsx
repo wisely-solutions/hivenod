@@ -1,5 +1,5 @@
 import type { Attachment } from '@hive/shared';
-import { Markdown } from '../process/markdown';
+import { Markdown } from '../ui/markdown';
 import { SandboxedHtml } from '../review/SandboxedHtml';
 
 /** Inline preview of one attachment. HTML runs in a sandbox without same-origin access. */

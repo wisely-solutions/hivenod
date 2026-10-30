@@ -7,7 +7,7 @@ import { Input, RadioCards, Textarea } from '../ui/form';
 import { Icon } from '../ui/icon';
 import { GateEditor, type Person } from './GateEditor';
 import { OUTPUT_CHOICES } from './logic';
-import { Markdown } from './markdown';
+import { Markdown } from '../ui/markdown';
 
 /** An agent that may be chosen for a step (allowed on the project, not revoked). */
 export interface AgentChoice {
