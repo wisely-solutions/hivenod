@@ -381,6 +381,7 @@ export function outcomeRulesBlock(): string {
     `      function outcomePlanTypes() { return ${list(entries.filter(([, t]) => t.plan).map(([k]) => k))}; }`,
     `      function outcomeHuman() { return ${list(entries.filter(([, t]) => t.kind === 'human').map(([k]) => k))}; }`,
     `      function outcomeImmediate() { return ${list(entries.filter(([, t]) => t.executor === 'none').map(([k]) => k))}; }`,
+    `      function outcomeLong() { return ${list(entries.filter(([, t]) => t.long).map(([k]) => k))}; }`,
     `      function outcomeAfter() { return ${map((t) => q(t.after.state))}; }`,
     `      function outcomeWaitingOn() { return ${map((t) => (t.after.waitingOn ? q(t.after.waitingOn) : 'null'))}; }`,
     // Retired types have no field lists: proposing, revising and approving them is refused.

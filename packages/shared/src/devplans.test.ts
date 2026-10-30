@@ -9,6 +9,7 @@ import {
   proposePlan,
   retryPlanStep,
   sendBackPlan,
+  stepProgress,
   type OutcomeStateOf,
   type PlanInput,
   type PlanOf,
@@ -419,5 +420,82 @@ describe('sendBackPlan', () => {
     expect(at(r.ops, O('d3'))).toBeUndefined();
     expect(at(r.ops, P)!.data).toMatchObject({ state: 'active' });
     expect(r.ops.at(-1)!.data).toMatchObject({ type: 'plan.retried', data: { outcomeId: 'd3' } });
+  });
+});
+
+describe('long steps (slice 6b)', () => {
+  it('Build starts with no item: running, the thread waits on the work', () => {
+    const pl = dev([D, D, A, Pr, A, Pr], 2);
+    const p = finishOutcome(agent, {
+      outcomeId: 'd3',
+      outcome: pl.outcomes.d3!,
+      thread: TH,
+      status: 'started',
+      plan: pl,
+    });
+    expect(at(p.ops, O('d3'))!.data).toMatchObject({ state: 'running' });
+    expect(at(p.ops, T)!.data).toMatchObject({ state: 'waiting', waiting: { on: 'item' } });
+    // Shape is not long: no start without an item.
+    const sh = dev([A, Pr, A, Pr, A, Pr], 0);
+    expect(() =>
+      finishOutcome(agent, {
+        outcomeId: 'd1',
+        outcome: sh.outcomes.d1!,
+        thread: TH,
+        status: 'started',
+        plan: sh,
+      }),
+    ).toThrow(/Give the item/);
+  });
+  it('outcome_done records the usage on its event', () => {
+    const pl = dev([D, D, 'running', Pr, A, Pr], 2);
+    const p = finishOutcome(agent, {
+      outcomeId: 'd3',
+      outcome: pl.outcomes.d3!,
+      thread: TH,
+      status: 'done',
+      plan: pl,
+      usage: { tokens: 120000, costEur: 1.234567 },
+    });
+    expect(p.ops.at(-1)!.data).toMatchObject({
+      data: { usage: { tokens: 120000, costEur: 1.2346 } },
+    });
+    expect(() =>
+      finishOutcome(agent, {
+        outcomeId: 'd3',
+        outcome: pl.outcomes.d3!,
+        thread: TH,
+        status: 'done',
+        plan: pl,
+        usage: { tokens: -1 },
+      }),
+    ).toThrow(/usage.tokens/);
+  });
+  it('step_progress: a line and a percent on the running long step, nothing else', () => {
+    const pl = dev([D, D, 'running', Pr, A, Pr], 2);
+    const base = { outcomeId: 'd3', outcome: pl.outcomes.d3!, thread: TH, plan: pl };
+    const p = stepProgress(agent, { ...base, line: '  Tests   green ', percent: 70 });
+    expect(p.ops.map((o) => o.path)).toEqual([O('d3'), `workspaces/w1/inboxEvents/${p.eventId}`]);
+    expect(at(p.ops, O('d3'))!.data).toMatchObject({
+      progress: { line: 'Tests green', percent: 70 },
+    });
+    expect(p.ops.at(-1)!.data).toMatchObject({
+      type: 'step.progress',
+      data: { line: 'Tests green', percent: 70 },
+    });
+    expect(() => stepProgress(agent, { ...base, line: ' ' })).toThrow(/where it stands/);
+    expect(() => stepProgress(agent, { ...base, line: 'x'.repeat(141) })).toThrow(/140/);
+    expect(() => stepProgress(agent, { ...base, line: 'x', percent: 101 })).toThrow(/percent/);
+    expect(() => stepProgress(other, { ...base, line: 'x' })).toThrow(/Only the agent/);
+    const ap = dev([D, D, A, Pr, A, Pr], 2);
+    expect(() =>
+      stepProgress(agent, {
+        outcomeId: 'd3',
+        outcome: ap.outcomes.d3!,
+        thread: TH,
+        plan: ap,
+        line: 'x',
+      }),
+    ).toThrow(/started first/);
   });
 });

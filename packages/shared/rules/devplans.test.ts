@@ -13,6 +13,7 @@ import {
   proposePlan,
   retryPlanStep,
   sendBackPlan,
+  stepProgress,
   type OutcomeStateOf,
   type PlanInput,
   type PlanOf,
@@ -353,5 +354,104 @@ describe('send back', () => {
     await ok(alice.run(retryPlanStep(alice.ctx, { ...pl, thread: await thread() })));
     expect(await snap(PL('pd1'))).toMatchObject({ state: 'active', cursor: 2 });
     await finish(2);
+  });
+});
+
+describe('long steps (slice 6b)', () => {
+  async function started(a: As = as(AGENTS.a)) {
+    const alice = await newDev();
+    await finish(0, a);
+    await gate(1, alice);
+    const pl = await load();
+    await ok(
+      a.run(
+        finishOutcome(a.ctx, {
+          outcomeId: 'dv3',
+          outcome: pl.outcomes.dv3!,
+          thread: await thread(),
+          status: 'started',
+          plan: pl,
+        }),
+      ),
+    );
+    return alice;
+  }
+  const progress = async (a: As, line: string, percent: number | null = null) => {
+    const pl = await load();
+    return stepProgress(a.ctx, {
+      outcomeId: 'dv3',
+      outcome: pl.outcomes.dv3!,
+      thread: await thread(),
+      line,
+      percent,
+      plan: pl,
+    });
+  };
+  it('Build starts with no item, reports progress, ends done from running', async () => {
+    await started();
+    expect(await snap(O('dv3'))).toMatchObject({ state: 'running' });
+    expect(await snap(T('nt1'))).toMatchObject({ state: 'waiting', waiting: { on: 'item' } });
+    const a = as(AGENTS.a);
+    await ok(a.run(await progress(a, 'Tests green, writing the PR', 70)));
+    expect(await snap(O('dv3'))).toMatchObject({
+      progress: { line: 'Tests green, writing the PR', percent: 70 },
+    });
+    await finish(2);
+    expect(await snap(PL('pd1'))).toMatchObject({ cursor: 3 });
+  });
+  it('progress only by its executor, on its running long step, within bounds', async () => {
+    await started();
+    const a = as(AGENTS.a);
+    const p = await progress(a, 'Halfway', 50);
+    // Another agent of the org, its own event and all: not its step.
+    await denied(
+      as(AGENTS.star).run(
+        p.ops.map((op) =>
+          op.path.includes('/inboxEvents/')
+            ? { ...op, data: { ...op.data, actor: { type: 'agent', id: AGENTS.star, name: 'S' } } }
+            : op,
+        ),
+      ),
+    );
+    await denied(
+      a.run(
+        p.ops.map((op) =>
+          op.path === O('dv3')
+            ? { ...op, data: { ...op.data, progress: { line: 'x', percent: 101, at: null } } }
+            : op,
+        ),
+      ),
+    );
+    const bad = p.ops.map((op) =>
+      op.path === O('dv3')
+        ? {
+            ...op,
+            data: {
+              ...op.data,
+              progress: { ...(op.data?.progress as object), percent: 101 },
+            },
+          }
+        : op,
+    );
+    await denied(a.run(bad));
+    const other = p.ops.map((op) =>
+      op.path === O('dv3') ? { ...op, data: { ...op.data, state: 'done' } } : op,
+    );
+    await denied(a.run(other));
+    await ok(a.run(p));
+  });
+  it('not on a step that is not running, nor a short one', async () => {
+    await newDev();
+    const a = as(AGENTS.a);
+    const pl = await load();
+    // Shape is approved, not started, and not long: no progress.
+    const p = stepProgress(a.ctx, {
+      outcomeId: 'dv1',
+      outcome: { ...pl.outcomes.dv1!, state: 'running', type: 'build' },
+      thread: await thread(),
+      line: 'x',
+      plan: pl,
+    });
+    await denied(a.run(p));
   });
 });
