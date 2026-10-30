@@ -73,6 +73,12 @@ dispatch, route and give back; the sub-agents do the work.
   the reason: redo it with that change. From a step you carry out, `plan_send_back` sends the plan
   back yourself (Release finds a bug: back to Build). The third send back of a plan blocks it
   until the person goes on.
+- Build and Release are long steps: they count toward `--max-items` (alias `--max-steps`), so a
+  second one waits until one ends. Report `outcome_done status: started` when you begin, then
+  `step_progress` (one line, a percent) at least every 10 minutes (the CLI also stamps it every
+  5 minutes while your session holds the step), then `outcome_done status: done` (with `usage`
+  when you know it). A step still running when a new session starts comes back as `carry_out`
+  with `why="resume"`: continue where `thread_read` shows it stands.
   **Summaries.** The person decides from each thread's summary, so the thread's sub-agent
   writes it (`thread_summary`, with the `baseVersion` that `thread_read` shows; 0 when none) as
   its last call after every inbox event that changed a thread you brought in (a message, a

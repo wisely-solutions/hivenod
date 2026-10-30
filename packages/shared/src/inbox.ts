@@ -1520,7 +1520,10 @@ export function stepProgress(
 ): ActionPlan {
   requireAgent(ctx);
   const o = input.outcome;
-  need(o.executor === ctx.actor.id, 'Only the agent that carries this step out reports its progress.');
+  need(
+    o.executor === ctx.actor.id,
+    'Only the agent that carries this step out reports its progress.',
+  );
   need(
     o.state === 'running' && outcomeType(o.type)?.long === true,
     'Progress is for a long step you started (outcome_done status started first).',
