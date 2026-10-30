@@ -3,6 +3,7 @@ package hive
 import (
 	"context"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -118,5 +119,65 @@ func TestStatusAskedOnceAndIntervalOff(t *testing.T) {
 	got := statuses(pushed)
 	if len(got) != 1 || got[0].Meta["why"] != "asked" || got[0].Meta["item_id"] != "i1" {
 		t.Fatal(got)
+	}
+}
+
+// Reach out (item KZ6O9): Hivenod's own status request ("hivenod") reaches parked items too, and
+// the session answers it itself (no model turn) when it saw a tool call on the item since the last
+// status; otherwise it is a status event with why "check".
+func TestReachSystemAsk(t *testing.T) {
+	s, pushed, tick, now := statusSetup(0)
+	var mu sync.Mutex
+	var wrote []string
+	s.autoStatus = func(_ context.Context, itemID, text, _ string) error {
+		mu.Lock()
+		wrote = append(wrote, itemID+": "+text)
+		mu.Unlock()
+		return nil
+	}
+	snapshot(s, "r1", nil, now())
+	snapshot(s, "r2", nil, now())
+	s.byRun("r2").parked = &parkState{reason: "release", at: now()}
+	// i1: the agent read it 12 minutes ago, after its last status (none): answered here.
+	s.Touched("i1", "read_item")
+	tick(12 * time.Minute)
+	ask := func(run string) func(it *model.Item) {
+		return func(it *model.Item) {
+			it.StatusAsk = &model.StatusAsk{RunID: run, ByUID: "hivenod", At: now()}
+		}
+	}
+	snapshot(s, "r1", ask("r1"), now())
+	// i2: parked, nothing seen since: the event goes to the model.
+	snapshot(s, "r2", ask("r2"), now())
+	time.Sleep(30 * time.Millisecond)
+	mu.Lock()
+	if !reflect.DeepEqual(wrote, []string{"i1: Alive, last: read_item 12 min ago"}) {
+		t.Fatal(wrote)
+	}
+	mu.Unlock()
+	got := statuses(pushed)
+	if len(got) != 1 || got[0].Meta["item_id"] != "i2" || got[0].Meta["why"] != "check" {
+		t.Fatal(got)
+	}
+	if want := `Hivenod asks for a status on "T2" (item_id i2)`; !strings.Contains(got[0].Content, want) {
+		t.Fatal(got[0].Content)
+	}
+	// A status after the tool call: the next request goes to the model, once.
+	tick(time.Minute)
+	st := &model.StatusUpdate{RunID: "r1", Text: "Tests", At: now(), By: "a"}
+	snapshot(s, "r1", func(it *model.Item) { it.StatusUpdate = st }, now())
+	tick(30 * time.Minute)
+	later := &model.StatusAsk{RunID: "r1", ByUID: "hivenod", At: now()}
+	for i := 0; i < 2; i++ {
+		snapshot(s, "r1", func(it *model.Item) { it.StatusUpdate, it.StatusAsk = st, later }, now())
+	}
+	time.Sleep(30 * time.Millisecond)
+	if got := statuses(pushed); len(got) != 2 || got[1].Meta["item_id"] != "i1" {
+		t.Fatal(got)
+	}
+	// The status tool itself is not "work seen".
+	s.Touched("i1", "status")
+	if h := s.byItem("i1"); h.lastTool != "read_item" {
+		t.Fatal(h.lastTool)
 	}
 }

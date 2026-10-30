@@ -18,6 +18,8 @@ import { Engine } from './engine';
 import { appendEnv, notifyEnvPath, readEnvFile, secretsDir } from './env';
 import { makePushSender, newVapidKeys } from './push';
 import { firestorePorts, watchAll } from './store';
+import { ReachOut } from './reach';
+import { firestoreReachPorts } from './reachStore';
 import { TelegramApi, TelegramBot } from './telegram';
 import { notifyPath } from '@hive/shared';
 import { describePersonalOrg, parsePersonalOrgArgs, personalOrg } from './personalOrg';
@@ -127,7 +129,9 @@ async function run() {
     clearTimeout(timer);
     timer = setTimeout(() => void sweep(), 2000);
   };
-  const stopWatch = watchAll(db, engine, kick, log);
+  // Reach out (item KZ6O9): one timer per item or thread step in agent hands, fed by the listeners.
+  const reach = new ReachOut(firestoreReachPorts(db, engine, log));
+  const stopWatch = watchAll(db, engine, kick, log, reach);
   const every = setInterval(() => void sweep(), 60_000);
   void bot?.poll();
   log(
@@ -138,6 +142,7 @@ async function run() {
     clearInterval(every);
     bot?.stop();
     stopWatch();
+    reach.stop();
     process.exit(0);
   };
   process.on('SIGINT', stop);

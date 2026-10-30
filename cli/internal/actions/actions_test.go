@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wisely-solutions/hivenod/cli/internal/model"
 )
@@ -106,5 +107,30 @@ func TestMaybe(t *testing.T) {
 	}
 	if u := usageFields(RunUsage{Model: Null[string]()}); u["model"] != nil {
 		t.Errorf("null: %v", u)
+	}
+}
+
+// Item KZ6O9: the 30 s gap between two statuses is per item: a status on one item right after one
+// on another item is fine; a second one on the same item within 30 s is refused.
+func TestReportStatusGapPerItem(t *testing.T) {
+	now := time.UnixMilli(5_000_000)
+	ctx := Ctx{WorkspaceID: "w1", Actor: Actor{Type: "agent", ID: "a", Name: "A"}, Now: func() time.Time { return now }}
+	item := func(run string, last *time.Time) model.Item {
+		it := model.Item{Status: "working", Claim: &model.Claim{RunID: run, AgentUID: "a", HeartbeatAt: now}}
+		if last != nil {
+			it.StatusUpdate = &model.StatusUpdate{RunID: run, Text: "x", At: *last, By: "a"}
+		}
+		return it
+	}
+	recent := now.Add(-10 * time.Second)
+	if _, err := ReportStatus(ctx, ReportStatusInput{ProjectID: "p", ItemID: "i2", Item: item("r2", nil), Text: "B"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReportStatus(ctx, ReportStatusInput{ProjectID: "p", ItemID: "i1", Item: item("r1", &recent), Text: "A"}); err == nil {
+		t.Fatal("same item within 30 s should be refused")
+	}
+	old := now.Add(-31 * time.Second)
+	if _, err := ReportStatus(ctx, ReportStatusInput{ProjectID: "p", ItemID: "i1", Item: item("r1", &old), Text: "A"}); err != nil {
+		t.Fatal(err)
 	}
 }

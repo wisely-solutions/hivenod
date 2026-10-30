@@ -18,6 +18,7 @@ import {
   planView,
   recheckable,
   staleReason,
+  stepSilentText,
   type InboxOutcome,
   type InboxPlan,
   type InboxThread,
@@ -27,6 +28,7 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  Clock,
   GripVertical,
   MoreHorizontal,
   Plus,
@@ -578,6 +580,15 @@ export function PlanPanel(props: PlanPanelProps) {
                   <span className="w-9" aria-hidden />
                 )}
               </div>
+              {row && stepSilentText(row.data, props.now) ? (
+                // Reach out (item KZ6O9): the agent did not answer Hivenod's status request.
+                <div className="mt-1 pl-9 sm:pl-14">
+                  <Pill tone="sendback" data-testid="silence-flag">
+                    <Icon icon={Clock} size={12} />
+                    {stepSilentText(row.data, props.now)}
+                  </Pill>
+                </div>
+              ) : null}
               {open ? <div className="pl-9 sm:pl-14">{body(s)}</div> : null}
             </li>
           );

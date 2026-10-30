@@ -21,7 +21,53 @@ a service account that can read and write Firestore, and its own secrets file.
   service worker (`apps/web/public/push-sw.js`) drops a push stamped more than 5 minutes ago, so a
   device that wakes up does not get a burst of old pop-ups.
 
+- Reach out (item KZ6O9, `src/reach.ts`): see below.
+
 Not built: the daily email digest (needs an email provider, a spend card).
+
+## Reach out: work in agent hands that goes quiet
+
+Every item an agent holds (held with a live heartbeat, parked, or a stale claim) and every Inbox
+thread step in an agent's hands (an approved outcome it carries out, a plan's only at its turn, or a
+running long step) gets **one in-memory timer** to its next due time (`reachNext` in
+`packages/shared/src/reachout.ts`):
+
+1. **Quiet** 30 min (parked: 2 h) without activity (a status, a tool write, a log line, the run's
+   start) → a status request: `statusAsk` by `hivenod` on the item (or the outcome). The agent's
+   channel delivers it as `kind="status"` (`why="check"`, parked items too) or, for a step, as an
+   inbox event with `reason="status"`. When the channel session saw the agent call a tool on the
+   item since its last status, it answers itself ("Alive, last: read_item 12 min ago"): no model
+   turn. One request at a time: a new one only after activity answered the last.
+2. **No answer** 10 min after a request (Hivenod's or a person's) → the silent flag (`silence` on
+   the item or outcome: since, asked, agent, told), shown as "Hive silent for 41 min" on the card,
+   the item, the thread's decision top and plan step, and Today's "Agents working"; and **one**
+   message to the people who decide next (a thread's member) with **Ping again · Release to queue ·
+   Stop · Open** (a thread step: Ping again · Open). At most one reminder per 2 h. Any activity
+   clears the flag.
+3. **Stale claim** (no heartbeat for 10 min) whose agent has no live session → back to the queue
+   30 min later (`releaseStale` as `hivenod`, plus a note on the item). With a live session it is
+   checked again 30 min later.
+
+A project with "Flag silence after: never" is left alone. The buttons apply the app's own plans with
+the Admin SDK (`src/reachDecide.ts`): Ping again for anyone on the project (at most once per 2 min),
+Release and Stop only for those who may stop work.
+
+**Cost** (no scans, no polling; writes only on transitions; free quota 50,000 reads and 20,000
+writes a day):
+
+| Per item or step, per day                     | Reads                     | Writes                     |
+| --------------------------------------------- | ------------------------- | -------------------------- |
+| Busy agent that writes (status, notes…)       | 0 extra (listener exists) | 0                          |
+| Busy agent that only logs                     | ≤ 48 checks × ~8 ≈ 400    | 0                          |
+| One quiet period answered                     | ~8                        | 1 (the request)            |
+| Silent all day                                | ~100                      | ~26 (flag, reminders)      |
+| Stale claim released                          | 1 (transaction) + 1       | 4 (item, run, event, note) |
+| Running long step (CLI stamps it every 5 min) | 288 (outcomes listener)   | 0                          |
+
+The working-items listener already existed (item AzveC: one read per heartbeat). The old 60-second
+silence pass, which read the log and events about once a minute for every silent-looking item
+(~3,000 reads a day each), is gone. LLM: at most one model turn per 30 minutes of real quiet (2 h
+parked), none while flagged, none when the session answers itself. Host: one `setTimeout` per item.
 
 ## Secrets (files, never in the repo)
 
@@ -76,6 +122,7 @@ WantedBy=default.target
 | `config/notify`                                  | notifier                     | VAPID public key and bot name (public)                    |
 | `workspaces/{wid}/notified/{key}`                | notifier                     | what was already sent per gate/question                   |
 | `telegramActions/{code}`, `telegramChats/{chat}` | notifier only                | button targets (no rule: clients cannot reach them)       |
+| items' and outcomes' `statusAsk`, `silence`      | notifier (Admin SDK)         | reach out: Hivenod's status request and the silent flag   |
 
 ## Tests
 
