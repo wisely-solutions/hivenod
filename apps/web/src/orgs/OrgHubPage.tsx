@@ -15,7 +15,7 @@ const row =
 /**
  * The organization hub (item icVly, model A): the phone's fifth tab. The organization picked in the
  * switcher, with its projects, agents, activity, insights and settings, and the switcher itself.
- * Today, Inbox and Calendar stay across all organizations.
+ * Today and Inbox stay across all organizations.
  */
 export function OrgHubPage() {
   const { session } = useReady();
@@ -28,7 +28,7 @@ export function OrgHubPage() {
       <PageHeader title="Organization" />
       <OrgSwitcher detailed />
       <p className="mt-2 text-13 text-text-2">
-        Switching changes this tab only. Today, Inbox and Calendar always show every organization.
+        Switching changes this tab only. Today and Inbox always show every organization.
       </p>
 
       <section aria-labelledby="hub-projects" className="mt-6">

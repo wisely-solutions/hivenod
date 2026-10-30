@@ -13,12 +13,12 @@ import { createAgentFlow } from './flow';
 export interface AgentFieldsValue {
   name: string;
   color: number;
-  /** 'inbox': Inbox and Calendar only, no projects (item fJnu6). */
+  /** 'inbox': Inbox only, no projects (item fJnu6). */
   scope: 'all' | 'some' | 'inbox';
   chosen: string[];
 }
 
-/** What the fields create: the projects and, for an Inbox and Calendar agent, its scope. */
+/** What the fields create: the projects and, for an Inbox-only agent, its scope. */
 export function agentScopeInput(v: Pick<AgentFieldsValue, 'scope' | 'chosen'>): {
   projectIds: string[] | '*';
   scope?: 'inbox';
@@ -115,9 +115,9 @@ export function AgentFields({
             },
             {
               value: 'inbox',
-              title: 'Inbox and Calendar only',
+              title: 'Inbox only',
               description:
-                'A personal assistant: it syncs calendars and brings in requests, never development work. This cannot be changed later.',
+                'A personal assistant: it brings in requests, never development work. This cannot be changed later.',
             },
           ]}
         />

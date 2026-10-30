@@ -39,10 +39,7 @@ const TH: ThreadStateOf = {
 };
 const STEPS = [
   { type: 'reply', fields: { text: 'Thursday works' } },
-  {
-    type: 'book',
-    fields: { start: '2026-11-05T10:00:00Z', end: '2026-11-05T11:00:00Z', with: 'Sam' },
-  },
+  { type: 'nudge', fields: { text: 'Any news on Thursday?' } },
   { type: 'approval', fields: { what: 'The price-list change' } },
   { type: 'make_it_work', fields: { title: 'Update the price list', project: 'Website' } },
   { type: 'reply', fields: { text: 'Done' } },
@@ -112,11 +109,11 @@ describe('proposePlan', () => {
       proposedBy: 'agentA',
     });
     expect(at(p.ops, O('s2'))!.data).toMatchObject({
-      type: 'book',
+      type: 'nudge',
       planId: 'p1',
       executor: 'agentA',
       state: 'proposed',
-      fields: { start: '2026-11-05T10:00:00.000Z' },
+      fields: { text: 'Any news on Thursday?' },
     });
     expect(at(p.ops, O('s3'))!.data).toMatchObject({ type: 'approval', executor: null });
     expect(at(p.ops, T)!.data).toMatchObject({ state: 'yourCall', waiting: null });
@@ -145,7 +142,7 @@ describe('proposePlan', () => {
 });
 
 describe('approvePlan', () => {
-  it('approves the proposed agent steps only, and books the booking step', () => {
+  it('approves the proposed agent steps only, and books nothing (Calendar removed)', () => {
     const pl = plan(['proposed', 'proposed', 'proposed', 'revising', 'proposed'], 0, 'proposed');
     const p = approvePlan(joao, { ...pl, thread: TH });
     const approved = p.ops.filter((o) => o.path.includes('inboxOutcomes')).map((o) => o.path);
@@ -156,9 +153,16 @@ describe('approvePlan', () => {
     });
     expect(at(p.ops, P)!.data).toMatchObject({ state: 'active' });
     expect(at(p.ops, T)!.data).toMatchObject({ state: 'yourCall' });
-    expect(
-      p.ops.some((o) => o.path.includes('/calendar/') || o.path.includes('calendarEvents')),
-    ).toBe(true);
+    expect(p.ops.some((o) => o.path.includes('/calendar/') || o.path.includes('/busy/'))).toBe(
+      false,
+    );
+  });
+  it('refuses a plan with an old booking step (retired with Calendar)', () => {
+    const pl = plan(Array(5).fill('proposed'), 0, 'proposed');
+    const outcomes = { ...pl.outcomes, s2: { ...pl.outcomes.s2!, type: 'book' } };
+    expect(() => approvePlan(joao, { ...pl, outcomes, thread: TH })).toThrow(
+      /retired with Calendar/,
+    );
   });
   it('only the member, and not twice', () => {
     const pl = plan(Array(5).fill('proposed'), 0, 'proposed');

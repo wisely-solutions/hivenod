@@ -3,29 +3,22 @@
     {
       "tool": "list_work",
       "ok": false,
-      "out": "This agent is limited to Inbox and Calendar (scope \"inbox\"): it cannot work on development items. Use the calendar_* and inbox tools."
+      "out": "This agent is limited to Inbox (scope \"inbox\"): it cannot work on development items. Use the inbox tools."
     },
     {
       "tool": "claim",
       "ok": false,
-      "out": "This agent is limited to Inbox and Calendar (scope \"inbox\"): it cannot work on development items. Use the calendar_* and inbox tools."
+      "out": "This agent is limited to Inbox (scope \"inbox\"): it cannot work on development items. Use the inbox tools."
     },
     {
       "tool": "read_item",
       "ok": false,
-      "out": "This agent is limited to Inbox and Calendar (scope \"inbox\"): it cannot work on development items. Use the calendar_* and inbox tools."
+      "out": "This agent is limited to Inbox (scope \"inbox\"): it cannot work on development items. Use the inbox tools."
     },
     {
       "tool": "calendar_upsert",
-      "ok": true,
-      "out": {
-        "ids": [
-          "alice_Z29vZ2xlCmcx"
-        ],
-        "member": "alice",
-        "note": "Saved 1 event in this organization's calendar of the member, with their busy time (no details) for the other organizations they are in. The same source event id updates the same event.",
-        "upserted": 1
-      }
+      "ok": false,
+      "out": "MCP error -32602: Tool calendar_upsert not found"
     },
     {
       "tool": "inbox_add",
@@ -96,25 +89,6 @@
       }
     ],
     "workspaces/w1/events": [
-      {
-        "actor": {
-          "id": "<agent>",
-          "name": "Research agent",
-          "type": "agent"
-        },
-        "at": "<ts>",
-        "data": {
-          "deleted": 0,
-          "memberUids": [
-            "alice"
-          ],
-          "upserted": 1
-        },
-        "itemId": null,
-        "projectId": null,
-        "runId": null,
-        "type": "calendar.changed"
-      },
       {
         "actor": {
           "id": "owner",
@@ -188,36 +162,6 @@
         "subjectId": null,
         "threadId": "it1fbecb63f276b29f37e15f82",
         "type": "inbox.added"
-      }
-    ],
-    "workspaces/w1/calendar": [
-      {
-        "allDay": false,
-        "attendees": [],
-        "busyOnly": false,
-        "deleted": false,
-        "end": "<ts>",
-        "lastEventId": "<id>",
-        "memberUid": "alice",
-        "source": "google",
-        "sourceEventId": "g1",
-        "start": "<ts>",
-        "title": "Dentist",
-        "updatedAt": "<ts>",
-        "updatedBy": {
-          "id": "<agent>",
-          "type": "agent"
-        }
-      }
-    ],
-    "users/alice/busy": [
-      {
-        "deleted": false,
-        "end": "<ts>",
-        "lastEventId": "<id>",
-        "start": "<ts>",
-        "updatedAt": "<ts>",
-        "workspaceId": "w1"
       }
     ],
     "workspaces/w1/projects": [

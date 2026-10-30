@@ -448,7 +448,7 @@ test('connect a terminal: the code from hivenod pair creates the agent and hands
   for (const c of seen.consoleText) expect(c).not.toContain('hive_agt_');
 });
 
-test('connect an Inbox and Calendar agent (item fJnu6): no projects, refused on development items', async ({
+test('connect an Inbox-only agent (item fJnu6): no projects, refused on development items', async ({
   page,
 }, info) => {
   const { wid } = await enter(page, 'Petra Personal');
@@ -457,7 +457,7 @@ test('connect an Inbox and Calendar agent (item fJnu6): no projects, refused on 
   const main = page.getByRole('main');
   await expect(main.getByLabel('Terminal waiting')).toBeVisible();
   await main.getByLabel('Name').fill('Personal');
-  await main.getByRole('radio', { name: /Inbox and Calendar only/ }).check();
+  await main.getByRole('radio', { name: /Inbox only/ }).check();
   // No projects to pick: none are needed.
   await expect(main.getByRole('checkbox', { name: 'Blog' })).toHaveCount(0);
   await expectNoHorizontalScroll(page);
@@ -487,7 +487,7 @@ test('connect an Inbox and Calendar agent (item fJnu6): no projects, refused on 
   // Its page says what it may do; there are no project or step pickers.
   await page.goto(`/agents/${p.agentUid}`);
   await expect(page.getByRole('heading', { name: 'Personal' })).toBeVisible();
-  await expect(page.getByTestId('inbox-only')).toContainText('Inbox and Calendar only');
+  await expect(page.getByTestId('inbox-only')).toContainText('Inbox only');
   await expect(page.getByRole('group', { name: 'Projects' })).toBeHidden();
   await expectNoHorizontalScroll(page);
   if (process.env.SHOTS_DIR)
@@ -496,7 +496,7 @@ test('connect an Inbox and Calendar agent (item fJnu6): no projects, refused on 
       fullPage: true,
     });
   await page.goto('/agents');
-  await expect(page.getByText('Inbox and Calendar only').first()).toBeVisible();
+  await expect(page.getByText('Inbox only').first()).toBeVisible();
 });
 
 test('an org with no agents: the empty state opens the Connect page', async ({ page }) => {

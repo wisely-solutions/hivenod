@@ -1,5 +1,5 @@
 /**
- * The briefing bar on a thread opened from Today or the calendar (item kt3E7u9EliL3q2veDDI0,
+ * The briefing bar on a thread opened from Today (item kt3E7u9EliL3q2veDDI0,
  * design 2.2): "‹ Today · ▬▬▭▭▭ 2 of 6 · Next: <title> ›".
  */
 import { Link } from '@tanstack/react-router';
@@ -22,7 +22,6 @@ export function BriefingBar({
   index: number;
 }) {
   const next = index >= 0 ? list[index + 1] : list[0];
-  const back = from === 'calendar' ? 'Calendar' : 'Today';
   return (
     <nav
       aria-label="Briefing"
@@ -30,11 +29,11 @@ export function BriefingBar({
       className="mb-4 flex min-h-12 flex-wrap items-center gap-x-4 gap-y-1 rounded-card border border-line bg-surface px-3 py-1.5 shadow-e1"
     >
       <Link
-        to={from === 'calendar' ? '/calendar' : '/'}
+        to="/"
         className="inline-flex min-h-11 items-center gap-1 rounded-btn pr-1 text-14 font-semibold text-ink foc:outline-2 foc:outline-focus"
       >
         <Icon icon={ChevronLeft} size={16} />
-        {back}
+        Today
       </Link>
       {list.length ? (
         <span className="flex items-center gap-2 text-13 text-text-2">

@@ -1,5 +1,5 @@
 import { applyPlan } from '@hive/shared/firestore';
-import { beginOrgDelete, calendarPaths, paths, type ActionContext } from '@hive/shared';
+import { beginOrgDelete, paths, type ActionContext } from '@hive/shared';
 import { collection, getCountFromServer, getDocs, limit, query, where } from 'firebase/firestore';
 import { db } from '../lib/db';
 
@@ -46,11 +46,12 @@ async function empty(
 /**
  * Empties the organization's calendar and, with each event, its busy block in the member's own
  * store (users/{uid}/busy/{wid}_{eventId}): the rules let the deleting admin remove those while the
- * organization is flagged. An event id starts with its member's uid (no underscore in a uid). A
+ * organization is flagged (Calendar itself was removed in slice 5; its old data still goes with
+ * the organization). An event id starts with its member's uid (no underscore in a uid). A
  * block that is already gone is deleted again harmlessly, so a resumed walk is safe.
  */
 async function purgeCalendar(store: TreeStore, wid: string, count: { n: number }) {
-  const col = calendarPaths.events(wid);
+  const col = `${paths.workspace(wid)}/calendar`;
   for (;;) {
     const ids = await store.list(col, BATCH / 2);
     if (ids.length === 0) return;

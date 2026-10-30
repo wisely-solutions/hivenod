@@ -1104,7 +1104,7 @@ func (c *Client) ThreadDue(ctx context.Context, id string, due, reason *string) 
 }
 
 // RecheckNext is thread_read's next while the person's re-check request waits for this agent.
-const RecheckNext = "The person asked you to check this thread again: re-read the messages (any new ones especially), calendar_free and the context, then for each open proposal and each plan step that has not run either keep it, or write its next version with outcome_propose revises=<outcomeId> (only what changed), or ask with inbox_ask; finish with thread_recheck_done (still_good, revised or asked)."
+const RecheckNext = "The person asked you to check this thread again: re-read the messages (any new ones especially) and the context, then for each open proposal and each plan step that has not run either keep it, or write its next version with outcome_propose revises=<outcomeId> (only what changed), or ask with inbox_ask; finish with thread_recheck_done (still_good, revised or asked)."
 
 // ThreadRecheckDone answers the person's re-check request (thread_recheck_done).
 func (c *Client) ThreadRecheckDone(ctx context.Context, id, result string, note *string) (map[string]any, error) {

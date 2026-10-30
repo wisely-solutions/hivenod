@@ -1,7 +1,6 @@
 import {
   Activity,
   Bot,
-  CalendarDays,
   ChartNoAxesColumn,
   FolderKanban,
   Mails,
@@ -11,7 +10,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 
 export type NavPath =
-  '/' | '/inbox' | '/projects' | '/calendar' | '/insights' | '/activity' | '/agents' | '/account';
+  '/' | '/inbox' | '/projects' | '/insights' | '/activity' | '/agents' | '/account';
 
 export interface NavEntry {
   to: NavPath;
@@ -25,7 +24,7 @@ export interface NavEntry {
   short?: string;
   /**
    * Which sidebar zone it sits in (item icVly, model A): `you` spans every organization (Today,
-   * Inbox, Calendar); `org` belongs to the organization picked in the switcher.
+   * Inbox); `org` belongs to the organization picked in the switcher.
    */
   zone: 'you' | 'org';
 }
@@ -34,7 +33,6 @@ export const NAV: NavEntry[] = [
   // Today (item kt3E7) replaced Needs you: same route, badge and `g n`.
   { to: '/', label: 'Today', icon: Sun, badge: true, key: 'n', zone: 'you' },
   { to: '/inbox', label: 'Inbox', icon: Mails, key: 'm', zone: 'you' },
-  { to: '/calendar', label: 'Calendar', icon: CalendarDays, key: 'c', zone: 'you' },
   // "All projects" listed only the selected organization's: now plainly "Projects" (item icVly).
   { to: '/projects', label: 'Projects', icon: FolderKanban, key: 'p', zone: 'org' },
   { to: '/agents', label: 'Agents', icon: Bot, key: 'e', zone: 'org' },
@@ -57,11 +55,11 @@ export const ME: NavEntry = {
 };
 
 /**
- * The phone tabs around the + (items kt3E7, icVly): Today · Inbox · + · Calendar · <the
+ * The phone tabs (items kt3E7, icVly; Calendar removed in OE8Fm slice 5): Today · Inbox · + · <the
  * organization>. The last one is drawn by the tab bar itself (the organization's mark and name)
  * and opens the organization hub (/org). Your Account sits under the avatar in the top bar.
  */
-export const TABS: NavEntry[] = [NAV[0]!, NAV[1]!, NAV[2]!];
+export const TABS: NavEntry[] = [NAV[0]!, NAV[1]!];
 
 /** Paths that belong to the organization tab: the hub and every organization page. */
 export function isOrgPath(path: string): boolean {

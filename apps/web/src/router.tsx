@@ -216,13 +216,13 @@ const orgHubRoute = createRoute({
   path: '/org',
   component: lazyRouteComponent(() => import('./orgs/OrgHubPage'), 'OrgHubPage'),
 });
-const calendarRoute = createRoute({
+// Calendar was removed (item OE8FmrTaIxFVGcaeGG3N, slice 5): an old link or bookmark goes to Today.
+const calendarGoneRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/calendar',
-  // ?org=: the organization chips (item icVly), one organization's view.
-  validateSearch: (s: Record<string, unknown>): { org?: string } =>
-    typeof s.org === 'string' && s.org ? { org: s.org } : {},
-  component: lazyRouteComponent(() => import('./calendar/CalendarPage'), 'CalendarPage'),
+  beforeLoad: () => {
+    throw redirect({ to: '/', replace: true });
+  },
 });
 // Inbox (item 4PEHrOW5IfXBQWgOK9wo): the member's subjects and threads, all organizations or one.
 const inboxRoute = createRoute({
@@ -240,9 +240,9 @@ const inboxSubjectRoute = createRoute({
 const inboxThreadRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/inbox/$wid/t/$tid',
-  // ?from=today (or calendar): opened from the Today stack, the decision view (item kt3E7).
-  validateSearch: (s: Record<string, unknown>): { from?: 'today' | 'calendar' } =>
-    s.from === 'today' || s.from === 'calendar' ? { from: s.from } : {},
+  // ?from=today: opened from the Today stack, the decision view (item kt3E7).
+  validateSearch: (s: Record<string, unknown>): { from?: 'today' } =>
+    s.from === 'today' ? { from: s.from } : {},
   component: lazyRouteComponent(() => import('./threads/ThreadPage'), 'ThreadPage'),
 });
 const activityRoute = createRoute({
@@ -351,8 +351,8 @@ export const router = createRouter({
     processRoute,
     insightsRoute,
     projectInsightsRoute,
-    calendarRoute,
     orgHubRoute,
+    calendarGoneRoute,
     inboxRoute,
     inboxSubjectRoute,
     inboxThreadRoute,

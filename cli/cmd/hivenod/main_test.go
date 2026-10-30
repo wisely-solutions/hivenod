@@ -35,6 +35,13 @@ func TestCommands(t *testing.T) {
 	if code, _, errs := call("frobnicate"); code != 2 || !strings.Contains(errs, "unknown command") {
 		t.Fatal("unknown")
 	}
+	// Calendar was removed (item OE8FmrTaIxFVGcaeGG3N, slice 5): a clear refusal, no usage dump.
+	if code, _, errs := call("calendar", "sync", "-"); code != 1 || !strings.Contains(errs, "Calendar was removed from Hivenod") {
+		t.Fatalf("calendar: %d %q", code, errs)
+	}
+	if _, out, _ := call(); strings.Contains(out, "hivenod calendar") {
+		t.Fatal("help still lists hivenod calendar")
+	}
 	if _, out, _ := call("logout"); !strings.Contains(out, "No saved token") {
 		t.Fatal(out)
 	}

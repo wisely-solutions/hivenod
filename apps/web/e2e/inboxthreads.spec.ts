@@ -332,35 +332,15 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     await expect(chip(page, 'done')).toBeVisible({ timeout: UNDO_WAIT + 5000 });
     await expect(page.getByText('You approved Reply (edited)')).toBeVisible();
 
-    // Reply and book: approving books the meeting in the member's calendar.
-    const at = (h: number) => {
-      const d = new Date();
-      d.setHours(h, 0, 0, 0);
-      return d.toISOString();
-    };
-    const o4 = await agent.propose(t1, 'reply_book', {
-      text: 'Let us meet to go through it.',
-      start: at(15),
-      end: at(16),
-      with: 'Sam Example',
-    });
-    const book = page.locator(`[data-outcome="${o4}"]`);
-    await expect(book.getByRole('group', { name: 'Pick a time' })).toBeVisible();
-    await book.getByRole('button', { name: 'Send and book' }).click();
-    await expect(book.locator('[data-booked]')).toHaveText(
-      /^Booked in your calendar: .+, with Sam Example$/,
-      { timeout: UNDO_WAIT + 5000 },
-    );
-    await page.goto('/calendar');
+    // Bookings went with Calendar (OE8Fm slice 5): an agent cannot propose one any more.
     await expect(
-      page
-        .getByRole('region', { name: /^(Time grid|Agenda)$/ })
-        .getByRole('group', { name: /^Meeting with Sam Example, / }),
-    ).toBeVisible();
-    await agent.done(o4, 'https://teams.example.com/conv-1/invite');
-    await page.goto(`/inbox/${wid}/t/${t1}`);
-    await page.getByRole('button', { name: /^Everything/ }).click();
-    await expect(chip(page, 'waiting')).toBeVisible();
+      agent.propose(t1, 'reply_book', {
+        text: 'Let us meet to go through it.',
+        start: '2026-11-05T15:00:00Z',
+        end: '2026-11-05T16:00:00Z',
+        with: 'Sam Example',
+      }),
+    ).rejects.toThrow(/retired with Calendar/);
 
     // A second thread under its own subject; a nudge rejected (with Undo first).
     const t2 = await agent.add(uid, {
@@ -480,7 +460,8 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     if (info.project.name === 'iphone-se') {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(`/inbox/${wid}/t/${t1}`);
-      await expect(chip(page, 'waiting')).toBeVisible();
+      // Done (no_reply), now that no booking follows it (Calendar removed, OE8Fm slice 5).
+      await expect(chip(page, 'done')).toBeVisible();
       await look(page, 'thread-390', 'iphone-se');
     }
   } finally {

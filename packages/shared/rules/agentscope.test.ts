@@ -4,7 +4,7 @@
  * development item: no project, item, claim, finding, created item or project event, whatever its
  * projectIds say. Only an admin creates one; its scope never changes and it never gets projects.
  */
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { describe, expect, it } from 'vitest';
 import {
   claimItem,
@@ -15,7 +15,6 @@ import {
   updateAgentSettings,
   type ItemState,
 } from '../src/actions';
-import { calendarPaths, calendarUpsert } from '../src/calendar';
 import { paths } from '../src/schema';
 import {
   as,
@@ -58,8 +57,6 @@ function inboxAgent(over: Record<string, unknown> = {}) {
 }
 
 const seedInbox = (over: Record<string, unknown> = {}) => put({ [A(INBOX)]: inboxAgent(over) });
-
-const T = (h: number) => new Date(Date.UTC(2030, 0, 7, h));
 
 describe('creating an Inbox and Calendar agent', () => {
   it('an admin creates one with no projects', async () => {
@@ -225,22 +222,10 @@ describe('refused on development items', () => {
   });
 });
 
-describe('allowed on the Calendar of its organization', () => {
-  it('upserts events for a member and reads their busy blocks', async () => {
+describe('its own organization', () => {
+  it('reads its own doc and the organization (Calendar removed, OE8Fm slice 5)', async () => {
     await seedInbox();
     const a = as(INBOX);
-    const p = calendarUpsert(a.ctx, {
-      memberUid: 'owner',
-      events: [
-        { source: 'google', sourceEventId: 'g1', title: 'Dentist', start: T(9), end: T(10) },
-      ],
-    });
-    await ok(a.run(p));
-    expect(await snap(calendarPaths.event(W, p.ids[0]!))).toMatchObject({ title: 'Dentist' });
-    await ok(setDoc(doc(a.db, calendarPaths.agentHome(INBOX)), { workspaceId: W }));
-    const busy = await ok(getDocs(collection(a.db, calendarPaths.busy('owner'))));
-    expect(busy.size).toBe(1);
-    // ...and reads the organization's member cards and its own doc
     await ok(getDoc(doc(a.db, A(INBOX))));
     await ok(getDoc(doc(a.db, paths.workspace(W))));
   });

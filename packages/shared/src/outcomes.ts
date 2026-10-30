@@ -46,7 +46,7 @@ export interface OutcomeType {
   /**
    * A tidy-up type (item kt3E7u9EliL3q2veDDI0): it takes effect on approval and sends nothing,
    * so the member may approve it in one batch with others (the web app's tidy-ups card, when
-   * proposed with high confidence). Never on a type that sends or books.
+   * proposed with high confidence). Never on a type that sends.
    */
   batchable?: boolean;
   /**
@@ -59,6 +59,12 @@ export interface OutcomeType {
   plan?: boolean;
   /** Only as a step of a plan: outcome_propose refuses it alone. */
   planOnly?: boolean;
+  /**
+   * Retired (item OE8FmrTaIxFVGcaeGG3N, slice 5: Calendar removed): kept so old records still
+   * read and render ("Booking (retired)"), never proposed again (not a plan step, not alone) and
+   * never approved.
+   */
+  retired?: boolean;
 }
 export type OutcomeKind = 'agent' | 'human';
 
@@ -94,10 +100,10 @@ export const OUTCOMES = {
     plan: true,
   },
   reply_book: {
-    label: 'Reply and book',
-    approve: 'Send and book',
+    label: 'Booking (retired)',
+    approve: 'Retired',
     description:
-      "Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done.",
+      'Retired with Calendar (2026-10-30): never propose it. Propose a reply that suggests times instead.',
     fields: {
       text: text('Reply', 'The answer, ready to send as written'),
       start: {
@@ -113,17 +119,18 @@ export const OUTCOMES = {
         help: 'ISO 8601 with its offset, after start',
       },
       with: line('With', 'Who is invited: names or emails, separated by commas'),
-      title: line('Title', 'What the calendar shows; by default "Meeting with <with>"', false),
+      title: line('Title', 'The meeting title', false),
     },
     executor: 'agent',
     after: { state: 'waiting', waitingOn: 'them' },
-    plan: true,
+    planOnly: true,
+    retired: true,
   },
   book: {
-    label: 'Book',
-    approve: 'Book',
+    label: 'Booking (retired)',
+    approve: 'Retired',
     description:
-      "A plan step: book a meeting (pick the time with calendar_free); the reply is its own step. On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); when it is this step's turn you create it in the member's own calendar with your own access, call calendar_mirror with its id and report outcome_done.",
+      'Retired with Calendar (2026-10-30): never propose it. Propose a reply that suggests times instead.',
     fields: {
       start: {
         kind: 'datetime',
@@ -138,12 +145,12 @@ export const OUTCOMES = {
         help: 'ISO 8601 with its offset, after start',
       },
       with: line('With', 'Who is invited: names or emails, separated by commas'),
-      title: line('Title', 'What the calendar shows; by default "Meeting with <with>"', false),
+      title: line('Title', 'The meeting title', false),
     },
     executor: 'agent',
     after: { state: 'waiting', waitingOn: 'them' },
-    plan: true,
     planOnly: true,
+    retired: true,
   },
   no_reply: {
     label: 'No reply needed',
@@ -252,6 +259,10 @@ export const PLAN_TYPES = OUTCOME_TYPES.filter(
 export const SINGLE_TYPES = OUTCOME_TYPES.filter(
   (k) => (OUTCOMES as Record<string, OutcomeType>)[k]!.planOnly !== true,
 );
+/** Retired types (bookings, slice 5): old records only. */
+export function isRetiredOutcome(id: string): boolean {
+  return outcomeType(id)?.retired === true;
+}
 
 export function outcomeType(id: string): OutcomeType | null {
   return Object.prototype.hasOwnProperty.call(OUTCOMES, id)
@@ -315,8 +326,11 @@ export function outcomeRulesBlock(): string {
   const q = (s: string) => `'${s}'`;
   const list = (xs: string[]) => `[${xs.map(q).join(', ')}]`;
   const entries = Object.entries(OUTCOMES as Record<string, OutcomeType>);
-  const map = (f: (t: OutcomeType) => string) =>
-    `{${entries.map(([k, t]) => `${q(k)}: ${f(t)}`).join(', ')}}`;
+  const map = (f: (t: OutcomeType) => string, live = false) =>
+    `{${entries
+      .filter(([, t]) => !live || !t.retired)
+      .map(([k, t]) => `${q(k)}: ${f(t)}`)
+      .join(', ')}}`;
   return [
     '      // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by',
     '      // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)',
@@ -327,13 +341,16 @@ export function outcomeRulesBlock(): string {
     `      function outcomeImmediate() { return ${list(entries.filter(([, t]) => t.executor === 'none').map(([k]) => k))}; }`,
     `      function outcomeAfter() { return ${map((t) => q(t.after.state))}; }`,
     `      function outcomeWaitingOn() { return ${map((t) => (t.after.waitingOn ? q(t.after.waitingOn) : 'null'))}; }`,
-    `      function outcomeFieldKeys() { return ${map((t) => list(Object.keys(t.fields)))}; }`,
-    `      function outcomeRequired() { return ${map((t) =>
-      list(
-        Object.entries(t.fields)
-          .filter(([, f]) => f.required)
-          .map(([k]) => k),
-      ),
+    // Retired types have no field lists: proposing, revising and approving them is refused.
+    `      function outcomeFieldKeys() { return ${map((t) => list(Object.keys(t.fields)), true)}; }`,
+    `      function outcomeRequired() { return ${map(
+      (t) =>
+        list(
+          Object.entries(t.fields)
+            .filter(([, f]) => f.required)
+            .map(([k]) => k),
+        ),
+      true,
     )}; }`,
     '      // END outcome registry',
   ].join('\n');

@@ -54,7 +54,7 @@ describe('agent settings form', () => {
   });
 });
 
-describe('an Inbox and Calendar agent (item fJnu6)', () => {
+describe('an Inbox-only agent (item fJnu6)', () => {
   it('needs no projects, and the fields create it with none', async () => {
     const inbox = { projectIds: [], scope: 'inbox' } as unknown as Agent;
     const d = settingsDraft(inbox);

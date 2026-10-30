@@ -16,7 +16,7 @@
     {
       "tool": "plan_propose",
       "ok": false,
-      "out": "MCP error -32602: Input validation error: Invalid arguments for tool plan_propose: steps[0].type: must be one of \"reply\", \"reply_book\", \"book\", \"make_it_work\", \"handover\", \"snooze\", \"nudge\", \"approval\""
+      "out": "MCP error -32602: Input validation error: Invalid arguments for tool plan_propose: steps[0].type: must be one of \"reply\", \"make_it_work\", \"handover\", \"snooze\", \"nudge\", \"approval\""
     },
     {
       "tool": "plan_propose",

@@ -24,9 +24,9 @@
     "plan": true
   },
   "reply_book": {
-    "label": "Reply and book",
-    "approve": "Send and book",
-    "description": "Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done.",
+    "label": "Booking (retired)",
+    "approve": "Retired",
+    "description": "Retired with Calendar (2026-10-30): never propose it. Propose a reply that suggests times instead.",
     "fields": {
       "text": {
         "kind": "text",
@@ -55,7 +55,7 @@
       "title": {
         "kind": "line",
         "label": "Title",
-        "help": "What the calendar shows; by default \"Meeting with <with>\""
+        "help": "The meeting title"
       }
     },
     "executor": "agent",
@@ -63,12 +63,13 @@
       "state": "waiting",
       "waitingOn": "them"
     },
-    "plan": true
+    "planOnly": true,
+    "retired": true
   },
   "book": {
-    "label": "Book",
-    "approve": "Book",
-    "description": "A plan step: book a meeting (pick the time with calendar_free); the reply is its own step. On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); when it is this step's turn you create it in the member's own calendar with your own access, call calendar_mirror with its id and report outcome_done.",
+    "label": "Booking (retired)",
+    "approve": "Retired",
+    "description": "Retired with Calendar (2026-10-30): never propose it. Propose a reply that suggests times instead.",
     "fields": {
       "start": {
         "kind": "datetime",
@@ -91,7 +92,7 @@
       "title": {
         "kind": "line",
         "label": "Title",
-        "help": "What the calendar shows; by default \"Meeting with <with>\""
+        "help": "The meeting title"
       }
     },
     "executor": "agent",
@@ -99,8 +100,8 @@
       "state": "waiting",
       "waitingOn": "them"
     },
-    "plan": true,
-    "planOnly": true
+    "planOnly": true,
+    "retired": true
   },
   "no_reply": {
     "label": "No reply needed",

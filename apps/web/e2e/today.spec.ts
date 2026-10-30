@@ -1,7 +1,8 @@
 /**
  * Today (item kt3E7u9EliL3q2veDDI0, slice 2): the brief, the ranked decision stack with the
  * decision card, the tidy-ups card and the rail; keyboard and one-tap approve with Undo on the
- * button (no toast); Approve all; picking another slot. 1440 and 390, light and dark.
+ * button (no toast); Approve all; an old booking read-only (Calendar removed, OE8Fm slice 5). 1440
+ * and 390, light and dark.
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
@@ -14,7 +15,7 @@ import {
   settle,
   UNDO_WAIT,
 } from './helpers';
-import { seedInbox, type Seed } from './inboxSeed';
+import { makeOldBooking, seedInbox, type Seed } from './inboxSeed';
 
 async function axe(page: Page) {
   const { violations } = await new AxeBuilder({ page })
@@ -96,11 +97,9 @@ test.describe('desktop 1440', () => {
       await expect(stack(page)).not.toContainText('OPS-221');
       await expect(tidy.getByRole('button', { name: 'Approve all 3' })).toBeVisible();
 
-      // The rail: today's agenda and what agents are on.
+      // The rail: what agents are on (no agenda: Calendar was removed, OE8Fm slice 5).
       const rail = page.locator('[data-today-rail]');
-      await expect(rail.getByRole('region', { name: "Today's agenda" })).toContainText(
-        'Team standup',
-      );
+      await expect(rail.getByRole('region', { name: "Today's agenda" })).toHaveCount(0);
       await expect(rail.getByRole('region', { name: 'Agents working' })).toContainText(
         'Supplier visit next week',
       );
@@ -134,15 +133,14 @@ test.describe('desktop 1440', () => {
       // No toast: the toast region stays empty.
       await expect(page.locator('[data-toast-region] > *')).toHaveCount(0);
       await page.keyboard.press('z');
-      await expect(card(page).getByRole('button', { name: /Send and book/ })).toBeVisible();
+      await expect(card(page).getByRole('button', { name: /^Send/ })).toBeVisible();
       await page.waitForTimeout(UNDO_WAIT);
       expect(await outcomeState(s, s.outcomes.book)).toBe('proposed');
 
       await page.keyboard.press('a');
-      await expect(stack(page).locator('[data-done-row]')).toContainText(
-        'Sent · Reply and book · Sam',
-        { timeout: UNDO_WAIT + 5000 },
-      );
+      await expect(stack(page).locator('[data-done-row]')).toContainText('Sent · Reply · Sam', {
+        timeout: UNDO_WAIT + 5000,
+      });
       expect(await outcomeState(s, s.outcomes.book)).toBe('approved');
       // The focus moved on to the next decision, the question.
       await expect(card(page)).toHaveAttribute('aria-label', /Which room/);
@@ -208,34 +206,23 @@ test.describe('desktop 1440', () => {
     }
   });
 
-  test('picking another slot moves the reply’s time and approves as edited', async ({ page }) => {
+  test('an old booking shows read-only: no slot strip, Approve and Edit off', async ({ page }) => {
     test.setTimeout(120_000);
     const s = await open(page);
     try {
+      await makeOldBooking(s);
       await stack(page)
         .getByRole('button', { name: /Move the payments review/ })
         .click();
       await expect(card(page)).toHaveAttribute('aria-label', /Move the payments review/);
-      const slots = card(page).getByRole('group', { name: 'Pick a time' }).getByRole('button');
-      await expect(slots.first()).toHaveAttribute('aria-pressed', 'true');
-      const second = slots.nth(1);
-      const label = (await second.locator('span').first().textContent())!.trim();
-      await second.click();
-      await expect(second).toHaveAttribute('aria-pressed', 'true');
-      const [from, to] = label.split('–');
-      await expect(card(page).locator('[data-sentence]')).toContainText(`${from}-${to}`);
-      await card(page)
-        .getByRole('button', { name: /Send and book/ })
-        .click();
-      await expect(stack(page).locator('[data-done-row]')).toBeVisible({
-        timeout: UNDO_WAIT + 5000,
-      });
-      const o = (await adminDoc(`workspaces/${s.wid}/inboxOutcomes/${s.outcomes.book}`))!.fields;
-      expect(o.decision!.mapValue.fields.edited!.booleanValue).toBe(true);
-      const start = new Date(o.fields!.mapValue.fields.start!.stringValue!);
-      expect(
-        `${String(start.getUTCHours()).padStart(2, '0')}:${String(start.getUTCMinutes()).padStart(2, '0')}`,
-      ).toBe(from);
+      await expect(card(page).locator('[data-sentence]')).toContainText('Booking (retired)');
+      await expect(card(page).locator('[data-retired]')).toContainText(
+        'Bookings were removed with Calendar',
+      );
+      await expect(card(page).getByRole('group', { name: 'Pick a time' })).toHaveCount(0);
+      await expect(card(page).getByRole('button', { name: /^Retired/ })).toBeDisabled();
+      await expect(card(page).getByRole('button', { name: /^Edit/ })).toBeDisabled();
+      expect(await outcomeState(s, s.outcomes.book)).toBe('proposed');
     } finally {
       await s.stop();
     }
@@ -303,7 +290,7 @@ test.describe('phone 390', () => {
       await swipe(180);
       await expect(card(page).locator('button[data-undo]')).toBeVisible();
       await expect(page.locator('[data-toast-region] > *')).toHaveCount(0);
-      await expect(stack(page).locator('[data-done-row]')).toContainText('Sent · Reply and book', {
+      await expect(stack(page).locator('[data-done-row]')).toContainText('Sent · Reply', {
         timeout: UNDO_WAIT + 5000,
       });
       expect(await outcomeState(s, s.outcomes.book)).toBe('approved');

@@ -689,7 +689,7 @@
       },
       {
         "name": "thread_recheck_done",
-        "description": "Answer a re-check (inbox event reason recheck: the person asked you to check a thread again). First re-read the thread (thread_read), its new messages, calendar_free and the context. Then: result still_good if every open proposal and unrun plan step stands (they are marked \"checked again\"); revised once you wrote new versions with outcome_propose revises=<id> for what changed; asked once you asked the person with inbox_ask. Only the thread's home agent answers, once per request.",
+        "description": "Answer a re-check (inbox event reason recheck: the person asked you to check a thread again). First re-read the thread (thread_read), its new messages and the context. Then: result still_good if every open proposal and unrun plan step stands (they are marked \"checked again\"); revised once you wrote new versions with outcome_propose revises=<id> for what changed; asked once you asked the person with inbox_ask. Only the thread's home agent answers, once per request.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1054,7 +1054,7 @@
       },
       {
         "name": "inbox_note",
-        "description": "Add an investigation note to a thread's timeline (what you checked and found: tickets, repos, the calendar, earlier answers). The person sees it with the thread.",
+        "description": "Add an investigation note to a thread's timeline (what you checked and found: tickets, repos, earlier answers). The person sees it with the thread.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1118,7 +1118,7 @@
       },
       {
         "name": "outcome_propose",
-        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. When the person asks for changes to your proposal (inbox reason revise), revise it with revises=<outcomeId> (same threadId and type): apply only what they asked, keep the rest; do not start a new outcome. If you cannot make the change, say why with inbox_ask on the thread. note: 1-2 sentences, why this outcome; the person reads it first. confidence: high only when you verified every fact the outcome relies on, low when you are guessing what they want. checks: what you verified, one line each (\"Your calendar: Thu 10:00-11:00 free\"). no_reply, ignore and snooze proposed with high confidence are approved by the person in one batch. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
+        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. When the person asks for changes to your proposal (inbox reason revise), revise it with revises=<outcomeId> (same threadId and type): apply only what they asked, keep the rest; do not start a new outcome. If you cannot make the change, say why with inbox_ask on the thread. note: 1-2 sentences, why this outcome; the person reads it first. confidence: high only when you verified every fact the outcome relies on, low when you are guessing what they want. checks: what you verified, one line each (\"Ticket 412: fixed in release 38\"). no_reply, ignore and snooze proposed with high confidence are approved by the person in one batch. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1131,7 +1131,6 @@
               "type": "string",
               "enum": [
                 "reply",
-                "reply_book",
                 "no_reply",
                 "make_it_work",
                 "handover",
@@ -1197,7 +1196,7 @@
       },
       {
         "name": "plan_propose",
-        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. For one action alone, use outcome_propose. Step types: reply, reply_book, book, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\nbook: Book a meeting (pick the time with calendar_free); the reply is its own step. On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this step's outcome id); at its turn you create it in the member's own calendar, call calendar_mirror with its id and report outcome_done. Fields: start (datetime: ISO 8601 with its offset); end (datetime: after start); with (line: who is invited); title? (line: what the calendar shows).\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
+        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. For one action alone, use outcome_propose. Step types: reply, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1232,8 +1231,6 @@
                     "type": "string",
                     "enum": [
                       "reply",
-                      "reply_book",
-                      "book",
                       "make_it_work",
                       "handover",
                       "snooze",
@@ -1808,260 +1805,6 @@
             "description",
             "afterStepId",
             "reason"
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "execution": {
-          "taskSupport": "forbidden"
-        }
-      },
-      {
-        "name": "calendar_upsert",
-        "description": "Add or update events in a member's calendar in this organization, from a calendar you sync (for example their Google or Outlook calendar here). The same source + sourceEventId updates the same event, so send the whole window again on every sync. Members of this organization see the details; the member's other organizations only see the time as busy. busyOnly: you only know the time (no title or attendees are kept). At most 100 events per call.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "member": {
-              "description": "Whose calendar: the member's uid, email or name (may be left out when the organization has one member)",
-              "type": "string"
-            },
-            "events": {
-              "minItems": 1,
-              "maxItems": 100,
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "source": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 40,
-                    "description": "Where it comes from: google, outlook, …"
-                  },
-                  "sourceEventId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 600,
-                    "description": "The event's id in that calendar"
-                  },
-                  "title": {
-                    "type": "string",
-                    "maxLength": 300
-                  },
-                  "start": {
-                    "type": "string",
-                    "description": "RFC 3339 time with a zone, e.g. 2026-11-02T09:00:00Z"
-                  },
-                  "end": {
-                    "type": "string",
-                    "description": "RFC 3339 time with a zone, after start"
-                  },
-                  "allDay": {
-                    "type": "boolean"
-                  },
-                  "attendees": {
-                    "maxItems": 50,
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 320
-                    }
-                  },
-                  "busyOnly": {
-                    "description": "Only the time is known or may be shared",
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "source",
-                  "sourceEventId",
-                  "start",
-                  "end"
-                ]
-              }
-            }
-          },
-          "required": [
-            "events"
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "execution": {
-          "taskSupport": "forbidden"
-        }
-      },
-      {
-        "name": "calendar_delete",
-        "description": "Remove events from a member's calendar in this organization (cancelled or deleted at the source), by the ids calendar_upsert returned, or by source and the source's event ids. Their busy time is freed everywhere.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "ids": {
-              "description": "Event ids from calendar_upsert",
-              "maxItems": 100,
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "member": {
-              "description": "With sourceEventIds: whose calendar (uid, email or name)",
-              "type": "string"
-            },
-            "source": {
-              "description": "With sourceEventIds: google, outlook, …",
-              "type": "string",
-              "maxLength": 40
-            },
-            "sourceEventIds": {
-              "maxItems": 100,
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 600
-              }
-            }
-          },
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "execution": {
-          "taskSupport": "forbidden"
-        }
-      },
-      {
-        "name": "calendar_free",
-        "description": "A member's free time between from and to, across every organization they are in (busy time only, never details), as free slots of at least minMinutes. Use it to propose meeting times in a draft. Range: at most 62 days.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "member": {
-              "description": "The member's uid, email or name (may be left out when the organization has one member)",
-              "type": "string"
-            },
-            "from": {
-              "type": "string",
-              "description": "RFC 3339 time with a zone"
-            },
-            "to": {
-              "type": "string",
-              "description": "RFC 3339 time with a zone, after from"
-            },
-            "minMinutes": {
-              "description": "Shortest slot; default 30",
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 1440
-            }
-          },
-          "required": [
-            "from",
-            "to"
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "execution": {
-          "taskSupport": "forbidden"
-        }
-      },
-      {
-        "name": "calendar_sync",
-        "description": "Sync a calendar you read yourself (for example the member's Google Calendar, through your own Google access) into their calendar in this organization. Pass the events exactly as the Google Calendar API lists them (single events, recurring ones expanded) for the window from..to (default: a day ago to 30 days ahead): new and changed events are saved, cancelled, declined and free ones are removed, and in a full sync an event no longer listed in the window is removed too. With incremental, pass only the changes since your last sync token: nothing is removed for being absent. Echoes nextSyncToken for your next incremental sync. For large calendars use `hivenod calendar sync <file>` instead.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "events": {
-              "maxItems": 2500,
-              "type": "array",
-              "items": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                },
-                "additionalProperties": {}
-              },
-              "description": "Google Calendar API events: id, status, summary, start, end, attendees, transparency, eventType"
-            },
-            "source": {
-              "description": "Where they come from; default google",
-              "type": "string",
-              "maxLength": 40
-            },
-            "member": {
-              "description": "Whose calendar: uid, email or name (may be left out when the organization has one member)",
-              "type": "string"
-            },
-            "from": {
-              "description": "Window start, RFC 3339; default a day ago",
-              "type": "string"
-            },
-            "to": {
-              "description": "Window end, RFC 3339; default 30 days ahead",
-              "type": "string"
-            },
-            "incremental": {
-              "description": "Only changes since the last sync token",
-              "type": "boolean"
-            },
-            "busyOnly": {
-              "description": "Keep only the times (no titles or attendees)",
-              "type": "boolean"
-            },
-            "nextSyncToken": {
-              "description": "The source's token, echoed back",
-              "type": "string",
-              "maxLength": 2000
-            }
-          },
-          "required": [
-            "events"
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "execution": {
-          "taskSupport": "forbidden"
-        }
-      },
-      {
-        "name": "calendar_mirror",
-        "description": "After the member approved a booking (a reply_book outcome), Hivenod put the meeting in their calendar. Once you have created it in their own calendar (for example their Google Calendar, with your own access, inviting the people in 'with'), call this with that calendar's event id: the booking becomes that event, so your next calendar sync updates it and never counts the meeting twice. Then send the reply and report outcome_done. Safe to call again.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "outcomeId": {
-              "type": "string",
-              "minLength": 1,
-              "description": "The approved reply_book outcome"
-            },
-            "sourceEventId": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 600,
-              "description": "The event's id in the member's calendar (e.g. the Google event id)"
-            },
-            "source": {
-              "description": "Which calendar; default google",
-              "type": "string",
-              "maxLength": 40
-            },
-            "start": {
-              "description": "Only if the calendar moved it: RFC 3339",
-              "type": "string"
-            },
-            "end": {
-              "description": "Only if the calendar moved it: RFC 3339",
-              "type": "string"
-            },
-            "title": {
-              "description": "Only if it differs from the booking",
-              "type": "string",
-              "maxLength": 300
-            }
-          },
-          "required": [
-            "outcomeId",
-            "sourceEventId"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
@@ -2774,7 +2517,7 @@
       },
       {
         "name": "thread_recheck_done",
-        "description": "Answer a re-check (inbox event reason recheck: the person asked you to check a thread again). First re-read the thread (thread_read), its new messages, calendar_free and the context. Then: result still_good if every open proposal and unrun plan step stands (they are marked \"checked again\"); revised once you wrote new versions with outcome_propose revises=<id> for what changed; asked once you asked the person with inbox_ask. Only the thread's home agent answers, once per request.",
+        "description": "Answer a re-check (inbox event reason recheck: the person asked you to check a thread again). First re-read the thread (thread_read), its new messages and the context. Then: result still_good if every open proposal and unrun plan step stands (they are marked \"checked again\"); revised once you wrote new versions with outcome_propose revises=<id> for what changed; asked once you asked the person with inbox_ask. Only the thread's home agent answers, once per request.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -3139,7 +2882,7 @@
       },
       {
         "name": "inbox_note",
-        "description": "Add an investigation note to a thread's timeline (what you checked and found: tickets, repos, the calendar, earlier answers). The person sees it with the thread.",
+        "description": "Add an investigation note to a thread's timeline (what you checked and found: tickets, repos, earlier answers). The person sees it with the thread.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -3203,7 +2946,7 @@
       },
       {
         "name": "outcome_propose",
-        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. When the person asks for changes to your proposal (inbox reason revise), revise it with revises=<outcomeId> (same threadId and type): apply only what they asked, keep the rest; do not start a new outcome. If you cannot make the change, say why with inbox_ask on the thread. note: 1-2 sentences, why this outcome; the person reads it first. confidence: high only when you verified every fact the outcome relies on, low when you are guessing what they want. checks: what you verified, one line each (\"Your calendar: Thu 10:00-11:00 free\"). no_reply, ignore and snooze proposed with high confidence are approved by the person in one batch. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nreply_book: Answer them and book a meeting (pick the time with calendar_free). On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this outcome's id); you then create it in the member's own calendar with your own access and call calendar_mirror with its id, send the reply and report outcome_done. Fields: text (text: The answer, ready to send as written); start (datetime: ISO 8601 with its offset, e.g. 2026-11-03T10:00:00+00:00); end (datetime: ISO 8601 with its offset, after start); with (line: Who is invited: names or emails, separated by commas); title? (line: What the calendar shows; by default \"Meeting with <with>\").\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
+        "description": "Propose what should come of a thread. The person approves (maybe after editing the fields), or rejects it; nothing is carried out before their approval. Propose one or more. When the person asks for changes to your proposal (inbox reason revise), revise it with revises=<outcomeId> (same threadId and type): apply only what they asked, keep the rest; do not start a new outcome. If you cannot make the change, say why with inbox_ask on the thread. note: 1-2 sentences, why this outcome; the person reads it first. confidence: high only when you verified every fact the outcome relies on, low when you are guessing what they want. checks: what you verified, one line each (\"Ticket 412: fixed in release 38\"). no_reply, ignore and snooze proposed with high confidence are approved by the person in one batch. Replies and nudges are written in the person's own voice, ready to send as they stand. Types and their fields:\nreply: Answer them in the member's voice. Also for a holding reply that keeps the thread open (holding: true). Fields: text (text: The answer, ready to send as written); holding? (boolean: true when it only says you are on it).\nno_reply: Nothing to answer: an FYI, already handled, or the member answered outside Hivenod. Fields: reason? (line: One line on why no answer is needed).\nmake_it_work: It needs real work: a Hivenod item. When the item is done, propose a reply saying so. Fields: title (line: The work, as an item title); brief? (text: What is asked, by whom, and what done looks like); project? (line: The project id or name).\nhandover: Loop in someone else, or another organization's agent. Fields: to (line: Who takes it over); note? (text: What you tell them).\nsnooze: Come back to it later: the thread waits until the date, then wakes up. Fields: until (datetime: ISO 8601, e.g. 2026-11-03T09:00:00Z); reason? (line: What you are waiting for).\nnudge: They have not answered for a while: a short reminder. Fields: text (text: The reminder, ready to send as written).\nignore: Not for the member: spam, noise, not theirs. Fields: reason? (line: One line).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -3216,7 +2959,6 @@
               "type": "string",
               "enum": [
                 "reply",
-                "reply_book",
                 "no_reply",
                 "make_it_work",
                 "handover",
@@ -3282,7 +3024,7 @@
       },
       {
         "name": "plan_propose",
-        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. For one action alone, use outcome_propose. Step types: reply, reply_book, book, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\nbook: Book a meeting (pick the time with calendar_free); the reply is its own step. On approval Hivenod puts the meeting in the member's calendar (source hivenod, sourceEventId = this step's outcome id); at its turn you create it in the member's own calendar, call calendar_mirror with its id and report outcome_done. Fields: start (datetime: ISO 8601 with its offset); end (datetime: after start); with (line: who is invited); title? (line: what the calendar shows).\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
+        "description": "Propose a plan for a thread: 1 to 8 ordered steps in one call, when the answer has more than one action or needs the person's OK on the way. The person approves the whole plan or step by step, edits, reorders or removes steps, or asks for changes to one step (you get a revise event for that step only: outcome_propose revises=<its outcomeId>). Steps run strictly in order: you get one carry_out per step, only once it is approved and every step before it is done; carry it out exactly as approved and report it with outcome_done. Put an approval step (the person's own gate) before anything that changes money, prices, contracts or public content. A make_it_work step (Build it): create the item, report outcome_done status started with result.itemId; the plan waits until the item is Done, then report it done. A snooze step waits until its date, then the plan moves on. For one action alone, use outcome_propose. Step types: reply, make_it_work, handover, snooze (wait until), nudge, approval (fields as in outcome_propose), plus:\napproval: The person's gate: they decide it at its turn; never carried out by an agent. Fields: what (line: what they approve); detail? (text: the change, e.g. old → new prices); link? (line: an http(s) link where to look).",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -3317,8 +3059,6 @@
                     "type": "string",
                     "enum": [
                       "reply",
-                      "reply_book",
-                      "book",
                       "make_it_work",
                       "handover",
                       "snooze",
@@ -3882,260 +3622,6 @@
             "description",
             "afterStepId",
             "reason"
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "execution": {
-          "taskSupport": "forbidden"
-        }
-      },
-      {
-        "name": "calendar_upsert",
-        "description": "Add or update events in a member's calendar in this organization, from a calendar you sync (for example their Google or Outlook calendar here). The same source + sourceEventId updates the same event, so send the whole window again on every sync. Members of this organization see the details; the member's other organizations only see the time as busy. busyOnly: you only know the time (no title or attendees are kept). At most 100 events per call.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "member": {
-              "description": "Whose calendar: the member's uid, email or name (may be left out when the organization has one member)",
-              "type": "string"
-            },
-            "events": {
-              "minItems": 1,
-              "maxItems": 100,
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "source": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 40,
-                    "description": "Where it comes from: google, outlook, …"
-                  },
-                  "sourceEventId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 600,
-                    "description": "The event's id in that calendar"
-                  },
-                  "title": {
-                    "type": "string",
-                    "maxLength": 300
-                  },
-                  "start": {
-                    "type": "string",
-                    "description": "RFC 3339 time with a zone, e.g. 2026-11-02T09:00:00Z"
-                  },
-                  "end": {
-                    "type": "string",
-                    "description": "RFC 3339 time with a zone, after start"
-                  },
-                  "allDay": {
-                    "type": "boolean"
-                  },
-                  "attendees": {
-                    "maxItems": 50,
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 320
-                    }
-                  },
-                  "busyOnly": {
-                    "description": "Only the time is known or may be shared",
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "source",
-                  "sourceEventId",
-                  "start",
-                  "end"
-                ]
-              }
-            }
-          },
-          "required": [
-            "events"
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "execution": {
-          "taskSupport": "forbidden"
-        }
-      },
-      {
-        "name": "calendar_delete",
-        "description": "Remove events from a member's calendar in this organization (cancelled or deleted at the source), by the ids calendar_upsert returned, or by source and the source's event ids. Their busy time is freed everywhere.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "ids": {
-              "description": "Event ids from calendar_upsert",
-              "maxItems": 100,
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "member": {
-              "description": "With sourceEventIds: whose calendar (uid, email or name)",
-              "type": "string"
-            },
-            "source": {
-              "description": "With sourceEventIds: google, outlook, …",
-              "type": "string",
-              "maxLength": 40
-            },
-            "sourceEventIds": {
-              "maxItems": 100,
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 600
-              }
-            }
-          },
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "execution": {
-          "taskSupport": "forbidden"
-        }
-      },
-      {
-        "name": "calendar_free",
-        "description": "A member's free time between from and to, across every organization they are in (busy time only, never details), as free slots of at least minMinutes. Use it to propose meeting times in a draft. Range: at most 62 days.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "member": {
-              "description": "The member's uid, email or name (may be left out when the organization has one member)",
-              "type": "string"
-            },
-            "from": {
-              "type": "string",
-              "description": "RFC 3339 time with a zone"
-            },
-            "to": {
-              "type": "string",
-              "description": "RFC 3339 time with a zone, after from"
-            },
-            "minMinutes": {
-              "description": "Shortest slot; default 30",
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 1440
-            }
-          },
-          "required": [
-            "from",
-            "to"
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "execution": {
-          "taskSupport": "forbidden"
-        }
-      },
-      {
-        "name": "calendar_sync",
-        "description": "Sync a calendar you read yourself (for example the member's Google Calendar, through your own Google access) into their calendar in this organization. Pass the events exactly as the Google Calendar API lists them (single events, recurring ones expanded) for the window from..to (default: a day ago to 30 days ahead): new and changed events are saved, cancelled, declined and free ones are removed, and in a full sync an event no longer listed in the window is removed too. With incremental, pass only the changes since your last sync token: nothing is removed for being absent. Echoes nextSyncToken for your next incremental sync. For large calendars use `hivenod calendar sync <file>` instead.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "events": {
-              "maxItems": 2500,
-              "type": "array",
-              "items": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                },
-                "additionalProperties": {}
-              },
-              "description": "Google Calendar API events: id, status, summary, start, end, attendees, transparency, eventType"
-            },
-            "source": {
-              "description": "Where they come from; default google",
-              "type": "string",
-              "maxLength": 40
-            },
-            "member": {
-              "description": "Whose calendar: uid, email or name (may be left out when the organization has one member)",
-              "type": "string"
-            },
-            "from": {
-              "description": "Window start, RFC 3339; default a day ago",
-              "type": "string"
-            },
-            "to": {
-              "description": "Window end, RFC 3339; default 30 days ahead",
-              "type": "string"
-            },
-            "incremental": {
-              "description": "Only changes since the last sync token",
-              "type": "boolean"
-            },
-            "busyOnly": {
-              "description": "Keep only the times (no titles or attendees)",
-              "type": "boolean"
-            },
-            "nextSyncToken": {
-              "description": "The source's token, echoed back",
-              "type": "string",
-              "maxLength": 2000
-            }
-          },
-          "required": [
-            "events"
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "execution": {
-          "taskSupport": "forbidden"
-        }
-      },
-      {
-        "name": "calendar_mirror",
-        "description": "After the member approved a booking (a reply_book outcome), Hivenod put the meeting in their calendar. Once you have created it in their own calendar (for example their Google Calendar, with your own access, inviting the people in 'with'), call this with that calendar's event id: the booking becomes that event, so your next calendar sync updates it and never counts the meeting twice. Then send the reply and report outcome_done. Safe to call again.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "outcomeId": {
-              "type": "string",
-              "minLength": 1,
-              "description": "The approved reply_book outcome"
-            },
-            "sourceEventId": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 600,
-              "description": "The event's id in the member's calendar (e.g. the Google event id)"
-            },
-            "source": {
-              "description": "Which calendar; default google",
-              "type": "string",
-              "maxLength": 40
-            },
-            "start": {
-              "description": "Only if the calendar moved it: RFC 3339",
-              "type": "string"
-            },
-            "end": {
-              "description": "Only if the calendar moved it: RFC 3339",
-              "type": "string"
-            },
-            "title": {
-              "description": "Only if it differs from the booking",
-              "type": "string",
-              "maxLength": 300
-            }
-          },
-          "required": [
-            "outcomeId",
-            "sourceEventId"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },

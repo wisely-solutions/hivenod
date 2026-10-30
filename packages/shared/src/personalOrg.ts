@@ -1,8 +1,7 @@
 /**
  * The "Personal" organization (Inbox item fJnu6, design 2026-10-28-hivenod-inbox-design): a member's
- * own organization with no development projects, for their Inbox and Calendar only. Their personal
- * agent joins it with scope 'inbox' (Inbox and Calendar only) and brings in their own requests and
- * calendars there.
+ * own organization with no development projects, for their Inbox only. Their personal
+ * agent joins it with scope 'inbox' (Inbox only) and brings in their own requests there.
  *
  * It is created exactly as the app creates an organization (`createWorkspace`: the workspace doc,
  * the member's card and a `workspace.created` event in one batch), and it is added to the person's

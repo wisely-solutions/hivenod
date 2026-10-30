@@ -1,7 +1,6 @@
 /**
  * Today (item kt3E7u9EliL3q2veDDI0, design D): the decision logic of the Today page, free of React
- * and Firestore. Tidy-ups, the proposal as one readable sentence, the greeting, the slot choices
- * of a reply_book and how its reply text follows a new slot.
+ * and Firestore. Tidy-ups, the proposal as one readable sentence, the greeting.
  */
 import {
   outcomeType,
@@ -9,7 +8,6 @@ import {
   type InboxThread,
   type OutcomeConfidence,
 } from '@hive/shared';
-import { addDays, isWorkDay, startOfDay, WORK_HOURS } from '../calendar/logic';
 
 const DAY = 86_400_000;
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -89,7 +87,7 @@ export function proposalSentence(
           ? ` ${dayLabel(s)}, ${hhmm(s)}–${hhmm(e)}`
           : '';
       const who = str(f.with) ? ` with ${str(f.with)}` : '';
-      return `Reply and book${slot}${who}${quote(str(f.text))}`;
+      return `Booking (retired)${slot}${who}${quote(str(f.text))}`;
     }
     case 'no_reply':
       return `Close it, no reply needed${tail(str(f.reason))}`;
@@ -130,78 +128,4 @@ export function tidySummary(
   const close = of('no_reply');
   if (close.length) parts.push(`close ${close.length} ${close.length === 1 ? 'FYI' : 'FYIs'}`);
   return parts.join(', ');
-}
-
-export interface Slot {
-  start: Date;
-  end: Date;
-}
-
-/** Working hours of a day, from `now` on (rounded up to the half hour). */
-function workWindow(day: Date, now: number): Slot | null {
-  if (!isWorkDay(day)) return null;
-  const from = new Date(day);
-  from.setHours(WORK_HOURS.start, 0, 0, 0);
-  const to = new Date(day);
-  to.setHours(WORK_HOURS.end, 0, 0, 0);
-  const half = 30 * 60_000;
-  const lo = Math.max(from.getTime(), Math.ceil(now / half) * half);
-  return lo < to.getTime() ? { start: new Date(lo), end: to } : null;
-}
-
-/**
- * The slots a reply_book card offers (design 3.6): the agent's slot, then up to 2 more free slots
- * of the same length in working hours, on that day or else the next working day.
- */
-export function slotOptions(input: {
-  start: Date;
-  end: Date;
-  busy: ReadonlyArray<{ start: Date; end: Date }>;
-  now: number;
-}): Slot[] {
-  const len = input.end.getTime() - input.start.getTime();
-  const out: Slot[] = [{ start: input.start, end: input.end }];
-  if (!(len > 0)) return out;
-  const taken = [...input.busy, { start: input.start, end: input.end }];
-  const free = (s: number, e: number) =>
-    !taken.some((b) => b.start.getTime() < e && b.end.getTime() > s);
-  // That day, then the next working day.
-  const days = [startOfDay(input.start)];
-  for (let d = addDays(days[0]!, 1), n = 0; n < 7; d = addDays(d, 1), n++)
-    if (isWorkDay(d)) {
-      days.push(d);
-      break;
-    }
-  for (const day of days) {
-    if (out.length >= 3) break;
-    const w = workWindow(day, input.now);
-    if (!w) continue;
-    for (let s = w.start.getTime(); s + len <= w.end.getTime() && out.length < 3;) {
-      if (free(s, s + len)) {
-        out.push({ start: new Date(s), end: new Date(s + len) });
-        s += len;
-      } else s += 30 * 60_000;
-    }
-  }
-  return out;
-}
-
-/**
- * The reply with its time range moved to the new slot, when the old range ("10:00–11:00" or
- * "10:00-11:00") appears in it exactly once; otherwise null (the member checks it in Edit).
- */
-export function replaceSlotText(
-  text: string,
-  oldStart: Date,
-  oldEnd: Date,
-  newStart: Date,
-  newEnd: Date,
-): string | null {
-  const a = hhmm(oldStart);
-  const b = hhmm(oldEnd);
-  const re = new RegExp(`${a}\\s?([–-])\\s?${b}`, 'g');
-  const hits = [...text.matchAll(re)];
-  if (hits.length !== 1) return null;
-  const dash = hits[0]![1];
-  return text.replace(re, `${hhmm(newStart)}${dash}${hhmm(newEnd)}`);
 }

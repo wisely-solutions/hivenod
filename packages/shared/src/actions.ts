@@ -472,7 +472,7 @@ interface AgentInput {
   tokenHint: string;
   /** Optional settings (card zSzW3LXy); left out, the defaults apply. */
   guardrails?: Guardrails;
-  /** 'inbox': Inbox and Calendar only (item fJnu6); then `projectIds` must be `[]`. */
+  /** 'inbox': Inbox only (item fJnu6); then `projectIds` must be `[]`. */
   scope?: AgentScope;
 }
 
@@ -483,7 +483,7 @@ function agentDocOp(
   eventId: string,
 ) {
   if (input.scope === 'inbox' && (input.projectIds === '*' || input.projectIds.length > 0))
-    throw new ActionError('An Inbox and Calendar agent has no projects');
+    throw new ActionError('An Inbox agent has no projects');
   return {
     kind: 'set' as const,
     path: paths.agent(ctx.workspaceId, input.agentUid),
@@ -547,7 +547,7 @@ export function updateAgentSettings(
     name: string;
     projectIds?: string[] | '*';
     guardrails?: Guardrails;
-    /** The agent's scope (item fJnu6): an Inbox and Calendar agent never gets projects. */
+    /** The agent's scope (item fJnu6): an Inbox agent never gets projects. */
     scope?: AgentScope;
   },
 ): ActionPlan {
@@ -557,7 +557,7 @@ export function updateAgentSettings(
     input.projectIds !== undefined &&
     (input.projectIds === '*' || input.projectIds.length > 0)
   )
-    throw new ActionError('An Inbox and Calendar agent has no projects');
+    throw new ActionError('An Inbox agent has no projects');
   const data: Record<string, unknown> = {};
   if (input.projectIds !== undefined) data.projectIds = input.projectIds;
   if (input.guardrails !== undefined) data.guardrails = input.guardrails;

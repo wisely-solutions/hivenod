@@ -100,7 +100,7 @@ service cloud.firestore {
       return signedIn() && activeAgentDoc(get(agentPath(wid, me())));
     }
     function activeAgentDoc(a) { return a != null && a.data.revokedAt == null; }
-    // An Inbox and Calendar agent (scope 'inbox', item fJnu6) never works on development items,
+    // An Inbox-only agent (scope 'inbox', item fJnu6) never works on development items,
     // whatever its projectIds say. Mirrored by inboxOnly() in packages/shared/src/agents.ts.
     function agentCanProject(wid, pid) {
       let a = get(agentPath(wid, me())).data;
@@ -444,54 +444,15 @@ service cloud.firestore {
         }
       }
 
-      // ---------- busy store (Inbox item w9SAf) ----------
-      // A member's busy time across organizations: start, end and the organization, never a
-      // title. Block ids start with the organization id. An agent writes blocks of its own
-      // organization for its members (mirroring calendar events, same batch and event); the
-      // member writes their own (a booking). The member reads all their blocks; an agent reads
-      // them when the member is in the agent's organization (agentHomes/{agentUid} says which).
+      // ---------- busy store (Inbox item w9SAf; Calendar removed in OE8Fm slice 5) ----------
+      // Nothing reads or writes it now; the old blocks go with the deletion script (slice 11).
+      // An admin of an organization being deleted still clears its blocks in the members' stores
+      // (the organization id is the part of the block id before the first underscore).
       match /busy/{bid} {
-        allow read: if signedIn() && (uid == me() || busyReader(uid));
-        allow create, update: if busyCreateUpdateOk();
-        function busyCreateUpdateOk() {
-          let d = request.resource.data;
-          return signedIn() && validBusy(d)
-          && bid.size() > d.workspaceId.size() + 1
-          && bid[0:d.workspaceId.size() + 1] == d.workspaceId + '_'
-          && (resource == null || resource.data.workspaceId == d.workspaceId)
-          && busyWriter(d.workspaceId, uid)
-          && d.updatedAt == request.time
-          && tracked(d.workspaceId, d.lastEventId, ['calendar.changed']);
-        }
-        // A member clears their own blocks of an organization they have left (or that is gone); an
-        // admin of an organization being deleted clears its blocks in the members' stores (the
-        // organization id is the part of the block id before the first underscore).
-        allow delete: if signedIn() && (
-          (uid == me() && resource != null && !busyMember(resource.data.workspaceId, uid))
-          || (busyDeleting(bid.split('_')[0]) && isAdmin(bid.split('_')[0])));
+        allow delete: if signedIn() && busyDeleting(bid.split('_')[0]) && isAdmin(bid.split('_')[0]);
       }
       function busyDeleting(w) {
         return exists(wsPath(w)) && get(wsPath(w)).data.get('deletingAt', null) != null;
-      }
-      function busyMember(w, u) {
-        return exists(wsPath(w)) && u in get(wsPath(w)).data.memberRoles;
-      }
-      function validBusy(d) {
-        return exactKeys(d, ['workspaceId', 'start', 'end', 'deleted', 'updatedAt', 'lastEventId'])
-          && str(d.workspaceId, 1, 128)
-          && d.start is timestamp && d.end is timestamp && d.end > d.start
-          && d.deleted is bool;
-      }
-      function busyWriter(w, u) {
-        let ws = get(wsPath(w));
-        return ws != null && u in ws.data.memberRoles
-          && (activeAgentDoc(get(agentPath(w, me()))) || u == me());
-      }
-      function busyReader(u) {
-        let h = get(/databases/$(database)/documents/agentHomes/$(me()));
-        return h != null
-          && activeAgentDoc(get(agentPath(h.data.workspaceId, me())))
-          && u in get(wsPath(h.data.workspaceId)).data.memberRoles;
       }
 
       // The list of organizations only ever grows by one organization per write (appended), one the
@@ -515,16 +476,6 @@ service cloud.firestore {
         && request.resource.data.uid == me()
         && request.resource.data.createdAt is number;
       allow read, update, delete: if false;
-    }
-    // Which organization an agent belongs to (item w9SAf), for rules outside that organization
-    // (the busy store). Written once by the agent itself, while it is active there.
-    match /agentHomes/{aid} {
-      allow get: if signedIn() && aid == me();
-      allow create: if signedIn() && aid == me()
-        && exactKeys(request.resource.data, ['workspaceId'])
-        && str(request.resource.data.workspaceId, 1, 128)
-        && activeAgentDoc(get(agentPath(request.resource.data.workspaceId, me())));
-      allow list, update, delete: if false;
     }
     // Public settings the notifier publishes (VAPID public key, bot name). Never secrets.
     match /config/{doc} {
@@ -641,7 +592,7 @@ service cloud.firestore {
       // ---------- member cards (the name and picture others see inside this organization) ----------
 
       match /members/{uid} {
-        // Agents read the cards too: calendar tools name a member by id or email (item w9SAf).
+        // Agents read the cards too: inbox tools name a member by id or email.
         allow read: if isMember(wid) || isActiveAgent(wid);
         allow create, update: if membersCreateUpdateOk();
         function membersCreateUpdateOk() {
@@ -735,7 +686,7 @@ service cloud.firestore {
                'revokedAt', 'lastSeenAt', 'tokenHint', 'previousAgentUid', 'lastEventId'],
           // guardrails and permissions are optional (absent = defaults); a new agent is never paused.
                ['guardrails', 'permissions', 'scope'])
-          // An Inbox and Calendar agent (item fJnu6) is created by an admin only.
+          // An Inbox-only agent (item fJnu6) is created by an admin only.
           && (!('scope' in d) || isAdmin(wid))
           && validAgentFields(d)
           && d.createdBy == me()
@@ -911,64 +862,16 @@ service cloud.firestore {
                   'item.claimed', 'item.released', 'item.completed', 'item.updated',
                   'item.created', 'attachment.added', 'message.posted', 'finding.raised',
                   'run.started', 'run.heartbeat', 'run.ended',
-                  'item.shaped', 'item.pathChanged', 'step.proposed', 'item.sentBack'])
-            || calendarEventOk(d));
+                  'item.shaped', 'item.pathChanged', 'step.proposed', 'item.sentBack']));
         }
         allow update, delete: if false;
-
-        // Calendar writes (item w9SAf): outside any project, by an agent of the organization or
-        // a member. The event names whose calendars changed, never a title.
-        function calendarEventOk(d) {
-          return d.type == 'calendar.changed' && d.projectId == null && d.itemId == null
-            && d.runId == null
-            && ((d.actor.type == 'agent' && isActiveAgent(wid))
-                || (d.actor.type == 'human' && isMemberAfter(wid)))
-            && exactKeys(d.data, ['memberUids', 'upserted', 'deleted'])
-            && d.data.memberUids is list && d.data.memberUids.size() <= 100
-            && d.data.upserted is int && d.data.deleted is int;
-        }
       }
 
-      // ---------- calendar (Inbox item w9SAf) ----------
-      // A member's events from this organization, with details. Members and agents of the
-      // organization read them (nobody outside it). Agents write them for any member; a member
-      // writes only their own (a booking). Deleting is a soft delete that clears the details.
-      // The document id starts with the member's uid, so one member cannot take another's id.
+      // ---------- calendar (Inbox item w9SAf; removed in OE8Fm slice 5) ----------
+      // No writes any more. Admins read the old events for the export (slice 7) until the
+      // deletion script removes them (slice 11).
       match /calendar/{eid} {
-        allow read: if isMember(wid) || isActiveAgent(wid);
-        allow create, update: if calendarCreateUpdateOk();
-        function calendarCreateUpdateOk() {
-          let d = request.resource.data;
-          return signedIn() && validCalendarEvent(d)
-          && eid.size() > d.memberUid.size() + 1
-          && eid[0:d.memberUid.size() + 1] == d.memberUid + '_'
-          && (resource == null
-              || (resource.data.memberUid == d.memberUid
-                  && resource.data.source == d.source
-                  && resource.data.sourceEventId == d.sourceEventId))
-          && calendarWriter(d.memberUid)
-          && d.updatedBy == me_(isActiveAgent(wid) ? 'agent' : 'human')
-          && d.updatedAt == request.time
-          && docTracked(wid, d, ['calendar.changed']);
-        }
-        allow delete: if false;
-      }
-      function validCalendarEvent(d) {
-        return exactKeys(d, ['memberUid', 'title', 'start', 'end', 'allDay', 'attendees', 'source',
-                             'sourceEventId', 'busyOnly', 'deleted', 'updatedBy', 'updatedAt', 'lastEventId'])
-          && str(d.memberUid, 1, 128)
-          && str(d.title, 0, 300)
-          && d.start is timestamp && d.end is timestamp && d.end > d.start
-          && d.allDay is bool && d.busyOnly is bool && d.deleted is bool
-          && d.attendees is list && d.attendees.size() <= 50
-          && str(d.source, 1, 40) && str(d.sourceEventId, 1, 600)
-          // Busy-only and deleted events carry no details.
-          && (!(d.busyOnly || d.deleted) || (d.title == '' && d.attendees.size() == 0));
-      }
-      // The member is in this organization; the writer is one of its agents, or the member.
-      function calendarWriter(m) {
-        return m in get(wsPath(wid)).data.memberRoles
-          && (isActiveAgent(wid) || m == me());
+        allow read: if isAdmin(wid);
       }
 
       // ---------- runs ----------
@@ -1236,14 +1139,14 @@ service cloud.firestore {
       // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by
       // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)
       function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'approval']; }
-      function outcomeSingle() { return ['reply', 'reply_book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore']; }
-      function outcomePlanTypes() { return ['reply', 'reply_book', 'book', 'make_it_work', 'handover', 'snooze', 'nudge', 'approval']; }
+      function outcomeSingle() { return ['reply', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore']; }
+      function outcomePlanTypes() { return ['reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'approval']; }
       function outcomeHuman() { return ['approval']; }
       function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval']; }
       function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'approval': 'done'}; }
       function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'approval': null}; }
-      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'reply_book': ['text', 'start', 'end', 'with', 'title'], 'book': ['start', 'end', 'with', 'title'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'approval': ['what', 'detail', 'link']}; }
-      function outcomeRequired() { return {'reply': ['text'], 'reply_book': ['text', 'start', 'end', 'with'], 'book': ['start', 'end', 'with'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'approval': ['what']}; }
+      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'make_it_work': ['title', 'brief', 'project'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'approval': ['what', 'detail', 'link']}; }
+      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'make_it_work': ['title'], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'approval': ['what']}; }
       // END outcome registry
 
       // ---------- summaries (item OE8FmrTaIxFVGcaeGG3N, packages/shared/src/summary.ts) ----------
@@ -2108,7 +2011,7 @@ service cloud.firestore {
         function inboxReviseAsk(d, r, type) {
           return type == 'outcome.revise_requested'
             && touched(['state', 'revise'])
-            && r.type in ['reply', 'reply_book', 'nudge', 'handover', 'make_it_work']
+            && r.type in ['reply', 'nudge', 'handover', 'make_it_work']
             && ((r.state == 'proposed' && d.state == 'revising'
                 && exactKeys(d.revise, ['instruction', 'chips', 'byUid', 'at'])
                 && d.revise.byUid == me() && d.revise.at == request.time

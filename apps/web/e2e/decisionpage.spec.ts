@@ -363,10 +363,8 @@ test.describe('desktop 1440', () => {
       // No summary: the fallback top line, "No summary yet" with the first message, and why.
       await page.goto(`/inbox/${s.wid}/t/${s.threads.review}`);
       await expect(t.locator('[data-kicker]')).toHaveText(/Your approval/, { timeout: 20_000 });
-      await expect(t.getByRole('heading', { level: 2 })).toHaveText(
-        'Desk agent proposes: Reply and book',
-      );
-      await expect(t.getByRole('button', { name: /Send and book/ })).toBeVisible();
+      await expect(t.getByRole('heading', { level: 2 })).toHaveText('Desk agent proposes: Reply');
+      await expect(t.getByRole('button', { name: /^Send/ })).toBeVisible();
       await expect(t.locator('[data-effects]')).toContainText('When you approve, Desk agent will:');
       const none = page.locator('[data-no-summary]');
       await expect(none).toContainText('No summary yet');

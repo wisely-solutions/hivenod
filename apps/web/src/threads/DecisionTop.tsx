@@ -53,7 +53,6 @@ export interface DecisionTopProps {
   outcomes: Row<InboxOutcome>[];
   messages: InboxMessage[];
   now: number;
-  busy: ReadonlyArray<{ start: Date; end: Date }>;
   agentName: (id: string) => string;
   agent: AgentInfo;
   onDone: (label: string) => void;
@@ -318,7 +317,6 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           proposals={[stepRow]}
           sender={sender}
           now={now}
-          busy={props.busy}
           agentName={agentName}
           onDone={() => undefined}
           plan={pl}
@@ -342,7 +340,6 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
           proposals={proposals}
           sender={sender}
           now={now}
-          busy={props.busy}
           agentName={agentName}
           onDone={props.onDone}
           after={props.compact ? undefined : effect}

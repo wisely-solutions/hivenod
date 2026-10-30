@@ -12,7 +12,7 @@ import { runOrgDelete, useDeleting } from './deleteJobs';
 import { useOrgLooks } from './look';
 
 /**
- * The little square with an organization's initial, in its colour (the same as in Calendar and
+ * The little square with an organization's initial, in its colour (the same as in Inbox and
  * Today). The Personal organization gets a person instead of a letter (item icVly).
  */
 export function OrgMark({
@@ -271,8 +271,8 @@ export function OrgSwitcher({
         >
           <Icon icon={Info} size={15} className="mt-0.5 shrink-0" />
           <span>
-            Switching changes the Organization section: projects, agents, settings. Today, Inbox and
-            Calendar stay across all your organizations.
+            Switching changes the Organization section: projects, agents, settings. Today and Inbox
+            stay across all your organizations.
           </span>
         </p>
         <button

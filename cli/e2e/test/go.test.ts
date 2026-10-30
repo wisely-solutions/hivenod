@@ -186,10 +186,6 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
       'inboxAttachments',
     ])
       await read(`workspaces/${W}/${c}`);
-    await read(`workspaces/${W}/calendar`);
-    await read('users/alice/busy');
-    await read('users/owner/busy');
-    await read('agentHomes');
     for (const r of await read(`workspaces/${W}/runs`)) await read(`workspaces/${W}/runs/${r}/log`);
     for (const p of await read(`workspaces/${W}/projects`)) {
       await read(`workspaces/${W}/projects/${p}/decisions`);
@@ -1506,295 +1502,7 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
     matchesGolden(r);
   }, 120_000);
 
-  it('calendar sync (item fJnu6): a stub Google source creates, updates and deletes; busy blocks follow', async () => {
-    // A stub of what the personal agent reads from Google (Calendar API v3 events, single events).
-    const google = (id: string, h: number, over: Record<string, unknown> = {}) => ({
-      kind: 'calendar#event',
-      id,
-      status: 'confirmed',
-      summary: `Meeting ${id}`,
-      start: {
-        dateTime: `2030-01-07T${String(h).padStart(2, '0')}:00:00+01:00`,
-        timeZone: 'Europe/Lisbon',
-      },
-      end: { dateTime: `2030-01-07T${String(h + 1).padStart(2, '0')}:00:00+01:00` },
-      attendees: [{ email: 'alice@example.com', self: true, responseStatus: 'accepted' }],
-      ...over,
-    });
-    const win = { member: 'alice', from: '2030-01-06T00:00:00Z', to: '2030-02-05T00:00:00Z' };
-    const r = await scenario(async (call) => {
-      await call('calendar_sync', {
-        ...win,
-        events: [
-          google('a', 9),
-          google('b', 11),
-          google('c', 14),
-          google('free', 16, { transparency: 'transparent' }),
-        ],
-        nextSyncToken: 'tok-1',
-      });
-      // the same again: nothing changes
-      await call('calendar_sync', {
-        ...win,
-        events: [google('a', 9), google('b', 11), google('c', 14)],
-      });
-      // b moved, c deleted at the source (no longer listed), d new and declined
-      await call('calendar_sync', {
-        ...win,
-        events: [
-          google('a', 9),
-          google('b', 12),
-          google('d', 15, {
-            attendees: [{ email: 'alice@example.com', self: true, responseStatus: 'declined' }],
-          }),
-        ],
-      });
-      // incremental: a cancelled, nothing removed for being absent
-      await call('calendar_sync', {
-        ...win,
-        incremental: true,
-        events: [{ id: 'a', status: 'cancelled' }],
-        nextSyncToken: 'tok-2',
-      });
-      await call('calendar_free', {
-        member: 'alice',
-        from: '2030-01-07T07:00:00Z',
-        to: '2030-01-07T13:00:00Z',
-      });
-      await call('calendar_sync', { ...win, to: '2030-06-01T00:00:00Z', events: [] });
-    });
-    const outs = r.calls.map((c) => (c as { out: Record<string, unknown> }).out);
-    expect(outs.slice(0, 4).map((o) => [o.upserted, o.deleted, o.unchanged])).toEqual([
-      [3, 0, 0],
-      [0, 0, 3],
-      [1, 1, 1],
-      [0, 1, 0],
-    ]);
-    expect(outs[0]).toMatchObject({ nextSyncToken: 'tok-1', mode: 'full', source: 'google' });
-    expect(outs[3]).toMatchObject({ nextSyncToken: 'tok-2', mode: 'incremental' });
-    // Only b is busy now (11:00 to 12:00 UTC): free before and after it.
-    expect(outs[4]).toMatchObject({ busyBlocks: 1 });
-    expect(JSON.stringify(outs[5])).toContain('62 days');
-    matchesGolden({ calls: r.calls });
-  });
-
-  it('calendar_mirror (item fJnu6): an approved booking becomes the Google event, once', async () => {
-    const r = await scenario(async (call) => {
-      const owner = as('owner');
-      const t = out(
-        await call('inbox_add', {
-          source: 'mail',
-          sender: { name: 'Sam Example', handle: 'sam@example.com' },
-          text: 'Coffee on Thursday?',
-          threadRef: 'mail-1',
-          receivedAt: '2030-01-06T09:00:00Z',
-        }),
-      ).threadId as string;
-      const o = out(
-        await call('outcome_propose', {
-          threadId: t,
-          type: 'reply_book',
-          fields: {
-            text: 'Thursday 10:00 works.',
-            start: '2030-01-10T10:00:00Z',
-            end: '2030-01-10T10:30:00Z',
-            with: 'sam@example.com',
-          },
-        }),
-      ).outcomeId as string;
-      // not approved yet: refused
-      await call('calendar_mirror', { outcomeId: o, sourceEventId: 'gcal-1' });
-      await owner.run(
-        approveOutcome(owner.ctx, {
-          outcomeId: o,
-          outcome: (await snap(inboxPaths.outcome(W, o))) as unknown as OutcomeStateOf,
-          thread: (await snap(inboxPaths.thread(W, t))) as unknown as ThreadStateOf,
-        }),
-      );
-      await call('calendar_free', {
-        member: 'owner',
-        from: '2030-01-10T09:00:00Z',
-        to: '2030-01-10T12:00:00Z',
-      });
-      await call('calendar_mirror', { outcomeId: o, sourceEventId: 'gcal-1' });
-      // again: already mirrored, nothing written
-      await call('calendar_mirror', { outcomeId: o, sourceEventId: 'gcal-1' });
-      await call('calendar_free', {
-        member: 'owner',
-        from: '2030-01-10T09:00:00Z',
-        to: '2030-01-10T12:00:00Z',
-      });
-      await call('calendar_mirror', { outcomeId: 'nope', sourceEventId: 'gcal-1' });
-      await call('calendar_mirror', { outcomeId: o, sourceEventId: ' ' });
-      await call('outcome_done', { outcomeId: o, status: 'done' });
-    });
-    const outs = r.calls.map((c) => c as { ok: boolean; out: Record<string, unknown> });
-    expect(outs.map((c) => c.ok)).toEqual([
-      true,
-      true,
-      false,
-      true,
-      true,
-      true,
-      true,
-      false,
-      false,
-      true,
-    ]);
-    expect(outs[2]!.out).toContain('not approved');
-    expect(outs[4]!.out).toMatchObject({ mirrored: true });
-    expect(outs[5]!.out).toMatchObject({ mirrored: false });
-    // one busy block before and after: the meeting is never counted twice
-    expect(outs[3]!.out).toMatchObject({ busyBlocks: 1 });
-    expect(outs[6]!.out).toMatchObject({ busyBlocks: 1 });
-    // the replaced id derives from the random outcome id
-    const noReplaced = (cs: unknown[]) =>
-      cs.map((c) => JSON.stringify(c).replace(/"replaced":"[^"]*"/g, '"replaced":"<id>"'));
-    matchesGolden({ calls: noReplaced(r.calls), docs: r.docs });
-  }, 120_000);
-
-  it('calendar (item w9SAf): upsert, free across organizations, delete, errors', async () => {
-    const r = await scenario(async (call) => {
-      await put({
-        [paths.member(W, 'alice')]: {
-          name: 'Alice',
-          email: 'alice@example.com',
-          photoURL: null,
-          color: '#000',
-        },
-        // Busy time Alice has in another organization (no title, only the time).
-        'users/alice/busy/wOther_x': {
-          workspaceId: 'wOther',
-          start: new Date('2030-01-07T12:00:00Z'),
-          end: new Date('2030-01-07T13:30:00Z'),
-          deleted: false,
-          updatedAt: now(),
-          lastEventId: 'seed',
-        },
-      });
-      const up = out(
-        await call('calendar_upsert', {
-          member: 'Alice@Example.com',
-          events: [
-            {
-              source: 'google',
-              sourceEventId: 'g1',
-              title: ' Standup ',
-              start: '2030-01-07T09:00:00Z',
-              end: '2030-01-07T09:30:00+00:00',
-              attendees: ['bob@example.com'],
-            },
-            {
-              source: 'google',
-              sourceEventId: 'g2',
-              title: 'Private',
-              start: '2030-01-07T10:00Z',
-              end: '2030-01-07T11:00:00.000Z',
-              busyOnly: true,
-            },
-          ],
-        }),
-      ) as { ids: string[] };
-      await call('calendar_upsert', {
-        member: 'alice',
-        events: [
-          {
-            source: 'google',
-            sourceEventId: 'g1',
-            title: 'Standup (moved)',
-            start: '2030-01-07T09:15:00Z',
-            end: '2030-01-07T09:45:00Z',
-            allDay: false,
-          },
-        ],
-      });
-      await call('calendar_free', {
-        member: 'alice',
-        from: '2030-01-07T08:00:00Z',
-        to: '2030-01-07T17:00:00Z',
-      });
-      await call('calendar_free', {
-        member: 'Alice',
-        from: '2030-01-07T08:00:00Z',
-        to: '2030-01-07T17:00:00Z',
-        minMinutes: 90,
-      });
-      await call('calendar_delete', { member: 'alice', source: 'google', sourceEventIds: ['g2'] });
-      await call('calendar_delete', { ids: [up.ids[0]!, 'alice_nope'] });
-      await call('calendar_free', {
-        member: 'alice',
-        from: '2030-01-07T08:00:00Z',
-        to: '2030-01-07T17:00:00Z',
-      });
-      // errors
-      await call('calendar_upsert', {
-        member: 'alice',
-        events: [
-          { source: 'google', sourceEventId: 'x', start: 'tomorrow', end: '2030-01-07T09:00:00Z' },
-        ],
-      });
-      await call('calendar_upsert', {
-        member: 'alice',
-        events: [
-          {
-            source: 'google',
-            sourceEventId: 'x',
-            start: '2030-01-07T10:00:00Z',
-            end: '2030-01-07T09:00:00Z',
-          },
-        ],
-      });
-      await call('calendar_upsert', {
-        member: 'eve',
-        events: [
-          {
-            source: 'google',
-            sourceEventId: 'x',
-            start: '2030-01-07T08:00:00Z',
-            end: '2030-01-07T09:00:00Z',
-          },
-        ],
-      });
-      await call('calendar_free', { from: '2030-01-07T08:00:00Z', to: '2030-01-07T09:00:00Z' });
-      await call('calendar_free', {
-        member: 'alice',
-        from: '2030-01-07T08:00:00Z',
-        to: '2030-04-07T09:00:00Z',
-      });
-      await call('calendar_delete', {});
-    });
-    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
-    expect(oks).toEqual([
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-    ]);
-    expect(r.calls[2]).toMatchObject({
-      out: {
-        free: [
-          { start: '<iso>', end: '<iso>' },
-          { start: '<iso>', end: '<iso>' },
-          { start: '<iso>', end: '<iso>' },
-        ],
-        busyBlocks: 3,
-      },
-    });
-    expect((r.calls[3] as { out: { free: unknown[] } }).out.free).toHaveLength(1);
-    expect(r.calls[6]).toMatchObject({ out: { busyBlocks: 1 } });
-    matchesGolden(r);
-  }, 120_000);
-
-  it('an Inbox and Calendar agent is refused item tools and uses the calendar (item fJnu6)', async () => {
+  it('an Inbox-only agent is refused item tools and the removed calendar tools (items fJnu6, OE8Fm)', async () => {
     const r = await scenario(
       async (call) => {
         await call('list_work', {});
@@ -1827,10 +1535,10 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       false,
       false,
       false,
-      true,
+      false,
       true,
     ]);
-    expect(JSON.stringify(r.calls[0])).toContain('limited to Inbox and Calendar');
+    expect(JSON.stringify(r.calls[0])).toContain('limited to Inbox (scope');
     matchesGolden(r);
   }, 60_000);
 
@@ -1861,7 +1569,7 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
 
   it.each([
     ['a project agent', { guardrails: { maxFailedRuns: 5 } }],
-    ['an Inbox and Calendar agent (item fJnu6)', { projectIds: [], scope: 'inbox' }],
+    ['an Inbox-only agent (item fJnu6)', { projectIds: [], scope: 'inbox' }],
   ])(
     'hivenod whoami --json shows the agent and its settings: %s',
     async (_, extra) => {

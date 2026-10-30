@@ -182,9 +182,8 @@ export function AgentSettings({
             data-testid="inbox-only"
             className="rounded-btn border border-line bg-canvas px-3 py-2.5 text-14 text-ink"
           >
-            Inbox and Calendar only. This agent syncs calendars and brings in requests for this
-            organization; it never works on development items. This was set when it was connected
-            and cannot be changed.
+            Inbox only. This agent brings in requests for this organization; it never works on
+            development items. This was set when it was connected and cannot be changed.
           </p>
         ) : null}
         <div hidden={d.inboxOnly}>

@@ -88,7 +88,7 @@ func (w Who) Text() string {
 	}
 	scopeLine := "projects: " + projects
 	if w.Scope != nil && *w.Scope == "inbox" {
-		scopeLine = "scope: Inbox and Calendar only (no development projects)"
+		scopeLine = "scope: Inbox only (no development projects)"
 	}
 	lines := []string{
 		fmt.Sprintf("%s (%s) in organization %s", w.Name, w.AgentUID, w.WorkspaceID),

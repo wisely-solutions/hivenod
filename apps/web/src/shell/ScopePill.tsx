@@ -4,7 +4,7 @@ import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
 
 /**
- * "You · all organizations" (item icVly, model A): says on Today, Inbox and Calendar that the page
+ * "You · all organizations" (item icVly, model A): says on Today and Inbox that the page
  * spans every organization the person is in, whatever the switcher shows.
  */
 export function ScopePill({ className }: { className?: string }) {

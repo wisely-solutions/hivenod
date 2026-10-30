@@ -72,7 +72,6 @@ export interface PlanPanelProps {
   outcomes: readonly Row<InboxOutcome>[];
   sender: { name: string; source: string; at: number } | null;
   now: number;
-  busy: ReadonlyArray<{ start: Date; end: Date }>;
   agentName: (id: string) => string;
   /** Phone: the panel is in the bottom sheet, with one main button at its foot. */
   sheet?: boolean;
@@ -226,7 +225,6 @@ export function PlanPanel(props: PlanPanelProps) {
           proposals={[row]}
           sender={props.sender}
           now={props.now}
-          busy={props.busy}
           agentName={agentName}
           onDone={() => setOpenId('')}
           narrow

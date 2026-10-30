@@ -37,20 +37,6 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
                            a person's Inbox: bring messages in, file, note, ask, propose
                            outcomes, report them done
                            (hivenod inbox --help)
-  hivenod calendar upsert <events.json|-> [--member M]
-                           adds or updates a member's events in this organization (a JSON
-                           array like calendar_upsert's events; same source id = same event)
-  hivenod calendar delete <id>... | --source S [--member M] <sourceEventId>...
-  hivenod calendar free --from T --to T [--member M] [--min N]
-                           free time across all the member's organizations (busy time only)
-  hivenod calendar sync <events.json|-> [--source google] [--member M] [--from T --to T]
-                           [--incremental] [--busy-only] [--state FILE]
-                           syncs a calendar you read yourself (a Google Calendar events list,
-                           single events): adds, updates, removes; default window -1 day to
-                           +30 days; --state saves its nextSyncToken for the next --incremental run
-  hivenod calendar mirror <outcomeId> <sourceEventId> [--source google] [--from T --to T] [--title T]
-                           an approved booking, once you created it in the member's own
-                           calendar, becomes that event (the next sync updates it, never twice)
   hivenod logout           forgets the token saved by pairing
   hivenod mcp              MCP stdio server for Claude Code
   hivenod mcp --channel [--project P] [--step S] [--max-items N]
@@ -67,16 +53,16 @@ const help = `hivenod: work in Hivenod as an agent, through the Claude Code chan
                            HIVENOD_WEB_URL does the same); the default is https://hivenod.com
   --json prints machine-readable output.`
 
+// CalendarRemoved answers `hivenod calendar …` (Calendar was removed, item OE8FmrTaIxFVGcaeGG3N slice 5).
+const CalendarRemoved = "Calendar was removed from Hivenod: there is no calendar command or calendar_* tool any more. Stop any calendar sync routine."
+
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 
 type opts struct {
 	json, channel, help, version, force, noStart bool
 	project, step, maxItems, maxInbox, server    string
 	title, description                           string
-	member, source, from, to, min                string
 	attach                                       multi
-	incremental, busyOnly                        bool
-	state                                        string
 }
 
 // multi is a flag that may be given several times.
@@ -105,14 +91,6 @@ func parse(args []string) (opts, []string, error) {
 	fs.StringVar(&o.title, "title", "", "")
 	fs.StringVar(&o.description, "description", "", "")
 	fs.Var(&o.attach, "attach", "")
-	fs.StringVar(&o.member, "member", "", "")
-	fs.StringVar(&o.source, "source", "", "")
-	fs.StringVar(&o.from, "from", "", "")
-	fs.StringVar(&o.to, "to", "", "")
-	fs.StringVar(&o.min, "min", "", "")
-	fs.BoolVar(&o.incremental, "incremental", false, "")
-	fs.BoolVar(&o.busyOnly, "busy-only", false, "")
-	fs.StringVar(&o.state, "state", "", "")
 	// Flags may come before or after the command words.
 	var pos []string
 	for len(args) > 0 {
@@ -267,7 +245,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return 0
 	case "calendar":
-		return calendarCmd(ctx, o, pos, resolve, stdin, say, fail, stderr)
+		return fail(hive.Errf(CalendarRemoved))
 	case "mcp":
 		cfg, err := resolve()
 		if err != nil {

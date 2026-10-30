@@ -57,13 +57,11 @@ async function started(ref = 'r1', threadRef = 'thread-1') {
 }
 const thread = async (tid = 'itr1') => (await snap(T(tid))) as unknown as ThreadStateOf;
 
-// The design's example: reply → book → you approve → Build it → reply "done".
+// The design's example: reply → nudge → you approve → Build it → reply "done" (the booking step
+// went with Calendar, OE8Fm slice 5).
 const EXAMPLE: PlanStepInput[] = [
   { type: 'reply', fields: { text: 'Thursday works.' } },
-  {
-    type: 'book',
-    fields: { start: '2026-11-05T10:00:00Z', end: '2026-11-05T11:00:00Z', with: 'Sam' },
-  },
+  { type: 'nudge', fields: { text: 'Any news on Thursday?' } },
   { type: 'approval', fields: { what: 'The price-list change', detail: '€10 → €12' } },
   { type: 'make_it_work', fields: { title: 'Update the price list', project: 'Website' } },
   { type: 'reply', fields: { text: 'Done: the new prices are live.' } },
@@ -130,7 +128,7 @@ describe('proposing a plan', () => {
     await proposed();
     expect(await snap(PL('pl1'))).toMatchObject({ steps: IDS, cursor: 0, state: 'proposed' });
     expect(await snap(O('st3'))).toMatchObject({ type: 'approval', executor: null, planId: 'pl1' });
-    expect(await snap(O('st2'))).toMatchObject({ type: 'book', executor: AGENTS.a });
+    expect(await snap(O('st2'))).toMatchObject({ type: 'nudge', executor: AGENTS.a });
     expect(await snap(T('itr1'))).toMatchObject({ state: 'yourCall' });
   });
   it('not by the member; not half a plan; not with a forged start', async () => {
@@ -230,7 +228,7 @@ describe('proposing a plan', () => {
 describe('approving', () => {
   it('Approve plan approves the agent steps only, within the read limit', async () => {
     await started();
-    // 8 steps: 7 agent steps (two bookings) and a gate
+    // 8 steps: 7 agent steps and a gate
     const steps = [...EXAMPLE, EXAMPLE[1]!, EXAMPLE[0]!, EXAMPLE[0]!];
     const ids = [...IDS, 'st6', 'st7', 'st8'];
     await proposed(steps, ids);
@@ -249,17 +247,10 @@ describe('approving', () => {
       'approved',
     ]);
   });
-  it('the worst case fits the 20 reads of a batch: 8 bookings approved, then rejected', async () => {
+  it('the worst case fits the 20 reads of a batch: 8 steps approved, then rejected', async () => {
     await started();
     const ids = Array.from({ length: 8 }, (_, i) => `bk${i}`);
-    const steps = ids.map((_, i) => ({
-      type: 'book',
-      fields: {
-        start: `2026-11-0${i + 1}T10:00:00Z`,
-        end: `2026-11-0${i + 1}T11:00:00Z`,
-        with: 'Sam',
-      },
-    }));
+    const steps = ids.map((_, i) => ({ type: 'nudge', fields: { text: `Any news? (${i + 1})` } }));
     await proposed(steps, ids);
     const alice = as('alice');
     await approvedAll(alice);
@@ -626,7 +617,7 @@ describe('editing a plan', () => {
 });
 
 describe('plan-only outcome types', () => {
-  it('an agent cannot propose an approval gate or a bare booking alone', async () => {
+  it('an agent cannot propose an approval gate or a (retired) booking alone', async () => {
     const a = await started();
     const p = proposeOutcome(a.ctx, {
       threadId: 'itr1',

@@ -47,7 +47,7 @@ type Agent struct {
 	Color string `firestore:"color" json:"color"`
 	// ProjectIDs is a []any of ids or the string "*" (every project).
 	ProjectIDs any `firestore:"projectIds" json:"projectIds"`
-	// Scope is "inbox" for an Inbox and Calendar agent (item fJnu6), "" otherwise.
+	// Scope is "inbox" for an Inbox agent (item fJnu6), "" otherwise.
 	Scope       string     `firestore:"scope" json:"scope,omitempty"`
 	CreatedBy   string     `firestore:"createdBy" json:"createdBy"`
 	CreatedAt   time.Time  `firestore:"createdAt" json:"createdAt"`
@@ -69,7 +69,7 @@ type Agent struct {
 	LastEventID      string      `firestore:"lastEventId" json:"lastEventId"`
 }
 
-// InboxOnly is true for an agent limited to Inbox and Calendar (packages/shared/src/agents.ts inboxOnly).
+// InboxOnly is true for an agent limited to Inbox (packages/shared/src/agents.ts inboxOnly).
 func (a Agent) InboxOnly() bool { return a.Scope == "inbox" }
 
 // AllProjects is true when the agent may work on every project ('*').

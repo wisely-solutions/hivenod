@@ -74,16 +74,13 @@ async function planned(): Promise<PlanInput> {
       proposePlan(a.ctx, {
         threadId: 'itr1',
         thread: await thread(),
-        note: 'Reply, then book',
+        note: 'Reply, then nudge',
         planId: 'pl1',
         stepIds: ['st1', 'st2', 'st3'],
         steps: [
           { type: 'reply', fields: { text: 'Thursday works.' } },
-          {
-            type: 'book',
-            fields: { start: '2026-11-05T10:00:00Z', end: '2026-11-05T11:00:00Z', with: 'Sam' },
-          },
-          { type: 'reply', fields: { text: 'Booked.' } },
+          { type: 'nudge', fields: { text: 'Any news on Thursday?' } },
+          { type: 'reply', fields: { text: 'See you then.' } },
         ],
       }),
     ),

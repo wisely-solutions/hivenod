@@ -124,7 +124,7 @@ export function DecisionRow({
   );
 }
 
-/** A decision made this visit: the card collapsed to one line ("Sent · Reply and book · Sam"). */
+/** A decision made this visit: the card collapsed to one line ("Sent · Reply · Sam"). */
 export function DoneRow({ label }: { label: string }) {
   return (
     <li className="pb-2" data-done-row="">

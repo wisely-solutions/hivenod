@@ -58,6 +58,13 @@ type OutcomeType struct {
 	// Plan: allowed as a plan step; PlanOnly: never proposed alone (outcome_propose).
 	Plan     bool `json:"plan"`
 	PlanOnly bool `json:"planOnly"`
+	// Retired (bookings, item OE8FmrTaIxFVGcaeGG3N slice 5): old records only, never proposed.
+	Retired bool `json:"retired"`
+}
+
+// RetiredMessage is RETIRED_MESSAGE: the refusal for a retired outcome type.
+func RetiredMessage(t string) string {
+	return t + " was retired with Calendar: bookings are no longer made through Hivenod. Reject it, or propose a reply that suggests times."
 }
 
 // Outcomes is the registry, in its order.
@@ -1060,6 +1067,9 @@ func ProposeOutcome(ctx Ctx, in ProposeInput) (ProposeResult, error) {
 	if typ == nil {
 		return ProposeResult{}, fail("Unknown outcome type " + in.Type + ". Types: " + strings.Join(SingleOutcomeTypes(), ", ") + ".")
 	}
+	if typ.Retired {
+		return ProposeResult{}, fail(RetiredMessage(in.Type))
+	}
 	if typ.PlanOnly {
 		return ProposeResult{}, fail(in.Type + " is only a step of a plan (plan_propose). Types alone: " + strings.Join(SingleOutcomeTypes(), ", ") + ".")
 	}
@@ -1183,6 +1193,9 @@ func ReviseOutcome(ctx Ctx, in ReviseInput) (ReviseResult, error) {
 	}
 	if o.ProposedBy == nil || *o.ProposedBy != ctx.Actor.ID {
 		return ReviseResult{}, fail("Only the agent that proposed this outcome revises it.")
+	}
+	if t := OutcomeTypeOf(o.Type); t != nil && t.Retired {
+		return ReviseResult{}, fail(RetiredMessage(o.Type))
 	}
 	if in.Fields == nil {
 		in.Fields = map[string]any{}
