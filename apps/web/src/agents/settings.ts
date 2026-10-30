@@ -27,12 +27,9 @@ export function parseCount(text: string): number | null {
 }
 
 export function settingsErrors(d: SettingsDraft): {
-  projects?: string;
   maxFailedRuns?: string;
 } {
   const out: ReturnType<typeof settingsErrors> = {};
-  if (!d.inboxOnly && !d.allProjects && d.projectIds.length === 0)
-    out.projects = 'Pick at least one project.';
   const n = parseCount(d.maxFailedRuns);
   if (n === null || n < 1 || n > MAX_FAILED_RUNS_LIMIT)
     out.maxFailedRuns = `A whole number from 1 to ${MAX_FAILED_RUNS_LIMIT}.`;
@@ -40,10 +37,6 @@ export function settingsErrors(d: SettingsDraft): {
 }
 
 export function settingsChanged(a: SettingsDraft, b: SettingsDraft): boolean {
-  const sorted = (x: readonly string[]) => [...x].sort().join('|');
-  return (
-    a.allProjects !== b.allProjects ||
-    (!b.allProjects && sorted(a.projectIds) !== sorted(b.projectIds)) ||
-    parseCount(a.maxFailedRuns) !== parseCount(b.maxFailedRuns)
-  );
+  // Projects were removed (item OE8FmrTaIxFVGcaeGG3N, slice 10): only the guardrails change here.
+  return parseCount(a.maxFailedRuns) !== parseCount(b.maxFailedRuns);
 }

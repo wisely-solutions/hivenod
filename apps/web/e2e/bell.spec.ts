@@ -126,7 +126,7 @@ test('signing in with 5 unread shows no pop-up; the bell says 5; open, read, mar
 }, info) => {
   test.skip(info.project.name !== 'desktop-1440', 'the sidebar bell is desktop');
   test.setTimeout(90_000);
-  const { uid, pid } = await seedBell(page);
+  const { uid } = await seedBell(page);
   // A fresh load is a sign-in: the history must not pop up.
   await page.reload();
   const side = page.getByRole('complementary', { name: 'Main' });
@@ -155,7 +155,8 @@ test('signing in with 5 unread shows no pop-up; the bell says 5; open, read, mar
 
   // A click opens the item and marks the entry read.
   await pop.locator('[data-entry="n2"]').click();
-  await expect(page).toHaveURL(new RegExp(`/p/${pid}\\?item=b2`));
+  // Projects were removed (OE8Fm slice 10): an old item entry opens Inbox (not migrated).
+  await expect(page).toHaveURL(/\/inbox$/);
   await expect.poll(() => readAt(uid, 'n2')).toBe('read');
   await expect(bellCount(page)).toHaveText('4');
   await page.keyboard.press('Escape');
@@ -201,7 +202,8 @@ test('a live event while the app is open gives one toast and one bell entry', as
   await expect(toasts(page)).toHaveCount(1);
   // Its Open goes to the item and marks it read.
   await toasts(page).getByRole('button', { name: 'Open' }).click();
-  await expect(page).toHaveURL(new RegExp(`/p/${pid}\\?item=b4`));
+  // Projects were removed (OE8Fm slice 10): an old item entry opens Inbox (not migrated).
+  await expect(page).toHaveURL(/\/inbox$/);
   await expect.poll(() => readAt(uid, 'live1')).toBe('read');
   await expect(bellCount(page)).toHaveText('5');
 });
@@ -245,7 +247,7 @@ test('phones: the bell sits in the top bar and opens the full-screen list; the t
   test.skip(info.project.name === 'desktop-1440', 'phone layout');
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 390, height: 844 });
-  const { uid, pid } = await seedBell(page);
+  const { uid } = await seedBell(page);
   await page.reload();
   const header = page.locator('header');
   const bell = header.getByRole('link', { name: /^Notifications/ });
@@ -258,7 +260,8 @@ test('phones: the bell sits in the top bar and opens the full-screen list; the t
   await expect(page.locator('main [data-entry]')).toHaveCount(5);
   await expectNoHorizontalScroll(page);
   await page.locator('main [data-entry="n1"]').click();
-  await expect(page).toHaveURL(new RegExp(`/p/${pid}\\?item=b1`));
+  // Projects were removed (OE8Fm slice 10): an old item entry opens Inbox (not migrated).
+  await expect(page).toHaveURL(/\/inbox$/);
   await expect.poll(() => readAt(uid, 'n1')).toBe('read');
   await expect(bell).toHaveAccessibleName('Notifications, 4 unread');
 });

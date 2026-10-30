@@ -11,7 +11,6 @@ import { isOrgPath, TABS } from './nav';
 import { useReady } from '../auth/context';
 import { OrgMark } from '../orgs/OrgSwitcher';
 import { useOrgLooks } from '../orgs/look';
-import { useShellData } from './data';
 
 /** Hides while scrolling down, comes back on any scroll up (or near the top). */
 export function useScrollHidden(): boolean {
@@ -41,21 +40,19 @@ export function useScrollHidden(): boolean {
 
 /**
  * The last tab (item icVly, model A): the organization picked in the switcher, as its mark and
- * name. It opens the organization hub (projects, agents, settings, switch) and is lit on every
- * organization page. A dot when something in its projects needs you.
+ * name. It opens the organization hub (agents, settings, switch) and is lit on every
+ * organization page.
  */
 function OrgTab() {
   const { session } = useReady();
   const look = useOrgLooks()(session.workspaceId);
-  const { needs, needsReady } = useShellData();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const active = isOrgPath(path);
   const name = session.workspace.name;
-  const waiting = needsReady && needs.total > 0;
   return (
     <Link
       to="/org"
-      aria-label={`${name}, organization${waiting ? `, ${needs.total} waiting in its projects` : ''}`}
+      aria-label={`${name}, organization`}
       data-org-tab=""
       data-status={active ? 'active' : undefined}
       className="relative flex min-h-14 min-w-0 flex-col-reverse items-center justify-center gap-0.5 px-1 text-12 font-medium text-text-2 transition-colors data-[status=active]:text-ink"
@@ -63,12 +60,6 @@ function OrgTab() {
       <span className="block w-full truncate text-center">{name}</span>{' '}
       <span className="relative">
         <OrgMark name={name} {...look} className="size-[22px] text-12" />
-        {waiting ? (
-          <span
-            aria-hidden
-            className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-surface bg-gate"
-          />
-        ) : null}
       </span>
     </Link>
   );
@@ -134,7 +125,7 @@ export function TabBar({ hidden }: { hidden: boolean }) {
         <li>
           <button
             type="button"
-            aria-label="Add an item"
+            aria-label="New thread"
             onClick={() => capture.open()}
             className="flex min-h-14 w-full items-center justify-center foc:outline-2 foc:outline-focus"
           >

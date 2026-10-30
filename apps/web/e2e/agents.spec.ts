@@ -84,18 +84,10 @@ async function openTokenForm(page: Page) {
   await expect(page.getByRole('dialog', { name: 'New agent with a token' })).toBeVisible();
 }
 
-async function createAgent(
-  page: Page,
-  name: string,
-  opts: { color?: string; projects?: string[] } = {},
-) {
+async function createAgent(page: Page, name: string, opts: { color?: string } = {}) {
   await openTokenForm(page);
   await page.getByLabel('Name').fill(name);
   if (opts.color) await page.getByRole('radio', { name: opts.color }).click();
-  if (opts.projects) {
-    await page.getByRole('radio', { name: /Chosen projects/ }).check();
-    for (const p of opts.projects) await page.getByRole('checkbox', { name: p }).check();
-  }
   await page.getByRole('button', { name: 'Create agent' }).click();
   await expect(page.getByRole('dialog', { name: `Token for ${name}` })).toBeVisible();
   return page.getByLabel('Agent token').inputValue();
@@ -123,14 +115,13 @@ test('create -> token once -> sign in -> allowed / denied -> revoke -> denied', 
   await openTokenForm(page);
   await page.getByRole('button', { name: 'Create agent' }).click();
   await expect(page.getByText('Give the agent a name.')).toBeVisible();
-  await page.getByLabel('Name').fill('Scout');
-  await page.getByRole('radio', { name: /Chosen projects/ }).check();
-  await page.getByRole('button', { name: 'Create agent' }).click();
-  await expect(page.getByText('Pick at least one project.')).toBeVisible();
+  // Projects were removed (OE8Fm slice 10): no project choice, only Inbox (and plans) or Inbox only.
+  await expect(page.getByRole('radio', { name: /Chosen projects/ })).toHaveCount(0);
+  await expect(page.getByRole('radio', { name: /Inbox and development plans/ })).toBeChecked();
   await page.getByRole('button', { name: 'Cancel' }).click();
 
-  // Create: Scout may use Blog only.
-  const token = await createAgent(page, 'Scout', { color: 'Teal', projects: ['Blog'] });
+  // Create.
+  const token = await createAgent(page, 'Scout', { color: 'Teal' });
   expect(token).toMatch(/^hive_agt_[A-Za-z0-9_-]+$/);
   const { p: password, w } = decodeToken(token);
   expect(w).toBe(wid);
@@ -148,7 +139,6 @@ test('create -> token once -> sign in -> allowed / denied -> revoke -> denied', 
   const row = page.getByRole('listitem', { name: 'Scout' });
   await expect(row).toBeVisible();
   await expect(row.getByText('Offline · not connected yet')).toBeVisible();
-  await expect(row.getByText('Blog', { exact: true })).toBeVisible();
   await expect(row.getByText(tokenHint(token))).toBeVisible();
   expect(await page.content()).not.toContain(token);
   expect(await page.content()).not.toContain(password);
@@ -156,13 +146,8 @@ test('create -> token once -> sign in -> allowed / denied -> revoke -> denied', 
   // An agent process signs in with only the token.
   const bot = await asAgent(token);
   expect(bot.who.workspaceId).toBe(wid);
-  expect((await bot.read(`workspaces/${wid}/projects/blog`)).exists()).toBe(true);
-  await bot.read(`workspaces/${wid}/projects/ops`).then(
-    () => {
-      throw new Error('expected the non-allowed project to be denied');
-    },
-    (e) => expect(isDenied(e)).toBe(true),
-  );
+  const own = `workspaces/${wid}/agents/${bot.who.uid}`;
+  expect((await bot.read(own)).exists()).toBe(true);
 
   // Revoke names the consequences, then takes effect on the very next request.
   await row.getByRole('button', { name: 'Actions for Scout' }).click();
@@ -183,7 +168,7 @@ test('create -> token once -> sign in -> allowed / denied -> revoke -> denied', 
   await expect(page.getByRole('menuitem', { name: 'Revoke' })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: 'Rotate token' })).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await bot.read(`workspaces/${wid}/projects/blog`).then(
+  await bot.read(own).then(
     () => {
       throw new Error('expected the revoked token to be denied');
     },
@@ -192,7 +177,7 @@ test('create -> token once -> sign in -> allowed / denied -> revoke -> denied', 
   await bot.done();
   // A brand new sign-in with the same token is denied too.
   const again = await asAgent(token);
-  await again.read(`workspaces/${wid}/projects/blog`).then(
+  await again.read(own).then(
     () => {
       throw new Error('expected the revoked token to be denied');
     },
@@ -391,11 +376,8 @@ test('connect a terminal: the code from hivenod pair creates the agent and hands
   await expect(modal.getByLabel('Terminal waiting')).toContainText('Claude Code on laptop');
   await expect(modal.getByLabel('Name')).toHaveValue('Claude Code (laptop)');
   await expectNoHorizontalScroll(page);
-  // A terminal gets only chosen projects by default (tester finding 8).
-  await expect(modal.getByRole('radio', { name: /Chosen projects/ })).toBeChecked();
-  await modal.getByRole('button', { name: 'Pair this terminal' }).click();
-  await expect(modal.getByText('Pick at least one project.')).toBeVisible();
-  await modal.getByRole('checkbox', { name: 'Blog' }).check();
+  // No projects to choose (OE8Fm slice 10): Inbox and development plans by default.
+  await expect(modal.getByRole('radio', { name: /Inbox and development plans/ })).toBeChecked();
   await expect(modal.getByText('Allowed when unattended')).toHaveCount(0);
   await modal.getByRole('button', { name: 'Pair this terminal' }).click();
 
@@ -439,7 +421,7 @@ test('connect a terminal: the code from hivenod pair creates the agent and hands
   expect(token).toMatch(/^hive_agt_/);
   const bot = await asAgent(token);
   expect(bot.who.uid).toBe(p.agentUid);
-  expect((await bot.read(`workspaces/${wid}/projects/blog`)).exists()).toBe(true);
+  expect((await bot.read(`workspaces/${wid}/agents/${p.agentUid}`)).exists()).toBe(true);
   await bot.done();
   await term.done();
 
@@ -556,7 +538,6 @@ for (const theme of ['light', 'dark'] as const) {
     await page.goto(`/agents/connect?code=${formatPairingCode(term.code)}`);
     // A full page load that then looks the pairing code up on the server: more than 5 s when loaded.
     await expect(page.getByLabel('Terminal waiting')).toBeVisible({ timeout: 20_000 });
-    await page.getByRole('checkbox', { name: 'Blog' }).check();
     await axe();
     await snap('2-pair-found');
     await page.getByRole('button', { name: 'Pair this terminal' }).click();

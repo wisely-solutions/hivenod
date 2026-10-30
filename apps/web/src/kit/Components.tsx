@@ -3,7 +3,8 @@ import { useState, type ReactNode } from 'react';
 import { Avatar, AgentAvatar, AvatarStack } from '../ui/avatar';
 import { Badge, Eyebrow, Pill, StepPill } from '../ui/badge';
 import { Button, IconButton, type ButtonVariant } from '../ui/button';
-import { Card, ItemCard } from '../ui/card';
+import { Card } from '../ui/card';
+import { ItemCard } from './ItemCard';
 import {
   BarChart,
   CountUp,

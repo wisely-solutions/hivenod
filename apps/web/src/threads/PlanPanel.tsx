@@ -50,7 +50,6 @@ import { Icon } from '../ui/icon';
 import { ActionMenu, type MenuAction } from '../ui/menu';
 import { Dialog } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
-import { BuildItCard } from './BuildItCard';
 import { GateAsk } from './GateAsk';
 import { FieldView } from './OutcomeCard';
 import { usePlanActions } from './usePlanActions';
@@ -299,16 +298,6 @@ export function PlanPanel(props: PlanPanelProps) {
           <p className="mt-3 text-14 text-sendback">
             Failed{o.result?.error ? `: ${o.result.error}` : ''}
           </p>
-        ) : null}
-        {o.type === 'make_it_work' && o.result?.itemId ? (
-          <>
-            <BuildItCard wid={wid} outcome={o} />
-            {o.state === 'running' ? (
-              <p data-running-item="" className="mt-2 text-13 text-text-2">
-                The plan goes on when this item is Done.
-              </p>
-            ) : null}
-          </>
         ) : null}
         {o.state === 'done' && o.result?.permalink ? (
           <a

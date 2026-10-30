@@ -170,27 +170,13 @@ async function seed(page: Page) {
   return { wid, uid };
 }
 
-test('silent work shows "<agent> silent for N min" on the card, the item, the plan step and Today', async ({
+test('silent work shows "<agent> silent for N min" on the thread, its plan step and Today', async ({
   page,
 }, info) => {
   if (info.project.name !== 'desktop-1440') await page.setViewportSize({ width: 390, height: 844 });
   const { wid } = await seed(page);
 
-  await page.goto('/p/hive');
-  const card = page
-    .getByRole('button')
-    .filter({ has: page.getByRole('heading', { name: 'Dark mode for the board' }) })
-    .first();
-  await expect(card.getByTestId('silence-flag')).toHaveText(/Hive silent for 4[12] min/, {
-    timeout: 15_000,
-  });
-  await look(page, 'card');
-
-  await card.click();
-  const flag = page.locator('[aria-label="Item detail"]:visible').getByTestId('silence-flag');
-  await expect(flag).toHaveText(/Hive silent for 4[12] min/, { timeout: 15_000 });
-  await look(page, 'item');
-
+  // The board card and item went with Projects (OE8Fm slice 10): the thread and Today remain.
   await page.goto(`/inbox/${wid}/t/rt1`);
   // The decision page's top says it; at 1440 the plan step shows it too (the plan folds at 390).
   const top = page.getByRole('region', { name: 'Decision' });
