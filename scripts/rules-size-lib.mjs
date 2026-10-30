@@ -42,28 +42,96 @@ export function padRules(src, n) {
   return src.slice(0, j) + pad + src.slice(j);
 }
 
+/** Google also refuses a ruleset whose source files total this many bytes or more. */
+export const RULES_SOURCE_LIMIT = 262144;
+/**
+ * A lower bound for what one pad function adds to the compiled size: its filler string literal is
+ * kept as is (400 characters), so a pad costs at least this many bytes.
+ */
+export const PAD_MIN_COMPILED = 400;
+
+/** True for Google's 400 on a ruleset whose source is too big ("Total size of sources must be smaller than 262144"). */
+export function isSourcesTooBig(text) {
+  return /total size of sources must be smaller than \d+/i.test(String(text ?? ''));
+}
+
+/** Thrown by an upload that Google refused for the source size (not the compiled size). */
+export class SourcesTooBigError extends Error {
+  constructor(message = 'rules size probe: sources too big') {
+    super(message);
+    this.name = 'SourcesTooBigError';
+  }
+}
+
+/**
+ * The rules without comments, indentation and blank lines. Compiled size ignores them, so the
+ * probe uploads this form: the rules then leave room under the source limit for the padding.
+ */
+export function compactRules(src) {
+  return stripRulesComments(src)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+/** Source bytes one pad function adds. */
+function padBytes(source) {
+  return padRules(source, 1).length - source.length;
+}
+
 /**
  * The compiled size of `source`. `tryRelease(source)` uploads the ruleset and tries a throwaway
  * release, cleans up, and returns the compiled size when Google refused it for size, or null
- * when the release fit. Unpadded first; when it fits, pad with n functions (doubling from 40)
- * until refused, then once more with n + 20 to learn the exact cost per pad function.
- * @returns {Promise<number>}
+ * when the release fit (it may throw SourcesTooBigError when the source alone is too big).
+ * The source is compacted first. Unpadded; when it fits, pad with n functions (doubling from 40,
+ * never past Google's source limit) until refused, then once more with 20 pads fewer or more to
+ * learn the exact cost per pad function.
+ * When the padding cannot get past the compiled limit within the source limit, the rules do
+ * fit: the result then has no exact size, only `atMost`, an upper bound from the pads that fit.
+ * @returns {Promise<{size: number, exact: true} | {size: null, exact: false, atMost: number, pads: number}>}
  */
 export async function measureCompiledSize(source, tryRelease, { maxPad = 1280 } = {}) {
-  const direct = await tryRelease(source);
-  if (direct != null) return direct;
-  let n = 40;
+  const base = compactRules(source);
+  const direct = await tryRelease(base);
+  if (direct != null) return { size: direct, exact: true };
+  const per = padBytes(base);
+  // Leave 20 pads for the second try and a little for the pad block's own newline.
+  const nMax = Math.min(maxPad, Math.floor((RULES_SOURCE_LIMIT - 1 - base.length) / per) - 20);
+  const unmeasured = (pads) => ({
+    size: null,
+    exact: false,
+    atMost: RULES_COMPILED_LIMIT - pads * PAD_MIN_COMPILED,
+    pads,
+  });
+  const attempt = async (n) => {
+    try {
+      return { m: await tryRelease(padRules(base, n)) };
+    } catch (e) {
+      if (e instanceof SourcesTooBigError) return { tooBig: true };
+      throw e;
+    }
+  };
+  let n = Math.min(40, nMax);
   let m1 = null;
-  while (n <= maxPad) {
-    m1 = await tryRelease(padRules(source, n));
-    if (m1 != null) break;
-    n *= 2;
+  let fitted = 0;
+  while (n >= 1) {
+    const r = await attempt(n);
+    if (r.tooBig) return unmeasured(fitted);
+    if (r.m != null) {
+      m1 = r.m;
+      break;
+    }
+    fitted = n;
+    if (n >= nMax) return unmeasured(fitted);
+    n = Math.min(n * 2, nMax);
   }
-  if (m1 == null) throw new Error(`rules size probe: still under the limit with ${maxPad} pads`);
-  const m2 = await tryRelease(padRules(source, n + 20));
-  if (m2 == null) throw new Error('rules size probe: a bigger pad fit where a smaller one did not');
-  const perPad = (m2 - m1) / 20;
-  return Math.round(m1 - n * perPad);
+  if (m1 == null) return unmeasured(fitted);
+  const r2 = await attempt(n + 20);
+  if (r2.tooBig || r2.m == null)
+    throw new Error('rules size probe: a bigger pad fit where a smaller one did not');
+  const perPad = (r2.m - m1) / 20;
+  return { size: Math.round(m1 - n * perPad), exact: true };
 }
 
 /** The rules without comments. */
@@ -102,9 +170,30 @@ export function estimateCompiledSize(src) {
   return Math.round(4.4727 * tokens + 0.9526 * chars - 10837);
 }
 
-/** One-line verdict for the deploy log. */
+/**
+ * One-line verdict for the deploy log, for a measurement from measureCompiledSize or a plain size.
+ * An unmeasured result is a pass: the padding never reached the limit within Google's source limit.
+ */
 export function rulesSizeVerdict(size, limit = RULES_COMPILED_LIMIT) {
+  if (size != null && typeof size === 'object') {
+    return size.exact
+      ? rulesSizeVerdict(size.size, limit)
+      : `rules fit: compiled size is at most ${size.atMost} of ${limit} bytes (${size.pads} pad functions still fit; the probe reached Google's source limit of ${RULES_SOURCE_LIMIT} bytes before the compiled limit, so the exact size is not measured)`;
+  }
   return size >= limit
     ? `rules too big: ${size} of ${limit} bytes (Google refuses the release; see docs/DEPLOY.md "Rules size and compile time")`
     : `rules compiled size: ${size} of ${limit} bytes (${Math.round((100 * (limit - size)) / limit)}% headroom)`;
+}
+
+/**
+ * What a deploy or the CLI does with a measurement: `pass` false means stop (Google would refuse
+ * the release), `size` is the exact compiled size or null when only a bound is known.
+ */
+export function rulesSizeOutcome(m, limit = RULES_COMPILED_LIMIT) {
+  const size = m.exact ? m.size : null;
+  return {
+    pass: m.exact ? m.size < limit : true,
+    size,
+    message: rulesSizeVerdict(m, limit),
+  };
 }

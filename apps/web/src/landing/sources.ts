@@ -1,8 +1,7 @@
 /**
- * The channels the landing page names for Inbox and Calendar (item x38DsNLjyh1rBTlkwMr5): only
- * ones an agent can really bring in today. Messages: the sources Hivenod knows (INBOX_SOURCES in
- * @hive/shared, kept in step by sources.test.ts; not imported here so the landing chunk stays
- * small). Calendar: Google Calendar, the one an agent syncs and books in (docs/INBOX.md).
+ * The channels the landing page names for Inbox (item x38DsNLjyh1rBTlkwMr5): only ones an agent
+ * can really bring in today: the sources Hivenod knows (INBOX_SOURCES in @hive/shared, kept in
+ * step by sources.test.ts; not imported here so the landing chunk stays small).
  */
 export const MESSAGE_SOURCES: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'mail', label: 'Mail' },
@@ -12,8 +11,4 @@ export const MESSAGE_SOURCES: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'gitlab', label: 'GitLab' },
   { id: 'github', label: 'GitHub' },
   { id: 'telegram', label: 'Telegram' },
-];
-
-export const CALENDAR_SOURCES: ReadonlyArray<{ id: string; label: string }> = [
-  { id: 'google', label: 'Google Calendar' },
 ];
