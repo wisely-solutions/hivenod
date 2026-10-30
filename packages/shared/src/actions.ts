@@ -37,7 +37,12 @@ export function increment(by: number) {
 export type Increment = ReturnType<typeof increment>;
 
 export interface WriteOp {
-  kind: 'set' | 'update' | 'delete';
+  /**
+   * `create`: a set that fails when the document exists (Admin SDK `create()`, the scheduler's
+   * idempotent fire). The web SDK has no batch create: it writes it as a set, which the rules
+   * judge as a create anyway when the document is new.
+   */
+  kind: 'set' | 'create' | 'update' | 'delete';
   path: string;
   /** For `update`, keys may be dotted field paths (e.g. `gate.approvals.<uid>`). */
   data?: Record<string, unknown>;

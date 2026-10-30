@@ -22,6 +22,7 @@ export async function applyPlanAdmin(db: Firestore, plan: Pick<ActionPlan, 'ops'
     const ref = db.doc(op.path);
     const data = toAdminValue(op.data ?? {}) as Record<string, unknown>;
     if (op.kind === 'set') batch.set(ref, data);
+    else if (op.kind === 'create') batch.create(ref, data);
     else if (op.kind === 'update') batch.update(ref, data);
     else batch.delete(ref);
   }

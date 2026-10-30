@@ -236,7 +236,7 @@ const MUTATIONS = [
   ],
   [
     'inbox: plan-only type proposed alone',
-    [['&& d.type in outcomeSingle()', '&& d.type in outcomeTypes()']],
+    [['(d.type in outcomeSingle() ||', '(d.type in outcomeTypes() ||']],
   ],
   [
     'inbox: forged executor',
@@ -329,8 +329,8 @@ const MUTATIONS = [
     'inbox: people write agent events',
     [
       [
-        "'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back'])",
-        "'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back', 'outcome.done'])",
+        "'schedule.deleted', 'run.decided', 'agents.off', 'agents.on'])",
+        "'schedule.deleted', 'run.decided', 'agents.off', 'agents.on', 'outcome.done'])",
       ],
     ],
   ],
@@ -964,6 +964,142 @@ const MUTATIONS = [
       ],
     ],
   ],
+  // Scheduled tasks (slice 2): only the member activates, edits, pauses, deletes his schedules
+  // and decides his runs; agents only propose, as the thread's home agent, with the outcome;
+  // runs are the scheduler's; the Off switch is the member's own.
+  [
+    'schedule: agent proposes it active',
+    [
+      [
+        "return d.state == 'proposed' && d.activeFrom == null && d.agentUid == me()",
+        'return d.agentUid == me()',
+      ],
+    ],
+  ],
+  [
+    'schedule: proposal not by the home agent',
+    [
+      [
+        '&& d.proposal.by == me() && t.fetchedBy == me() && t.memberUid',
+        '&& d.proposal.by == me() && t.memberUid',
+      ],
+    ],
+  ],
+  [
+    'schedule: proposal without its outcome',
+    [["\n          && existsAfter(inboxDoc('inboxOutcomes', d.proposal.outcomeId))", '']],
+  ],
+  [
+    'schedule: outcome without its schedule',
+    [
+      [
+        "(d.type in outcomeSingle() || (d.type == 'schedule'\n            && getAfter(inboxDoc('schedules', d.fields.scheduleId)).data.proposal.outcomeId == oid))",
+        "(d.type in outcomeSingle() || d.type == 'schedule')",
+      ],
+    ],
+  ],
+  ["schedule: change of someone else's schedule", [['(x.memberUid == d.memberUid && ', '(']]],
+  ['schedule: change of a schedule another agent runs', [['&& x.agentUid == me() && ', '&& ']]],
+  [
+    'schedule: member makes one for a revoked agent',
+    [['\n              && activeAgentDoc(get(agentPath(wid, d.agentUid)))', '']],
+  ],
+  [
+    'schedule: any time of day',
+    [["\n          && r.at is string && r.at.matches('([01][0-9]|2[0-3]):[0-5][0-9]')", '']],
+  ],
+  [
+    'schedule: another member edits',
+    [
+      [
+        'return inboxOwner(r) && schedOk(d) && d.version == r.version + 1',
+        'return isMember(wid) && schedOk(d) && d.version == r.version + 1',
+      ],
+    ],
+  ],
+  [
+    'schedule: activated without approving its outcome',
+    [["? e.type == 'outcome.approved' && r.replaces == null", '? r.replaces == null']],
+  ],
+  [
+    'schedule: a new rule keeps activeFrom',
+    [
+      [
+        'd.activeFrom == r.activeFrom && d.rule == r.rule && (',
+        'd.activeFrom == r.activeFrom && (',
+      ],
+    ],
+  ],
+  ['schedule: resume keeps activeFrom', [["(r.state == 'active' || d.state != 'active')", 'true']]],
+  [
+    'schedule: another member deletes',
+    [
+      [
+        "allow delete: if inboxOwner(resource.data)\n          && inboxTracked('del-schedule-",
+        "allow delete: if isMember(wid)\n          && inboxTracked('del-schedule-",
+      ],
+    ],
+  ],
+  [
+    'schedule: delete untracked',
+    [
+      [
+        "\n          && inboxTracked('del-schedule-' + sid, ['schedule.deleted', 'outcome.rejected', 'outcome.approved'], me());",
+        ';',
+      ],
+    ],
+  ],
+  [
+    'run: decided by another member',
+    [
+      [
+        "return inboxOwner(r) && r.state == 'cantRun'",
+        "return isMember(wid) && r.state == 'cantRun'",
+      ],
+    ],
+  ],
+  ['run: decided from any state', [["&& r.state == 'cantRun'\n", '\n']]],
+  ['run: try later in the past', [['&& d.laterAt > request.time\n', '\n']]],
+  [
+    'run: try later unbounded',
+    [["\n              && d.laterAt <= request.time + duration.value(35, 'd')", '']],
+  ],
+  [
+    'run: decided in someone else’s name',
+    [['d.decision.by == me() && d.decision.at', 'd.decision.at']],
+  ],
+  [
+    'run: choice and state differ',
+    [
+      [
+        "\n          && d.state == {'runNow': 'runNow', 'later': 'later', 'skip': 'skipped'}[c]",
+        '',
+      ],
+    ],
+  ],
+  [
+    "off: another member's switch",
+    [
+      [
+        "return uid == me() && isMember(wid)\n          && exactKeys(d, ['all', 'agents', 'since'",
+        "return isMember(wid)\n          && exactKeys(d, ['all', 'agents', 'since'",
+      ],
+    ],
+  ],
+  [
+    'off: agents write it',
+    [
+      [
+        "return uid == me() && isMember(wid)\n          && exactKeys(d, ['all', 'agents', 'since'",
+        "return (isMember(wid) || isActiveAgent(wid))\n          && exactKeys(d, ['all', 'agents', 'since'",
+      ],
+      [
+        "'plan.sent_back', 'step.progress']));",
+        "'plan.sent_back', 'step.progress', 'agents.on']));",
+      ],
+    ],
+  ],
+  ['off: since in the past', [['\n          && d.since == (off ? request.time : null)', '']]],
 ];
 
 // A search text that no longer matches (the rules were refactored) would check nothing: it is

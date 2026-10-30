@@ -60,7 +60,7 @@ export function toFirestoreValue(v: unknown): unknown {
 function addOp(batch: ReturnType<typeof writeBatch>, db: Firestore, op: WriteOp) {
   const ref = doc(db, op.path);
   const data = toFirestoreValue(op.data ?? {}) as DocumentData;
-  if (op.kind === 'set') batch.set(ref, data);
+  if (op.kind === 'set' || op.kind === 'create') batch.set(ref, data);
   else if (op.kind === 'update') batch.update(ref, data);
   else batch.delete(ref);
 }
