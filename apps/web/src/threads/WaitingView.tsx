@@ -126,7 +126,7 @@ export function WaitingView({
     <section data-group="waiting-view" aria-label="Waiting">
       <div
         data-bulk-bar=""
-        className="sticky top-0 z-[2] mb-2 flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface px-3.5 py-2"
+        className="mb-2 flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface px-3.5 py-2"
       >
         <label className="mr-auto flex min-h-11 cursor-pointer items-center gap-3 text-14 font-semibold text-ink">
           <input
@@ -140,7 +140,17 @@ export function WaitingView({
             onChange={() => setPicked(allPicked ? new Set() : new Set(keys))}
             aria-label="Select all waiting threads"
           />
-          <span aria-live="polite">{selected.size ? `${selected.size} selected` : 'Select'}</span>
+          <span aria-live="polite">
+            {selected.size ? (
+              <>
+                {selected.size}
+                {/* A phone keeps both buttons on the header's one line. */}
+                <span className="max-sm:sr-only"> selected</span>
+              </>
+            ) : (
+              'Select'
+            )}
+          </span>
         </label>
         {counting ? (
           <UndoButton
@@ -153,6 +163,7 @@ export function WaitingView({
               <Button
                 variant="primary"
                 data-recheck-selected=""
+                className="shrink-0"
                 disabled={forSelected.length === 0}
                 onClick={() => recheck(forSelected, 'selected')}
                 leading={<Icon icon={RefreshCw} size={15} />}
@@ -163,11 +174,14 @@ export function WaitingView({
             <Button
               variant="secondary"
               data-recheck-all=""
+              className="shrink-0"
               disabled={forAll.length === 0}
               onClick={() => recheck(forAll, 'all')}
               leading={<Icon icon={RefreshCw} size={15} className="text-agent" />}
             >
-              Re-check all {forAll.length}
+              {/* A phone has room for both buttons only with the short label. */}
+              <span className="max-sm:hidden">Re-check all</span>
+              <span className="sm:hidden">All</span> {forAll.length}
             </Button>
           </>
         )}
@@ -207,7 +221,7 @@ export function WaitingView({
                 />
               ) : null}
               <div className="min-w-0 flex-1">
-                <h3 className="truncate text-15 font-semibold text-ink">
+                <h2 className="truncate text-15 font-semibold text-ink">
                   <Link
                     to="/inbox/$wid/t/$tid"
                     params={{ wid: t.wid, tid: t.id }}
@@ -215,13 +229,15 @@ export function WaitingView({
                   >
                     {title}
                   </Link>
-                  {o ? <span className="sr-only"> · {o.name}</span> : null}
-                </h3>
+                </h2>
                 <p className="truncate text-13 text-text-2">
                   {[subject, line].filter(Boolean).join(' · ') || ' '}
                 </p>
+                {/* Outside the truncated heading: an absolute sr-only span there would sit past
+                    the clipped title and widen the page. */}
+                {o ? <span className="sr-only">{o.name}</span> : null}
               </div>
-              <div className="flex shrink-0 items-center gap-3 max-sm:basis-full max-sm:pl-8">
+              <div className="flex shrink-0 items-center gap-x-3 gap-y-1 max-sm:min-w-0 max-sm:basis-full max-sm:flex-wrap max-sm:pl-8">
                 <StateChip state={t.data.state} waiting={t.data.waiting} />
                 <StatusText status={rowStatus(t.data, now)} now={now} />
               </div>
