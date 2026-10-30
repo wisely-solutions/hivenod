@@ -15,6 +15,7 @@ import { DecisionCard, type DecisionCardHandle } from '../today/DecisionCard';
 import { DecisionRow, DoneRow } from '../today/DecisionRow';
 import { TidyUps } from '../today/TidyUps';
 import { TodayRail } from '../today/TodayRail';
+import { OffBanner } from '../off/OffSwitch';
 import { useToday } from '../today/useToday';
 import { Icon } from '../ui/icon';
 import { nextKey, parseFilter } from './logic';
@@ -488,6 +489,9 @@ export function InboxPage() {
             ) : null
           }
         />
+        <div className="mt-4 empty:hidden">
+          <OffBanner />
+        </div>
         {/* The count for screen readers (and the old summary line's place). */}
         <p aria-live="polite" className="sr-only">
           {loading || total === 0 ? '\u00a0' : summaryLine}

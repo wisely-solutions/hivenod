@@ -34,6 +34,8 @@ import { useReplayPending } from './useReplayPending';
 import { ShortcutsProvider, useShortcut } from './shortcuts';
 import { useUndoLast } from '../ui/overlay';
 import { Sidebar } from './Sidebar';
+import { OffProvider } from '../off/data';
+import { OffPill } from '../off/OffSwitch';
 import { TabBar, useScrollHidden } from './TabBar';
 
 /**
@@ -49,7 +51,9 @@ export function Shell({ children }: { children?: ReactNode }) {
             <RemindersProvider>
               <BellProvider>
                 <CaptureProvider>
-                  <Frame>{children}</Frame>
+                  <OffProvider>
+                    <Frame>{children}</Frame>
+                  </OffProvider>
                 </CaptureProvider>
               </BellProvider>
             </RemindersProvider>
@@ -237,6 +241,7 @@ function Frame({ children }: { children?: ReactNode }) {
               {title}
             </p>
             <div className="flex items-center gap-1">
+              <OffPill variant="compact" />
               <BellLink />
               {/* Your Account lives under the avatar (items kt3E7, icVly); organization settings are the organization's. */}
               <Link

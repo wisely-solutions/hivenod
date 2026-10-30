@@ -15,6 +15,7 @@ import { OrgSwitcher } from '../orgs/OrgSwitcher';
 import { BellButton } from '../bell/Bell';
 import { useNeedsAll } from '../needs/data';
 import { NeedsBadge, needsLabel } from '../needs/NeedsBadge';
+import { OffPill } from '../off/OffSwitch';
 
 /** A zone's heading: "YOU · all organizations", "ORGANIZATION" (hidden in the icon-only sidebar). */
 const zoneHead =
@@ -69,9 +70,14 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
       </div>
 
       <div className="px-2 pb-1 xl:hidden">
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-1">
           <BellButton />
+          <OffPill variant="icon" />
         </div>
+      </div>
+      {/* The Off switch (scheduled tasks slice 7): on every page. */}
+      <div className="px-2 pb-2 max-xl:hidden">
+        <OffPill />
       </div>
 
       <div className="px-2">
