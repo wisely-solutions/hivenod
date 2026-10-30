@@ -4,7 +4,8 @@
  * agenda went with Calendar, item OE8FmrTaIxFVGcaeGG3N slice 5).
  */
 import { Link } from '@tanstack/react-router';
-import { Bot } from 'lucide-react';
+import { Bot, Clock } from 'lucide-react';
+import { Pill } from '../ui/badge';
 import type { ReactNode } from 'react';
 import { Icon } from '../ui/icon';
 import { WorkingDots } from '../ui/feedback';
@@ -41,7 +42,15 @@ export function TodayRail({
   now,
 }: {
   waiting: Array<{ key: string; wid: string; tid: string; title: string; on: string; at: number }>;
-  working: Array<{ key: string; wid: string; tid: string; title: string; note: string }>;
+  working: Array<{
+    key: string;
+    wid: string;
+    tid: string;
+    title: string;
+    note: string;
+    /** "Hive silent for 41 min" (item KZ6O9), or ''. */
+    silent?: string;
+  }>;
   now: number;
 }) {
   if (!waiting.length && !working.length) return null;
@@ -89,6 +98,14 @@ export function TodayRail({
                     <Icon icon={Bot} size={14} className="text-agent" />
                     <span className="truncate">{w.title}</span>
                   </span>
+                  {w.silent ? (
+                    <span className="mt-1 block">
+                      <Pill tone="sendback" data-testid="silence-flag">
+                        <Icon icon={Clock} size={12} />
+                        {w.silent}
+                      </Pill>
+                    </span>
+                  ) : null}
                   {w.note ? (
                     <span className="mt-0.5 block truncate text-13 text-text-2">{w.note}</span>
                   ) : null}

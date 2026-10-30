@@ -182,3 +182,22 @@ export function pingAgent(
     ],
   );
 }
+
+/**
+ * The silent flag of a thread step in agent hands (an approved or running outcome), as the web
+ * shows it ("Hive silent for 41 min"); null when it is not silent.
+ */
+export function stepSilentText(
+  o: {
+    state: string;
+    silence?: { since: number; agent?: string } | null;
+    progress?: { at: { toMillis(): number } };
+  },
+  nowMs: number,
+): string | null {
+  const f = o.silence;
+  if (!f || (o.state !== 'approved' && o.state !== 'running')) return null;
+  // A progress line after it ends it (the notifier clears the flag at its next check).
+  if (o.progress && o.progress.at.toMillis() > f.since) return null;
+  return silentText(f.agent, f.since, nowMs);
+}

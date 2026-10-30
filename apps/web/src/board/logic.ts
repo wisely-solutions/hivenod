@@ -6,7 +6,7 @@ import {
   isOnHold,
   parkOf,
   silenceOf,
-  silenceText,
+  silentText,
   statusLine,
   statusOf,
   STALE_CLAIM_MINUTES,
@@ -492,10 +492,11 @@ export function stoppedReason(
 export function statusView(item: Item, now: number): { status?: string; silence?: string } {
   if (item.status !== 'working' || !item.claim) return {};
   const st = statusOf(item);
-  const quiet = parkOf(item) ? null : silenceOf(item);
+  // Reach out (item KZ6O9): parked items are watched too; the flag names the silent agent.
+  const quiet = silenceOf(item);
   return {
     ...(st ? { status: statusLine(st) } : {}),
-    ...(quiet ? { silence: silenceText(quiet.since, now) } : {}),
+    ...(quiet ? { silence: silentText(quiet.agent, quiet.since, now) } : {}),
   };
 }
 

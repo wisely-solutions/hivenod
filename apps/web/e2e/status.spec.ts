@@ -129,7 +129,7 @@ async function seed(page: Page, name: string) {
   await adminSet(
     `${base}/projects/blog/items/i2`,
     itemDoc(uid, 'Draft the launch email', 'r2', 2, {
-      silence: { runId: 'r2', since: Date.now() - 42 * MIN, at: Date.now() - MIN },
+      silence: { runId: 'r2', since: Date.now() - 42 * MIN, at: Date.now() - MIN, agent: 'Scout' },
     }),
   );
   return { wid, base };
@@ -141,7 +141,7 @@ const cardOf = (page: Page, title: string) =>
     .filter({ has: page.getByRole('heading', { name: title }) })
     .first();
 
-test('the card and the item show the status line and the No update flag', async ({
+test('the card and the item show the status line and the silent flag', async ({
   page,
 }, info) => {
   if (info.project.name !== 'desktop-1440') await page.setViewportSize({ width: 390, height: 844 });
@@ -153,7 +153,7 @@ test('the card and the item show the status line and the No update flag', async 
     { timeout: 15_000 },
   );
   const quiet = cardOf(page, 'Draft the launch email');
-  await expect(quiet.getByTestId('silence-flag')).toHaveText(/No update for 4[23] min/);
+  await expect(quiet.getByTestId('silence-flag')).toHaveText(/Scout silent for 4[23] min/);
   await settle(page);
   await expectNoHorizontalScroll(page);
   await themed(page, 'status-board', async () => {
