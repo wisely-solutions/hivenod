@@ -365,7 +365,7 @@ export class Scheduler {
       return;
     }
     this.running = true;
-    let next = Infinity;
+    let next: number;
     try {
       next = await this.work();
     } catch (e) {

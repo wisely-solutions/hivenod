@@ -280,6 +280,14 @@ function world(start: number) {
     for (const i of instances) i.s.setPlan(pv, W, id);
   }
 
+  /** A plan listener that stopped and started again: null, then the same (stale) view. */
+  function replayPlan(id: string) {
+    for (const i of instances) {
+      i.s.setPlan(null, W, id);
+      i.s.setPlan(plans.get(id)!, W, id);
+    }
+  }
+
   function setOff(v: OffView | null) {
     for (const i of instances) i.s.setOff(v, W, 'joao');
   }
@@ -299,6 +307,7 @@ function world(start: number) {
     runDue,
     decide,
     setPlan,
+    replayPlan,
     setOff,
     digests,
   };
@@ -701,8 +710,10 @@ describe('Run now, Try later, Skip', () => {
     await w.runDue(M);
     expect(w.runs.get('s1_2026-11')!.state).toBe('cantRun');
     w.decide('s1_2026-11', 'runNow');
+    w.replayPlan('s1_2026-11');
     await w.runDue(M);
     expect(w.reruns).toEqual(['s1_2026-11']);
+    w.replayPlan('s1_2026-11');
     expect(w.fires.length).toBe(1);
     expect(w.runs.get('s1_2026-11')).toMatchObject({ state: 'fired', attempts: 2 });
     // The stale blocked plan view does not fail it again; the retried plan going on does count.
