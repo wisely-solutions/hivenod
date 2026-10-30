@@ -146,6 +146,16 @@ func ChannelTools(lazy *Lazy, cs *ChannelServer) []mcpserver.Tool {
 				if !hasItem {
 					delete(args, "itemId")
 				}
+				// Reach out (item KZ6O9): any tool call on a held item shows the agent is at work on it.
+				if s != nil {
+					touched := held
+					if touched == "" && anyItem[name] {
+						touched = itemID
+					}
+					if touched != "" {
+						s.Touched(touched, name)
+					}
+				}
 				if held == "" || !givesBack[name] {
 					return inner(ctx, c, args)
 				}

@@ -11,16 +11,25 @@ import {
   planView,
   recheckable,
   staleReason,
+  stepSilentText,
   type InboxMessage,
   type InboxOutcome,
   type InboxPlan,
   type InboxThread,
 } from '@hive/shared';
-import { Check, ChevronRight, MessageSquare, MoreHorizontal, TriangleAlert } from 'lucide-react';
+import {
+  Check,
+  ChevronRight,
+  Clock,
+  MessageSquare,
+  MoreHorizontal,
+  TriangleAlert,
+} from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
 import type { Row } from '../lib/live';
 import { effectLines } from '../lib/outcomes';
 import { ProposalPanel, QuestionPanel, type DecisionCardHandle } from '../today/DecisionCard';
+import { Pill } from '../ui/badge';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
@@ -448,6 +457,15 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
         {widget ? <div className="mt-1">{widget}</div> : null}
         {top.kind === 'working' && cur ? (
           <LongProgress outcome={cur.data} now={now} agent={agent} />
+        ) : null}
+        {top.kind === 'working' && cur && stepSilentText(cur.data, now) ? (
+          // Reach out (item KZ6O9): the agent did not answer Hivenod's status request.
+          <p className="mt-3">
+            <Pill tone="sendback" data-testid="silence-flag">
+              <Icon icon={Clock} size={12} />
+              {stepSilentText(cur.data, now)}
+            </Pill>
+          </p>
         ) : null}
         {nn.error ? (
           <p role="alert" className="mt-3 text-14 text-sendback">

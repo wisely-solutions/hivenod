@@ -12,8 +12,14 @@ import (
 
 // Status checks on ongoing work (item AzveC; packages/shared/src/status.ts).
 
-// StatusMinGap: a status may not be reported more often than this.
+// StatusMinGap: a status may not be reported more often than this, per item.
 const StatusMinGap = 30 * time.Second
+
+// SystemUID is who Hivenod's own status requests are from (item KZ6O9; packages/shared/src/reachout.ts).
+const SystemUID = "hivenod"
+
+// SystemName is how it is named in a status event.
+const SystemName = "Hivenod"
 
 // StatusEveryOf is the project's status interval in minutes (0 = off).
 func StatusEveryOf(p model.Project) int64 {
@@ -86,7 +92,7 @@ func ReportStatus(ctx Ctx, in ReportStatusInput) (plan.Plan, error) {
 	}
 	prev := StatusOf(in.Item)
 	if prev != nil && ctx.now().Sub(prev.At) < StatusMinGap {
-		return plan.Plan{}, fail("You reported a status less than 30 seconds ago: wait a little before the next one")
+		return plan.Plan{}, fail("You reported a status on this item less than 30 seconds ago (the limit is per item): wait a little before the next one")
 	}
 	repeat := prev != nil && prev.Text == text && ((prev.Pct == nil && pctN == nil) || (prev.Pct != nil && pctN != nil && *prev.Pct == *pctN))
 	su := map[string]any{"runId": claim.RunID, "text": text, "pct": pct, "at": ServerTime(), "by": ctx.Actor.ID}
