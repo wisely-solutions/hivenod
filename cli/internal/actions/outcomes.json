@@ -121,9 +121,9 @@
     "batchable": true
   },
   "make_it_work": {
-    "label": "Make it work",
-    "approve": "Create item",
-    "description": "It needs real work: a Hivenod item. When the item is done, propose a reply saying so.",
+    "label": "Make it work (retired)",
+    "approve": "Retired",
+    "description": "Retired with Projects (2026-10-30): never propose it. Propose a Development plan (plan_propose template dev) instead.",
     "fields": {
       "title": {
         "kind": "line",
@@ -147,7 +147,8 @@
       "state": "waiting",
       "waitingOn": "item"
     },
-    "plan": true
+    "planOnly": true,
+    "retired": true
   },
   "handover": {
     "label": "Hand over",

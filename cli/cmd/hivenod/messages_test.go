@@ -115,7 +115,6 @@ var hintFiles = map[string]bool{
 	"../../internal/hive/errors.go":       true,
 	"../../internal/hive/client.go":       true,
 	"../../internal/hive/ops.go":          true,
-	"../../internal/hive/ops2.go":         true,
 	"../../internal/attachfile/attach.go": true,
 }
 

@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// The texts the channel sends to the model (instructions, work, inbox and status events) are
+// The texts the channel sends to the model (instructions and inbox events) are
 // snapshot-tested against testdata/texts.json. After changing one on purpose, rewrite the
 // snapshots with UPDATE_GO_SURFACE=1 go test ./internal/hive/ and review the diff.
 
@@ -19,56 +19,14 @@ type instructionsSample struct {
 	Text     string `json:"text"`
 }
 
-type workSample struct {
-	Row struct {
-		ItemID  string  `json:"itemId"`
-		Title   string  `json:"title"`
-		Project string  `json:"project"`
-		Step    string  `json:"step"`
-		Job     *string `json:"job"`
-	} `json:"row"`
-	Why struct {
-		Why      string  `json:"why"`
-		By       string  `json:"by,omitempty"`
-		Text     string  `json:"text,omitempty"`
-		Question *string `json:"question,omitempty"`
-	} `json:"why"`
-	MaxItems int    `json:"maxItems"`
-	Text     string `json:"text"`
-}
-
 type inboxSample struct {
 	Info json.RawMessage `json:"info"`
 	Text string          `json:"text"`
 }
 
-type statusSample struct {
-	Item struct {
-		ItemID string `json:"itemId"`
-		Title  string `json:"title"`
-	} `json:"item"`
-	Why struct {
-		Why string `json:"why"`
-		By  string `json:"by"`
-	} `json:"why"`
-	MaxItems int    `json:"maxItems"`
-	Text     string `json:"text"`
-}
-
 type textSamples struct {
 	ChannelInstructions []instructionsSample `json:"channelInstructions"`
-	WorkText            []workSample         `json:"workText"`
 	InboxText           []inboxSample        `json:"inboxText"`
-	StatusText          []statusSample       `json:"statusText"`
-}
-
-func (s *workSample) render() string {
-	row := WorkRow{ItemID: s.Row.ItemID, Title: s.Row.Title, Project: s.Row.Project, Step: s.Row.Step, Job: s.Row.Job}
-	why := Arrival{Why: s.Why.Why, By: s.Why.By, Text: s.Why.Text}
-	if s.Why.Question != nil {
-		why.Question, why.HasQ = *s.Why.Question, true
-	}
-	return WorkText(row, why, s.MaxItems)
 }
 
 func (s *inboxSample) render(t *testing.T) string {
@@ -77,10 +35,6 @@ func (s *inboxSample) render(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return InboxText(info)
-}
-
-func (s *statusSample) render() string {
-	return StatusText(s.Item.ItemID, s.Item.Title, s.Why.Why, s.Why.By, s.MaxItems)
 }
 
 func loadTexts(t *testing.T) textSamples {
@@ -98,8 +52,8 @@ func loadTexts(t *testing.T) textSamples {
 
 func TestTextSnapshots(t *testing.T) {
 	s := loadTexts(t)
-	if len(s.ChannelInstructions) != MaxItemsLimit || len(s.WorkText) < 20 || len(s.InboxText) < 15 || len(s.StatusText) < 10 {
-		t.Fatalf("too few samples: %d %d %d %d", len(s.ChannelInstructions), len(s.WorkText), len(s.InboxText), len(s.StatusText))
+	if len(s.ChannelInstructions) != MaxItemsLimit || len(s.InboxText) < 15 {
+		t.Fatalf("too few samples: %d %d", len(s.ChannelInstructions), len(s.InboxText))
 	}
 	update := os.Getenv("UPDATE_GO_SURFACE") == "1"
 	check := func(name string, got string, want *string) {
@@ -117,17 +71,9 @@ func TestTextSnapshots(t *testing.T) {
 		}
 		check("ChannelInstructions", ChannelInstructions(c.MaxItems), &c.Text)
 	}
-	for i := range s.WorkText {
-		w := &s.WorkText[i]
-		check("WorkText", w.render(), &w.Text)
-	}
 	for i := range s.InboxText {
 		x := &s.InboxText[i]
 		check("InboxText "+string(x.Info), x.render(t), &x.Text)
-	}
-	for i := range s.StatusText {
-		x := &s.StatusText[i]
-		check("StatusText", x.render(), &x.Text)
 	}
 	if update {
 		var buf bytes.Buffer
@@ -148,8 +94,14 @@ func TestChannelInstructionsMaxItems(t *testing.T) {
 	if got := ChannelInstructions(0); got != ChannelInstructions(1) {
 		t.Fatal("0 must read like 1")
 	}
-	if !bytes.Contains([]byte(ChannelInstructions(7)), []byte("Up to 7 items at a time")) {
+	if !bytes.Contains([]byte(ChannelInstructions(7)), []byte("max_items is 7")) {
 		t.Fatal("max items missing")
+	}
+	// Threads only (item OE8FmrTaIxFVGcaeGG3N, slice 11): no item tools or work events.
+	for _, w := range []string{"read_item", "kind=\"work\"", "list_work", "claim ", "send_back to an earlier", "item_done", "Build it step"} {
+		if strings.Contains(ChannelInstructions(3), w) {
+			t.Errorf("instructions still mention %s", w)
+		}
 	}
 }
 

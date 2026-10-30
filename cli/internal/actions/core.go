@@ -16,9 +16,6 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf16"
-
-	"github.com/wisely-solutions/hivenod/cli/internal/model"
-	"github.com/wisely-solutions/hivenod/cli/internal/plan"
 )
 
 // Actor is who acts: Type "human" or "agent".
@@ -105,52 +102,7 @@ func Num(f float64) any {
 	return f
 }
 
-// ---------- plan ----------
-
-// Scope of an event; nil fields are null.
-type Scope struct {
-	ProjectID *string
-	ItemID    *string
-	RunID     *string
-}
-
 func sp(s string) *string { return &s }
-
-// Plan wraps a domain change with its event: the ops build returns, then the event doc. eventID
-// is generated when empty.
-func Plan(ctx Ctx, typ string, scope Scope, data map[string]any, build func(eventID string) []plan.Op, eventID string) plan.Plan {
-	if eventID == "" {
-		eventID = ctx.nid()
-	}
-	evData := data
-	if ctx.Via != "" && strings.HasPrefix(typ, "decision.") {
-		evData = make(map[string]any, len(data)+1)
-		for k, v := range data {
-			evData[k] = v
-		}
-		evData["via"] = ctx.Via
-	}
-	ptr := func(p *string) any {
-		if p == nil {
-			return nil
-		}
-		return *p
-	}
-	event := plan.Op{
-		Kind: "set",
-		Path: model.Paths.Event(ctx.WorkspaceID, eventID),
-		Data: map[string]any{
-			"actor":     map[string]any{"type": ctx.Actor.Type, "id": ctx.Actor.ID, "name": ctx.Actor.Name},
-			"projectId": ptr(scope.ProjectID),
-			"itemId":    ptr(scope.ItemID),
-			"runId":     ptr(scope.RunID),
-			"type":      typ,
-			"data":      evData,
-			"at":        ServerTime(),
-		},
-	}
-	return plan.Plan{EventID: eventID, Ops: append(build(eventID), event)}
-}
 
 // RequireHuman refuses agents.
 func RequireHuman(ctx Ctx) error {
@@ -166,63 +118,6 @@ func RequireAgent(ctx Ctx) error {
 		return fail("Only agents can do this")
 	}
 	return nil
-}
-
-// RequireReason wants at least MinReasonChars after trimming.
-func RequireReason(text string) error {
-	if jsLen(jsTrim(text)) < model.MinReasonChars {
-		return fail("Say why in at least " + strconv.Itoa(model.MinReasonChars) + " characters")
-	}
-	return nil
-}
-
-// StepIndexOf is the step's position in the library.
-func StepIndexOf(project model.Project, stepID string) (int, error) {
-	for i, s := range project.Steps {
-		if s.ID == stepID {
-			return i, nil
-		}
-	}
-	return -1, fail("Unknown step " + stepID)
-}
-
-func stepOf(project model.Project, stepID string) (model.Step, error) {
-	i, err := StepIndexOf(project, stepID)
-	if err != nil {
-		return model.Step{}, err
-	}
-	return project.Steps[i], nil
-}
-
-// Arrival is the fields that put an item at step (a fresh gate for people steps). stepAt is when it
-// got there (item QjTTL): claimable work is handed out oldest first by it.
-func Arrival(step model.Step) map[string]any {
-	if step.Kind == "human" {
-		return map[string]any{
-			"stepId": step.ID,
-			"status": "waiting",
-			"claim":  nil,
-			"gate":   map[string]any{"stepId": step.ID, "approvals": map[string]any{}, "rejections": map[string]any{}},
-			"stepAt": ServerTime(),
-		}
-	}
-	return map[string]any{"stepId": step.ID, "status": "queued", "claim": nil, "gate": nil, "stepAt": ServerTime()}
-}
-
-// Forward is one step on along the path, or done after the last one.
-func Forward(project model.Project, item model.Item) map[string]any {
-	if next := NextOnPath(project, item, item.StepID); next != nil {
-		return Arrival(*next)
-	}
-	return map[string]any{"stepId": item.StepID, "status": "done", "claim": nil, "gate": nil}
-}
-
-// OwnClaim is the actor's claim on the item, or an error.
-func OwnClaim(ctx Ctx, item model.Item) (model.Claim, error) {
-	if item.Claim == nil || item.Claim.AgentUID != ctx.Actor.ID {
-		return model.Claim{}, fail("You do not hold this item")
-	}
-	return *item.Claim, nil
 }
 
 // merge copies maps left to right into a new one (like {...a, ...b}).
@@ -310,14 +205,6 @@ func jsRound(x float64) float64 {
 		f++
 	}
 	return f
-}
-
-func strs(ss []string) []any {
-	out := make([]any, len(ss))
-	for i, s := range ss {
-		out[i] = s
-	}
-	return out
 }
 
 // JSSlice is s.slice(0, n) in UTF-16 code units (exported for the hive package).

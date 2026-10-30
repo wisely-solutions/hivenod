@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 )
 
@@ -41,6 +42,15 @@ type Surface struct {
 		Tools        []ToolSpec     `json:"tools"`
 	} `json:"channel"`
 }
+
+// RemovedTools are the item and run tools that went with projects (item OE8FmrTaIxFVGcaeGG3N,
+// slice 11). A call to one is answered with ProjectsRemoved.
+var RemovedTools = []string{"list_work", "wait_for_work", "claim", "read_item", "log", "attach", "ask",
+	"progress", "status", "raise_finding", "create_item", "release", "end_run", "complete", "send_back",
+	"add_note", "shape_item", "skip_step", "ask_path_change", "propose_step", "report_usage", "park", "unpark"}
+
+// ProjectsRemoved says where work comes from now.
+const ProjectsRemoved = "Projects were removed from Hivenod; work arrives as Inbox threads (<channel kind=\"inbox\"> events, inbox_list)."
 
 // LoadSurface parses the embedded surface.
 func LoadSurface() Surface {
@@ -226,6 +236,10 @@ func (s *Server) handle(ctx context.Context, line []byte) {
 			}
 		}
 		if tool == nil {
+			if slices.Contains(RemovedTools, p.Name) {
+				s.reply(m.ID, errorResult(fmt.Sprintf("Tool %s was removed: %s", p.Name, ProjectsRemoved)))
+				return
+			}
 			s.reply(m.ID, errorResult(fmt.Sprintf("MCP error -32602: Tool %s not found", p.Name)))
 			return
 		}

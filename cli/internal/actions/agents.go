@@ -1,8 +1,6 @@
 package actions
 
 import (
-	"math"
-	"slices"
 	"time"
 
 	"github.com/wisely-solutions/hivenod/cli/internal/model"
@@ -28,58 +26,6 @@ func GuardrailsOf(agent model.Agent) Guardrails {
 
 // IsPaused: the agent paused itself after too many failed runs.
 func IsPaused(agent model.Agent) bool { return agent.PausedAt != nil }
-
-// AllowedAgentsFor is the agents a step is limited to; empty means any agent on the project.
-func AllowedAgentsFor(project model.Project, stepID string) []string {
-	if a, ok := project.StepAgents[stepID]; ok && a != nil {
-		return a
-	}
-	return []string{}
-}
-
-// AgentMayTakeStep: the step is not limited to other agents.
-func AgentMayTakeStep(project model.Project, stepID, agentUID string) bool {
-	only := AllowedAgentsFor(project, stepID)
-	return len(only) == 0 || slices.Contains(only, agentUID)
-}
-
-// TokenUsage for NewTokens.
-type TokenUsage struct {
-	TokensIn     float64  `json:"tokensIn"`
-	TokensOut    float64  `json:"tokensOut"`
-	TokensCached *float64 `json:"tokensCached"`
-}
-
-// NewTokens is input without cache reads, plus output. Display only.
-func NewTokens(u TokenUsage) float64 {
-	cached := 0.0
-	if u.TokensCached != nil {
-		cached = *u.TokensCached
-	}
-	return math.Max(0, u.TokensIn-cached) + u.TokensOut
-}
-
-// Streak is what a run's end does to the agent's failure streak.
-type Streak struct {
-	FailStreak int64 `json:"failStreak"`
-	Pause      bool  `json:"pause"`
-}
-
-// StreakAfter is the new streak after a run ends with status (nil: nothing to write).
-func StreakAfter(agent model.Agent, status string) *Streak {
-	streak := agent.FailStreak
-	if status == "released" {
-		return nil
-	}
-	if status == "done" {
-		if streak == 0 || agent.PausedAt != nil {
-			return nil
-		}
-		return &Streak{FailStreak: 0, Pause: false}
-	}
-	next := streak + 1
-	return &Streak{FailStreak: next, Pause: agent.PausedAt == nil && next >= GuardrailsOf(agent).MaxFailedRuns}
-}
 
 // Terminal is the live terminal's presence.
 type Terminal struct {

@@ -4,11 +4,12 @@
  * reads it there). Bump it when older CLIs would break.
  *  1: everything before per-item paths (CLIs before this number existed)
  *  2: per-item paths: shaping jobs, skipped steps, path tools
+ *  3: projects removed: item tools and work events gone
  */
 // A plain constant (not a JSON import): this file is loaded by Vite, vitest, esbuild and Node's
 // own ESM loader (Playwright), and only a .ts constant works in all four. scripts/deploy.mjs
 // reads the number from this line.
-export const CLI_PROTOCOL = 2;
+export const CLI_PROTOCOL = 3;
 
 /** The site's protocol from /version.json, or null when it does not say. */
 export function siteProtocol(versionJson: unknown): number | null {

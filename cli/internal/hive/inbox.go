@@ -905,17 +905,9 @@ func (c *Client) OutcomeDone(ctx context.Context, id, status string, res Outcome
 	if err != nil {
 		return nil, err
 	}
-	if status == "started" && o.PlanID != nil && res.ItemID != nil && strings.TrimSpace(*res.ItemID) != "" {
-		// Build it (item qwFAWxZM5xkcE7PPjAzi): the item must exist; its link shows on the step and
-		// tells the channel where to watch for Done.
-		l, err := c.load(ctx, strings.TrimSpace(*res.ItemID), "")
-		if err != nil {
-			return nil, err
-		}
-		if res.Permalink == nil || strings.TrimSpace(*res.Permalink) == "" {
-			link := ItemLink(c.WebURL, l.ProjectID, l.ItemID)
-			res.Permalink = &link
-		}
+	if res.ItemID != nil && strings.TrimSpace(*res.ItemID) != "" {
+		// Build it items went with projects (item OE8FmrTaIxFVGcaeGG3N, slice 11).
+		return nil, Errf(ProjectsRemovedMessage + " Report outcome_done without itemId.")
 	}
 	in := actions.FinishInput{OutcomeID: id, Outcome: actions.OutcomeStateFrom(o), Thread: actions.ThreadStateFrom(t), Status: status}
 	if o.PlanID != nil {

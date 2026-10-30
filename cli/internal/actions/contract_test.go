@@ -65,57 +65,7 @@ func pure[I any](f func(I) (any, error)) runner {
 	}
 }
 
-type projItem struct {
-	Project model.Project `json:"project"`
-	Item    model.Item    `json:"item"`
-}
-
-func ids(steps []model.Step) []string {
-	out := make([]string, len(steps))
-	for i, s := range steps {
-		out[i] = s.ID
-	}
-	return out
-}
-
-func stepID(s *model.Step) any {
-	if s == nil {
-		return nil
-	}
-	return s.ID
-}
-
 var runners = map[string]runner{
-	"claimItem": act(ClaimItem),
-	"heartbeat": act(func(ctx Ctx, in HeartbeatInput) (any, error) {
-		p, err := Heartbeat(ctx, in)
-		if err != nil {
-			return nil, err
-		}
-		var eventID any
-		if p.EventID != "" {
-			eventID = p.EventID
-		}
-		return map[string]any{"eventId": eventID, "ops": p.Ops}, nil
-	}),
-	"logLine":        act(LogLine),
-	"releaseClaim":   act(ReleaseClaim),
-	"reportProgress": act(ReportProgress),
-	"parkItem":       act(ParkItem),
-	"reportStatus":   act(ReportStatus),
-	"statusEveryOf":  pure(func(in model.Project) (any, error) { return StatusEveryOf(in), nil }),
-	"unparkItem":     act(UnparkItem),
-	"completeStep":   act(CompleteStep),
-	"endRun":         act(EndRun),
-	"attach":         act(Attach),
-	"postMessage":    act(PostMessage),
-	"raiseFinding":   act(RaiseFinding),
-	"createItem":     act(CreateItem),
-	"agentSendBack":  act(AgentSendBack),
-	"shapeItem":      act(ShapeItem),
-	"skipStep":       act(SkipStep),
-	"askPathChange":  act(AskPathChange),
-	"proposeStep":    act(ProposeStep),
 	// Inbox (item 4PEHrOW5IfXBQWgOK9wo)
 	"addInboxMessage":   act(AddInboxMessage),
 	"assignSubject":     act(AssignSubject),
@@ -188,82 +138,10 @@ var runners = map[string]runner{
 	}),
 	"searchSubjects": pure(func(in SearchInput) (any, error) { return SearchSubjects(in), nil }),
 
-	"agentSendBackTargets": pure(func(in projItem) (any, error) {
-		return ids(AgentSendBackTargets(in.Project, in.Item)), nil
-	}),
-	"checkSendBackTarget": pure(func(in struct {
-		projItem
-		ToStepID string `json:"toStepId"`
-	}) (any, error) {
-		s, err := CheckSendBackTarget(in.Project, in.Item, in.ToStepID)
-		return s.ID, err
-	}),
-	"requireSendBackReason": pure(func(in struct {
-		Reason string `json:"reason"`
-	}) (any, error) {
-		return nil, RequireSendBackReason(in.Reason)
-	}),
-	"agentRounds": pure(func(in struct {
-		Item model.Item `json:"item"`
-	}) (any, error) {
-		return AgentRounds(in.Item), nil
-	}),
-	"stuckQuestion": pure(func(in struct {
-		Reasons []string `json:"reasons"`
-		Next    string   `json:"next"`
-	}) (any, error) {
-		return StuckQuestion(in.Reasons, in.Next), nil
-	}),
 	"constants": pure(func(struct{}) (any, error) {
 		return map[string]any{
-			"MAX_AGENT_SEND_BACKS":     MaxAgentSendBacks,
-			"STUCK_QUESTION_PREFIX":    StuckQuestionPrefix,
-			"HEARTBEAT_EVENT_AFTER_MS": HeartbeatEventAfterMs,
-			"AGENT_ONLINE_MS":          AgentOnlineMs,
+			"AGENT_ONLINE_MS": AgentOnlineMs,
 		}, nil
-	}),
-	"planPathChange": pure(func(in struct {
-		projItem
-		Actor  model.ActorRef `json:"actor"`
-		Wanted []string       `json:"wanted"`
-	}) (any, error) {
-		return PlanPathChange(in.Project, in.Item, in.Actor, in.Wanted)
-	}),
-	"isUnshaped": pure(func(in struct {
-		Item model.Item `json:"item"`
-	}) (any, error) {
-		return IsUnshaped(in.Item), nil
-	}),
-	"pathOf": pure(func(in projItem) (any, error) { return PathOf(in.Project, in.Item), nil }),
-	"stepsOnPath": pure(func(in projItem) (any, error) {
-		out := []any{}
-		for _, p := range StepsOnPath(in.Project, in.Item) {
-			m := map[string]any{"step": p.Step.ID, "state": p.State}
-			if p.Request != "" {
-				m["request"] = p.Request
-			}
-			if p.Note != "" {
-				m["note"] = p.Note
-			}
-			out = append(out, m)
-		}
-		return out, nil
-	}),
-	"nextOnPath": pure(func(in struct {
-		projItem
-		StepID *string `json:"stepId"`
-	}) (any, error) {
-		from := in.Item.StepID
-		if in.StepID != nil {
-			from = *in.StepID
-		}
-		return stepID(NextOnPath(in.Project, in.Item, from)), nil
-	}),
-	"firstOnPath": pure(func(in projItem) (any, error) { return stepID(FirstOnPath(in.Project, in.Item)), nil }),
-	"isOnHold": pure(func(in struct {
-		Item model.Item `json:"item"`
-	}) (any, error) {
-		return IsOnHold(in.Item), nil
 	}),
 	"guardrailsOf": pure(func(in struct {
 		Agent model.Agent `json:"agent"`
@@ -274,26 +152,6 @@ var runners = map[string]runner{
 		Agent model.Agent `json:"agent"`
 	}) (any, error) {
 		return IsPaused(in.Agent), nil
-	}),
-	"agentMayTakeStep": pure(func(in struct {
-		Project  model.Project `json:"project"`
-		StepID   string        `json:"stepId"`
-		AgentUID string        `json:"agentUid"`
-	}) (any, error) {
-		return AgentMayTakeStep(in.Project, in.StepID, in.AgentUID), nil
-	}),
-	"allowedAgentsFor": pure(func(in struct {
-		Project model.Project `json:"project"`
-		StepID  string        `json:"stepId"`
-	}) (any, error) {
-		return AllowedAgentsFor(in.Project, in.StepID), nil
-	}),
-	"newTokens": pure(func(in TokenUsage) (any, error) { return NewTokens(in), nil }),
-	"streakAfter": pure(func(in struct {
-		Agent  model.Agent `json:"agent"`
-		Status string      `json:"status"`
-	}) (any, error) {
-		return StreakAfter(in.Agent, in.Status), nil
 	}),
 	"liveTerminal": pure(func(in struct {
 		Agent model.Agent `json:"agent"`
