@@ -181,7 +181,10 @@ test.describe('desktop 1440', () => {
         'data-outcome-state',
         'proposed',
       );
-      expect((await outcomeDoc(s)).revise!.nullValue).toBe(null);
+      // The card follows the local write at once; the server copy a moment later.
+      await expect
+        .poll(async () => (await outcomeDoc(s)).revise?.nullValue, { timeout: 15_000 })
+        .toBe(null);
 
       // Ask again (key C), then send v1 while the agent works on it.
       await page.locator('body').click({ position: { x: 5, y: 5 } });

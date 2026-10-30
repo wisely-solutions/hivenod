@@ -115,8 +115,8 @@ const MUTATIONS = [
     'events editable',
     [
       [
-        'allow update, delete: if false;\n\n        // Calendar writes (item w9SAf)',
-        'allow update, delete: if true;\n\n        // Calendar writes (item w9SAf)',
+        'allow update, delete: if false;\n      }\n\n      // ---------- calendar (Inbox item w9SAf; removed',
+        'allow update, delete: if true;\n      }\n\n      // ---------- calendar (Inbox item w9SAf; removed',
       ],
     ],
   ],

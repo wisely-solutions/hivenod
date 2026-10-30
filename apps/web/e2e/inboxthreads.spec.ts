@@ -460,7 +460,8 @@ test('Inbox: investigate, answer, edit and send with Undo, done; reorganize; pri
     if (info.project.name === 'iphone-se') {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(`/inbox/${wid}/t/${t1}`);
-      await expect(chip(page, 'waiting')).toBeVisible();
+      // Done (no_reply), now that no booking follows it (Calendar removed, OE8Fm slice 5).
+      await expect(chip(page, 'done')).toBeVisible();
       await look(page, 'thread-390', 'iphone-se');
     }
   } finally {
