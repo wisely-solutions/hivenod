@@ -1,7 +1,7 @@
 import type { InboxOutcome, InboxThread } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
 import { bandOf, rankThreads } from '../threads/logic';
-import { greeting, isTidyUp, proposalSentence, tidySummary } from './logic';
+import { greeting, isTidyUp, proposalSentence, theirDraftText, tidySummary } from './logic';
 
 const ts = (ms: number) => ({ toMillis: () => ms, seconds: ms / 1000, nanoseconds: 0 });
 const H = 3_600_000;
@@ -143,5 +143,37 @@ describe('greeting', () => {
     expect(greeting(new Date(2026, 9, 29, 9).getTime())).toBe('Good morning');
     expect(greeting(new Date(2026, 9, 29, 13).getTime())).toBe('Good afternoon');
     expect(greeting(new Date(2026, 9, 29, 19).getTime())).toBe('Good evening');
+  });
+});
+
+describe('theirDraftText: the Their reply card', () => {
+  const v = (kind: string, quote: string | null = null) => ({
+    who: 'Ana',
+    org: 'Acme legal',
+    need: 'Her OK on clauses 4 and 7',
+    channel: 'mail',
+    quote,
+    ask: { kind },
+  });
+  it('the first ask names the step and who gets it', () => {
+    expect(theirDraftText(v('ask'), { number: 3, total: 5 })).toEqual({
+      tag: 'Their reply · step 3 of 5',
+      question: 'Send to Ana (Acme legal)?',
+      sub: 'Her OK on clauses 4 and 7 · by mail',
+      canMarkDone: false,
+    });
+  });
+  it('a follow-up quotes what they said and offers Mark done', () => {
+    const t = theirDraftText(v('follow_up', 'Clause 4 ok'), { number: 1, total: 2 });
+    expect(t.tag).toBe('Their reply · follow-up');
+    expect(t.question).toBe('Follow up with Ana?');
+    expect(t.sub).toBe('Ana said: “Clause 4 ok”');
+    expect(t.canMarkDone).toBe(true);
+  });
+  it('a reminder', () => {
+    const t = theirDraftText(v('nudge'), { number: 1, total: 2 });
+    expect(t.tag).toBe('Their reply · reminder');
+    expect(t.question).toBe('Remind Ana?');
+    expect(t.canMarkDone).toBe(true);
   });
 });

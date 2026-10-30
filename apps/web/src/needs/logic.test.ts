@@ -2,6 +2,7 @@ import type { InboxOutcome, InboxThread } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
 import type { Row } from '../lib/live';
 import {
+  askOf,
   buildNeeds,
   countKinds,
   filterByLabel,
@@ -10,6 +11,7 @@ import {
   labelsOfNeeds,
   orderNeeds,
   orderToday,
+  theirDraftWaits,
   type NeedsEntry,
   type OrgInput,
 } from './logic';
@@ -253,5 +255,60 @@ describe('label filter (item YaOErIjeIFG8Y3EvZuIp)', () => {
     expect(filterByLabel(list, 'sales').every((e) => e.thread)).toBe(true);
     expect(filterByLabel(list, 'sales').length).toBe(2);
     expect(filterByLabel(list, null).length).toBe(list.length);
+  });
+});
+
+describe('Their reply drafts wait on Today', () => {
+  const NOW = 10 * 86_400_000;
+  const ext = (state: string, kind = 'ask') =>
+    ({
+      ask: { n: 1, kind, text: 'Hi Ana', state, by: 'agent' },
+      outAt: null,
+      sent: 0,
+      reply: null,
+    }) as never;
+  const step = (state: string, askState: string) =>
+    outcome('t1', 'their_reply', { state, planId: 'p1', ext: ext(askState) } as never);
+  const plan = {
+    memberUid: 'me',
+    threadId: 't1',
+    proposedBy: 'agent',
+    steps: ['s1'],
+    cursor: 0,
+    state: 'active',
+    note: '',
+    createdAt: ts(100),
+    updatedAt: ts(100),
+    lastEventId: 'e',
+  } as never;
+
+  it('a running step with a drafted ask counts; a sent or approved one does not', () => {
+    expect(theirDraftWaits(step('running', 'proposed'))).toBe(true);
+    expect(theirDraftWaits(step('approved', 'proposed'))).toBe(true);
+    expect(theirDraftWaits(step('running', 'approved'))).toBe(false);
+    expect(theirDraftWaits(step('running', 'sent'))).toBe(false);
+    expect(theirDraftWaits(outcome('t1', 'reply', { state: 'running' }))).toBe(false);
+  });
+
+  it('puts the thread on the stack, and the thread asks the step with the draft kind', () => {
+    const o = org('w', {
+      threads: [row('t1', thread())],
+      openOutcomes: [row('s1', step('running', 'proposed'))],
+      livePlans: [row('p1', plan)],
+    });
+    const n = buildNeeds([o], 'me', NOW);
+    expect(n.todo.map((x) => x.key)).toEqual(['t:w:t1']);
+    const e0 = n.todo[0]!;
+    const a = askOf(e0.thread!, e0.plan, e0.proposals ?? []);
+    expect(a).toMatchObject({ kind: 'step', outcomeId: 's1', ext: { n: 1, kind: 'ask' } });
+  });
+
+  it('a step waiting on them is not on the stack', () => {
+    const o = org('w', {
+      threads: [row('t1', thread())],
+      openOutcomes: [],
+      livePlans: [row('p1', plan)],
+    });
+    expect(buildNeeds([o], 'me', NOW).todo).toEqual([]);
   });
 });

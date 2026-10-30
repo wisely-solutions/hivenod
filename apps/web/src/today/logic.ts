@@ -129,3 +129,50 @@ export function tidySummary(
   if (close.length) parts.push(`close ${close.length} ${close.length === 1 ? 'FYI' : 'FYIs'}`);
   return parts.join(', ');
 }
+
+/** The texts of a Their reply draft on Today's card (the mockup: tag, one-liner, sub line). */
+export interface TheirDraftText {
+  /** "Their reply · step 3 of 5", "Their reply · follow-up" or "Their reply · reminder". */
+  tag: string;
+  /** "Send to Ana (Acme legal)?" or "Follow up with Ana?" */
+  question: string;
+  /** What it is about and how it goes: the need, the channel, or what they said. */
+  sub: string;
+  /** Mark done is offered on follow-ups and reminders (they already replied or were nudged). */
+  canMarkDone: boolean;
+}
+
+export function theirDraftText(
+  v: {
+    who: string;
+    org: string | null;
+    need: string;
+    channel: string;
+    quote: string | null;
+    ask: { kind: string } | null;
+  },
+  step: { number: number; total: number },
+): TheirDraftText {
+  const kind = v.ask?.kind ?? 'ask';
+  const by = v.channel ? ` · by ${v.channel}` : '';
+  if (kind === 'follow_up')
+    return {
+      tag: 'Their reply · follow-up',
+      question: `Follow up with ${v.who}?`,
+      sub: v.quote ? `${v.who} said: “${v.quote}”` : `${v.need}${by}`,
+      canMarkDone: true,
+    };
+  if (kind === 'nudge')
+    return {
+      tag: 'Their reply · reminder',
+      question: `Remind ${v.who}?`,
+      sub: `${v.need}${by}`,
+      canMarkDone: true,
+    };
+  return {
+    tag: `Their reply · step ${step.number} of ${step.total}`,
+    question: `Send to ${v.who}${v.org ? ` (${v.org})` : ''}?`,
+    sub: `${v.need}${by}`,
+    canMarkDone: false,
+  };
+}
