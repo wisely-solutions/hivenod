@@ -980,7 +980,7 @@
       },
       {
         "name": "schedule_propose",
-        "description": "Propose a schedule when the person asks for something recurring or at a later time (\"every 1st at 9, prepare the invoices and ask me before sending\"; \"every Friday at 16:00\"; \"on 12 Nov remind them\"). Hivenod owns the clock: once the person approves (Set up schedule), it starts each run at its time as a new thread with this plan, filed under the subject, and sends you its carry_out; never keep a timer, cron or reminder of your own for it. The person sees the rule in words, the next 3 runs and the plan of each run, and approves, asks for changes (you get a revise event: schedule_propose revises=<outcomeId> with the whole schedule again, changing only what they asked) or says not now. The plan of each run is plan steps (as in plan_propose): put an approval step before anything that sends, pays or publishes. Check schedule_list first so you never schedule the same thing twice; to change a schedule you run, propose with replaces=<scheduleId>. Never through outcome_propose or as a plan step. Frequencies: once, daily (optionally only some weekdays), weekly, monthly, quarterly, yearly; no hourly.",
+        "description": "Propose a schedule when the person asks for something recurring or at a later time (\"every 1st at 9, prepare the invoices and ask me before sending\"; \"every Friday at 16:00\"; \"on 12 Nov remind them\"). Hivenod owns the clock: once the person approves (Set up schedule), it starts each run at its time as a new thread with this plan, filed under the subject, and sends you its carry_out; never keep a timer, cron or reminder of your own for it. The person sees the rule in words, the next 3 runs and the plan of each run, and approves, asks for changes (you get a revise event: schedule_propose revises=<outcomeId> with the whole schedule again, changing only what they asked) or says not now. The plan of each run is plan steps (as in plan_propose): put an approval step before anything that sends, pays or publishes. Check schedule_list first so you never schedule the same thing twice; to change a schedule you run, propose with replaces=<scheduleId> (the schedule keeps that id after approval; the proposal's own scheduleId is only a placeholder and disappears when the person approves or declines; a Not now keeps it waiting). To merge several of your schedules into one, give replaces a list: the first id is rewritten as the change, the others are ended by the same approval (refused if one is no longer active or paused). To stop one for good without a replacement use schedule_end. Never through outcome_propose or as a plan step. Frequencies: once, daily (optionally only some weekdays), weekly, monthly, quarterly, yearly; no hourly.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1170,9 +1170,7 @@
               "description": "The schedule outcome id the person asked changes for (inbox reason revise): this becomes its next version"
             },
             "replaces": {
-              "type": "string",
-              "minLength": 1,
-              "description": "The id of an active or paused schedule you run that this proposal changes (schedule_list); approving it rewrites that one"
+              "description": "The id of an active or paused schedule you run that this proposal changes (schedule_list); approving it rewrites that one and it keeps its id. A list of ids is a merge: the first is rewritten, the others are ended by the same approval. A string or an array of strings (at most 9)."
             }
           },
           "required": [
@@ -1188,8 +1186,66 @@
         }
       },
       {
+        "name": "schedule_end",
+        "description": "Propose ending a schedule you run for good (state active or paused): the person sees your reason and approves (End schedule), asks for changes or says not now. Once approved its future runs stop; the past runs and their threads stay, and the schedule stays listed as ended. Nothing changes before. To replace a schedule with a changed one use schedule_propose with replaces instead; to pause it is the person's choice. Never through outcome_propose or as a plan step.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The person's thread where this came up (you are its home agent)"
+            },
+            "scheduleId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The schedule to end (schedule_list): one you run"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "description": "Why it should end, one line the person reads first"
+            },
+            "note": {
+              "description": "More context, in 1-2 sentences",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "confidence": {
+              "description": "How sure you are",
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            "checks": {
+              "description": "What you verified, one line each (at most 6)",
+              "type": "array",
+              "maxItems": 6,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          },
+          "required": [
+            "threadId",
+            "scheduleId",
+            "reason"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "schedule_list",
-        "description": "The person's schedules in this organization (the one who connected you, or member): title, state (proposed, active, paused, ended), which agent runs it (yours: you), the rule in words, the next 3 runs (active and proposed ones), the plan's step types and the subject. Read it to answer \"what is scheduled?\" and before schedule_propose, so nothing is scheduled twice.",
+        "description": "The person's schedules in this organization (the result names it: organization; the one who connected you, or member): title, state (proposed, active, paused, ended), which agent runs it (yours: you), the rule in words, the next 3 runs (active and proposed ones), the plan's step types and the subject. Read it to answer \"what is scheduled?\" and before schedule_propose, so nothing is scheduled twice.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2420,7 +2476,7 @@
       },
       {
         "name": "schedule_propose",
-        "description": "Propose a schedule when the person asks for something recurring or at a later time (\"every 1st at 9, prepare the invoices and ask me before sending\"; \"every Friday at 16:00\"; \"on 12 Nov remind them\"). Hivenod owns the clock: once the person approves (Set up schedule), it starts each run at its time as a new thread with this plan, filed under the subject, and sends you its carry_out; never keep a timer, cron or reminder of your own for it. The person sees the rule in words, the next 3 runs and the plan of each run, and approves, asks for changes (you get a revise event: schedule_propose revises=<outcomeId> with the whole schedule again, changing only what they asked) or says not now. The plan of each run is plan steps (as in plan_propose): put an approval step before anything that sends, pays or publishes. Check schedule_list first so you never schedule the same thing twice; to change a schedule you run, propose with replaces=<scheduleId>. Never through outcome_propose or as a plan step. Frequencies: once, daily (optionally only some weekdays), weekly, monthly, quarterly, yearly; no hourly.",
+        "description": "Propose a schedule when the person asks for something recurring or at a later time (\"every 1st at 9, prepare the invoices and ask me before sending\"; \"every Friday at 16:00\"; \"on 12 Nov remind them\"). Hivenod owns the clock: once the person approves (Set up schedule), it starts each run at its time as a new thread with this plan, filed under the subject, and sends you its carry_out; never keep a timer, cron or reminder of your own for it. The person sees the rule in words, the next 3 runs and the plan of each run, and approves, asks for changes (you get a revise event: schedule_propose revises=<outcomeId> with the whole schedule again, changing only what they asked) or says not now. The plan of each run is plan steps (as in plan_propose): put an approval step before anything that sends, pays or publishes. Check schedule_list first so you never schedule the same thing twice; to change a schedule you run, propose with replaces=<scheduleId> (the schedule keeps that id after approval; the proposal's own scheduleId is only a placeholder and disappears when the person approves or declines; a Not now keeps it waiting). To merge several of your schedules into one, give replaces a list: the first id is rewritten as the change, the others are ended by the same approval (refused if one is no longer active or paused). To stop one for good without a replacement use schedule_end. Never through outcome_propose or as a plan step. Frequencies: once, daily (optionally only some weekdays), weekly, monthly, quarterly, yearly; no hourly.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2610,9 +2666,7 @@
               "description": "The schedule outcome id the person asked changes for (inbox reason revise): this becomes its next version"
             },
             "replaces": {
-              "type": "string",
-              "minLength": 1,
-              "description": "The id of an active or paused schedule you run that this proposal changes (schedule_list); approving it rewrites that one"
+              "description": "The id of an active or paused schedule you run that this proposal changes (schedule_list); approving it rewrites that one and it keeps its id. A list of ids is a merge: the first is rewritten, the others are ended by the same approval. A string or an array of strings (at most 9)."
             }
           },
           "required": [
@@ -2628,8 +2682,66 @@
         }
       },
       {
+        "name": "schedule_end",
+        "description": "Propose ending a schedule you run for good (state active or paused): the person sees your reason and approves (End schedule), asks for changes or says not now. Once approved its future runs stop; the past runs and their threads stay, and the schedule stays listed as ended. Nothing changes before. To replace a schedule with a changed one use schedule_propose with replaces instead; to pause it is the person's choice. Never through outcome_propose or as a plan step.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The person's thread where this came up (you are its home agent)"
+            },
+            "scheduleId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The schedule to end (schedule_list): one you run"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "description": "Why it should end, one line the person reads first"
+            },
+            "note": {
+              "description": "More context, in 1-2 sentences",
+              "type": "string",
+              "maxLength": 2000
+            },
+            "confidence": {
+              "description": "How sure you are",
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            "checks": {
+              "description": "What you verified, one line each (at most 6)",
+              "type": "array",
+              "maxItems": 6,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          },
+          "required": [
+            "threadId",
+            "scheduleId",
+            "reason"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
         "name": "schedule_list",
-        "description": "The person's schedules in this organization (the one who connected you, or member): title, state (proposed, active, paused, ended), which agent runs it (yours: you), the rule in words, the next 3 runs (active and proposed ones), the plan's step types and the subject. Read it to answer \"what is scheduled?\" and before schedule_propose, so nothing is scheduled twice.",
+        "description": "The person's schedules in this organization (the result names it: organization; the one who connected you, or member): title, state (proposed, active, paused, ended), which agent runs it (yours: you), the rule in words, the next 3 runs (active and proposed ones), the plan's step types and the subject. Read it to answer \"what is scheduled?\" and before schedule_propose, so nothing is scheduled twice.",
         "inputSchema": {
           "type": "object",
           "properties": {

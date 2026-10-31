@@ -19,6 +19,7 @@ import {
   inboxSubjectSchema,
   agentsOffSchema,
   localDate,
+  endSchedule,
   pauseSchedule,
   resumeSchedule,
   ruleSentence,
@@ -601,6 +602,12 @@ function useScheduleActions(uid: string) {
         (ctx) => resumeSchedule(ctx, { scheduleId: s.id, schedule: doc }),
         `Resumed: ${s.title}`,
       ),
+    end: (s: SchedLite, doc: Schedule) =>
+      act(
+        s.wid,
+        (ctx) => endSchedule(ctx, { scheduleId: s.id, schedule: doc }),
+        `Ended: ${s.title}`,
+      ),
     remove: (s: SchedLite, doc: Schedule) =>
       act(
         s.wid,
@@ -663,6 +670,7 @@ function ScheduleList({
   const acts = useScheduleActions(uid);
   const [editing, setEditing] = useState<ListRow | null>(null);
   const [deleting, setDeleting] = useState<ListRow | null>(null);
+  const [ending, setEnding] = useState<ListRow | null>(null);
   const menu = (r: ListRow) => {
     const doc = docs.get(r.key);
     if (!doc) return null;
@@ -670,14 +678,28 @@ function ScheduleList({
     return (
       <ActionMenu
         label={`Actions for ${r.s.title}`}
-        actions={[
-          { id: 'run', label: 'Run now', onSelect: () => void acts.runNow(r.s, agent, now) },
-          r.s.state === 'active'
-            ? { id: 'pause', label: 'Pause', onSelect: () => void acts.pause(r.s, doc) }
-            : { id: 'resume', label: 'Resume', onSelect: () => void acts.resume(r.s, doc) },
-          { id: 'edit', label: 'Edit', onSelect: () => setEditing(r) },
-          { id: 'delete', label: 'Delete', tone: 'danger', onSelect: () => setDeleting(r) },
-        ]}
+        actions={
+          r.s.state === 'ended'
+            ? [{ id: 'delete', label: 'Delete', tone: 'danger', onSelect: () => setDeleting(r) }]
+            : [
+                {
+                  id: 'run',
+                  label: 'Run now',
+                  onSelect: () => void acts.runNow(r.s, agent, now),
+                },
+                r.s.state === 'active'
+                  ? { id: 'pause', label: 'Pause', onSelect: () => void acts.pause(r.s, doc) }
+                  : { id: 'resume', label: 'Resume', onSelect: () => void acts.resume(r.s, doc) },
+                { id: 'end', label: 'End', onSelect: () => setEnding(r) },
+                { id: 'edit', label: 'Edit', onSelect: () => setEditing(r) },
+                {
+                  id: 'delete',
+                  label: 'Delete',
+                  tone: 'danger',
+                  onSelect: () => setDeleting(r),
+                },
+              ]
+        }
         trigger={
           <IconButton label={`Actions for ${r.s.title}`} data-row-menu="">
             <Icon icon={MoreHorizontal} size={18} />
@@ -705,7 +727,11 @@ function ScheduleList({
             <li
               key={r.key}
               data-schedule-row={r.s.id}
-              className="flex items-start gap-1 rounded-card border border-l-[3px] border-line bg-surface"
+              data-schedule-state={r.s.state}
+              className={cn(
+                'flex items-start gap-1 rounded-card border border-l-[3px] border-line bg-surface',
+                r.s.state === 'ended' && 'bg-canvas',
+              )}
               style={{ borderLeftColor: agentColor(r.s.agentUid) }}
             >
               <button
@@ -716,7 +742,13 @@ function ScheduleList({
                 <span className="block truncate text-15 font-semibold text-ink">{r.s.title}</span>
                 <span className="block text-13 text-text-2 [overflow-wrap:anywhere]">
                   {r.sentence} · {agentName(r.s.wid, r.s.agentUid)}
-                  {r.s.state === 'paused' ? ' · paused' : r.next ? ` · next ${r.next.words}` : ''}
+                  {r.s.state === 'paused'
+                    ? ' · paused'
+                    : r.s.state === 'ended'
+                      ? ' · ended'
+                      : r.next
+                        ? ` · next ${r.next.words}`
+                        : ''}
                 </span>
               </button>
               <span className="pr-1 pt-1">{menu(r)}</span>
@@ -742,10 +774,12 @@ function ScheduleList({
               key={r.key}
               role="row"
               data-schedule-row={r.s.id}
+              data-schedule-state={r.s.state}
               aria-selected={selected === r.key}
               className={cn(
                 'grid grid-cols-[minmax(0,1.5fr)_7rem_minmax(0,1.1fr)_minmax(0,1.6fr)_7.5rem_6rem_2.75rem] items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0',
                 selected === r.key && 'bg-agent-soft',
+                r.s.state === 'ended' && 'bg-canvas',
               )}
             >
               <span role="cell" className="min-w-0">
@@ -770,6 +804,8 @@ function ScheduleList({
               <span role="cell" className="text-ink">
                 {r.s.state === 'paused' ? (
                   <Pill className="h-5 px-2 text-12">Paused</Pill>
+                ) : r.s.state === 'ended' ? (
+                  <Pill className="h-5 px-2 text-12">Ended</Pill>
                 ) : (
                   (r.next?.words ?? '–')
                 )}
@@ -796,6 +832,14 @@ function ScheduleList({
           schedule={docs.get(editing.key)!}
         />
       ) : null}
+      <EndDialog
+        row={ending}
+        onClose={() => setEnding(null)}
+        onEnd={async (r) => {
+          const doc = docs.get(r.key);
+          if (doc && (await acts.end(r.s, doc))) setEnding(null);
+        }}
+      />
       <DeleteDialog
         row={deleting}
         onClose={() => setDeleting(null)}
@@ -851,6 +895,49 @@ function DeleteDialog({
   );
 }
 
+function EndDialog({
+  row,
+  onClose,
+  onEnd,
+}: {
+  row: ListRow | null;
+  onClose: () => void;
+  onEnd: (r: ListRow) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Dialog
+      open={!!row}
+      onOpenChange={(o) => !o && onClose()}
+      title={row ? `End “${row.s.title}”?` : 'End'}
+      description="No more runs, for good. It stays in the list with its history, and the threads of past runs stay in your Inbox."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Keep it running
+          </Button>
+          <Button
+            variant="sendback"
+            data-confirm-end=""
+            loading={busy}
+            onClick={async () => {
+              if (!row) return;
+              setBusy(true);
+              try {
+                await onEnd(row);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            End schedule
+          </Button>
+        </>
+      }
+    />
+  );
+}
+
 // ---------- the detail ----------
 
 function Detail({
@@ -884,6 +971,7 @@ function Detail({
   );
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [ending, setEnding] = useState(false);
   const agent = agentName(s.wid, s.agentUid);
   const next = nextN(s, now, 3);
   const steps = scheduleSteps(s.steps, next[0] ?? null);
@@ -910,6 +998,11 @@ function Detail({
       {s.state === 'paused' ? (
         <p className="mt-2">
           <Pill>Paused: nothing runs until you resume it</Pill>
+        </p>
+      ) : null}
+      {s.state === 'ended' ? (
+        <p className="mt-2">
+          <Pill>Ended: no more runs. Past runs stay below.</Pill>
         </p>
       ) : null}
       <dl className="mt-4 grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-2.5">
@@ -962,7 +1055,11 @@ function Detail({
         </ul>
       ) : (
         <p className="mt-1.5 text-14 text-text-2">
-          {s.state === 'paused' ? 'None while paused.' : 'No run left.'}
+          {s.state === 'paused'
+            ? 'None while paused.'
+            : s.state === 'ended'
+              ? 'None: it has ended.'
+              : 'No run left.'}
         </p>
       )}
 
@@ -1015,33 +1112,40 @@ function Detail({
 
       {doc ? (
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button variant="secondary" data-detail-edit="" onClick={() => setEditing(true)}>
-            Edit
-          </Button>
-          <Button
-            variant="secondary"
-            data-detail-run-now=""
-            onClick={() => void acts.runNow(s, agent, now)}
-          >
-            Run now
-          </Button>
-          {s.state === 'active' ? (
-            <Button
-              variant="secondary"
-              data-detail-pause=""
-              onClick={() => void acts.pause(s, doc)}
-            >
-              Pause
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              data-detail-resume=""
-              onClick={() => void acts.resume(s, doc)}
-            >
-              Resume
-            </Button>
-          )}
+          {s.state !== 'ended' ? (
+            <>
+              <Button variant="secondary" data-detail-edit="" onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+              <Button
+                variant="secondary"
+                data-detail-run-now=""
+                onClick={() => void acts.runNow(s, agent, now)}
+              >
+                Run now
+              </Button>
+              {s.state === 'active' ? (
+                <Button
+                  variant="secondary"
+                  data-detail-pause=""
+                  onClick={() => void acts.pause(s, doc)}
+                >
+                  Pause
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  data-detail-resume=""
+                  onClick={() => void acts.resume(s, doc)}
+                >
+                  Resume
+                </Button>
+              )}
+              <Button variant="secondary" data-detail-end="" onClick={() => setEnding(true)}>
+                End
+              </Button>
+            </>
+          ) : null}
           <Button variant="sendback" data-detail-delete="" onClick={() => setDeleting(true)}>
             Delete
           </Button>
@@ -1064,6 +1168,13 @@ function Detail({
           schedule={doc}
         />
       ) : null}
+      <EndDialog
+        row={ending ? row : null}
+        onClose={() => setEnding(false)}
+        onEnd={async () => {
+          if (doc && (await acts.end(s, doc))) setEnding(false);
+        }}
+      />
       <DeleteDialog
         row={deleting ? row : null}
         onClose={() => setDeleting(false)}

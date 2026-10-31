@@ -405,6 +405,11 @@
         "label": "When",
         "help": "The rule in words, e.g. \"Monthly · day 1 · 09:00 Lisbon\"",
         "required": true
+      },
+      "ends": {
+        "kind": "line",
+        "label": "Also ends",
+        "help": "Other schedules of this agent that the same approval ends (a merge): their ids, comma separated (set by schedule_propose with replaces as a list)"
       }
     },
     "executor": "none",
@@ -412,5 +417,29 @@
       "state": "done"
     },
     "ownTool": "schedule_propose"
+  },
+  "schedule_end": {
+    "label": "End schedule",
+    "approve": "End schedule",
+    "description": "Stop a schedule the agent runs for good: proposed with schedule_end (never outcome_propose), with the reason. Past runs stay.",
+    "fields": {
+      "scheduleId": {
+        "kind": "line",
+        "label": "Schedule",
+        "help": "The schedule to end (set by schedule_end)",
+        "required": true
+      },
+      "reason": {
+        "kind": "line",
+        "label": "Why",
+        "help": "One line: why it should end",
+        "required": true
+      }
+    },
+    "executor": "none",
+    "after": {
+      "state": "done"
+    },
+    "ownTool": "schedule_end"
   }
 }

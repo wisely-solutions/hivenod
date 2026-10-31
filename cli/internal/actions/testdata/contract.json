@@ -18640,7 +18640,7 @@
       "action": "cleanOutcomeFields",
       "input": { "type": "x", "fields": {} },
       "output": {
-        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, shape, build, keepgreen, release, their_reply, approval, schedule."
+        "error": "Unknown outcome type x. Types: reply, reply_book, book, no_reply, make_it_work, handover, snooze, nudge, ignore, shape, build, keepgreen, release, their_reply, approval, schedule, schedule_end."
       }
     },
     {
@@ -26310,6 +26310,968 @@
       "output": { "error": "You can only propose changes to schedules you run." }
     },
     {
+      "name": "proposeSchedule/a merge",
+      "action": "proposeSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "replaces": {
+          "id": "sA",
+          "schedule": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "ends": [
+          {
+            "id": "sB",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "paused",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          },
+          {
+            "id": "sC",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          }
+        ]
+      },
+      "output": {
+        "eventId": "id03",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/schedules/id01",
+            "data": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices from the hours log and ask me before sending.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [
+                { "type": "reply", "fields": { "text": "Invoices for {period} are ready." } },
+                { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+              ],
+              "templateId": null,
+              "subjectId": null,
+              "state": "proposed",
+              "activeFrom": null,
+              "proposal": { "threadId": "it1", "outcomeId": "id02", "by": "agentA" },
+              "replaces": "sA",
+              "version": 1,
+              "createdBy": { "type": "agent", "id": "agentA" },
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id03"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/id02",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "schedule",
+              "fields": {
+                "scheduleId": "id01",
+                "sentence": "Monthly · day 1 · 09:00",
+                "ends": "sB,sC"
+              },
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": null,
+              "decision": null,
+              "result": null,
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id03"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id03"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id03",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.proposed",
+              "data": {
+                "outcomeId": "id02",
+                "type": "schedule",
+                "fields": {
+                  "scheduleId": "id01",
+                  "sentence": "Monthly · day 1 · 09:00",
+                  "ends": "sB,sC"
+                },
+                "scheduleId": "id01"
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "scheduleId": "id01",
+        "outcomeId": "id02",
+        "sentence": "Monthly · day 1 · 09:00"
+      }
+    },
+    {
+      "name": "proposeSchedule/a merge keeps ids in order",
+      "action": "proposeSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "replaces": {
+          "id": "sA",
+          "schedule": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "ends": [
+          {
+            "id": "sB",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          }
+        ],
+        "scheduleId": "sch2",
+        "outcomeId": "out2"
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/schedules/sch2",
+            "data": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices from the hours log and ask me before sending.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [
+                { "type": "reply", "fields": { "text": "Invoices for {period} are ready." } },
+                { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+              ],
+              "templateId": null,
+              "subjectId": null,
+              "state": "proposed",
+              "activeFrom": null,
+              "proposal": { "threadId": "it1", "outcomeId": "out2", "by": "agentA" },
+              "replaces": "sA",
+              "version": 1,
+              "createdBy": { "type": "agent", "id": "agentA" },
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/out2",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "schedule",
+              "fields": {
+                "scheduleId": "sch2",
+                "sentence": "Monthly · day 1 · 09:00",
+                "ends": "sB"
+              },
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": null,
+              "decision": null,
+              "result": null,
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.proposed",
+              "data": {
+                "outcomeId": "out2",
+                "type": "schedule",
+                "fields": {
+                  "scheduleId": "sch2",
+                  "sentence": "Monthly · day 1 · 09:00",
+                  "ends": "sB"
+                },
+                "scheduleId": "sch2"
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "scheduleId": "sch2",
+        "outcomeId": "out2",
+        "sentence": "Monthly · day 1 · 09:00"
+      }
+    },
+    {
+      "name": "proposeSchedule/ends without replaces",
+      "action": "proposeSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "ends": [
+          {
+            "id": "sB",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          }
+        ]
+      },
+      "output": { "error": "ends needs replaces: the first id is the one changed." }
+    },
+    {
+      "name": "proposeSchedule/a merge of nine",
+      "action": "proposeSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "replaces": {
+          "id": "sA",
+          "schedule": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "ends": [
+          {
+            "id": "e0",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          },
+          {
+            "id": "e1",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          },
+          {
+            "id": "e2",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          },
+          {
+            "id": "e3",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          },
+          {
+            "id": "e4",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          },
+          {
+            "id": "e5",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          },
+          {
+            "id": "e6",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          },
+          {
+            "id": "e7",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          },
+          {
+            "id": "e8",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          }
+        ]
+      },
+      "output": { "error": "A merge ends at most 8 other schedules." }
+    },
+    {
+      "name": "proposeSchedule/a merge names one twice",
+      "action": "proposeSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "replaces": {
+          "id": "sA",
+          "schedule": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "ends": [
+          {
+            "id": "sA",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          }
+        ]
+      },
+      "output": { "error": "Each schedule is named once." }
+    },
+    {
+      "name": "proposeSchedule/a merge with a repeated end",
+      "action": "proposeSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "replaces": {
+          "id": "sA",
+          "schedule": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "ends": [
+          {
+            "id": "sB",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          },
+          {
+            "id": "sB",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          }
+        ]
+      },
+      "output": { "error": "Each schedule is named once." }
+    },
+    {
+      "name": "proposeSchedule/a merge with someone else’s",
+      "action": "proposeSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "replaces": {
+          "id": "sA",
+          "schedule": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "ends": [
+          {
+            "id": "sB",
+            "schedule": {
+              "memberUid": "ana",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          }
+        ]
+      },
+      "output": { "error": "That schedule is someone else’s." }
+    },
+    {
+      "name": "proposeSchedule/a merge with another agent’s",
+      "action": "proposeSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "replaces": {
+          "id": "sA",
+          "schedule": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "ends": [
+          {
+            "id": "sB",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentB",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "active",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          }
+        ]
+      },
+      "output": { "error": "You can only end schedules you run." }
+    },
+    {
+      "name": "proposeSchedule/a merge with an ended one",
+      "action": "proposeSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "replaces": {
+          "id": "sA",
+          "schedule": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "ends": [
+          {
+            "id": "sB",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "ended",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          }
+        ]
+      },
+      "output": { "error": "This schedule has ended." }
+    },
+    {
+      "name": "proposeSchedule/a merge with a proposed one",
+      "action": "proposeSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "replaces": {
+          "id": "sA",
+          "schedule": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "ends": [
+          {
+            "id": "sB",
+            "schedule": {
+              "memberUid": "joao",
+              "agentUid": "agentA",
+              "title": "Send invoices",
+              "what": "Prepare the invoices.",
+              "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+              "templateId": null,
+              "subjectId": "s9",
+              "state": "proposed",
+              "proposal": null,
+              "replaces": null,
+              "version": 3
+            }
+          }
+        ]
+      },
+      "output": { "error": "This schedule is still a proposal: approve or reject it." }
+    },
+    {
       "name": "proposeSchedule/ignored thread",
       "action": "proposeSchedule",
       "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
@@ -26802,6 +27764,623 @@
           { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
           { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
         ],
+        "checks": ["a", "b", "c", "d", "e", "f", "g"]
+      },
+      "output": { "error": "At most 6 checks." }
+    },
+    {
+      "name": "proposeScheduleEnd/active",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. "
+      },
+      "output": {
+        "eventId": "id02",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/id01",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "schedule_end",
+              "fields": { "scheduleId": "sA", "reason": "Replaced by the weekly report." },
+              "state": "proposed",
+              "note": "",
+              "proposedBy": "agentA",
+              "executor": null,
+              "decision": null,
+              "result": null,
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id02"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id02"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id02",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.proposed",
+              "data": {
+                "outcomeId": "id01",
+                "type": "schedule_end",
+                "fields": { "scheduleId": "sA", "reason": "Replaced by the weekly report." },
+                "scheduleId": "sA"
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "outcomeId": "id01"
+      }
+    },
+    {
+      "name": "proposeScheduleEnd/paused, with everything",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "paused",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. ",
+        "note": " Nobody reads it any more. ",
+        "confidence": "high",
+        "checks": [" Last 3 runs were skipped "],
+        "outcomeId": "out1"
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxOutcomes/out1",
+            "data": {
+              "memberUid": "joao",
+              "threadId": "it1",
+              "type": "schedule_end",
+              "fields": { "scheduleId": "sA", "reason": "Replaced by the weekly report." },
+              "state": "proposed",
+              "note": "Nobody reads it any more.",
+              "confidence": "high",
+              "checks": ["Last 3 runs were skipped"],
+              "proposedBy": "agentA",
+              "executor": null,
+              "decision": null,
+              "result": null,
+              "createdAt": { "__hive": "serverTime" },
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxThreads/it1",
+            "data": {
+              "state": "yourCall",
+              "waiting": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.proposed",
+              "data": {
+                "outcomeId": "out1",
+                "type": "schedule_end",
+                "fields": { "scheduleId": "sA", "reason": "Replaced by the weekly report." },
+                "scheduleId": "sA"
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "outcomeId": "out1"
+      }
+    },
+    {
+      "name": "proposeScheduleEnd/a proposed one",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "proposed",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. "
+      },
+      "output": { "error": "This schedule is still a proposal: approve or reject it." }
+    },
+    {
+      "name": "proposeScheduleEnd/an ended one",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "ended",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. "
+      },
+      "output": { "error": "This schedule has ended." }
+    },
+    {
+      "name": "proposeScheduleEnd/someone else’s",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "ana",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. "
+      },
+      "output": { "error": "That schedule is someone else’s." }
+    },
+    {
+      "name": "proposeScheduleEnd/another agent’s",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentB",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. "
+      },
+      "output": { "error": "You can only end schedules you run." }
+    },
+    {
+      "name": "proposeScheduleEnd/ignored thread",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "ignored",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. "
+      },
+      "output": { "error": "This thread was ignored: bring it back first." }
+    },
+    {
+      "name": "proposeScheduleEnd/not the home agent",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentB", "name": "Bee" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. "
+      },
+      "output": { "error": "Only the thread’s home agent proposes ending a schedule on it." }
+    },
+    {
+      "name": "proposeScheduleEnd/a person",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "human", "id": "joao", "name": "João" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. "
+      },
+      "output": { "error": "Only agents can do this" }
+    },
+    {
+      "name": "proposeScheduleEnd/no reason",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": "   "
+      },
+      "output": { "error": "Give the reason in 1 to 300 characters." }
+    },
+    {
+      "name": "proposeScheduleEnd/long reason",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "output": { "error": "Give the reason in 1 to 300 characters." }
+    },
+    {
+      "name": "proposeScheduleEnd/long note",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. ",
+        "note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "output": { "error": "The note is at most 2000 characters." }
+    },
+    {
+      "name": "proposeScheduleEnd/bad confidence",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. ",
+        "confidence": "sure"
+      },
+      "output": { "error": "The confidence is high, medium or low." }
+    },
+    {
+      "name": "proposeScheduleEnd/too many checks",
+      "action": "proposeScheduleEnd",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "investigating",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "schedule": {
+          "id": "sA",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "active",
+            "proposal": null,
+            "replaces": null,
+            "version": 3
+          }
+        },
+        "reason": " Replaced by the weekly report. ",
         "checks": ["a", "b", "c", "d", "e", "f", "g"]
       },
       "output": { "error": "At most 6 checks." }
@@ -27384,6 +28963,154 @@
         "outcomeId": "o1",
         "sentence": "Monthly · day 1 · 08:30",
         "version": 3
+      }
+    },
+    {
+      "name": "reviseSchedule/a merge stays a merge",
+      "action": "reviseSchedule",
+      "ctx": { "workspaceId": "w1", "actor": { "type": "agent", "id": "agentA", "name": "Hive" } },
+      "input": {
+        "threadId": "it1",
+        "thread": {
+          "memberUid": "joao",
+          "subjectId": "s1",
+          "state": "yourCall",
+          "fetchedBy": "agentA",
+          "refs": ["r1"],
+          "waiting": null
+        },
+        "title": "  Send   invoices ",
+        "what": " Prepare the invoices from the hours log and ask me before sending. ",
+        "rule": { "freq": "monthly", "at": "08:30", "tz": "Europe/Lisbon", "monthDay": 1 },
+        "steps": [
+          { "type": "reply", "fields": { "text": " Invoices for {period} are ready. " } },
+          { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+        ],
+        "outcomeId": "o1",
+        "outcome": {
+          "memberUid": "joao",
+          "threadId": "it1",
+          "type": "schedule",
+          "fields": { "scheduleId": "sp1", "sentence": "x", "ends": "sB,sC" },
+          "state": "revising",
+          "executor": null,
+          "proposedBy": "agentA",
+          "note": "First go.",
+          "revise": { "instruction": "At 08:30", "chips": [], "byUid": "joao", "at": null }
+        },
+        "schedule": {
+          "id": "sp1",
+          "data": {
+            "memberUid": "joao",
+            "agentUid": "agentA",
+            "title": "Send invoices",
+            "what": "Prepare the invoices.",
+            "rule": { "freq": "monthly", "at": "09:00", "tz": "Europe/Lisbon", "monthDay": 1 },
+            "runTitle": "Send invoices · {period}",
+            "steps": [{ "type": "approval", "fields": { "what": "Send them" } }],
+            "templateId": null,
+            "subjectId": "s9",
+            "state": "proposed",
+            "proposal": { "threadId": "it1", "outcomeId": "o1", "by": "agentA" },
+            "replaces": null,
+            "version": 1
+          }
+        },
+        "note": " Moved to 08:30. "
+      },
+      "output": {
+        "eventId": "id01",
+        "ops": [
+          {
+            "kind": "update",
+            "path": "workspaces/w1/inboxOutcomes/o1",
+            "data": {
+              "state": "proposed",
+              "fields": {
+                "scheduleId": "sp1",
+                "sentence": "Monthly · day 1 · 08:30",
+                "ends": "sB,sC"
+              },
+              "note": "Moved to 08:30.",
+              "confidence": null,
+              "checks": [],
+              "versions": [
+                {
+                  "n": 1,
+                  "fields": { "scheduleId": "sp1", "sentence": "x", "ends": "sB,sC" },
+                  "note": "First go.",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": null,
+                  "asked": null
+                },
+                {
+                  "n": 2,
+                  "fields": {
+                    "scheduleId": "sp1",
+                    "sentence": "Monthly · day 1 · 08:30",
+                    "ends": "sB,sC"
+                  },
+                  "note": "Moved to 08:30.",
+                  "confidence": null,
+                  "checks": [],
+                  "by": "agentA",
+                  "eventId": "id01",
+                  "asked": { "instruction": "At 08:30", "chips": [] }
+                }
+              ],
+              "revise": null,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "update",
+            "path": "workspaces/w1/schedules/sp1",
+            "data": {
+              "title": "Send invoices",
+              "what": "Prepare the invoices from the hours log and ask me before sending.",
+              "rule": { "freq": "monthly", "at": "08:30", "tz": "Europe/Lisbon", "monthDay": 1 },
+              "runTitle": "Send invoices · {period}",
+              "steps": [
+                { "type": "reply", "fields": { "text": "Invoices for {period} are ready." } },
+                { "type": "approval", "fields": { "what": "Send the invoices for {month}" } }
+              ],
+              "templateId": null,
+              "subjectId": "s9",
+              "version": 2,
+              "updatedAt": { "__hive": "serverTime" },
+              "lastEventId": "id01"
+            }
+          },
+          {
+            "kind": "set",
+            "path": "workspaces/w1/inboxEvents/id01",
+            "data": {
+              "actor": { "type": "agent", "id": "agentA", "name": "Hive" },
+              "memberUid": "joao",
+              "threadId": "it1",
+              "subjectId": "s1",
+              "type": "outcome.revised",
+              "data": {
+                "outcomeId": "o1",
+                "type": "schedule",
+                "version": 2,
+                "fields": {
+                  "scheduleId": "sp1",
+                  "sentence": "Monthly · day 1 · 08:30",
+                  "ends": "sB,sC"
+                }
+              },
+              "at": { "__hive": "serverTime" }
+            }
+          }
+        ],
+        "scheduleId": "sp1",
+        "outcomeId": "o1",
+        "sentence": "Monthly · day 1 · 08:30",
+        "version": 2
       }
     },
     {

@@ -28,6 +28,7 @@ import {
   type SendBackOf,
   requestRevision,
   requestRecheck,
+  createSchedule,
   schedulePaths,
   type ScheduleOf,
   instructThread,
@@ -867,6 +868,160 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
         ],
       },
     });
+    matchesGolden(r);
+  }, 120_000);
+
+  it('schedules (end and merge): the agent proposes ending its schedule, or merging several into one; the person approves', async () => {
+    const r = await scenario(async (call, uid) => {
+      const owner = as('owner');
+      const thread = async (tid: string) =>
+        (await snap(inboxPaths.thread(W, tid))) as unknown as ThreadStateOf;
+      const outcome = async (oid: string) =>
+        (await snap(inboxPaths.outcome(W, oid))) as unknown as OutcomeStateOf;
+      const schedule = async (sid: string) =>
+        (await snap(schedulePaths.schedule(W, sid))) as unknown as ScheduleOf;
+      const t1 = out(
+        await call('inbox_add', {
+          source: 'teams',
+          sender: { name: 'Cara Owner', handle: 'cara@example.com' },
+          text: 'The hours reminder and the invoice reminder can go; fold them into one report.',
+          threadRef: 'reports-1',
+          receivedAt: '2026-10-28T09:00:00Z',
+          fromMember: true,
+        }),
+      ).threadId as string;
+      const mine = async (sid: string, title: string) =>
+        owner.run(
+          createSchedule(owner.ctx, {
+            title,
+            what: `${title}: prepare it and ask me before sending.`,
+            rule: { freq: 'weekly', at: '16:00', tz: 'Europe/Lisbon', weekdays: [5] },
+            runTitle: `${title} · {period}`,
+            steps: [{ type: 'approval', fields: { what: 'Send it' } }],
+            agentUid: uid,
+            scheduleId: sid,
+          }),
+        );
+      await mine('hours', 'Hours reminder');
+      await mine('invoices', 'Invoice reminder');
+      await mine('report', 'Weekly report');
+      // Another agent's schedule (seeded: the rules would not let the person make one for a
+      // stranger).
+      await put({
+        [schedulePaths.schedule(W, 'theirs')]: {
+          memberUid: 'owner',
+          agentUid: 'another-agent',
+          title: 'Someone else’s',
+          what: 'Not this agent’s.',
+          rule: { freq: 'weekly', at: '16:00', tz: 'Europe/Lisbon', weekdays: [5] },
+          runTitle: 'Theirs · {period}',
+          steps: [{ type: 'approval', fields: { what: 'Send it' } }],
+          templateId: null,
+          subjectId: null,
+          state: 'active',
+          activeFrom: now(),
+          proposal: null,
+          replaces: null,
+          version: 1,
+          createdBy: { type: 'human', id: 'owner' },
+          createdAt: now(),
+          updatedAt: now(),
+          lastEventId: 'seed',
+        },
+      });
+      await call('schedule_list', {});
+      // Ending: not one it does not run, not an unknown one; then the person decides.
+      await call('schedule_end', { threadId: t1, scheduleId: 'theirs', reason: 'Not needed.' });
+      await call('schedule_end', { threadId: t1, scheduleId: 'nope', reason: 'Not needed.' });
+      await call('outcome_propose', {
+        threadId: t1,
+        type: 'schedule_end',
+        fields: { scheduleId: 'hours', reason: 'x' },
+      });
+      const e = out(
+        await call('schedule_end', {
+          threadId: t1,
+          scheduleId: 'hours',
+          reason: 'The weekly report covers it.',
+          note: 'Nobody replied to it since September.',
+          confidence: 'high',
+        }),
+      );
+      await call('thread_read', { threadId: t1 });
+      await owner.run(
+        approveOutcome(owner.ctx, {
+          outcomeId: e.outcomeId as string,
+          outcome: await outcome(e.outcomeId as string),
+          thread: await thread(t1),
+          ending: [{ id: 'hours', data: await schedule('hours') }],
+        }),
+      );
+      await call('schedule_list', {});
+      // Ended: it cannot be ended again, nor changed.
+      await call('schedule_end', { threadId: t1, scheduleId: 'hours', reason: 'Again.' });
+      await call('schedule_propose', {
+        threadId: t1,
+        title: 'Hours report',
+        what: 'Report the hours.',
+        rule: { freq: 'weekly', at: '16:00', weekdays: [5] },
+        steps: [{ type: 'approval', fields: { what: 'Send it' } }],
+        replaces: ['hours'],
+      });
+      // A merge: the first id is changed (and keeps its id), the others end in the same approval.
+      await call('schedule_propose', {
+        threadId: t1,
+        title: 'Reports',
+        what: 'Report.',
+        rule: { freq: 'weekly', at: '16:00', weekdays: [5] },
+        steps: [{ type: 'approval', fields: { what: 'Send it' } }],
+        replaces: ['report', 'report'],
+      });
+      const m = out(
+        await call('schedule_propose', {
+          threadId: t1,
+          title: 'Weekly reports',
+          what: 'One report: hours and invoices.',
+          rule: { freq: 'weekly', at: '16:00', tz: 'Europe/Lisbon', weekdays: [5] },
+          steps: [{ type: 'approval', fields: { what: 'Send it' } }],
+          replaces: ['report', 'invoices'],
+        }),
+      );
+      const mid = m.scheduleId as string;
+      await owner.run(
+        approveOutcome(owner.ctx, {
+          outcomeId: m.outcomeId as string,
+          outcome: await outcome(m.outcomeId as string),
+          thread: await thread(t1),
+          schedule: { id: mid, data: await schedule(mid), replaced: { version: 1 } },
+          ending: [{ id: 'invoices', data: await schedule('invoices') }],
+        }),
+      );
+      await call('schedule_list', {});
+    });
+    const oks = r.calls.map((c) => (c as { ok: boolean }).ok);
+    expect(oks).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+    ]);
+    expect(r.calls[1]).toMatchObject({ out: { organization: expect.any(String) } });
+    expect(r.calls[5]).toMatchObject({ out: { state: 'proposed' } });
+    expect(r.calls[11]).toMatchObject({
+      out: { replaces: 'report', note: expect.stringContaining('keeps its id report') },
+    });
+    expect(
+      r.docs[`workspaces/${W}/schedules`]?.map((d) => (d as { state: string }).state).sort(),
+    ).toEqual(['active', 'active', 'ended', 'ended']);
     matchesGolden(r);
   }, 120_000);
 

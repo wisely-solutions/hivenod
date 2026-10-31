@@ -386,6 +386,53 @@ test.describe('desktop 1440', () => {
     ).toBeVisible();
   });
 
+  test('End: confirmed, the schedule stops, stays listed greyed with its history', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const s = await seed(page);
+    await page.goto('/schedules');
+    const list = page.getByRole('region', { name: 'All schedules' });
+    const row = list.locator('[data-schedule-row="tidy"]');
+    await row.getByRole('button', { name: 'Inbox tidy-up', exact: true }).click();
+    const det = page.locator('[data-schedule-detail="tidy"]');
+    // End sits next to Pause; Keep it running leaves everything as it was.
+    await expect(det.getByRole('button', { name: 'Pause' })).toBeVisible();
+    await look(page, 'end-before-1440');
+    await det.getByRole('button', { name: 'End', exact: true }).click();
+    await expect(page.getByRole('dialog')).toContainText('End “Inbox tidy-up”?');
+    await page.getByRole('button', { name: 'Keep it running' }).click();
+    expect((await field(`workspaces/${s.wid}/schedules/tidy`, 'state'))?.stringValue).toBe(
+      'active',
+    );
+    await det.getByRole('button', { name: 'End', exact: true }).click();
+    await page.locator('[data-confirm-end]').click();
+    await expect
+      .poll(async () => (await field(`workspaces/${s.wid}/schedules/tidy`, 'state'))?.stringValue)
+      .toBe('ended');
+    expect((await field(`workspaces/${s.wid}/schedules/tidy`, 'version'))?.integerValue).toBe('2');
+    // Still listed (6 rows), last, greyed, with its history; nothing but Delete is left.
+    await expect(list.locator('[data-schedule-row]')).toHaveCount(6);
+    await expect(list.locator('[data-schedule-row]').last()).toHaveAttribute(
+      'data-schedule-state',
+      'ended',
+    );
+    await expect(list.locator('[data-schedule-row="tidy"]')).toContainText('Ended');
+    await expect(det).toContainText('Ended: no more runs');
+    await expect(det.locator('[data-detail-past] li')).toHaveCount(2);
+    await expect(det.getByRole('button', { name: 'Pause' })).toHaveCount(0);
+    await expect(det.getByRole('button', { name: 'Resume' })).toHaveCount(0);
+    await expect(det.getByRole('button', { name: 'Edit' })).toHaveCount(0);
+    await expect(det.getByRole('button', { name: 'Delete' })).toBeVisible();
+    await look(page, 'end-after-1440');
+    // It no longer shows as coming up, and its runs stay in the store.
+    expect(await adminDoc(`workspaces/${s.wid}/scheduleRuns/tidy_2026-06-15`)).not.toBeNull();
+    await page.goto('/');
+    await expect(page.getByRole('region', { name: 'Coming up' })).not.toContainText(
+      'Inbox tidy-up',
+    );
+  });
+
   test('Today: Coming up, Run now / Try later / Skip, and the scheduler-offline banner', async ({
     page,
   }) => {
