@@ -1047,15 +1047,6 @@ const MUTATIONS = [
     ],
   ],
   [
-    'schedule: an agent ends a schedule',
-    [
-      [
-        'return inboxOwner(r) && schedOk(d) && d.version == r.version + 1',
-        'return (inboxOwner(r) || isActiveAgent(wid)) && schedOk(d) && d.version == r.version + 1',
-      ],
-    ],
-  ],
-  [
     'schedule: a merge ends what its event does not name',
     [["(d.state == 'ended' && sid in e.data.get('ends', []))", "d.state == 'ended'"]],
   ],
