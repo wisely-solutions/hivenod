@@ -41,6 +41,8 @@ type Client struct {
 	// off (slice 7): member -> since (ms) this agent is Off for them, kept by the channel's
 	// listener (nil: no listener; the tools then read the member's Off doc).
 	off map[string]int64
+	// orgName: the organization's name, as last read with its members.
+	orgName string
 }
 
 // Connect signs in with the token (tok "" = HIVENOD_TOKEN, then the saved pairing) and reads

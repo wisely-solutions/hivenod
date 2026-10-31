@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/wisely-solutions/hivenod/cli/internal/actions"
@@ -30,8 +31,9 @@ type ScheduleProposeIn struct {
 	Checks     []string
 	// Revises: the schedule outcome the person asked changes for (its id).
 	Revises *string
-	// Replaces: an active (or paused) schedule this proposal changes.
-	Replaces *string
+	// Replaces: an active (or paused) schedule this proposal changes. A merge lists more: the first
+	// is rewritten as a change (it keeps its id), the others are ended by the same approval.
+	Replaces []string
 }
 
 func (c *Client) schedule(ctx context.Context, id string) (model.Schedule, error) {
@@ -89,6 +91,7 @@ func (c *Client) SchedulePropose(ctx context.Context, in ScheduleProposeIn) (map
 	si := actions.ScheduleInput{Title: in.Title, What: in.What, Rule: in.Rule, RunTitle: in.RunTitle, Steps: steps, TemplateID: tpl, SubjectID: in.SubjectID.Val}
 	var r actions.ProposeScheduleResult
 	var threadID string
+	var replaced []string
 	if in.Revises != nil && *in.Revises != "" {
 		o, err := c.outcome(ctx, *in.Revises)
 		if err != nil {
@@ -112,6 +115,9 @@ func (c *Client) SchedulePropose(ctx context.Context, in ScheduleProposeIn) (map
 		rin := actions.ReviseScheduleInput{ScheduleInput: si, OutcomeID: *in.Revises, Outcome: actions.OutcomeStateFrom(o), Thread: actions.ThreadStateFrom(t),
 			Note: in.Note, Confidence: in.Confidence, Checks: in.Checks, Subject: in.SubjectID}
 		rin.Schedule.ID, rin.Schedule.Data = sid, actions.ScheduleStateFrom(s)
+		if s.Replaces != nil {
+			replaced = []string{*s.Replaces}
+		}
 		if r, err = actions.ReviseSchedule(c.actx(), rin); err != nil {
 			return nil, wrap(err)
 		}
@@ -130,16 +136,22 @@ func (c *Client) SchedulePropose(ctx context.Context, in ScheduleProposeIn) (map
 			si.SubjectID = t.SubjectID
 		}
 		pin := actions.ProposeScheduleInput{ScheduleInput: si, ThreadID: in.ThreadID, Thread: actions.ThreadStateFrom(t), Note: in.Note, Confidence: in.Confidence, Checks: in.Checks}
-		if in.Replaces != nil && *in.Replaces != "" {
-			s, err := c.schedule(ctx, *in.Replaces)
+		for i, id := range in.Replaces {
+			s, err := c.schedule(ctx, id)
 			if err != nil {
 				return nil, err
 			}
-			pin.Replaces = &struct {
+			one := struct {
 				ID       string                `json:"id"`
 				Schedule actions.ScheduleState `json:"schedule"`
-			}{*in.Replaces, actions.ScheduleStateFrom(s)}
+			}{id, actions.ScheduleStateFrom(s)}
+			if i == 0 {
+				pin.Replaces = &one
+			} else {
+				pin.Ends = append(pin.Ends, one)
+			}
 		}
+		replaced = in.Replaces
 		if r, err = actions.ProposeSchedule(c.actx(), pin); err != nil {
 			return nil, wrap(err)
 		}
@@ -157,7 +169,47 @@ func (c *Client) SchedulePropose(ctx context.Context, in ScheduleProposeIn) (map
 	} else {
 		out["note"] = "Proposed. The person sees the schedule, its next runs and the plan of each run, and approves it (Set up schedule), asks for changes or says not now. Nothing runs before; once approved Hivenod starts each run at its time as a new thread with this plan and sends you its carry_out. Keep no timer of your own."
 	}
+	if len(replaced) > 0 {
+		out["replaces"] = replaced[0]
+		out["note"] = fmt.Sprint(out["note"]) + " " + finalIDNote(r.ScheduleID, replaced)
+	}
 	return out, nil
+}
+
+// finalIDNote tells the agent which id a change keeps: the proposal's own id (scheduleId) is only
+// a placeholder, deleted when the person approves, declines or says Not now.
+func finalIDNote(proposal string, replaced []string) string {
+	n := fmt.Sprintf("This is a change: the schedule keeps its id %s after approval (use that id from then on). The proposal id %s disappears once the person approves, declines or says Not now.", replaced[0], proposal)
+	if len(replaced) > 1 {
+		n += " Approving also ends " + strings.Join(replaced[1:], ", ") + " (their runs stop; past runs stay)."
+	}
+	return n
+}
+
+// ScheduleEnd is schedule_end: ends a schedule this agent runs, once the person approves.
+func (c *Client) ScheduleEnd(ctx context.Context, threadID, scheduleID, reason string, note, confidence *string, checks []string) (map[string]any, error) {
+	t, err := c.thread(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.refuseOff(ctx, t.MemberUID, func(s int64) bool { return touchedSince(t, s) }); err != nil {
+		return nil, err
+	}
+	s, err := c.schedule(ctx, scheduleID)
+	if err != nil {
+		return nil, err
+	}
+	in := actions.ProposeScheduleEndInput{ThreadID: threadID, Thread: actions.ThreadStateFrom(t), Reason: reason, Note: note, Confidence: confidence, Checks: checks}
+	in.Schedule.ID, in.Schedule.Data = scheduleID, actions.ScheduleStateFrom(s)
+	r, err := actions.ProposeScheduleEnd(c.actx(), in)
+	if err != nil {
+		return nil, wrap(err)
+	}
+	if err := c.inboxWrite(ctx, r.Plan); err != nil {
+		return nil, err
+	}
+	return map[string]any{"scheduleId": scheduleID, "outcomeId": r.OutcomeID, "threadId": threadID, "state": "proposed",
+		"note": "Proposed. The person sees the schedule and your reason and approves (End schedule), asks for changes or says not now. Nothing changes before: the schedule keeps running until then. Once approved its future runs stop; the past runs and their threads stay."}, nil
 }
 
 // ScheduleList is schedule_list: the member's schedules in this organization, next runs first.
@@ -217,6 +269,9 @@ func (c *Client) ScheduleList(ctx context.Context, member string) (map[string]an
 	for i, r := range rows {
 		list[i] = r.m
 	}
-	return map[string]any{"member": uid, "schedules": list,
+	c.mu.Lock()
+	org := c.orgName
+	c.mu.Unlock()
+	return map[string]any{"organization": org, "member": uid, "schedules": list,
 		"note": "Active schedules run by themselves (Hivenod starts each run and sends its carry_out to the agent that runs it). Before proposing, check that the same thing is not scheduled already; to change one you run, schedule_propose with replaces."}, nil
 }

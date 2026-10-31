@@ -209,9 +209,26 @@ var ToolRuns = map[string]Run{
 	"schedule_propose": func(ctx context.Context, c *Client, a Args) (any, error) {
 		in := ScheduleProposeIn{ThreadID: a.S("threadId"), Title: a.S("title"), What: a.S("what"), Rule: asMap(a["rule"]),
 			Template: a.SP("template"), RunTitle: a.SP("runTitle"), Note: a.SP("note"), Confidence: a.SP("confidence"),
-			Checks: a.Strings("checks"), Revises: a.SP("revises"), Replaces: a.SP("replaces")}
+			Checks: a.Strings("checks"), Revises: a.SP("revises")}
 		if a.Has("subjectId") {
 			in.SubjectID = actions.OptString{Set: true, Val: a.SP("subjectId")}
+		}
+		switch v := a["replaces"].(type) {
+		case nil:
+		case string:
+			if v != "" {
+				in.Replaces = []string{v}
+			}
+		case []any:
+			for _, e := range v {
+				id, ok := e.(string)
+				if !ok || id == "" {
+					return nil, Errf("replaces is a schedule id, or a list of schedule ids (a merge).")
+				}
+				in.Replaces = append(in.Replaces, id)
+			}
+		default:
+			return nil, Errf("replaces is a schedule id, or a list of schedule ids (a merge).")
 		}
 		arr, _ := a["steps"].([]any)
 		if arr == nil && a.S("template") == "" {
@@ -226,6 +243,9 @@ var ToolRuns = map[string]Run{
 			in.Steps = append(in.Steps, PlanStepArg{Type: m.S("type"), Fields: f})
 		}
 		return c.SchedulePropose(ctx, in)
+	},
+	"schedule_end": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.ScheduleEnd(ctx, a.S("threadId"), a.S("scheduleId"), a.S("reason"), a.SP("note"), a.SP("confidence"), a.Strings("checks"))
 	},
 	"schedule_list": func(ctx context.Context, c *Client, a Args) (any, error) { return c.ScheduleList(ctx, a.S("member")) },
 }

@@ -857,6 +857,11 @@ type ProposeScheduleInput struct {
 		ID       string        `json:"id"`
 		Schedule ScheduleState `json:"schedule"`
 	} `json:"replaces"`
+	// Ends: a merge, more schedules the same approval ends (replaces is the first id).
+	Ends []struct {
+		ID       string        `json:"id"`
+		Schedule ScheduleState `json:"schedule"`
+	} `json:"ends"`
 	ScheduleID *string `json:"scheduleId"`
 	OutcomeID  *string `json:"outcomeId"`
 }
@@ -906,6 +911,35 @@ func ProposeSchedule(ctx Ctx, in ProposeScheduleInput) (ProposeScheduleResult, e
 		}
 		replaces = rep.ID
 	}
+	if len(in.Ends) > 0 && in.Replaces == nil {
+		return ProposeScheduleResult{}, fail("ends needs replaces: the first id is the one changed.")
+	}
+	if len(in.Ends) > MaxScheduleEnds {
+		return ProposeScheduleResult{}, fail("A merge ends at most " + strconv.Itoa(MaxScheduleEnds) + " other schedules.")
+	}
+	seen := map[string]bool{}
+	if in.Replaces != nil {
+		seen[in.Replaces.ID] = true
+	}
+	for _, e := range in.Ends {
+		seen[e.ID] = true
+	}
+	if len(seen) != len(in.Ends)+btoi(in.Replaces != nil) {
+		return ProposeScheduleResult{}, fail("Each schedule is named once.")
+	}
+	ends := make([]string, 0, len(in.Ends))
+	for _, e := range in.Ends {
+		if e.Schedule.MemberUID != t.MemberUID {
+			return ProposeScheduleResult{}, fail("That schedule is someone else’s.")
+		}
+		if e.Schedule.AgentUID != me {
+			return ProposeScheduleResult{}, fail("You can only end schedules you run.")
+		}
+		if err := scheduleEditable(e.Schedule); err != nil {
+			return ProposeScheduleResult{}, err
+		}
+		ends = append(ends, e.ID)
+	}
 	c, err := cleanSchedule(in.ScheduleInput)
 	if err != nil {
 		return ProposeScheduleResult{}, err
@@ -935,6 +969,9 @@ func ProposeSchedule(ctx Ctx, in ProposeScheduleInput) (ProposeScheduleResult, e
 	}
 	sentence := ruleSentenceOf(c.rule)
 	fields := map[string]any{"scheduleId": sid, "sentence": sentence}
+	if len(ends) > 0 {
+		fields["ends"] = strings.Join(ends, ",")
+	}
 	w := ctx.WorkspaceID
 	p := InboxPlan(ctx, "outcome.proposed", t.MemberUID, sp(in.ThreadID), t.SubjectID,
 		map[string]any{"outcomeId": oid, "type": "schedule", "fields": fields, "scheduleId": sid}, func(eventID string) []plan.Op {
@@ -962,6 +999,104 @@ func ProposeSchedule(ctx Ctx, in ProposeScheduleInput) (ProposeScheduleResult, e
 			}
 		}, "")
 	return ProposeScheduleResult{Plan: p, ScheduleID: sid, OutcomeID: oid, Sentence: sentence}, nil
+}
+
+// MaxScheduleEnds is MAX_SCHEDULE_ENDS: the other schedules one merge ends.
+const MaxScheduleEnds = 8
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// ProposeScheduleEndInput is proposeScheduleEnd's input.
+type ProposeScheduleEndInput struct {
+	ThreadID string      `json:"threadId"`
+	Thread   ThreadState `json:"thread"`
+	Schedule struct {
+		ID   string        `json:"id"`
+		Data ScheduleState `json:"data"`
+	} `json:"schedule"`
+	Reason     string   `json:"reason"`
+	Note       *string  `json:"note"`
+	Confidence *string  `json:"confidence"`
+	Checks     []string `json:"checks"`
+	OutcomeID  *string  `json:"outcomeId"`
+}
+
+// ProposeScheduleEnd is proposeScheduleEnd (schedule_end): the agent proposes ending a schedule it
+// runs; the member's approval ends it.
+func ProposeScheduleEnd(ctx Ctx, in ProposeScheduleEndInput) (struct {
+	plan.Plan
+	OutcomeID string `json:"outcomeId"`
+}, error) {
+	type res = struct {
+		plan.Plan
+		OutcomeID string `json:"outcomeId"`
+	}
+	if err := RequireAgent(ctx); err != nil {
+		return res{}, err
+	}
+	t, me, sc := in.Thread, ctx.Actor.ID, in.Schedule
+	if t.State == "ignored" {
+		return res{}, fail("This thread was ignored: bring it back first.")
+	}
+	if t.FetchedBy != me {
+		return res{}, fail("Only the thread’s home agent proposes ending a schedule on it.")
+	}
+	if sc.Data.MemberUID != t.MemberUID {
+		return res{}, fail("That schedule is someone else’s.")
+	}
+	if sc.Data.AgentUID != me {
+		return res{}, fail("You can only end schedules you run.")
+	}
+	if err := scheduleEditable(sc.Data); err != nil {
+		return res{}, err
+	}
+	reason := jsTrim(in.Reason)
+	if jsLen(reason) < 1 || jsLen(reason) > 300 {
+		return res{}, fail("Give the reason in 1 to 300 characters.")
+	}
+	note := ""
+	if in.Note != nil {
+		note = jsTrim(*in.Note)
+	}
+	if jsLen(note) > InboxMaxOutcomeNote {
+		return res{}, fail("The note is at most " + strconv.Itoa(InboxMaxOutcomeNote) + " characters.")
+	}
+	checks, err := sureness(in.Confidence, in.Checks)
+	if err != nil {
+		return res{}, err
+	}
+	oid := ""
+	if in.OutcomeID != nil {
+		oid = *in.OutcomeID
+	} else {
+		oid = ctx.nid()
+	}
+	fields := map[string]any{"scheduleId": sc.ID, "reason": reason}
+	w := ctx.WorkspaceID
+	p := InboxPlan(ctx, "outcome.proposed", t.MemberUID, sp(in.ThreadID), t.SubjectID,
+		map[string]any{"outcomeId": oid, "type": "schedule_end", "fields": fields, "scheduleId": sc.ID}, func(eventID string) []plan.Op {
+			od := map[string]any{
+				"memberUid": t.MemberUID, "threadId": in.ThreadID, "type": "schedule_end", "fields": fields,
+				"state": "proposed", "note": note, "proposedBy": me, "executor": nil, "decision": nil, "result": nil,
+				"createdAt": ServerTime(), "updatedAt": ServerTime(), "lastEventId": eventID,
+			}
+			if in.Confidence != nil {
+				od["confidence"] = *in.Confidence
+			}
+			if len(checks) > 0 {
+				od["checks"] = checks
+			}
+			return []plan.Op{
+				{Kind: "set", Path: model.Paths.InboxOutcome(w, oid), Data: od},
+				upd(model.Paths.InboxThread(w, in.ThreadID), map[string]any{"state": "yourCall", "waiting": nil}, eventID),
+			}
+		}, "")
+	return res{Plan: p, OutcomeID: oid}, nil
 }
 
 // ReviseScheduleInput is reviseSchedule's input.
@@ -1011,8 +1146,12 @@ func ReviseSchedule(ctx Ctx, in ReviseScheduleInput) (ProposeScheduleResult, err
 		return ProposeScheduleResult{}, err
 	}
 	sentence := ruleSentenceOf(c.rule)
+	rf := map[string]any{"scheduleId": sc.ID, "sentence": sentence}
+	if e, ok := o.Fields["ends"].(string); ok && e != "" {
+		rf["ends"] = e // a merge stays a merge
+	}
 	r, err := reviseOutcomeOps(ctx, ReviseInput{OutcomeID: in.OutcomeID, Outcome: o, Thread: in.Thread,
-		Fields: map[string]any{"scheduleId": sc.ID, "sentence": sentence}, Note: in.Note, Confidence: in.Confidence, Checks: in.Checks})
+		Fields: rf, Note: in.Note, Confidence: in.Confidence, Checks: in.Checks})
 	if err != nil {
 		return ProposeScheduleResult{}, err
 	}

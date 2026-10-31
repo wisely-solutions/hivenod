@@ -8,6 +8,7 @@ import {
   checkRule,
   nextRuns,
   proposeSchedule,
+  proposeScheduleEnd,
   reviseOutcome,
   reviseSchedule,
   ruleSentence,
@@ -221,6 +222,51 @@ export function scheduleCases(
   prop('a change of another agent’s', who.agent, {
     replaces: { id: 'sA', schedule: SCH({ agentUid: 'agentB' }) },
   });
+  prop('a merge', who.agent, {
+    replaces: { id: 'sA', schedule: SCH() },
+    ends: [
+      { id: 'sB', schedule: SCH({ state: 'paused' }) },
+      { id: 'sC', schedule: SCH() },
+    ],
+  });
+  prop('a merge keeps ids in order', who.agent, {
+    replaces: { id: 'sA', schedule: SCH() },
+    ends: [{ id: 'sB', schedule: SCH() }],
+    scheduleId: 'sch2',
+    outcomeId: 'out2',
+  });
+  prop('ends without replaces', who.agent, { ends: [{ id: 'sB', schedule: SCH() }] });
+  prop('a merge of nine', who.agent, {
+    replaces: { id: 'sA', schedule: SCH() },
+    ends: Array.from({ length: 9 }, (_, i) => ({ id: `e${i}`, schedule: SCH() })),
+  });
+  prop('a merge names one twice', who.agent, {
+    replaces: { id: 'sA', schedule: SCH() },
+    ends: [{ id: 'sA', schedule: SCH() }],
+  });
+  prop('a merge with a repeated end', who.agent, {
+    replaces: { id: 'sA', schedule: SCH() },
+    ends: [
+      { id: 'sB', schedule: SCH() },
+      { id: 'sB', schedule: SCH() },
+    ],
+  });
+  prop('a merge with someone else’s', who.agent, {
+    replaces: { id: 'sA', schedule: SCH() },
+    ends: [{ id: 'sB', schedule: SCH({ memberUid: 'ana' }) }],
+  });
+  prop('a merge with another agent’s', who.agent, {
+    replaces: { id: 'sA', schedule: SCH() },
+    ends: [{ id: 'sB', schedule: SCH({ agentUid: 'agentB' }) }],
+  });
+  prop('a merge with an ended one', who.agent, {
+    replaces: { id: 'sA', schedule: SCH() },
+    ends: [{ id: 'sB', schedule: SCH({ state: 'ended' }) }],
+  });
+  prop('a merge with a proposed one', who.agent, {
+    replaces: { id: 'sA', schedule: SCH() },
+    ends: [{ id: 'sB', schedule: SCH({ state: 'proposed' }) }],
+  });
   prop('ignored thread', who.agent, { thread: TH({ state: 'ignored' }) });
   prop('not the home agent', who.other, {});
   prop('a person', who.human, {});
@@ -243,6 +289,42 @@ export function scheduleCases(
   prop('long note', who.agent, { note: 'x'.repeat(2001) });
   prop('bad confidence', who.agent, { confidence: 'sure' });
   prop('too many checks', who.agent, { checks: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] });
+
+  // ---------- proposeScheduleEnd (schedule_end) ----------
+  const endIt = (name: string, actor: Actor, over: Record<string, unknown>) =>
+    act(
+      `proposeScheduleEnd/${name}`,
+      'proposeScheduleEnd',
+      actor,
+      {
+        threadId: 'it1',
+        thread: TH(),
+        schedule: { id: 'sA', data: SCH() },
+        reason: ' Replaced by the weekly report. ',
+        ...over,
+      } as Parameters<typeof proposeScheduleEnd>[1],
+      proposeScheduleEnd,
+    );
+  endIt('active', who.agent, {});
+  endIt('paused, with everything', who.agent, {
+    schedule: { id: 'sA', data: SCH({ state: 'paused' }) },
+    note: ' Nobody reads it any more. ',
+    confidence: 'high',
+    checks: [' Last 3 runs were skipped '],
+    outcomeId: 'out1',
+  });
+  endIt('a proposed one', who.agent, { schedule: { id: 'sA', data: SCH({ state: 'proposed' }) } });
+  endIt('an ended one', who.agent, { schedule: { id: 'sA', data: SCH({ state: 'ended' }) } });
+  endIt('someone else’s', who.agent, { schedule: { id: 'sA', data: SCH({ memberUid: 'ana' }) } });
+  endIt('another agent’s', who.agent, { schedule: { id: 'sA', data: SCH({ agentUid: 'agentB' }) } });
+  endIt('ignored thread', who.agent, { thread: TH({ state: 'ignored' }) });
+  endIt('not the home agent', who.other, {});
+  endIt('a person', who.human, {});
+  endIt('no reason', who.agent, { reason: '   ' });
+  endIt('long reason', who.agent, { reason: 'x'.repeat(301) });
+  endIt('long note', who.agent, { note: 'x'.repeat(2001) });
+  endIt('bad confidence', who.agent, { confidence: 'sure' });
+  endIt('too many checks', who.agent, { checks: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] });
 
   // ---------- reviseSchedule (schedule_propose revises) ----------
   const OUT = (over: Partial<OutcomeStateOf> = {}): OutcomeStateOf => ({
@@ -307,6 +389,9 @@ export function scheduleCases(
         },
       ],
     }),
+  });
+  rev('a merge stays a merge', who.agent, {
+    outcome: OUT({ fields: { scheduleId: 'sp1', sentence: 'x', ends: 'sB,sC' } }),
   });
   rev('nobody asked', who.agent, { outcome: OUT({ state: 'proposed', revise: null }) });
   rev('not a schedule outcome', who.agent, { outcome: OUT({ type: 'reply' }) });

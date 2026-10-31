@@ -109,6 +109,11 @@ func (c *Client) members(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, c.inboxRead(err)
 	}
+	if n, ok := snap.Data()["name"].(string); ok {
+		c.mu.Lock()
+		c.orgName = n
+		c.mu.Unlock()
+	}
 	roles, _ := snap.Data()["memberRoles"].(map[string]any)
 	out := make([]string, 0, len(roles))
 	for k := range roles {

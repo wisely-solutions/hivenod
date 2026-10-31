@@ -265,3 +265,29 @@ export function scheduleApprovalOps(
     { kind: 'delete', path: schedulePaths.schedule(workspaceId, input.scheduleId) },
   ];
 }
+
+/** Ending a schedule: state ended (no future runs; the schedule and its past runs stay). */
+export function scheduleEndOps(
+  workspaceId: string,
+  input: { scheduleId: string; schedule: ScheduleOf; eventId: string },
+): WriteOp[] {
+  return [
+    {
+      kind: 'update',
+      path: schedulePaths.schedule(workspaceId, input.scheduleId),
+      data: {
+        state: 'ended',
+        version: input.schedule.version + 1,
+        updatedAt: SERVER_TIME,
+        lastEventId: input.eventId,
+      },
+    },
+  ];
+}
+
+/** Other schedules a merge ends (the `ends` field of a `schedule` outcome). */
+export const MAX_SCHEDULE_ENDS = 8;
+export function scheduleEnds(fields: Readonly<Record<string, unknown>>): string[] {
+  const v = fields.ends;
+  return typeof v === 'string' ? v.split(',').map((x) => x.trim()).filter(Boolean) : [];
+}

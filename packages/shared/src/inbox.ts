@@ -56,6 +56,8 @@ import type { ExtStateOf } from './theirreply';
 import {
   scheduleApprovalOps,
   scheduleDeleteEventId,
+  scheduleEnds,
+  scheduleEndOps,
   schedulePaths,
   type ScheduleOf,
 } from './scheduleDocs';
@@ -174,6 +176,7 @@ export const INBOX_EVENT_TYPES = [
   'schedule.updated',
   'schedule.paused',
   'schedule.resumed',
+  'schedule.ended',
   'schedule.deleted',
   'run.fired',
   'run.started',
@@ -2018,6 +2021,11 @@ export function approveOutcome(
      * (`replaces`) the active schedule's version. Approving activates it in the same batch.
      */
     schedule?: { id: string; data: ScheduleOf; replaced?: { version: number } | null };
+    /**
+     * The schedules this approval ends: a `schedule_end` outcome's schedule, or the other
+     * schedules of a merge (`ends` of a `schedule` outcome). Each must still be active or paused.
+     */
+    ending?: readonly { id: string; data: ScheduleOf }[];
   },
 ): ActionPlan {
   const o = input.outcome;
@@ -2027,6 +2035,7 @@ export function approveOutcome(
     'Only a proposed outcome can be approved.',
   );
   const sch = o.type === 'schedule' ? scheduleToApprove(input.outcomeId, o, input) : null;
+  const ending = o.type === 'schedule' || o.type === 'schedule_end' ? schedulesToEnd(o, input) : [];
   const sv = input.summaryVersion ?? null;
   need(
     sv === null || (Number.isInteger(sv) && sv >= 1),
@@ -2082,6 +2091,8 @@ export function approveOutcome(
       ...(version !== null ? { version } : {}),
       ...(pl ? { planId: pl.planId } : {}),
       ...(sch ? { scheduleId: sch.data.replaces ?? sch.id } : {}),
+      ...(o.type === 'schedule_end' ? { scheduleId: String(o.fields.scheduleId ?? '') } : {}),
+      ...(sch && ending.length ? { ends: ending.map((e) => e.id) } : {}),
       ...decisionFacts({
         thread: input.thread,
         plan: pl?.plan,
@@ -2098,6 +2109,9 @@ export function approveOutcome(
             eventId,
           })
         : []),
+      ...ending.flatMap((e) =>
+        scheduleEndOps(ctx.workspaceId, { scheduleId: e.id, schedule: e.data, eventId }),
+      ),
       upd(
         inboxPaths.outcome(ctx.workspaceId, input.outcomeId),
         {
@@ -2126,7 +2140,7 @@ export function approveOutcome(
         : []),
       // A schedule set up next to another open proposal (slice 6) leaves the thread on Your call
       // for that one: setting up a schedule does not end the conversation.
-      ...(immediate && !pl && !(o.type === 'schedule' && input.othersPending === true)
+      ...(immediate && !pl && !((o.type === 'schedule' || o.type === 'schedule_end') && input.othersPending === true)
         ? [
             upd(
               inboxPaths.thread(ctx.workspaceId, o.threadId),
@@ -2170,6 +2184,31 @@ function scheduleToApprove(
   );
   need(input.fields === undefined, 'Edit the schedule itself, not this proposal.');
   return sc!;
+}
+
+/**
+ * The schedules an approval ends, checked: a `schedule_end` outcome's own, and the other ones of
+ * a merge. Refused (nothing written) if any is no longer active or paused.
+ */
+function schedulesToEnd(
+  o: OutcomeStateOf,
+  input: { ending?: readonly { id: string; data: ScheduleOf }[]; fields?: unknown },
+): readonly { id: string; data: ScheduleOf }[] {
+  const want = o.type === 'schedule_end' ? [String(o.fields.scheduleId ?? '')] : scheduleEnds(o.fields);
+  const have = input.ending ?? [];
+  need(
+    want.length === have.length && want.every((id) => have.some((e) => e.id === id)),
+    'Give the schedules this proposal ends.',
+  );
+  need(input.fields === undefined, 'Edit the schedule itself, not this proposal.');
+  for (const e of have) {
+    need(e.data.memberUid === o.memberUid, 'That schedule is someone else’s.');
+    need(
+      e.data.state === 'active' || e.data.state === 'paused',
+      `“${e.data.title}” is no longer active or paused, so it can’t be ended: ask the agent to propose this again.`,
+    );
+  }
+  return have;
 }
 
 /** The member turns a proposal down; with none left, the agent investigates again. */

@@ -68,6 +68,7 @@ export const THREAD_GROUPS = [
       'schedule.updated',
       'schedule.paused',
       'schedule.resumed',
+      'schedule.ended',
       'schedule.deleted',
       'run.fired',
       'run.done',
@@ -132,7 +133,7 @@ export function feedChunks(group: '' | ThreadGroupId): number {
 export function isScheduleEvent(e: Ev): boolean {
   if (e.type.startsWith('schedule.') || e.type.startsWith('run.') || e.type.startsWith('agents.'))
     return true;
-  return /^outcome\./.test(e.type) && e.data.type === 'schedule';
+  return /^outcome\./.test(e.type) && (e.data.type === 'schedule' || e.data.type === 'schedule_end');
 }
 
 type Ev = Pick<InboxEvent, 'actor' | 'type' | 'data'>;
@@ -249,9 +250,12 @@ function scheduleSentence(e: Ev, sched: string | null | undefined): Sentence | n
       return { before: 'paused the schedule ', after: '', target: 'schedule' };
     case 'schedule.resumed':
       return { before: 'resumed the schedule ', after: '', target: 'schedule' };
+    case 'schedule.ended':
+      return { before: 'ended the schedule ', after: '', target: 'schedule' };
     case 'schedule.deleted':
       return { before: 'deleted the schedule ', after: '', target: 'schedule' };
     case 'outcome.proposed':
+      if (d.type === 'schedule_end') return { before: 'proposed ending the schedule ', after: '', target: 'schedule' };
       if (d.type !== 'schedule') return null;
       return {
         before: 'proposed the schedule ',
@@ -261,6 +265,7 @@ function scheduleSentence(e: Ev, sched: string | null | undefined): Sentence | n
         target: 'schedule',
       };
     case 'outcome.approved':
+      if (d.type === 'schedule_end') return { before: 'approved ending the schedule ', after: '', target: 'schedule' };
       if (d.type !== 'schedule') return null;
       return {
         before: `${d.edited ? 'edited and approved' : 'approved'} the schedule `,
@@ -268,6 +273,7 @@ function scheduleSentence(e: Ev, sched: string | null | undefined): Sentence | n
         target: 'schedule',
       };
     case 'outcome.rejected':
+      if (d.type === 'schedule_end') return { before: 'turned down ending the schedule ', after: '', target: 'schedule' };
       if (d.type !== 'schedule') return null;
       return { before: 'turned down the schedule ', after: '', target: 'schedule' };
     case 'run.fired':

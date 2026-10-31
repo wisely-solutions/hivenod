@@ -655,16 +655,16 @@ service cloud.firestore {
 
       // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by
       // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)
-      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'keepgreen', 'release', 'their_reply', 'approval', 'schedule']; }
+      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'keepgreen', 'release', 'their_reply', 'approval', 'schedule', 'schedule_end']; }
       function outcomeSingle() { return ['reply', 'no_reply', 'handover', 'snooze', 'nudge', 'ignore']; }
       function outcomePlanTypes() { return ['reply', 'handover', 'snooze', 'nudge', 'shape', 'build', 'keepgreen', 'release', 'their_reply', 'approval']; }
       function outcomeHuman() { return ['approval']; }
-      function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval', 'schedule']; }
+      function outcomeImmediate() { return ['no_reply', 'snooze', 'ignore', 'approval', 'schedule', 'schedule_end']; }
       function outcomeLong() { return ['build', 'keepgreen', 'release']; }
-      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'keepgreen': 'waiting', 'release': 'done', 'their_reply': 'waiting', 'approval': 'done', 'schedule': 'done'}; }
-      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'keepgreen': 'item', 'release': null, 'their_reply': 'them', 'approval': null, 'schedule': null}; }
-      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'keepgreen': [], 'release': ['notes'], 'their_reply': ['who', 'org', 'channel', 'address', 'need', 'remindAfterDays'], 'approval': ['what', 'detail', 'link'], 'schedule': ['scheduleId', 'sentence']}; }
-      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'keepgreen': [], 'release': [], 'their_reply': ['who', 'channel', 'address', 'need'], 'approval': ['what'], 'schedule': ['scheduleId', 'sentence']}; }
+      function outcomeAfter() { return {'reply': 'waiting', 'reply_book': 'waiting', 'book': 'waiting', 'no_reply': 'done', 'make_it_work': 'waiting', 'handover': 'waiting', 'snooze': 'waiting', 'nudge': 'waiting', 'ignore': 'ignored', 'shape': 'waiting', 'build': 'waiting', 'keepgreen': 'waiting', 'release': 'done', 'their_reply': 'waiting', 'approval': 'done', 'schedule': 'done', 'schedule_end': 'done'}; }
+      function outcomeWaitingOn() { return {'reply': 'them', 'reply_book': 'them', 'book': 'them', 'no_reply': null, 'make_it_work': 'item', 'handover': 'thirdParty', 'snooze': 'date', 'nudge': 'them', 'ignore': null, 'shape': 'item', 'build': 'item', 'keepgreen': 'item', 'release': null, 'their_reply': 'them', 'approval': null, 'schedule': null, 'schedule_end': null}; }
+      function outcomeFieldKeys() { return {'reply': ['text', 'holding'], 'no_reply': ['reason'], 'handover': ['to', 'note'], 'snooze': ['until', 'reason'], 'nudge': ['text'], 'ignore': ['reason'], 'shape': ['idea'], 'build': ['brief'], 'keepgreen': [], 'release': ['notes'], 'their_reply': ['who', 'org', 'channel', 'address', 'need', 'remindAfterDays'], 'approval': ['what', 'detail', 'link'], 'schedule': ['scheduleId', 'sentence', 'ends'], 'schedule_end': ['scheduleId', 'reason']}; }
+      function outcomeRequired() { return {'reply': ['text'], 'no_reply': [], 'handover': ['to'], 'snooze': ['until'], 'nudge': ['text'], 'ignore': [], 'shape': [], 'build': [], 'keepgreen': [], 'release': [], 'their_reply': ['who', 'channel', 'address', 'need'], 'approval': ['what'], 'schedule': ['scheduleId', 'sentence'], 'schedule_end': ['scheduleId', 'reason']}; }
       // END outcome registry
 
       // ---------- summaries (item OE8FmrTaIxFVGcaeGG3N, packages/shared/src/summary.ts) ----------
@@ -991,7 +991,7 @@ service cloud.firestore {
                   'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
                   'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back',
                   'schedule.created', 'schedule.updated', 'schedule.paused', 'schedule.resumed',
-                  'schedule.deleted', 'run.decided', 'agents.off', 'agents.on', 'step.external'])
+                  'schedule.ended', 'schedule.deleted', 'run.decided', 'agents.off', 'agents.on', 'step.external'])
             || (d.actor.type == 'agent' && isActiveAgent(wid)
                 && inboxMember(d.memberUid)
                 && d.type in ['inbox.added', 'thread.filed', 'thread.note',
@@ -1349,7 +1349,8 @@ service cloud.firestore {
           // Alone: never a plan-only type (approval, book: item qwFAWxZM5xkcE7PPjAzi).
           // A schedule (scheduled tasks): with the proposed schedule that names it.
           && (d.type in outcomeSingle() || (d.type == 'schedule'
-            && getAfter(inboxDoc('schedules', d.fields.scheduleId)).data.proposal.outcomeId == oid))
+            && getAfter(inboxDoc('schedules', d.fields.scheduleId)).data.proposal.outcomeId == oid)
+            || (d.type == 'schedule_end' && schedEndable(d)))
           && inboxFieldsOk(d.type, d.fields)
           && d.state == 'proposed'
           && str(d.note, 0, 2000)
@@ -1902,6 +1903,11 @@ service cloud.firestore {
           && inboxDocTracked(d, ['outcome.proposed'], d.memberUid, d.proposal.threadId)
           && (x == null || (x.memberUid == d.memberUid && x.agentUid == me() && x.state in ['active', 'paused']));
       }
+      // Ending a schedule is proposed only for one this agent runs for that member.
+      function schedEndable(d) {
+        let x = get(inboxDoc('schedules', d.fields.scheduleId)).data;
+        return x.memberUid == d.memberUid && x.agentUid == me() && x.state in ['active', 'paused'];
+      }
       match /schedules/{sid} {
         allow read: if inboxReader(resource.data);
         allow create: if schedCreateOk();
@@ -1937,11 +1943,13 @@ service cloud.firestore {
           && touched(['title', 'what', 'rule', 'runTitle', 'steps', 'templateId', 'subjectId', 'state',
                'activeFrom', 'version'])
           && inboxTracked(d.lastEventId,
-               ['schedule.updated', 'schedule.paused', 'schedule.resumed', 'outcome.approved'], me())
-          && e.data.scheduleId == sid
+               ['schedule.updated', 'schedule.paused', 'schedule.resumed', 'schedule.ended',
+                'outcome.approved'], me())
+          && (e.data.scheduleId == sid || (d.state == 'ended' && sid in e.data.get('ends', [])))
           && (d.activeFrom == request.time
             || (d.activeFrom == r.activeFrom && d.rule == r.rule && (r.state == 'active' || d.state != 'active')))
-          && (e.type == 'schedule.paused' ? r.state == 'active' && d.state == 'paused'
+          && (d.state == 'ended' ? r.state in ['active', 'paused']
+            : e.type == 'schedule.paused' ? r.state == 'active' && d.state == 'paused'
             : e.type == 'schedule.resumed' ? r.state == 'paused' && d.state == 'active'
             : r.state == 'proposed'
               ? e.type == 'outcome.approved' && r.replaces == null && d.state == 'active'
