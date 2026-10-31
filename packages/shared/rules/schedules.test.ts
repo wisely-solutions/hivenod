@@ -24,8 +24,10 @@ import {
   decideRun,
   deleteSchedule,
   editSchedule,
+  endSchedule,
   pauseSchedule,
   proposeSchedule,
+  proposeScheduleEnd,
   resumeSchedule,
   reviseSchedule,
   setAgentsOff,
@@ -491,6 +493,214 @@ describe('Ask for changes: the agent revises its proposal (slice 5)', () => {
     expect(() =>
       reviseOutcome(a.ctx, { outcomeId: 'osp1', outcome: o, thread: t, fields: {} }),
     ).toThrow(/schedule_propose/);
+  });
+});
+
+describe('ending a schedule', () => {
+  it('the member ends an active or paused one: state ended, the history stays', async () => {
+    const m = await mine('s1');
+    await mine('s2');
+    await ok(m.run(pauseSchedule(m.ctx, { scheduleId: 's2', schedule: await schedule('s2') })));
+    await ok(m.run(endSchedule(m.ctx, { scheduleId: 's1', schedule: await schedule('s1') })));
+    await ok(m.run(endSchedule(m.ctx, { scheduleId: 's2', schedule: await schedule('s2') })));
+    expect(await snap(S('s1'))).toMatchObject({ state: 'ended', version: 2 });
+    expect((await snap(S('s2'))).state).toBe('ended');
+  });
+
+  it('an ended one never comes back: not resumed, not paused, not ended again', async () => {
+    const m = await mine('s1');
+    await ok(m.run(endSchedule(m.ctx, { scheduleId: 's1', schedule: await schedule('s1') })));
+    const ended = await schedule('s1');
+    const live = { ...ended, state: 'paused' as const };
+    await denied(m.run(resumeSchedule(m.ctx, { scheduleId: 's1', schedule: live })));
+    await denied(
+      m.run(pauseSchedule(m.ctx, { scheduleId: 's1', schedule: { ...ended, state: 'active' } })),
+    );
+    await denied(
+      m.run(endSchedule(m.ctx, { scheduleId: 's1', schedule: { ...ended, state: 'active' } })),
+    );
+  });
+
+  it('only the member ends it: not the agent that runs it, not another member (mutation)', async () => {
+    await mine('s1');
+    const s = await schedule('s1');
+    const end = (who: As, type: string, data: Record<string, unknown>): WriteOp[] => [
+      {
+        kind: 'update',
+        path: S('s1'),
+        data: {
+          state: 'ended',
+          version: s.version + 1,
+          updatedAt: SERVER_TIME,
+          lastEventId: 'ev-end',
+        },
+      },
+      {
+        kind: 'set',
+        path: inboxPaths.event(W, 'ev-end'),
+        data: {
+          actor: { type: who.ctx.actor.type, id: who.uid, name: who.uid },
+          memberUid: 'alice',
+          threadId: null,
+          subjectId: null,
+          type,
+          data,
+          at: SERVER_TIME,
+        },
+      },
+    ];
+    const a = as(AGENTS.a);
+    await denied(a.run(end(a, 'schedule.ended', { scheduleId: 's1' })));
+    await denied(a.run(end(a, 'outcome.approved', { scheduleId: 's1', outcomeId: 'o' })));
+    const b = as('bob');
+    await denied(b.run(end(b, 'schedule.ended', { scheduleId: 's1' })));
+    // The member, but the event names another schedule.
+    await denied(as('alice').run(end(as('alice'), 'schedule.ended', { scheduleId: 's2' })));
+    await ok(as('alice').run(end(as('alice'), 'schedule.ended', { scheduleId: 's1' })));
+  });
+
+  async function endProposal(over: Record<string, unknown> = {}) {
+    const tid = (await snap(T('itr1'))).memberUid ? 'itr1' : await threadFor();
+    const a = as(AGENTS.a);
+    const p = proposeScheduleEnd(a.ctx, {
+      threadId: tid,
+      thread: await thread(tid),
+      schedule: { id: 's1', data: await schedule('s1') },
+      reason: 'Replaced by the weekly report.',
+      outcomeId: 'oe1',
+      ...over,
+    });
+    return { a, p, tid };
+  }
+
+  it('the agent proposes ending its own schedule; approving ends it, the thread is done', async () => {
+    await mine('s1');
+    const { a, p, tid } = await endProposal();
+    await ok(a.run(p));
+    expect((await snap(O('oe1'))).fields).toEqual({
+      scheduleId: 's1',
+      reason: 'Replaced by the weekly report.',
+    });
+    expect((await snap(T(tid))).state).toBe('yourCall');
+    expect((await snap(S('s1'))).state).toBe('active');
+    const m = as('alice');
+    await ok(
+      m.run(
+        approveOutcome(m.ctx, {
+          outcomeId: 'oe1',
+          outcome: (await snap(O('oe1'))) as unknown as OutcomeStateOf,
+          thread: await thread(tid),
+          ending: [{ id: 's1', data: await schedule('s1') }],
+        }),
+      ),
+    );
+    expect(await snap(S('s1'))).toMatchObject({ state: 'ended', version: 2 });
+    expect((await snap(O('oe1'))).state).toBe('done');
+    expect((await snap(T(tid))).state).toBe('done');
+  });
+
+  it('refuses a proposal for a schedule of another agent or member, an ended one, or an agent alone', async () => {
+    await mine('s1', 'alice', AGENTS.star);
+    await mine('s3', 'bob', AGENTS.a);
+    await mine('s4');
+    const m = as('alice');
+    await ok(m.run(endSchedule(m.ctx, { scheduleId: 's4', schedule: await schedule('s4') })));
+    // Built by hand: the action layer would refuse these before the rules do.
+    const { a, p } = await endProposal({
+      schedule: { id: 's1', data: { ...(await schedule('s1')), agentUid: AGENTS.a } },
+    });
+    await denied(a.run(p));
+    const { p: p3 } = await endProposal({
+      schedule: { id: 's3', data: { ...(await schedule('s3')), memberUid: 'alice' } },
+    });
+    await denied(a.run(p3));
+    const { p: p4 } = await endProposal({
+      schedule: { id: 's4', data: { ...(await schedule('s4')), state: 'active' as const } },
+    });
+    await denied(a.run(p4));
+    await mine('s5');
+    const { p: ok5 } = await endProposal({ schedule: { id: 's5', data: await schedule('s5') } });
+    await denied(a.run(tamper(ok5, inboxPaths.event(W, ok5.eventId), null)));
+    await ok(a.run(ok5));
+  });
+
+  it('a merge: the first schedule is rewritten, the others ended, the proposal gone', async () => {
+    await mine('s1');
+    await mine('s2');
+    await mine('s3');
+    const m = as('alice');
+    await ok(m.run(pauseSchedule(m.ctx, { scheduleId: 's3', schedule: await schedule('s3') })));
+    const { a, p, tid } = await proposal({
+      replaces: { id: 's1', schedule: await schedule('s1') },
+      ends: [
+        { id: 's2', schedule: await schedule('s2') },
+        { id: 's3', schedule: await schedule('s3') },
+      ],
+      rule: { freq: 'weekly', at: '10:00', tz: 'Europe/Lisbon', weekdays: [1] },
+    });
+    await ok(a.run(p));
+    expect((await snap(O('osp1'))).fields).toMatchObject({ scheduleId: 'sp1', ends: 's2,s3' });
+    const approve = async () =>
+      approveOutcome(m.ctx, {
+        outcomeId: 'osp1',
+        outcome: (await snap(O('osp1'))) as unknown as OutcomeStateOf,
+        thread: await thread(tid),
+        schedule: { id: 'sp1', data: await schedule('sp1'), replaced: { version: 1 } },
+        ending: [
+          { id: 's2', data: await schedule('s2') },
+          { id: 's3', data: await schedule('s3') },
+        ],
+      });
+    // The event must name the schedules it ends: without `ends` the rules refuse.
+    const plan = await approve();
+    await denied(
+      m.run(
+        tamper(plan, eventPath(plan), (d) => ({
+          ...d,
+          data: { ...(d.data as Record<string, unknown>), ends: [] },
+        })),
+      ),
+    );
+    await denied(
+      m.run(
+        tamper(plan, eventPath(plan), (d) => ({
+          ...d,
+          data: { ...(d.data as Record<string, unknown>), ends: ['s2'] },
+        })),
+      ),
+    );
+    await ok(m.run(plan));
+    expect(await snap(S('sp1'))).toEqual({});
+    expect(await snap(S('s1'))).toMatchObject({ state: 'active', version: 2 });
+    expect((await snap(S('s2'))).state).toBe('ended');
+    expect((await snap(S('s3'))).state).toBe('ended');
+  });
+
+  it('a merge is refused for ids of another agent’s or another member’s schedule', async () => {
+    await mine('s1');
+    await mine('s2', 'alice', AGENTS.star);
+    const { a, p } = await proposal({
+      replaces: { id: 's1', schedule: await schedule('s1') },
+      ends: [{ id: 's2', schedule: { ...(await schedule('s2')), agentUid: AGENTS.a } }],
+    });
+    // The rules do not read the ends at proposal time (the member approves what he sees); the
+    // approval is what ends them, and only the member can write that.
+    await ok(a.run(p));
+    const b = as(AGENTS.star);
+    await denied(
+      b.run([
+        {
+          kind: 'update',
+          path: S('s2'),
+          data: {
+            state: 'ended',
+            version: 2,
+            updatedAt: SERVER_TIME,
+            lastEventId: p.eventId,
+          },
+        },
+      ]),
+    );
   });
 });
 

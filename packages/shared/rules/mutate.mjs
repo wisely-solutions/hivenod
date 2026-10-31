@@ -1030,10 +1030,38 @@ const MUTATIONS = [
     'schedule: outcome without its schedule',
     [
       [
-        "(d.type in outcomeSingle() || (d.type == 'schedule'\n            && getAfter(inboxDoc('schedules', d.fields.scheduleId)).data.proposal.outcomeId == oid))",
-        "(d.type in outcomeSingle() || d.type == 'schedule')",
+        "(d.type in outcomeSingle() || (d.type == 'schedule'\n            && getAfter(inboxDoc('schedules', d.fields.scheduleId)).data.proposal.outcomeId == oid)\n            || (d.type == 'schedule_end' && schedEndable(d)))",
+        "(d.type in outcomeSingle() || d.type == 'schedule' || (d.type == 'schedule_end' && schedEndable(d)))",
       ],
     ],
+  ],
+  // Ending a schedule: only the member writes `ended`, from active or paused, and a merge's event
+  // names every schedule it also ends.
+  [
+    'schedule: end proposed for an ended schedule',
+    [
+      [
+        "x.state in ['active', 'paused'];\n      }\n      match /schedules/{sid}",
+        'true;\n      }\n      match /schedules/{sid}',
+      ],
+    ],
+  ],
+  [
+    'schedule: an agent ends a schedule',
+    [
+      [
+        'return inboxOwner(r) && schedOk(d) && d.version == r.version + 1',
+        'return (inboxOwner(r) || isActiveAgent(wid)) && schedOk(d) && d.version == r.version + 1',
+      ],
+    ],
+  ],
+  [
+    'schedule: a merge ends what its event does not name',
+    [["(d.state == 'ended' && sid in e.data.get('ends', []))", "d.state == 'ended'"]],
+  ],
+  [
+    'schedule: an ended schedule ends again or comes back',
+    [["(d.state == 'ended' ? r.state in ['active', 'paused']", "(d.state == 'ended' ? true"]],
   ],
   ["schedule: change of someone else's schedule", [['(x.memberUid == d.memberUid && ', '(']]],
   ['schedule: change of a schedule another agent runs', [['&& x.agentUid == me() && ', '&& ']]],

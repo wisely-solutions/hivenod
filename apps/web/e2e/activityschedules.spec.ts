@@ -98,6 +98,28 @@ async function seedEvents(s: Seed) {
   await put('agents.off', { all: true, agents: [] }, 20 * MIN, me);
   await put('agents.on', { all: false, agents: [] }, 10 * MIN, me);
   await put('schedule.deleted', { scheduleId: 'gone', title: 'Old chore' }, 5 * MIN, me);
+  // Ending a schedule: the agent proposes it (schedule_end), the member approves; he can also end
+  // one himself.
+  await put(
+    'outcome.proposed',
+    {
+      outcomeId: 'o2',
+      type: 'schedule_end',
+      scheduleId: 'weekly',
+      fields: { scheduleId: 'weekly', reason: 'Replaced by the daily report.' },
+    },
+    8 * MIN,
+    agent,
+    s.threads.price,
+  );
+  await put(
+    'outcome.approved',
+    { outcomeId: 'o2', type: 'schedule_end', scheduleId: 'weekly', edited: false },
+    7 * MIN,
+    me,
+    s.threads.price,
+  );
+  await put('schedule.ended', { scheduleId: 'weekly' }, 6 * MIN, me);
   // A thread event for contrast, and another member's schedule event (never shown).
   await put('summary.written', { version: 2 }, 70 * MIN, agent, s.threads.price);
   n += 1;
@@ -134,11 +156,21 @@ test('Activity: schedule, run and Off events, and the Schedules filter', async (
 
     const filters = page.getByRole('group', { name: 'Filters' });
     await filters.getByRole('button', { name: 'Schedules' }).click();
-    await expect(feed.locator('li[data-type="outcome.proposed"]')).toContainText(
-      'proposed the schedule Weekly report · Every Monday at 08:00',
-    );
-    await expect(feed.locator('li[data-type="outcome.approved"]')).toContainText(
-      'approved the schedule Weekly report',
+    await expect(
+      feed.locator('li[data-type="outcome.proposed"]').filter({ hasText: 'proposed the schedule' }),
+    ).toContainText('proposed the schedule Weekly report · Every Monday at 08:00');
+    await expect(
+      feed.locator('li[data-type="outcome.approved"]').filter({ hasText: 'approved the schedule' }),
+    ).toContainText('approved the schedule Weekly report');
+    // Ending one: proposed by the agent, approved by the member, or ended by him directly.
+    await expect(
+      feed.locator('li[data-type="outcome.proposed"]').filter({ hasText: 'ending' }),
+    ).toContainText('proposed ending the schedule Weekly report');
+    await expect(
+      feed.locator('li[data-type="outcome.approved"]').filter({ hasText: 'ending' }),
+    ).toContainText('approved ending the schedule Weekly report');
+    await expect(feed.locator('li[data-type="schedule.ended"]')).toContainText(
+      'ended the schedule Weekly report',
     );
     await expect(feed.locator('li[data-type="run.fired"]')).toContainText(
       'started the scheduled run',

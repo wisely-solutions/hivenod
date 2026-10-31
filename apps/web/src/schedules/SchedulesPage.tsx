@@ -730,7 +730,7 @@ function ScheduleList({
               data-schedule-state={r.s.state}
               className={cn(
                 'flex items-start gap-1 rounded-card border border-l-[3px] border-line bg-surface',
-                r.s.state === 'ended' && 'opacity-60',
+                r.s.state === 'ended' && 'bg-canvas',
               )}
               style={{ borderLeftColor: agentColor(r.s.agentUid) }}
             >
@@ -779,7 +779,7 @@ function ScheduleList({
               className={cn(
                 'grid grid-cols-[minmax(0,1.5fr)_7rem_minmax(0,1.1fr)_minmax(0,1.6fr)_7.5rem_6rem_2.75rem] items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0',
                 selected === r.key && 'bg-agent-soft',
-                r.s.state === 'ended' && 'opacity-60',
+                r.s.state === 'ended' && 'bg-canvas',
               )}
             >
               <span role="cell" className="min-w-0">

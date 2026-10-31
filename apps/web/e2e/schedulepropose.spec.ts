@@ -12,6 +12,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import {
   adminDoc,
+  adminSet,
+  adminUpdate,
   expectNoHorizontalScroll,
   fastTimers,
   freezeClock,
@@ -60,7 +62,7 @@ async function look(page: Page, name: string) {
 }
 
 /** A new member with an agent "Books" that proposed the invoices schedule on her thread. */
-async function proposed(page: Page) {
+async function proposed(page: Page, { propose = true } = {}) {
   await fastTimers(page);
   await freezeClock(page);
   const me = person('Cara Lindqvist');
@@ -79,14 +81,48 @@ async function proposed(page: Page) {
     id: 'm1',
     at: new Date(NOW - 3_600_000),
   });
-  const { scheduleId, outcomeId } = await books.schedule(tid, {
-    ...INVOICES,
-    note: 'Same steps as I did by hand on 1 Jun.',
-    confidence: 'high',
-    checks: ['Ran it by hand on 1 Jun'],
-  });
+  const { scheduleId, outcomeId } = propose
+    ? await books.schedule(tid, {
+        ...INVOICES,
+        note: 'Same steps as I did by hand on 1 Jun.',
+        confidence: 'high',
+        checks: ['Ran it by hand on 1 Jun'],
+      })
+    : { scheduleId: '', outcomeId: '' };
   await page.goto(`/inbox/${wid}/t/${tid}`);
-  return { wid, tid, books, scheduleId, outcomeId };
+  return { wid, tid, uid, books, scheduleId, outcomeId };
+}
+
+/** An active schedule of agent `agentUid` for the member (as the member would have made it). */
+async function live(
+  wid: string,
+  uid: string,
+  agentUid: string,
+  id: string,
+  title: string,
+  state: 'active' | 'paused' = 'active',
+) {
+  const at = new Date(NOW - 30 * 86_400_000);
+  await adminSet(`workspaces/${wid}/schedules/${id}`, {
+    memberUid: uid,
+    agentUid,
+    title,
+    what: `${title}: prepare it and ask me before sending.`,
+    rule: { freq: 'weekly', at: '16:00', tz: 'Europe/Lisbon', weekdays: [5] },
+    runTitle: `${title} · {period}`,
+    steps: [{ type: 'approval', fields: { what: 'Send it' } }],
+    templateId: null,
+    subjectId: null,
+    state,
+    activeFrom: at,
+    proposal: null,
+    replaces: null,
+    version: 1,
+    createdBy: { type: 'human', id: uid },
+    createdAt: at,
+    updatedAt: at,
+    lastEventId: 'seed',
+  });
 }
 
 const field = async (path: string, name: string) =>
@@ -209,6 +245,88 @@ test('a schedule next to another proposal keeps its card; the other shows after'
     expect(await field(`workspaces/${s.wid}/inboxOutcomes/${reply}`, 'state')).toBe('proposed');
     await expect(top.locator('[data-schedule-card]')).toBeHidden();
     await expect(top).toContainText('Sure, I will set that up.');
+  } finally {
+    await s.books.stop();
+  }
+});
+
+// Ending a schedule (schedule_end) and a merge (replaces as a list).
+test('the agent proposes ending a schedule; End schedule ends it, the history stays', async ({
+  page,
+  isMobile,
+}) => {
+  test.setTimeout(180_000);
+  const s = await proposed(page, { propose: false });
+  try {
+    await live(s.wid, s.uid, s.books.aid, 'old1', 'Weekly hours');
+    await s.books.scheduleEnd(
+      s.tid,
+      'old1',
+      'The invoices schedule covers it now.',
+      'Nothing has been sent from it since June.',
+    );
+    const top = page.getByRole('region', { name: 'Decision' });
+    const card = top.locator('[data-schedule-card]');
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    await expect(top.locator('[data-kicker]')).toHaveText('Your approval · end schedule');
+    await expect(top.locator('[data-headline]')).toHaveText('End “Weekly hours”?');
+    await expect(card.locator('[data-schedule-end-reason]')).toHaveText(
+      'Why: The invoices schedule covers it now.',
+    );
+    await expect(card.locator('[data-schedule-end-effect]')).toContainText('No more runs');
+    await expect(card.getByRole('button', { name: 'Ask for changes' })).toHaveCount(0);
+    await card.scrollIntoViewIfNeeded();
+    await look(page, isMobile ? 'end-390' : 'end-1440');
+    await card.getByRole('button', { name: 'End schedule' }).click();
+    await expect
+      .poll(() => field(`workspaces/${s.wid}/schedules/old1`, 'state'), {
+        timeout: UNDO_WAIT + 8000,
+      })
+      .toBe('ended');
+    expect((await adminDoc(`workspaces/${s.wid}/schedules/old1`))?.fields.version).toMatchObject({
+      integerValue: '2',
+    });
+    expect(await field(`workspaces/${s.wid}/inboxThreads/${s.tid}`, 'state')).toBe('done');
+  } finally {
+    await s.books.stop();
+  }
+});
+
+test('a merge: the first schedule is changed, the others end in the same approval', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'the same card on every screen');
+  test.setTimeout(180_000);
+  const s = await proposed(page, { propose: false });
+  try {
+    await live(s.wid, s.uid, s.books.aid, 'old1', 'Weekly hours');
+    await live(s.wid, s.uid, s.books.aid, 'old2', 'Invoice reminder', 'paused');
+    const m = await s.books.schedule(s.tid, { ...INVOICES, replaces: ['old1', 'old2'] });
+    const top = page.getByRole('region', { name: 'Decision' });
+    const card = top.locator('[data-schedule-card]');
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    await expect(top.locator('[data-headline]')).toHaveText('Change “Send invoices”?');
+    await expect(card.locator('[data-schedule-also-ends]')).toHaveText(
+      'Also ends: Invoice reminder',
+    );
+    // One of them ended meanwhile: refused with a clear message, nothing written.
+    await adminUpdate(`workspaces/${s.wid}/schedules/old2`, { state: 'ended' });
+    await card.getByRole('button', { name: 'Set up schedule' }).click();
+    await expect(card.getByRole('alert')).toContainText('no longer active or paused');
+    expect(await field(`workspaces/${s.wid}/schedules/old1`, 'title')).toBe('Weekly hours');
+    // Back to paused: approving rewrites old1, ends old2, deletes the proposal.
+    await adminUpdate(`workspaces/${s.wid}/schedules/old2`, { state: 'paused' });
+    await expect(card.locator('[data-schedule-also-ends]')).toBeVisible();
+    await card.getByRole('button', { name: 'Set up schedule' }).click();
+    await expect
+      .poll(() => field(`workspaces/${s.wid}/schedules/old2`, 'state'), {
+        timeout: UNDO_WAIT + 8000,
+      })
+      .toBe('ended');
+    expect(await field(`workspaces/${s.wid}/schedules/old1`, 'title')).toBe('Send invoices');
+    expect(await field(`workspaces/${s.wid}/schedules/old1`, 'state')).toBe('active');
+    expect(await adminDoc(`workspaces/${s.wid}/schedules/${m.scheduleId}`)).toBeNull();
   } finally {
     await s.books.stop();
   }
