@@ -381,6 +381,9 @@ export const OUTCOMES = {
   },
 } as const satisfies Record<string, OutcomeType>;
 
+/** The outcome types of scheduled tasks (their own tools): a schedule's proposal, ending one. */
+export const isScheduleType = (t: string) => t === 'schedule' || t === 'schedule_end';
+
 export type OutcomeTypeId = keyof typeof OUTCOMES;
 export const OUTCOME_TYPES = Object.keys(OUTCOMES) as OutcomeTypeId[];
 export const MAX_OUTCOME_FIELDS = 10;

@@ -289,5 +289,10 @@ export function scheduleEndOps(
 export const MAX_SCHEDULE_ENDS = 8;
 export function scheduleEnds(fields: Readonly<Record<string, unknown>>): string[] {
   const v = fields.ends;
-  return typeof v === 'string' ? v.split(',').map((x) => x.trim()).filter(Boolean) : [];
+  return typeof v === 'string'
+    ? v
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean)
+    : [];
 }

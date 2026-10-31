@@ -179,7 +179,7 @@ func (c *Client) SchedulePropose(ctx context.Context, in ScheduleProposeIn) (map
 // finalIDNote tells the agent which id a change keeps: the proposal's own id (scheduleId) is only
 // a placeholder, deleted when the person approves, declines or says Not now.
 func finalIDNote(proposal string, replaced []string) string {
-	n := fmt.Sprintf("This is a change: the schedule keeps its id %s after approval (use that id from then on). The proposal id %s disappears once the person approves, declines or says Not now.", replaced[0], proposal)
+	n := fmt.Sprintf("This is a change: the schedule keeps its id %s after approval (use that id from then on). The proposal id %s is only a placeholder: it disappears when the person approves or declines (a Not now keeps it waiting for later).", replaced[0], proposal)
 	if len(replaced) > 1 {
 		n += " Approving also ends " + strings.Join(replaced[1:], ", ") + " (their runs stop; past runs stay)."
 	}

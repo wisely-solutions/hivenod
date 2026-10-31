@@ -316,7 +316,9 @@ export function scheduleCases(
   endIt('a proposed one', who.agent, { schedule: { id: 'sA', data: SCH({ state: 'proposed' }) } });
   endIt('an ended one', who.agent, { schedule: { id: 'sA', data: SCH({ state: 'ended' }) } });
   endIt('someone else’s', who.agent, { schedule: { id: 'sA', data: SCH({ memberUid: 'ana' }) } });
-  endIt('another agent’s', who.agent, { schedule: { id: 'sA', data: SCH({ agentUid: 'agentB' }) } });
+  endIt('another agent’s', who.agent, {
+    schedule: { id: 'sA', data: SCH({ agentUid: 'agentB' }) },
+  });
   endIt('ignored thread', who.agent, { thread: TH({ state: 'ignored' }) });
   endIt('not the home agent', who.other, {});
   endIt('a person', who.human, {});

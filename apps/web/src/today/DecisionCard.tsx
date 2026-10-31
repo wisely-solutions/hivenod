@@ -195,7 +195,9 @@ export const DecisionCard = forwardRef<DecisionCardHandle, DecisionCardProps>(
     ) : null;
     // A plan (item qwFAWxZM5xkcE7PPjAzi): the card shows the step that waits for the member.
     const planStep = (entry.proposals ?? []).find((p) => p.data.planId);
-    const scheduleProposal = (entry.proposals ?? []).find((p) => p.data.type === 'schedule');
+    const scheduleProposal = (entry.proposals ?? []).find(
+      (p) => p.data.type === 'schedule' || p.data.type === 'schedule_end',
+    );
     const card = entry.plan
       ? shell(
           band,

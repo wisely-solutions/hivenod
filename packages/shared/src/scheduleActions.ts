@@ -35,7 +35,6 @@ import {
   SCHEDULE_LIMITS,
   scheduleDeleteEventId,
   scheduleEndOps,
-  scheduleEnds,
   MAX_SCHEDULE_ENDS,
   schedulePaths,
   runDocId,
@@ -346,7 +345,10 @@ export function proposeSchedule(
   }
   const ends = input.ends ?? [];
   need(ends.length === 0 || rep !== null, 'ends needs replaces: the first id is the one changed.');
-  need(ends.length <= MAX_SCHEDULE_ENDS, `A merge ends at most ${MAX_SCHEDULE_ENDS} other schedules.`);
+  need(
+    ends.length <= MAX_SCHEDULE_ENDS,
+    `A merge ends at most ${MAX_SCHEDULE_ENDS} other schedules.`,
+  );
   need(
     new Set([...(rep ? [rep.id] : []), ...ends.map((e) => e.id)]).size ===
       ends.length + (rep ? 1 : 0),

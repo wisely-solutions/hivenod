@@ -2140,7 +2140,9 @@ export function approveOutcome(
         : []),
       // A schedule set up next to another open proposal (slice 6) leaves the thread on Your call
       // for that one: setting up a schedule does not end the conversation.
-      ...(immediate && !pl && !((o.type === 'schedule' || o.type === 'schedule_end') && input.othersPending === true)
+      ...(immediate &&
+      !pl &&
+      !((o.type === 'schedule' || o.type === 'schedule_end') && input.othersPending === true)
         ? [
             upd(
               inboxPaths.thread(ctx.workspaceId, o.threadId),
@@ -2194,7 +2196,8 @@ function schedulesToEnd(
   o: OutcomeStateOf,
   input: { ending?: readonly { id: string; data: ScheduleOf }[]; fields?: unknown },
 ): readonly { id: string; data: ScheduleOf }[] {
-  const want = o.type === 'schedule_end' ? [String(o.fields.scheduleId ?? '')] : scheduleEnds(o.fields);
+  const want =
+    o.type === 'schedule_end' ? [String(o.fields.scheduleId ?? '')] : scheduleEnds(o.fields);
   const have = input.ending ?? [];
   need(
     want.length === have.length && want.every((id) => have.some((e) => e.id === id)),
