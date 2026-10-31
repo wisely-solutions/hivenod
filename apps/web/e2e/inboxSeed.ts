@@ -21,6 +21,7 @@ import {
   proposeOutcome,
   proposePlan,
   proposeSchedule,
+  proposeScheduleEnd,
   reviseSchedule,
   schedulePaths,
   type ScheduleInput,
@@ -314,11 +315,45 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
     /** schedule_propose (scheduled tasks, slice 5): a proposed schedule and its outcome. */
     async schedule(
       tid: string,
-      input: ScheduleInput & { note?: string; confidence?: string; checks?: string[] },
+      input: ScheduleInput & {
+        note?: string;
+        confidence?: string;
+        checks?: string[];
+        /** Schedule ids this proposal changes (the first) and, as a merge, also ends (the rest). */
+        replaces?: string[];
+      },
     ) {
-      const p = proposeSchedule(ctx, { ...input, threadId: tid, thread: await thread(tid) });
+      const { replaces: ids = [], ...rest } = input;
+      const live = async (id: string) => ({
+        id,
+        schedule: (await getDoc(doc(db, schedulePaths.schedule(wid, id)))).data() as ScheduleOf,
+      });
+      const first = ids[0] ? await live(ids[0]) : null;
+      const ends = await Promise.all(ids.slice(1).map(live));
+      const p = proposeSchedule(ctx, {
+        ...rest,
+        threadId: tid,
+        thread: await thread(tid),
+        ...(first ? { replaces: first } : {}),
+        ...(ends.length ? { ends } : {}),
+      });
       await run(p);
       return { scheduleId: p.scheduleId, outcomeId: p.outcomeId };
+    },
+    /** schedule_end: proposes ending a schedule this agent runs. */
+    async scheduleEnd(tid: string, scheduleId: string, reason: string, note?: string) {
+      const data = (
+        await getDoc(doc(db, schedulePaths.schedule(wid, scheduleId)))
+      ).data() as ScheduleOf;
+      const p = proposeScheduleEnd(ctx, {
+        threadId: tid,
+        thread: await thread(tid),
+        schedule: { id: scheduleId, data },
+        reason,
+        ...(note ? { note } : {}),
+      });
+      await run(p);
+      return { outcomeId: p.outcomeId };
     },
     /** schedule_propose revises: the next version after Ask for changes. */
     async reviseSchedule(oid: string, input: ScheduleInput & { note?: string }) {

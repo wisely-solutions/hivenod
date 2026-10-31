@@ -73,6 +73,11 @@ export const EVENT_MIN_VERSION: Readonly<Record<string, string>> = {
    * older CLI is not silenced by Hivenod (the rules still refuse its step starts).
    */
   off: '0.2.258',
+  /**
+   * Ending and merging schedules: schedule_end, and schedule_propose with replaces as a list. An
+   * older CLI cannot propose either (a single replaces still works).
+   */
+  schedule_end: '0.2.261',
 };
 
 /** Dotted numbers compared part by part: negative when a < b, 0 when equal, positive when a > b. */

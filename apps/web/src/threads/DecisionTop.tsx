@@ -18,6 +18,7 @@ import {
   type InboxOutcome,
   type InboxPlan,
   type InboxThread,
+  isScheduleType,
 } from '@hive/shared';
 import {
   Check,
@@ -189,12 +190,18 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
     // waits next to it; the others show once it is decided.
     const shownProposal =
       top.kind === 'person' && !main
-        ? (proposals.find((p) => p.data.type === 'schedule') ?? proposals[0])
+        ? (proposals.find((p) => isScheduleType(p.data.type)) ?? proposals[0])
         : undefined;
     // A schedule proposal (scheduled tasks, slice 5) has a card of its own.
-    const scheduleProposal = shownProposal?.data.type === 'schedule' ? shownProposal : undefined;
+    const scheduleProposal =
+      shownProposal && isScheduleType(shownProposal.data.type) ? shownProposal : undefined;
+    const endingIt = scheduleProposal?.data.type === 'schedule_end';
     const kicker =
-      scheduleProposal && proposals.length === 1 ? 'Your approval · new schedule' : top.kicker;
+      scheduleProposal && proposals.length === 1
+        ? endingIt
+          ? 'Your approval · end schedule'
+          : 'Your approval · new schedule'
+        : top.kicker;
     // Its ask names the schedule (the panel listens to the same doc: one read).
     const schedLive = useLiveDoc(
       scheduleProposal && typeof scheduleProposal.data.fields.scheduleId === 'string'
@@ -203,7 +210,11 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
       scheduleSchema,
     );
     const schedAsk =
-      schedLive.state === 'ready' && schedLive.data ? scheduleCard(schedLive.data, now).ask : null;
+      schedLive.state === 'ready' && schedLive.data
+        ? endingIt
+          ? `End “${schedLive.data.title}”?`
+          : scheduleCard(schedLive.data, now).ask
+        : null;
 
     // The headline: the summary's ask while something waits, else its headline; without one,
     // the app's own line (design 4.3), never nothing.
@@ -216,7 +227,8 @@ export const DecisionTop = forwardRef<DecisionCardHandle, DecisionTopProps>(
     else if (stepRow) fallback = stepTitle(stepRow.data.type, stepRow.data.fields);
     else if (scheduleProposal)
       fallback =
-        schedAsk ?? `Set up the schedule ${agentName(scheduleProposal.data.proposedBy)} proposes?`;
+        schedAsk ??
+        `${endingIt ? 'End' : 'Set up'} the schedule ${agentName(scheduleProposal.data.proposedBy)} ${endingIt ? 'wants to end' : 'proposes'}?`;
     else if (shownProposal)
       fallback = `${agentName(shownProposal.data.proposedBy)} proposes: ${outcomeType(shownProposal.data.type)?.label ?? shownProposal.data.type}`;
     else if (top.kind === 'blocked' && cur)

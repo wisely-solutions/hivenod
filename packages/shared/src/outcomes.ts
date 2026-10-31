@@ -353,12 +353,36 @@ export const OUTCOMES = {
     fields: {
       scheduleId: line('Schedule', 'The proposed schedule (set by schedule_propose)'),
       sentence: line('When', 'The rule in words, e.g. "Monthly · day 1 · 09:00 Lisbon"'),
+      ends: line(
+        'Also ends',
+        'Other schedules of this agent that the same approval ends (a merge): their ids, comma separated (set by schedule_propose with replaces as a list)',
+        false,
+      ),
     },
     executor: 'none',
     after: { state: 'done' },
     ownTool: 'schedule_propose',
   },
+  // End a schedule (scheduled tasks): the agent proposes it with schedule_end; the member's
+  // approval ends the schedule (state ended: no future runs, past runs and their threads stay) in
+  // the same batch (approveOutcome). Nothing to carry out.
+  schedule_end: {
+    label: 'End schedule',
+    approve: 'End schedule',
+    description:
+      'Stop a schedule the agent runs for good: proposed with schedule_end (never outcome_propose), with the reason. Past runs stay.',
+    fields: {
+      scheduleId: line('Schedule', 'The schedule to end (set by schedule_end)'),
+      reason: line('Why', 'One line: why it should end'),
+    },
+    executor: 'none',
+    after: { state: 'done' },
+    ownTool: 'schedule_end',
+  },
 } as const satisfies Record<string, OutcomeType>;
+
+/** The outcome types of scheduled tasks (their own tools): a schedule's proposal, ending one. */
+export const isScheduleType = (t: string) => t === 'schedule' || t === 'schedule_end';
 
 export type OutcomeTypeId = keyof typeof OUTCOMES;
 export const OUTCOME_TYPES = Object.keys(OUTCOMES) as OutcomeTypeId[];

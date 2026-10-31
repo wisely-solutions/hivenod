@@ -87,8 +87,9 @@ var runners = map[string]runner{
 		return CheckSummary(in.Summary)
 	}),
 	// Scheduled tasks, slice 5
-	"proposeSchedule": act(ProposeSchedule),
-	"reviseSchedule":  act(ReviseSchedule),
+	"proposeSchedule":    act(ProposeSchedule),
+	"reviseSchedule":     act(ReviseSchedule),
+	"proposeScheduleEnd": act(ProposeScheduleEnd),
 	"checkRule": pure(func(in struct {
 		Rule any `json:"rule"`
 	}) (any, error) {

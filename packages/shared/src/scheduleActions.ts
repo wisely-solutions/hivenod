@@ -34,6 +34,8 @@ import {
   RUN_CHOICE_STATE,
   SCHEDULE_LIMITS,
   scheduleDeleteEventId,
+  scheduleEndOps,
+  MAX_SCHEDULE_ENDS,
   schedulePaths,
   runDocId,
   type RunChoice,
@@ -268,6 +270,24 @@ export function resumeSchedule(
   );
 }
 
+/** End: no future runs, for good; the schedule stays listed with its history. */
+export function endSchedule(
+  ctx: ActionContext,
+  input: { scheduleId: string; schedule: ScheduleOf },
+): ActionPlan {
+  const s = input.schedule;
+  owner(ctx, s.memberUid);
+  editable(s);
+  return inboxPlan(
+    ctx,
+    'schedule.ended',
+    { memberUid: s.memberUid, subjectId: s.subjectId },
+    { scheduleId: input.scheduleId },
+    (eventId) =>
+      scheduleEndOps(ctx.workspaceId, { scheduleId: input.scheduleId, schedule: s, eventId }),
+  );
+}
+
 /** Delete: the schedule goes; its past runs and their threads stay. */
 export function deleteSchedule(
   ctx: ActionContext,
@@ -303,6 +323,11 @@ export function proposeSchedule(
     confidence?: string | null;
     checks?: readonly string[] | null;
     replaces?: { id: string; schedule: ScheduleOf } | null;
+    /**
+     * A merge: more schedules of this agent that the same approval ends (replaces is the first
+     * id, rewritten as a change; these are ended). Each is the agent's own, same member.
+     */
+    ends?: readonly { id: string; schedule: ScheduleOf }[] | null;
     scheduleId?: string;
     outcomeId?: string;
   },
@@ -318,6 +343,22 @@ export function proposeSchedule(
     need(rep.schedule.agentUid === me, 'You can only propose changes to schedules you run.');
     editable(rep.schedule);
   }
+  const ends = input.ends ?? [];
+  need(ends.length === 0 || rep !== null, 'ends needs replaces: the first id is the one changed.');
+  need(
+    ends.length <= MAX_SCHEDULE_ENDS,
+    `A merge ends at most ${MAX_SCHEDULE_ENDS} other schedules.`,
+  );
+  need(
+    new Set([...(rep ? [rep.id] : []), ...ends.map((e) => e.id)]).size ===
+      ends.length + (rep ? 1 : 0),
+    'Each schedule is named once.',
+  );
+  for (const e of ends) {
+    need(e.schedule.memberUid === t.memberUid, 'That schedule is someone else’s.');
+    need(e.schedule.agentUid === me, 'You can only end schedules you run.');
+    editable(e.schedule);
+  }
   const c = cleanSchedule(input);
   const note = (input.note ?? '').trim();
   need(
@@ -328,7 +369,11 @@ export function proposeSchedule(
   const scheduleId = input.scheduleId ?? nid(ctx);
   const outcomeId = input.outcomeId ?? nid(ctx);
   const sentence = ruleSentence(c.rule).slice(0, 300);
-  const fields = { scheduleId, sentence };
+  const fields = {
+    scheduleId,
+    sentence,
+    ...(ends.length ? { ends: ends.map((e) => e.id).join(',') } : {}),
+  };
   const w = ctx.workspaceId;
   const p = inboxPlan(
     ctx,
@@ -379,6 +424,76 @@ export function proposeSchedule(
   return { ...p, scheduleId, outcomeId, sentence };
 }
 
+/**
+ * schedule_end: the agent proposes ending a schedule it runs (state active or paused) for good.
+ * The member's approval ends it (approveOutcome); future runs stop, past runs and their threads
+ * stay.
+ */
+export function proposeScheduleEnd(
+  ctx: ActionContext,
+  input: {
+    threadId: string;
+    thread: ThreadStateOf;
+    schedule: { id: string; data: ScheduleOf };
+    reason: string;
+    note?: string;
+    confidence?: string | null;
+    checks?: readonly string[] | null;
+    outcomeId?: string;
+  },
+): ActionPlan & { outcomeId: string } {
+  requireAgent(ctx);
+  const t = input.thread;
+  const me = ctx.actor.id;
+  need(t.state !== 'ignored', 'This thread was ignored: bring it back first.');
+  need(t.fetchedBy === me, 'Only the thread’s home agent proposes ending a schedule on it.');
+  const sc = input.schedule;
+  need(sc.data.memberUid === t.memberUid, 'That schedule is someone else’s.');
+  need(sc.data.agentUid === me, 'You can only end schedules you run.');
+  editable(sc.data);
+  const reason = (input.reason ?? '').trim();
+  need(reason.length >= 1 && reason.length <= 300, 'Give the reason in 1 to 300 characters.');
+  const note = (input.note ?? '').trim();
+  need(
+    note.length <= INBOX_LIMITS.outcomeNote,
+    `The note is at most ${INBOX_LIMITS.outcomeNote} characters.`,
+  );
+  const { conf, checks } = sureness(input);
+  const outcomeId = input.outcomeId ?? nid(ctx);
+  const fields = { scheduleId: sc.id, reason };
+  const w = ctx.workspaceId;
+  const p = inboxPlan(
+    ctx,
+    'outcome.proposed',
+    { memberUid: t.memberUid, threadId: input.threadId, subjectId: t.subjectId },
+    { outcomeId, type: 'schedule_end', fields, scheduleId: sc.id },
+    (eventId) => [
+      {
+        kind: 'set',
+        path: inboxPaths.outcome(w, outcomeId),
+        data: {
+          memberUid: t.memberUid,
+          threadId: input.threadId,
+          type: 'schedule_end',
+          fields,
+          state: 'proposed',
+          note,
+          ...(conf !== null ? { confidence: conf } : {}),
+          ...(checks.length > 0 ? { checks } : {}),
+          proposedBy: me,
+          executor: null,
+          decision: null,
+          result: null,
+          createdAt: SERVER_TIME,
+          ...stamp(eventId),
+        },
+      },
+      upd(inboxPaths.thread(w, input.threadId), { state: 'yourCall', waiting: null }, eventId),
+    ],
+  );
+  return { ...p, outcomeId };
+}
+
 function sureness(input: { confidence?: string | null; checks?: readonly string[] | null }) {
   const conf = input.confidence ?? null;
   need(
@@ -426,7 +541,8 @@ export function reviseSchedule(
     outcomeId: input.outcomeId,
     outcome: o,
     thread: input.thread,
-    fields: { scheduleId: sc.id, sentence },
+    // A merge stays a merge: the schedules it also ends are kept.
+    fields: { scheduleId: sc.id, sentence, ...(o.fields.ends ? { ends: o.fields.ends } : {}) },
     note: input.note,
     confidence: input.confidence,
     checks: input.checks,

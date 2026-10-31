@@ -19,6 +19,7 @@
       "out": {
         "member": "owner",
         "note": "Active schedules run by themselves (Hivenod starts each run and sends its carry_out to the agent that runs it). Before proposing, check that the same thing is not scheduled already; to change one you run, schedule_propose with replaces.",
+        "organization": "Hive",
         "schedules": []
       }
     },
@@ -51,6 +52,7 @@
       "out": {
         "member": "owner",
         "note": "Active schedules run by themselves (Hivenod starts each run and sends its carry_out to the agent that runs it). Before proposing, check that the same thing is not scheduled already; to change one you run, schedule_propose with replaces.",
+        "organization": "Hive",
         "schedules": [
           {
             "agent": "<agent>",
@@ -158,6 +160,7 @@
       "out": {
         "member": "owner",
         "note": "Active schedules run by themselves (Hivenod starts each run and sends its carry_out to the agent that runs it). Before proposing, check that the same thing is not scheduled already; to change one you run, schedule_propose with replaces.",
+        "organization": "Hive",
         "schedules": [
           {
             "agent": "<agent>",

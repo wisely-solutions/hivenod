@@ -379,7 +379,7 @@ export function lastRuns(runs: readonly RunLite[], now: number): Map<string, Run
 
 /**
  * One row per schedule the member has (proposals and proposed changes stay on their threads):
- * sorted by next run, the paused and finished ones at the bottom.
+ * sorted by next run, the paused ones at the bottom and the ended ones (with their history) last.
  */
 export function listRows(
   schedules: readonly SchedLite[],
@@ -389,7 +389,7 @@ export function listRows(
 ): ListRow[] {
   const last = lastRuns(runs, now);
   const rows = schedules
-    .filter((s) => s.state === 'active' || s.state === 'paused')
+    .filter((s) => s.state === 'active' || s.state === 'paused' || s.state === 'ended')
     .map((s): ListRow => {
       const occ = nextOf(s, now);
       const l = last.get(skey(s.wid, s.id));
@@ -401,7 +401,8 @@ export function listRows(
         last: l ? { run: l, day: shortDay(l.dueMs, now, tz), words: runWords(l.state) } : null,
       };
     });
-  const rank = (r: ListRow) => (r.s.state !== 'active' ? 2 : r.next ? 0 : 1);
+  const rank = (r: ListRow) =>
+    r.s.state === 'ended' ? 3 : r.s.state !== 'active' ? 2 : r.next ? 0 : 1;
   return rows.sort(
     (a, b) =>
       rank(a) - rank(b) ||

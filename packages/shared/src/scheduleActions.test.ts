@@ -21,9 +21,11 @@ import {
   decideRun,
   deleteSchedule,
   editSchedule,
+  endSchedule,
   fireScheduledRun,
   pauseSchedule,
   proposeSchedule,
+  proposeScheduleEnd,
   resumeSchedule,
   reviseSchedule,
   setAgentsOff,
@@ -38,6 +40,7 @@ import {
   scheduleSchema,
   type ScheduleOf,
 } from './scheduleDocs';
+import { scheduleEnds } from './scheduleDocs';
 import { nextRun } from './schedules';
 
 let n = 0;
@@ -350,6 +353,239 @@ describe('an agent proposes, the member decides', () => {
     const r = rejectOutcome(human, { outcomeId: 'o1', outcome: o, thread, othersPending: false });
     expect(r.eventId).toBe(scheduleDeleteEventId('sp1'));
     expect(r.ops.find((x) => x.path.endsWith('schedules/sp1'))!.kind).toBe('delete');
+  });
+});
+
+describe('ending a schedule, and a merge', () => {
+  const thread: ThreadStateOf = {
+    memberUid: 'alice',
+    subjectId: null,
+    state: 'investigating',
+    fetchedBy: 'agentA',
+    refs: [],
+  };
+  const live = (over: Record<string, unknown> = {}) =>
+    asSchedule({
+      ...op(createSchedule(human, { ...INPUT, agentUid: 'agentA' }).ops, 'schedules').data!,
+      ...over,
+    });
+
+  it('the member ends an active or paused one: state ended, version + 1, schedule.ended', () => {
+    const e = endSchedule(human, { scheduleId: 's1', schedule: live() });
+    expect(e.ops.find((x) => x.path.endsWith('schedules/s1'))!.data).toMatchObject({
+      state: 'ended',
+      version: 2,
+    });
+    expect(op(e.ops, 'inboxEvents').data).toMatchObject({
+      type: 'schedule.ended',
+      data: { scheduleId: 's1' },
+    });
+    expect(
+      endSchedule(human, { scheduleId: 's1', schedule: live({ state: 'paused' }) }).ops,
+    ).toHaveLength(2);
+    expect(() =>
+      endSchedule(human, { scheduleId: 's1', schedule: live({ state: 'ended' }) }),
+    ).toThrow(/ended/);
+    expect(() => endSchedule(agent, { scheduleId: 's1', schedule: live() })).toThrow();
+  });
+
+  const endProposal = (over: Record<string, unknown> = {}) =>
+    proposeScheduleEnd(agent, {
+      threadId: 't1',
+      thread,
+      schedule: { id: 's1', data: live() },
+      reason: ' Replaced by the weekly report. ',
+      outcomeId: 'oe1',
+      ...over,
+    });
+
+  it('the agent proposes ending its own schedule; approving ends it in the same batch', () => {
+    const p = endProposal();
+    expect(op(p.ops, 'inboxOutcomes/oe1').data).toMatchObject({
+      type: 'schedule_end',
+      fields: { scheduleId: 's1', reason: 'Replaced by the weekly report.' },
+      executor: null,
+    });
+    expect(op(p.ops, 'inboxThreads/t1').data).toMatchObject({ state: 'yourCall' });
+    const o = stored(op(p.ops, 'inboxOutcomes').data!) as unknown as OutcomeStateOf;
+    expect(() => approveOutcome(human, { outcomeId: 'oe1', outcome: o, thread })).toThrow(
+      /Give the schedules/,
+    );
+    const a = approveOutcome(human, {
+      outcomeId: 'oe1',
+      outcome: o,
+      thread,
+      ending: [{ id: 's1', data: live() }],
+    });
+    expect(a.ops.find((x) => x.path.endsWith('schedules/s1'))!.data).toMatchObject({
+      state: 'ended',
+      version: 2,
+    });
+    expect(op(a.ops, 'inboxEvents').data!.data).toMatchObject({
+      type: 'schedule_end',
+      scheduleId: 's1',
+    });
+    expect(op(a.ops, 'inboxOutcomes/oe1').data).toMatchObject({ state: 'done' });
+    expect(op(a.ops, 'inboxThreads/t1').data).toMatchObject({ state: 'done' });
+    // Gone from under the proposal: refused, nothing written.
+    expect(() =>
+      approveOutcome(human, {
+        outcomeId: 'oe1',
+        outcome: o,
+        thread,
+        ending: [{ id: 's1', data: live({ state: 'ended' }) }],
+      }),
+    ).toThrow(/no longer active or paused/);
+    expect(() =>
+      approveOutcome(human, {
+        outcomeId: 'oe1',
+        outcome: o,
+        thread,
+        ending: [{ id: 's9', data: live() }],
+      }),
+    ).toThrow(/Give the schedules/);
+  });
+
+  it('refuses ending what the agent does not run, an ended or someone else’s schedule', () => {
+    expect(() =>
+      endProposal({ schedule: { id: 's1', data: live({ agentUid: 'agentB' }) } }),
+    ).toThrow(/you run/);
+    expect(() => endProposal({ schedule: { id: 's1', data: live({ memberUid: 'bob' }) } })).toThrow(
+      /someone else/,
+    );
+    expect(() => endProposal({ schedule: { id: 's1', data: live({ state: 'ended' }) } })).toThrow(
+      /ended/,
+    );
+    expect(() => endProposal({ reason: '  ' })).toThrow(/reason/);
+    expect(() => endProposal({ thread: { ...thread, fetchedBy: 'x' } })).toThrow(/home agent/);
+    expect(() =>
+      proposeScheduleEnd(human, {
+        threadId: 't1',
+        thread,
+        schedule: { id: 's1', data: live() },
+        reason: 'x',
+      }),
+    ).toThrow();
+    expect(() =>
+      proposeOutcome(agent, {
+        threadId: 't1',
+        thread,
+        type: 'schedule_end',
+        fields: { scheduleId: 's1', reason: 'x' },
+      }),
+    ).toThrow(/schedule_end/);
+  });
+
+  const merge = () =>
+    proposeSchedule(agent, {
+      ...INPUT,
+      threadId: 't1',
+      thread,
+      scheduleId: 'sp1',
+      outcomeId: 'o1',
+      replaces: { id: 's1', schedule: live() },
+      ends: [
+        { id: 's2', schedule: live() },
+        { id: 's3', schedule: live({ state: 'paused' }) },
+      ],
+    });
+
+  it('a merge: the first id is rewritten, the others are ended in the same approval', () => {
+    const p = merge();
+    expect(op(p.ops, 'schedules/sp1').data).toMatchObject({ replaces: 's1' });
+    const fields = (op(p.ops, 'inboxOutcomes').data as { fields: Record<string, string> }).fields;
+    expect(fields).toMatchObject({ scheduleId: 'sp1', ends: 's2,s3' });
+    expect(scheduleEnds(fields)).toEqual(['s2', 's3']);
+    const o = stored(op(p.ops, 'inboxOutcomes').data!) as unknown as OutcomeStateOf;
+    const sp = asSchedule(op(p.ops, 'schedules/sp1').data!);
+    const input = {
+      outcomeId: 'o1',
+      outcome: o,
+      thread,
+      schedule: { id: 'sp1', data: sp, replaced: { version: 4 } },
+    };
+    const a = approveOutcome(human, {
+      ...input,
+      ending: [
+        { id: 's2', data: live({ version: 2 }) },
+        { id: 's3', data: live({ state: 'paused' }) },
+      ],
+    });
+    expect(a.eventId).toBe(scheduleDeleteEventId('sp1'));
+    expect(op(a.ops, 'schedules/s1').data).toMatchObject({ version: 5, activeFrom: SERVER_TIME });
+    expect(a.ops.find((x) => x.path.endsWith('schedules/s2'))!.data).toMatchObject({
+      state: 'ended',
+      version: 3,
+    });
+    expect(a.ops.find((x) => x.path.endsWith('schedules/s3'))!.data).toMatchObject({
+      state: 'ended',
+    });
+    expect(op(a.ops, 'inboxEvents').data!.data).toMatchObject({
+      scheduleId: 's1',
+      ends: ['s2', 's3'],
+    });
+    // One of them was ended meanwhile: refused with a clear message.
+    expect(() =>
+      approveOutcome(human, {
+        ...input,
+        ending: [
+          { id: 's2', data: live({ state: 'ended', title: 'Old report' }) },
+          { id: 's3', data: live() },
+        ],
+      }),
+    ).toThrow(/“Old report” is no longer active or paused/);
+    expect(() => approveOutcome(human, { ...input, ending: [] })).toThrow(/Give the schedules/);
+  });
+
+  it('refuses a merge with an id twice, too many, another agent’s or an ended one', () => {
+    const one = (extra: Record<string, unknown>) =>
+      proposeSchedule(agent, {
+        ...INPUT,
+        threadId: 't1',
+        thread,
+        replaces: { id: 's1', schedule: live() },
+        ...extra,
+      });
+    expect(() => one({ ends: [{ id: 's1', schedule: live() }] })).toThrow(/once/);
+    expect(() =>
+      one({
+        ends: Array.from({ length: 9 }, (_, i) => ({ id: `e${i}`, schedule: live() })),
+      }),
+    ).toThrow(/at most 8/);
+    expect(() => one({ ends: [{ id: 's2', schedule: live({ agentUid: 'agentB' }) }] })).toThrow(
+      /you run/,
+    );
+    expect(() => one({ ends: [{ id: 's2', schedule: live({ state: 'ended' }) }] })).toThrow(
+      /ended/,
+    );
+    expect(() =>
+      proposeSchedule(agent, {
+        ...INPUT,
+        threadId: 't1',
+        thread,
+        ends: [{ id: 's2', schedule: live() }],
+      }),
+    ).toThrow(/replaces/);
+  });
+
+  it('revising a merge keeps what it also ends', () => {
+    const p = merge();
+    const o = {
+      ...(stored(op(p.ops, 'inboxOutcomes').data!) as unknown as OutcomeStateOf),
+      state: 'revising' as const,
+      revise: { instruction: 'x', chips: [], byUid: 'alice', at: ts as never },
+    };
+    const sp = asSchedule(op(p.ops, 'schedules/sp1').data!);
+    const r = reviseSchedule(agent, {
+      ...INPUT,
+      outcomeId: 'o1',
+      outcome: o,
+      thread: { ...thread, state: 'yourCall' },
+      schedule: { id: 'sp1', data: sp },
+    });
+    expect((op(r.ops, 'inboxOutcomes').data as { fields: unknown }).fields).toMatchObject({
+      ends: 's2,s3',
+    });
   });
 });
 

@@ -43,6 +43,7 @@ import {
   type ThreadAsk,
   scheduleSchema,
   schedulePaths,
+  scheduleEnds,
   type Schedule,
 } from '@hive/shared';
 import type { Firestore } from 'firebase-admin/firestore';
@@ -158,6 +159,29 @@ async function scheduleOf(
     (await db.doc(schedulePaths.schedule(wid, p.data.replaces)).get()).data(),
   );
   return r.success ? { id, data: p.data, replaced: { version: r.data.version } } : undefined;
+}
+
+/**
+ * The schedules an approval ends (scheduled tasks): a `schedule_end` outcome's own, or the other
+ * schedules of a merge. undefined: one of them is gone. Their state is checked by approveOutcome
+ * (a clear message when one is no longer active or paused).
+ */
+async function endingOf(
+  db: Firestore,
+  wid: string,
+  o: InboxOutcome,
+): Promise<{ id: string; data: Schedule }[] | undefined> {
+  const ids =
+    o.type === 'schedule_end' ? [String(o.fields.scheduleId ?? '')] : scheduleEnds(o.fields);
+  const out: { id: string; data: Schedule }[] = [];
+  for (const id of ids) {
+    const p = scheduleSchema.safeParse(
+      (await db.doc(schedulePaths.schedule(wid, id)).get()).data(),
+    );
+    if (!p.success) return undefined;
+    out.push({ id, data: p.data });
+  }
+  return out;
 }
 
 /** "14:05" in the member's time zone. */
@@ -292,6 +316,15 @@ export async function decideThread(
       const schedule = o.type === 'schedule' ? await scheduleOf(db, a.wid, o) : undefined;
       if (o.type === 'schedule' && !schedule)
         return { ok: false, text: 'That schedule is no longer waiting for your approval.' };
+      const ending =
+        o.type === 'schedule_end' || (o.type === 'schedule' && scheduleEnds(o.fields).length)
+          ? await endingOf(db, a.wid, o)
+          : undefined;
+      if (
+        (o.type === 'schedule_end' || (o.type === 'schedule' && scheduleEnds(o.fields).length)) &&
+        !ending
+      )
+        return { ok: false, text: 'One of the schedules this would end is gone.' };
       await applyPlanAdmin(
         db,
         approveOutcome(ctx, {
@@ -309,6 +342,7 @@ export async function decideThread(
           // A gate pins the summary version the person decided on (slice 6).
           ...(s.thread.summary ? { summaryVersion: s.thread.summary.version } : {}),
           ...(schedule ? { schedule } : {}),
+          ...(ending ? { ending } : {}),
         }),
       );
       const what =
