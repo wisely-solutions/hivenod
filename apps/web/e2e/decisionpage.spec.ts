@@ -1,7 +1,7 @@
 /**
  * The decision page (item OE8FmrTaIxFVGcaeGG3N, slice 2; design 3 and 5): a summary written with
  * the shared action (as thread_summary does) opens on the top card, the short version with the
- * visual kit, More detail and Everything folded, and the plan as a right rail (1440) or a fold
+ * visual kit, More detail and Everything folded, and the plan in the wide main column (1440) or a fold
  * (390). States: a gate at the cursor, the agent at work, a question, blocked, no summary (the
  * fallback, agent offline or CLI too old). Labels stay plain text. Light and dark, axe-clean.
  */
@@ -222,12 +222,23 @@ test.describe('desktop 1440', () => {
         2,
       );
 
-      // The plan as a right rail; no plan fold on a desktop.
-      const rail = page.locator('[data-plan-rail]');
-      await expect(rail).toContainText('Plan · Step 3 of 5');
-      await expect(rail.locator('li[data-step]')).toHaveCount(5);
+      // The plan sits in the wide main column under the decision card: no rail, no plan fold,
+      // and each step lays out in two columns (title left, its fields right).
+      await expect(page.locator('[data-plan-rail]')).toHaveCount(0);
+      const plan = page.locator('#plan[data-plan-main]');
+      await expect(plan).toContainText('Plan · Step 3 of 5');
+      await expect(plan.locator('li[data-step]')).toHaveCount(5);
       await expect(page.locator('[data-fold="plan-fold"]')).toHaveCount(0);
-      expect((await rail.boundingBox())!.x).toBeGreaterThan((await t.boundingBox())!.x + 400);
+      const pb = (await plan.boundingBox())!;
+      const tb = (await t.boundingBox())!;
+      expect(pb.width).toBeGreaterThan(800);
+      expect(pb.y).toBeGreaterThan(tb.y + tb.height - 1);
+      expect(Math.abs(pb.x - tb.x)).toBeLessThan(2);
+      const step = plan.locator('li[data-step]').first();
+      const title = (await step.getByRole('button', { name: /^Step 1:/ }).boundingBox())!;
+      const spec = (await step.locator('[data-spec-produces]').boundingBox())!;
+      expect(spec.x).toBeGreaterThan(title.x + title.width);
+      expect(spec.y).toBeLessThan(title.y + 200);
 
       // More detail and Everything start folded; D and E toggle them.
       await expect(fold(page, 'More detail')).toHaveAttribute('aria-expanded', 'false');
@@ -444,6 +455,7 @@ test.describe('phone 390', () => {
       await expect(approve).toBeInViewport();
       expect((await approve.boundingBox())!.width).toBeGreaterThan(300);
       await expect(page.locator('[data-plan-rail]')).toHaveCount(0);
+      await expect(page.locator('[data-plan-main]')).toHaveCount(0);
       const planFold = fold(page, 'Plan');
       await expect(planFold).toContainText('2 done');
       await expect(planFold).toContainText('you');

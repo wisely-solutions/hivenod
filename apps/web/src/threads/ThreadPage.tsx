@@ -2,7 +2,7 @@
  * One Inbox thread as a decision page (item OE8FmrTaIxFVGcaeGG3N, slice 2; design 3): the header,
  * the top card (ask, answer, recommendation, buttons, freshness), the short version (bullets and
  * visuals), then More detail and Everything folded (D and E toggle them). A plan is a sticky right
- * rail from 1024 px and a fold on a phone. Opened from Today (?from=today) it adds the briefing
+ * plan in the main column from 1024 px and a fold on a phone. Opened from Today (?from=today) it adds the briefing
  * bar and moves on to the next decision once one is made. The member's other actions sit in ⋯.
  */
 import {
@@ -400,10 +400,12 @@ export function ThreadPage() {
         : {})}
     />
   );
+  // A plan on a desktop sits in the main column, right under the decision card (no side rail).
   const rail = wide && shownPlan;
+  const wideDesk = !!rail;
 
   return (
-    <div className={cn('mx-auto w-full', !rail && 'max-w-3xl')}>
+    <div className={cn('mx-auto w-full', wideDesk ? 'max-w-[70rem]' : 'max-w-3xl')}>
       {from && briefing ? (
         <BriefingBar from={from} list={briefing.list} index={briefing.index} />
       ) : t.subjectId ? (
@@ -411,10 +413,7 @@ export function ThreadPage() {
       ) : (
         <BackLink>Inbox</BackLink>
       )}
-      <div
-        data-decision-page=""
-        className={cn(rail && 'lg:grid lg:grid-cols-[minmax(0,1fr)_25rem] lg:items-start lg:gap-6')}
-      >
+      <div data-decision-page="">
         <div className="min-w-0">
           <header>
             <div className="flex items-start gap-2">
@@ -478,6 +477,15 @@ export function ThreadPage() {
             onDone={() => (from ? goNext() : undefined)}
             compact={!wide}
           />
+          {rail && shownPlan ? (
+            <section
+              id="plan"
+              data-plan-main=""
+              className="mt-4 scroll-mt-20 overflow-hidden rounded-panel border border-line bg-surface shadow-e1"
+            >
+              {planPanel(shownPlan, true)}
+            </section>
+          ) : null}
           <ShortVersion
             summary={summary}
             images={images}
@@ -546,16 +554,6 @@ export function ThreadPage() {
             />
           </Fold>
         </div>
-        {rail ? (
-          <aside
-            aria-label="Plan rail"
-            id="plan"
-            data-plan-rail=""
-            className="mt-6 overflow-hidden rounded-panel border border-line bg-surface shadow-e1 scroll-mt-20 lg:sticky lg:top-4 lg:mt-0"
-          >
-            {planPanel(shownPlan, true)}
-          </aside>
-        ) : null}
       </div>
 
       <MoveDialog
