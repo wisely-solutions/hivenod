@@ -82,7 +82,7 @@ export interface PlanPanelProps {
   agentName: (id: string) => string;
   /** Phone: the panel is in the bottom sheet, with one main button at its foot. */
   sheet?: boolean;
-  /** The decision page's right rail (item OE8FmrTaIxFVGcaeGG3N): "Plan · Step 4 of 6" on top. */
+  /** On the decision page the plan sits in the main column: "Plan · Step 4 of 6" on top. */
   rail?: boolean;
   /** This plan's version on the thread (v1..vN, plan.ts planVersions): "Open plan" link. */
   version?: number;
@@ -577,7 +577,7 @@ export function PlanPanel(props: PlanPanelProps) {
           {error}
         </p>
       ) : null}
-      <ol aria-label="Steps" className="mt-3 flex flex-col">
+      <ol aria-label="Steps" className="@container mt-3 flex flex-col">
         {view.steps.map((s) => {
           const row = outcomes.find((o) => o.id === s.outcomeId);
           const open = !collapsed.has(s.outcomeId);
@@ -589,7 +589,10 @@ export function PlanPanel(props: PlanPanelProps) {
               data-step={s.number}
               data-step-ui={s.ui}
               data-outcome={s.outcomeId}
-              className={cn('relative py-2', drag !== null && movable(s.index) && 'rounded-btn')}
+              className={cn(
+                'relative py-2 @[56rem]:grid @[56rem]:grid-cols-[22rem_minmax(0,1fr)] @[56rem]:gap-x-6',
+                drag !== null && movable(s.index) && 'rounded-btn',
+              )}
               onDragOver={movable(s.index) && drag !== null ? (e) => e.preventDefault() : undefined}
               onDrop={movable(s.index) ? onDrop(s.index) : undefined}
             >
@@ -689,21 +692,23 @@ export function PlanPanel(props: PlanPanelProps) {
                   )}
                 </span>
               </div>
-              {row && stepSilentText(row.data, props.now) ? (
-                // Reach out (item KZ6O9): the agent did not answer Hivenod's status request.
-                <div className="mt-1 pl-9 sm:pl-14">
-                  <Pill tone="sendback" data-testid="silence-flag">
-                    <Icon icon={Clock} size={12} />
-                    {stepSilentText(row.data, props.now)}
-                  </Pill>
-                </div>
-              ) : null}
-              {row && !open && row.data.type === 'their_reply' ? (
-                <div className="pl-9 sm:pl-14">
-                  <TheirReplyQuote o={row.data} now={props.now} />
-                </div>
-              ) : null}
-              {open ? <div className="pl-9 sm:pl-14">{body(s)}</div> : null}
+              <div className="min-w-0">
+                {row && stepSilentText(row.data, props.now) ? (
+                  // Reach out (item KZ6O9): the agent did not answer Hivenod's status request.
+                  <div className="mt-1 pl-9 sm:pl-14 @[56rem]:pl-0">
+                    <Pill tone="sendback" data-testid="silence-flag">
+                      <Icon icon={Clock} size={12} />
+                      {stepSilentText(row.data, props.now)}
+                    </Pill>
+                  </div>
+                ) : null}
+                {row && !open && row.data.type === 'their_reply' ? (
+                  <div className="pl-9 sm:pl-14 @[56rem]:pl-0">
+                    <TheirReplyQuote o={row.data} now={props.now} />
+                  </div>
+                ) : null}
+                {open ? <div className="pl-9 sm:pl-14 @[56rem]:pl-0">{body(s)}</div> : null}
+              </div>
             </li>
           );
         })}
