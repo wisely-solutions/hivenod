@@ -78,12 +78,10 @@ export function firstFree(pl: PlanInput): number {
   return pl.plan.cursor + (started ? 1 : 0);
 }
 
-const clip = (s: string, n = 60) => {
-  const t = s.trim().replace(/\s+/g, ' ');
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
-};
+/** A title part: whitespace collapsed, never truncated (the title wraps instead). */
+const clip = (s: string) => s.trim().replace(/\s+/g, ' ');
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
-function when(iso: unknown): string {
+export function when(iso: unknown): string {
   const t = Date.parse(str(iso));
   if (Number.isNaN(t)) return '';
   const d = new Date(t);
@@ -94,23 +92,32 @@ function when(iso: unknown): string {
 export function stepTitle(type: string | null, fields: Readonly<Record<string, unknown>>): string {
   switch (type) {
     case 'reply':
-      return str(fields.text) ? `Reply: “${clip(str(fields.text), 50)}”` : 'Reply';
+      return str(fields.text) ? `Reply: “${clip(str(fields.text))}”` : 'Reply';
     // Retired with Calendar (slice 5): old records only.
     case 'reply_book':
     case 'book':
       return `Booking (retired) ${when(fields.start)}`.trim();
     case 'approval':
       return `You approve: ${clip(str(fields.what))}`;
+    // Development plans: the real titles, as the plan's steps are called.
+    case 'shape':
+      return str(fields.idea) ? `Shape: ${clip(str(fields.idea))}` : 'Shape';
+    case 'build':
+      return str(fields.brief) ? `Build: ${clip(str(fields.brief))}` : 'Build';
+    case 'keepgreen':
+      return 'Keep green: PR rebased and green';
+    case 'release':
+      return 'Release + live check';
     case 'make_it_work':
       return str(fields.title) ? `Build it: ${clip(str(fields.title))}` : 'Build it';
     case 'handover':
-      return `Hand over to ${clip(str(fields.to), 40)}`;
+      return `Hand over to ${clip(str(fields.to))}`;
     case 'their_reply':
-      return `${clip(str(fields.who), 30)}${str(fields.org) ? ` (${clip(str(fields.org), 30)})` : ''}: ${clip(str(fields.need), 50)}`;
+      return `${clip(str(fields.who))}${str(fields.org) ? ` (${clip(str(fields.org))})` : ''}: ${clip(str(fields.need))}`;
     case 'snooze':
       return `Wait until ${when(fields.until)}`.trim();
     case 'nudge':
-      return str(fields.text) ? `Nudge: “${clip(str(fields.text), 50)}”` : 'Nudge';
+      return str(fields.text) ? `Nudge: “${clip(str(fields.text))}”` : 'Nudge';
     case null:
       return '…';
     default:
@@ -234,4 +241,137 @@ export function keepGreenRecheck(
   // A line from before it was done (an earlier round) is not a re-check.
   if (o.result?.at && p.at.toMillis() <= o.result.at.toMillis()) return null;
   return { check: p.check, line: p.line, outcomeId: id! };
+}
+
+/** What each step type produces, in the member's words (shown as "Produces:" on a step). */
+export const PRODUCES: Record<string, string> = {
+  shape: 'a proposal with a size for your OK',
+  build: 'an open pull request, checks green, not merged',
+  keepgreen: 'the PR kept current with main',
+  release: 'the change live and checked',
+  reply: 'the message sent',
+  approval: 'your decision',
+  their_reply: 'their answer',
+  nudge: 'a reminder sent',
+  snooze: 'a wait until the date',
+  handover: 'it is handed over',
+};
+
+/** What a step produces: from PRODUCES, else null (retired and unknown types say nothing). */
+export const producesOf = (type: string | null): string | null => (type && PRODUCES[type]) || null;
+
+/** Who does a step: "You decide", "Their reply", or "Agent · <type label>". */
+export function whoOf(type: string | null): string {
+  if (type && outcomeKind(type) === 'human') return 'You decide';
+  if (type === 'their_reply') return 'Their reply';
+  return `Agent · ${(type && outcomeType(type)?.label) || type || 'step'}`;
+}
+
+/**
+ * The open questions in a field's text (documented rule, kept simple): a line that starts with
+ * "Open:" (any case) or ends with "?". They are drawn highlighted so the member answers them.
+ */
+export function openQuestionLines(value: string): { text: string; open: boolean }[] {
+  return value.split('\n').map((text) => {
+    const t = text.trim();
+    return { text, open: /^open:/i.test(t) || t.endsWith('?') };
+  });
+}
+
+/** A step of a plan, as the version diff reads it. */
+export interface DiffStep {
+  type: string;
+  fields: Readonly<Record<string, unknown>>;
+}
+export interface FieldChange {
+  name: string;
+  label: string;
+  before: string;
+  after: string;
+}
+export interface StepChange {
+  /** Step position, from 0. */
+  index: number;
+  kind: 'added' | 'removed' | 'changed' | 'same';
+  /** The step's type label (the new one; the old one for a removed step). */
+  label: string;
+  /** Type words before and after, when the type changed. */
+  type?: { before: string; after: string };
+  fields: FieldChange[];
+}
+
+const fieldText = (v: unknown): string =>
+  typeof v === 'string'
+    ? v
+    : typeof v === 'boolean'
+      ? v
+        ? 'Yes'
+        : ''
+      : v == null
+        ? ''
+        : String(v);
+const typeLabel = (t: string) => outcomeType(t)?.label ?? t;
+
+/**
+ * What changed from the previous plan to this one, per step position: a step added or removed, a
+ * changed type, and each field whose text differs (before to after).
+ */
+export function planDiff(prev: readonly DiffStep[], cur: readonly DiffStep[]): StepChange[] {
+  const out: StepChange[] = [];
+  const n = Math.max(prev.length, cur.length);
+  for (let index = 0; index < n; index++) {
+    const a = prev[index];
+    const b = cur[index];
+    if (!a && b) {
+      out.push({
+        index,
+        kind: 'added',
+        label: typeLabel(b.type),
+        fields: fieldChanges(undefined, b),
+      });
+    } else if (a && !b) {
+      out.push({
+        index,
+        kind: 'removed',
+        label: typeLabel(a.type),
+        fields: fieldChanges(a, undefined),
+      });
+    } else if (a && b) {
+      const typeChanged = a.type !== b.type;
+      const fields = fieldChanges(a, b);
+      out.push({
+        index,
+        kind: typeChanged || fields.length ? 'changed' : 'same',
+        label: typeLabel(b.type),
+        ...(typeChanged ? { type: { before: typeLabel(a.type), after: typeLabel(b.type) } } : {}),
+        fields,
+      });
+    }
+  }
+  return out;
+}
+
+function fieldChanges(a: DiffStep | undefined, b: DiffStep | undefined): FieldChange[] {
+  const names = new Set([...Object.keys(a?.fields ?? {}), ...Object.keys(b?.fields ?? {})]);
+  const out: FieldChange[] = [];
+  for (const name of names) {
+    const before = fieldText(a?.fields[name]);
+    const after = fieldText(b?.fields[name]);
+    if (before === after) continue;
+    const label =
+      (b && outcomeType(b.type)?.fields[name]?.label) ||
+      (a && outcomeType(a.type)?.fields[name]?.label) ||
+      name;
+    out.push({ name, label, before, after });
+  }
+  return out;
+}
+
+/** The plans of one thread numbered v1..vN by creation time (a tie goes by id). */
+export function planVersions(
+  plans: readonly { id: string; createdAtMs: number }[],
+): { id: string; n: number }[] {
+  return [...plans]
+    .sort((a, b) => a.createdAtMs - b.createdAtMs || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((p, i) => ({ id: p.id, n: i + 1 }));
 }

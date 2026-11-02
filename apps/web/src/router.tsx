@@ -262,6 +262,12 @@ const inboxThreadRoute = createRoute({
     s.from === 'today' ? { from: s.from } : {},
   component: lazyRouteComponent(() => import('./threads/ThreadPage'), 'ThreadPage'),
 });
+// The plan in full (plan view): one plan of a thread, its version and what changed.
+const inboxPlanRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/inbox/$wid/t/$tid/plan/$planId',
+  component: lazyRouteComponent(() => import('./threads/PlanPage'), 'PlanPage'),
+});
 // Scheduled tasks, slice 6: the member's schedules across every organization.
 const schedulesRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -384,6 +390,7 @@ export const router = createRouter({
     inboxRoute,
     inboxSubjectRoute,
     inboxThreadRoute,
+    inboxPlanRoute,
     schedulesRoute,
     activityRoute,
     agentsRoute,

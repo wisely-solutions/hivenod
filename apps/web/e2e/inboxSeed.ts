@@ -637,3 +637,49 @@ export async function seedInbox(page: Page, name = 'Cara Lindqvist') {
     },
   };
 }
+
+/**
+ * The plan view (spec view, plan page): a thread with an older plan still proposed (a reply and
+ * your approval) and a newer 4-step Development plan (Shape, Build, Keep green, Release), so the
+ * older one is "replaced". Invented example data.
+ */
+export async function seedDevPlans(s: Seed) {
+  const tid = await s.agent.add(s.uid, {
+    source: 'mail',
+    from: 'Sam Okafor',
+    text: 'Dark mode for the board\nCan the board follow the system theme? Several people asked for it.',
+    ref: 'dark-mode-plans',
+    id: 'dm1',
+    at: ago(4),
+  });
+  const old = await s.agent.plan(
+    tid,
+    [
+      { type: 'reply', fields: { text: 'Good idea, Sam: I will look into it.' } },
+      { type: 'approval', fields: { what: 'Start the dark mode work' } },
+    ],
+    'First idea: answer, then your OK.',
+  );
+  const dev = await s.agent.plan(
+    tid,
+    [
+      {
+        type: 'shape',
+        fields: {
+          idea: 'Dark mode for the board that follows the system theme, with a toggle in Settings.',
+        },
+      },
+      {
+        type: 'build',
+        fields: {
+          brief:
+            'One theme token set, a Settings toggle (Light / Dark / System), no data change.\nOpen: should the choice follow the person across devices?',
+        },
+      },
+      { type: 'keepgreen', fields: {} },
+      { type: 'release', fields: { notes: 'Check both themes on the live board.' } },
+    ],
+    'Development plan: shape, build, keep green, release.',
+  );
+  return { tid, old, dev };
+}

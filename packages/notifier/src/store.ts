@@ -7,6 +7,7 @@ import {
   notifyPath,
   notifyPrefsSchema,
   askFallback,
+  replacedPlanIds,
   outcomeType,
   threadAsk,
   type PlanStateOf,
@@ -28,6 +29,28 @@ import { stepDoc, stepWatched, type StepDoc } from './reachStore';
 
 /** Old bell entries are pruned when a person gets a new one, at most once an hour per person. */
 const PRUNE_EVERY_MS = 3_600_000;
+
+/**
+ * The live plans that were replaced (a proposed plan with a newer live plan on its thread): the
+ * notifier reads live plans only, so no extra reads; the web applies the same rule.
+ */
+export function replacedLive(
+  plans: readonly { id: string; threadId: string; plan: { state: string }; at: number }[],
+): Set<string> {
+  const by = new Map<string, (typeof plans)[number][]>();
+  for (const p of plans) by.set(p.threadId, [...(by.get(p.threadId) ?? []), p]);
+  const out = new Set<string>();
+  for (const group of by.values())
+    for (const id of replacedPlanIds(
+      group.map((p) => ({
+        id: p.id,
+        state: p.plan.state as 'proposed',
+        createdAtMs: p.at,
+      })),
+    ))
+      out.add(id);
+  return out;
+}
 
 export function firestorePorts(
   db: Firestore,
@@ -161,6 +184,7 @@ export function watchAll(
     let proposals = new Map<string, O[]>();
     let drafts = new Map<string, O[]>();
     let plans = new Map<string, P>();
+    let replaced = new Set<string>();
     const keys = new Set<string>();
     const subjects = new Map<string, string>();
     const subjectName = async (sid: string | null) => {
@@ -179,7 +203,9 @@ export function watchAll(
       const now = new Map<string, InboxWaiting>();
       let wake = Infinity;
       for (const [tid, t] of threads) {
-        const open = [...(proposals.get(tid) ?? []), ...(drafts.get(tid) ?? [])];
+        const open = [...(proposals.get(tid) ?? []), ...(drafts.get(tid) ?? [])].filter(
+          (o) => !o.planId || !replaced.has(o.planId),
+        );
         const plan = plans.get(tid) ?? null;
         const ask = threadAsk({
           thread: {
@@ -352,6 +378,7 @@ export function watchAll(
       .onSnapshot(
         (snap) => {
           const next = new Map<string, P>();
+          const all: P[] = [];
           for (const d of snap.docs) {
             const x = d.data();
             if (typeof x.threadId !== 'string' || !Array.isArray(x.steps)) continue;
@@ -362,10 +389,13 @@ export function watchAll(
               at: ms(x.createdAt),
               updatedAt: ms(x.updatedAt),
             };
+            all.push(p);
             // The newest live plan of a thread is the one on show (as on the web).
             const cur = next.get(x.threadId);
             if (!cur || cur.at < p.at) next.set(x.threadId, p);
           }
+          // A proposed plan with a newer plan on its thread is replaced: its steps do not count.
+          replaced = replacedLive(all);
           plans = next;
           void publish().catch((e) => log(`inbox ${wid}: ${String(e)}`));
           void publishSteps().catch((e) => log(`inbox steps ${wid}: ${String(e)}`));

@@ -12,7 +12,6 @@ import {
   cliSupports,
   compareVersions,
   minVersionFor,
-  outcomeType,
   paths,
   planTemplate,
   planView,
@@ -39,6 +38,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 import { useState, type DragEvent } from 'react';
 import { useLiveDoc, type Row } from '../lib/live';
 import { ProposalPanel } from '../today/DecisionCard';
@@ -52,7 +52,7 @@ import { ActionMenu, type MenuAction } from '../ui/menu';
 import { Dialog } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
 import { GateAsk } from './GateAsk';
-import { FieldView } from './OutcomeCard';
+import { StepSpec } from './StepSpec';
 import { usePlanActions } from './usePlanActions';
 import { RecheckButton, RecheckLine, StaleChip, useRecheck } from './Recheck';
 import { TheirReplyBody, theirReplyPill, TheirReplyQuote } from './TheirReply';
@@ -84,14 +84,19 @@ export interface PlanPanelProps {
   sheet?: boolean;
   /** The decision page's right rail (item OE8FmrTaIxFVGcaeGG3N): "Plan · Step 4 of 6" on top. */
   rail?: boolean;
+  /** This plan's version on the thread (v1..vN, plan.ts planVersions): "Open plan" link. */
+  version?: number;
+  /** Set when a newer plan replaced this one (still proposed): no actions, "Replaced by vN". */
+  replacedBy?: number;
 }
 
 export function PlanPanel(props: PlanPanelProps) {
   const { wid, thread, plan, outcomes, agentName, sheet, rail } = props;
   const pl = planInputOf(plan, outcomes);
   const view = planView(pl.plan, pl.outcomes);
-  const live = planLive(plan.data.state);
-  const main = planMain(pl);
+  const replaced = props.replacedBy !== undefined;
+  const live = planLive(plan.data.state) && !replaced;
+  const main = replaced ? null : planMain(pl);
   const free = firstFree(pl);
   const agent = agentName(plan.data.proposedBy);
   // A plan the member made from a template (New thread, slice 6) is theirs.
@@ -103,19 +108,18 @@ export function PlanPanel(props: PlanPanelProps) {
       : mine
         ? `Your ${tpl ? `${tpl.name} plan` : 'plan'}`
         : `${agent}’s ${tpl ? `${tpl.name} plan` : 'plan'}`;
-  const [openId, setOpenId] = useState<string | null>(null);
+  // Every step is open (the plan is the most important part of a thread); one may be collapsed.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  // The step whose proposal editor (Edit, Ask for changes, Approve step) is open.
+  const [editId, setEditId] = useState<string | null>(null);
+  const toggle = (id: string) =>
+    setCollapsed((cur) => {
+      const next = new Set(cur);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
   const [adding, setAdding] = useState<number | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
-  const defaultOpen =
-    main?.kind === 'step'
-      ? main.outcomeId
-      : (view.steps.find(
-          (s) => s.ui === 'blocked' || s.ui === 'revising' || s.ui === 'waitingForYou',
-        )?.outcomeId ??
-        view.steps.find((s) => s.ui === 'proposed')?.outcomeId ??
-        view.steps.find((s) => s.ui === 'running')?.outcomeId ??
-        null);
-  const shownId = openId === '' ? null : (openId ?? defaultOpen);
   // An old CLI sends every approved step at once: say so before the member approves.
   const home = useLiveDoc(paths.agent(wid, thread.data.fetchedBy), agentSchema);
   const have = home.state === 'ready' ? home.data?.cliVersion : undefined;
@@ -270,8 +274,9 @@ export function PlanPanel(props: PlanPanelProps) {
     const row = outcomes.find((o) => o.id === s.outcomeId);
     if (!row) return null;
     const o = row.data;
-    const t = outcomeType(o.type);
-    if (s.kind === 'agent' && (o.state === 'proposed' || o.state === 'revising') && live)
+    const editable =
+      s.kind === 'agent' && (o.state === 'proposed' || o.state === 'revising') && live;
+    if (editable && editId === s.outcomeId)
       return (
         <ProposalPanel
           wid={wid}
@@ -280,7 +285,7 @@ export function PlanPanel(props: PlanPanelProps) {
           sender={props.sender}
           now={props.now}
           agentName={agentName}
-          onDone={() => setOpenId('')}
+          onDone={() => setEditId(null)}
           narrow
           plan={pl}
           recheckUi={false}
@@ -307,22 +312,24 @@ export function PlanPanel(props: PlanPanelProps) {
         ) : null}
         <div
           className={cn(
-            'flex flex-col gap-2.5',
             ((o.type === 'make_it_work' && o.result?.itemId) || o.type === 'their_reply') &&
               'hidden',
           )}
         >
-          {Object.entries(t?.fields ?? {}).map(([k, f]) => (
-            <FieldView
-              key={k}
-              name={k}
-              field={f}
-              value={o.fields[k]}
-              editing={false}
-              onChange={() => undefined}
-            />
-          ))}
+          <StepSpec type={o.type} fields={o.fields} />
         </div>
+        {editable ? (
+          <div className="mt-3">
+            <Button
+              variant="secondary"
+              data-step-edit=""
+              aria-label={`Edit step ${s.number}`}
+              onClick={() => setEditId(s.outcomeId)}
+            >
+              Edit or ask for changes
+            </Button>
+          </div>
+        ) : null}
         {o.state === 'running' && o.progress ? (
           <p data-step-progress="" className="mt-3 text-14 text-ink [overflow-wrap:anywhere]">
             {o.progress.line}
@@ -487,6 +494,28 @@ export function PlanPanel(props: PlanPanelProps) {
           <ConfidenceMeter value={plan.data.confidence ?? undefined} />
         )}
       </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+        {props.version ? (
+          <span data-plan-version="" className="font-mono text-12 font-medium text-text-2">
+            v{props.version}
+          </span>
+        ) : null}
+        {replaced ? (
+          <Pill tone="neutral" data-testid="pill-replaced">
+            Replaced by v{props.replacedBy}
+          </Pill>
+        ) : null}
+        {props.version ? (
+          <Link
+            to="/inbox/$wid/t/$tid/plan/$planId"
+            params={{ wid, tid: thread.id, planId: plan.id }}
+            data-open-plan=""
+            className="text-14 font-medium text-agent hov:underline foc:outline-2 foc:outline-focus"
+          >
+            Open plan
+          </Link>
+        ) : null}
+      </div>
       {plan.data.note && !sheet ? (
         <p className="mt-1.5 text-14 text-text-2 [overflow-wrap:anywhere]">{plan.data.note}</p>
       ) : null}
@@ -506,7 +535,7 @@ export function PlanPanel(props: PlanPanelProps) {
           <span key={s.outcomeId} className={cn('h-1.5 flex-1 rounded-full', BAR[s.ui])} />
         ))}
       </div>
-      {plan.data.state === 'proposed' && !sheet ? (
+      {plan.data.state === 'proposed' && !replaced && !sheet ? (
         <p className="mt-2 text-13 text-text-2">
           Steps run in order. Approve plan approves the agent steps; your approval steps still wait
           for you when they are reached.
@@ -551,7 +580,7 @@ export function PlanPanel(props: PlanPanelProps) {
       <ol aria-label="Steps" className="mt-3 flex flex-col">
         {view.steps.map((s) => {
           const row = outcomes.find((o) => o.id === s.outcomeId);
-          const open = shownId === s.outcomeId;
+          const open = !collapsed.has(s.outcomeId);
           const menu = stepMenu(s);
           const title = stepTitle(s.type, row?.data.fields ?? {});
           return (
@@ -564,7 +593,7 @@ export function PlanPanel(props: PlanPanelProps) {
               onDragOver={movable(s.index) && drag !== null ? (e) => e.preventDefault() : undefined}
               onDrop={movable(s.index) ? onDrop(s.index) : undefined}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {live && !sheet ? (
                   <span
                     aria-hidden
@@ -614,50 +643,51 @@ export function PlanPanel(props: PlanPanelProps) {
                   type="button"
                   aria-expanded={open}
                   aria-label={`Step ${s.number}: ${title}, ${s.kind === 'human' ? 'your approval' : s.type === 'their_reply' ? 'their reply' : 'agent action'}, ${(row && theirReplyPill(row.data, props.now)) || STEP_UI_TEXT[s.ui]}`}
-                  title={title}
-                  onClick={() => setOpenId(open ? '' : s.outcomeId)}
-                  className="min-w-0 flex-1 truncate text-left text-14 font-semibold text-ink hov:underline foc:outline-2 foc:outline-focus"
+                  onClick={() => toggle(s.outcomeId)}
+                  className="min-h-8 min-w-[9rem] flex-1 basis-40 py-1 text-left text-14 font-semibold text-ink [overflow-wrap:anywhere] hov:underline foc:outline-2 foc:outline-focus"
                 >
                   {title}
                 </button>
-                {recheckAt(s.index + 1) ? (
-                  // Keep green re-greening while Ship it? waits (slice 6c).
-                  <Pill
-                    tone={recheckAt(s.index + 1)!.check === 'blocked' ? 'sendback' : 'agent'}
-                    data-testid="pill-recheck"
-                  >
-                    {recheckAt(s.index + 1)!.check === 'blocked' ? 'Stuck' : 'Re-checking'}
-                  </Pill>
-                ) : row && theirReplyPill(row.data, props.now) ? (
-                  // Their reply: it waits on someone outside Hivenod.
-                  <Pill tone="external" data-testid="pill-waiting-on">
-                    {sheet
-                      ? `${theirReplyPill(row.data, props.now)!.replace(/^waiting on /, '')}`
-                      : theirReplyPill(row.data, props.now)}
-                  </Pill>
-                ) : (
-                  <Pill tone={PILL[s.ui]}>
-                    {s.ui === 'waitingForYou' && sheet ? 'You' : STEP_UI_TEXT[s.ui]}
-                  </Pill>
-                )}
-                {menu.length ? (
-                  <ActionMenu
-                    label={`Step ${s.number} actions`}
-                    actions={menu}
-                    trigger={
-                      <Button
-                        variant="ghost"
-                        className="min-h-9 px-2"
-                        disabled={!!counting}
-                        aria-label={`Step ${s.number} actions`}
-                      >
-                        <Icon icon={MoreHorizontal} size={16} />
-                      </Button>
-                    }
-                  />
-                ) : (
-                  <span className="w-9" aria-hidden />
-                )}
+                <span className="ml-auto flex shrink-0 items-center gap-2">
+                  {recheckAt(s.index + 1) ? (
+                    // Keep green re-greening while Ship it? waits (slice 6c).
+                    <Pill
+                      tone={recheckAt(s.index + 1)!.check === 'blocked' ? 'sendback' : 'agent'}
+                      data-testid="pill-recheck"
+                    >
+                      {recheckAt(s.index + 1)!.check === 'blocked' ? 'Stuck' : 'Re-checking'}
+                    </Pill>
+                  ) : row && theirReplyPill(row.data, props.now) ? (
+                    // Their reply: it waits on someone outside Hivenod.
+                    <Pill tone="external" data-testid="pill-waiting-on">
+                      {sheet
+                        ? `${theirReplyPill(row.data, props.now)!.replace(/^waiting on /, '')}`
+                        : theirReplyPill(row.data, props.now)}
+                    </Pill>
+                  ) : (
+                    <Pill tone={PILL[s.ui]}>
+                      {s.ui === 'waitingForYou' && sheet ? 'You' : STEP_UI_TEXT[s.ui]}
+                    </Pill>
+                  )}
+                  {menu.length ? (
+                    <ActionMenu
+                      label={`Step ${s.number} actions`}
+                      actions={menu}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          className="min-h-9 px-2"
+                          disabled={!!counting}
+                          aria-label={`Step ${s.number} actions`}
+                        >
+                          <Icon icon={MoreHorizontal} size={16} />
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <span className="w-9" aria-hidden />
+                  )}
+                </span>
               </div>
               {row && stepSilentText(row.data, props.now) ? (
                 // Reach out (item KZ6O9): the agent did not answer Hivenod's status request.
@@ -706,7 +736,14 @@ export function PlanPanel(props: PlanPanelProps) {
                     <Button
                       variant="approve"
                       className="w-full"
-                      onClick={() => setOpenId(main.outcomeId)}
+                      onClick={() => {
+                        setCollapsed((cur) => {
+                          const next = new Set(cur);
+                          next.delete(main.outcomeId);
+                          return next;
+                        });
+                        setEditId(main.outcomeId);
+                      }}
                     >
                       Review step {main.index + 1}
                     </Button>

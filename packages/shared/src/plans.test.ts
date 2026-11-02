@@ -15,6 +15,8 @@ import {
 } from './outcomes';
 import {
   inboxPlanSchema,
+  isReplaced,
+  replacedPlanIds,
   planThreadState,
   planView,
   singlePlanView,
@@ -352,5 +354,30 @@ describe('planThreadState', () => {
   });
   it('a step not loaded yet: Your call', () => {
     expect(planThreadState(plan(0, 'proposed'), {})).toEqual(yourCall);
+  });
+});
+
+describe('replacedPlanIds', () => {
+  const p = (id: string, state: PlanStateOf['state'], createdAtMs: number) => ({
+    id,
+    state,
+    createdAtMs,
+  });
+  it('replaces a proposed plan when a newer plan exists on the thread', () => {
+    const ids = replacedPlanIds([p('a', 'proposed', 1), p('b', 'proposed', 2)]);
+    expect([...ids]).toEqual(['a']);
+  });
+  it('a newer plan in any state replaces it; older active/done plans stay', () => {
+    expect([...replacedPlanIds([p('a', 'proposed', 1), p('b', 'done', 2)])]).toEqual(['a']);
+    expect(replacedPlanIds([p('a', 'active', 1), p('b', 'proposed', 2)]).size).toBe(0);
+    expect(replacedPlanIds([p('a', 'proposed', 1)]).size).toBe(0);
+  });
+  it('breaks a tie in time by id', () => {
+    expect([...replacedPlanIds([p('a', 'proposed', 5), p('b', 'proposed', 5)])]).toEqual(['a']);
+  });
+  it('isReplaced asks one plan', () => {
+    const all = [p('a', 'proposed', 1), p('b', 'proposed', 2)];
+    expect(isReplaced(all[0]!, all)).toBe(true);
+    expect(isReplaced(all[1]!, all)).toBe(false);
   });
 });
