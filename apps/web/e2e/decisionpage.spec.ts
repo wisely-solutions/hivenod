@@ -222,7 +222,7 @@ test.describe('desktop 1440', () => {
         2,
       );
 
-      // The plan sits in the wide main column under the decision card: no rail, no plan fold,
+      // The plan sits in the wide main column below the decision card and the short version: no rail, no plan fold,
       // and each step lays out in two columns (title left, its fields right).
       await expect(page.locator('[data-plan-rail]')).toHaveCount(0);
       const plan = page.locator('#plan[data-plan-main]');

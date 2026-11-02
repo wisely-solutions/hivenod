@@ -477,6 +477,16 @@ export function ThreadPage() {
             onDone={() => (from ? goNext() : undefined)}
             compact={!wide}
           />
+          <ShortVersion
+            summary={summary}
+            images={images}
+            asks={top.kind === 'person' || top.kind === 'question'}
+            firstMessage={msgs[0]?.text ?? ''}
+            why={fresh.kind === 'none' ? fresh.why : null}
+            onOpenEverything={openEverything}
+          />
+          {/* Main-column order on desktop: decision card, the short version (its visuals must be
+              visible without unfolding at a decision point), then the full-width plan. */}
           {rail && shownPlan ? (
             <section
               id="plan"
@@ -486,14 +496,6 @@ export function ThreadPage() {
               {planPanel(shownPlan, true)}
             </section>
           ) : null}
-          <ShortVersion
-            summary={summary}
-            images={images}
-            asks={top.kind === 'person' || top.kind === 'question'}
-            firstMessage={msgs[0]?.text ?? ''}
-            why={fresh.kind === 'none' ? fresh.why : null}
-            onOpenEverything={openEverything}
-          />
           {!rail && shownPlan && view ? (
             <Fold
               id="plan-fold"
