@@ -16,7 +16,7 @@ import {
   settle,
   UNDO_WAIT,
 } from './helpers';
-import { at, seedInbox, type Seed } from './inboxSeed';
+import { at, seedDevPlans, seedInbox, type Seed } from './inboxSeed';
 
 async function look(page: Page, name: string) {
   const shots = process.env.SHOTS_DIR;
@@ -181,7 +181,9 @@ test.describe('desktop 1440', () => {
     try {
       await page.goto(`/inbox/${s.wid}/t/${tid}`);
       const plan = panel(page).locator(`[data-plan="${planId}"]`);
-      // Step 1 is open: Approve step, Edit and Ask for changes, as a single proposal.
+      // Every step is read-only; Edit opens step 1 as a single proposal: Approve step, Edit and
+      // Ask for changes.
+      await plan.getByRole('button', { name: 'Edit step 1' }).click({ timeout: 20_000 });
       await expect(plan.getByRole('button', { name: /Approve step/ })).toBeVisible({
         timeout: 20_000,
       });
@@ -203,6 +205,114 @@ test.describe('desktop 1440', () => {
         .toBe('investigating');
       expect(await stateOf(s, stepIds[2]!)).toBe('rejected');
       await expect(plan).toHaveAttribute('data-plan-state', 'stopped');
+    } finally {
+      await s.stop();
+    }
+  });
+});
+
+/** A thread with a replaced plan (v1, proposed) and a 4-step Development plan (v2). */
+async function seedPlanView(page: Page) {
+  await fastTimers(page);
+  await freezeClock(page);
+  const s = await seedInbox(page);
+  const d = await seedDevPlans(s);
+  return { s, ...d };
+}
+
+test.describe('plan view 1440', () => {
+  test.skip(({ isMobile }) => isMobile, 'desktop layout');
+
+  test('every step open with its spec; the plan page shows the diff; a replaced plan is inert', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const { s, tid, old, dev } = await seedPlanView(page);
+    try {
+      // Needs you: the thread once, with the newer plan; the replaced plan is not counted.
+      await page.goto('/');
+      await page
+        .getByRole('button', { name: /Plan · 4 steps to approve/ })
+        .click({ timeout: 20_000 });
+      await expect(page.locator(`[data-plan-card][data-plan="${dev.planId}"]`)).toBeVisible({
+        timeout: 20_000,
+      });
+      await expect(page.locator(`[data-plan-card][data-plan="${old.planId}"]`)).toHaveCount(0);
+
+      await page.goto(`/inbox/${s.wid}/t/${tid}`);
+      const plan = panel(page).locator(`[data-plan="${dev.planId}"]`);
+      await expect(plan).toContainText('Desk agent proposes a plan', { timeout: 20_000 });
+      await expect(plan.locator('[data-plan-version]')).toHaveText('v2');
+      const rows = plan.locator('li[data-step]');
+      await expect(rows).toHaveCount(4);
+      // Real titles, never truncated.
+      await expect(rows.nth(0)).toContainText(
+        'Shape: Dark mode for the board that follows the system theme, with a toggle in Settings.',
+      );
+      await expect(rows.nth(1)).toContainText('Build: One theme token set');
+      await expect(rows.nth(1)).toContainText('follow the person across devices?');
+      await expect(rows.nth(2)).toContainText('Keep green: PR rebased and green');
+      await expect(rows.nth(3)).toContainText('Release + live check');
+      // Every step is open: who, its fields, what it produces.
+      await expect(plan.locator('[data-step-spec]')).toHaveCount(4);
+      await expect(rows.nth(0).locator('[data-spec-who]')).toHaveText('Agent · Shape');
+      await expect(rows.nth(0)).toContainText('Idea');
+      await expect(rows.nth(0)).toContainText('Produces: a proposal with a size for your OK');
+      await expect(rows.nth(1)).toContainText('Produces: an open pull request, checks green');
+      await expect(rows.nth(2)).toContainText('Produces: the PR kept current with main');
+      await expect(rows.nth(3)).toContainText('Produces: the change live and checked');
+      // The open question is highlighted.
+      await expect(plan.locator('[data-open-question]')).toHaveCount(1);
+      await expect(plan.locator('[data-open-question]')).toContainText('Open: should the choice');
+      // A step can still be collapsed.
+      await rows
+        .nth(2)
+        .getByRole('button', { name: /^Step 3:/ })
+        .click();
+      await expect(rows.nth(2).locator('[data-step-spec]')).toHaveCount(0);
+      await rows
+        .nth(2)
+        .getByRole('button', { name: /^Step 3:/ })
+        .click();
+      await expect(rows.nth(2).locator('[data-step-spec]')).toHaveCount(1);
+      // The editor is behind Edit (one editor at a time).
+      await expect(plan.locator('[data-approve-step], [data-gate-approve]')).toHaveCount(0);
+      await plan.getByRole('button', { name: 'Edit step 1' }).click();
+      await expect(rows.nth(0).getByRole('button', { name: /^Approve step/ })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await look(page, 'planview-1440');
+
+      // The replaced plan: Replaced by v2, no actions.
+      await page.getByRole('button', { name: /Everything/ }).click();
+      const oldPanel = page.locator(`[data-plan="${old.planId}"]`);
+      await expect(oldPanel).toContainText('Replaced by v2');
+      await expect(oldPanel.locator('[data-plan-version]')).toHaveText('v1');
+      await expect(
+        oldPanel.getByRole('button', { name: /Approve|Reject|Add an approval/ }),
+      ).toHaveCount(0);
+      await expect(oldPanel.getByRole('button', { name: 'Plan actions' })).toHaveCount(0);
+
+      // The plan page.
+      await plan.getByRole('link', { name: 'Open plan' }).click();
+      await expect(page).toHaveURL(new RegExp(`/inbox/${s.wid}/t/${tid}/plan/${dev.planId}$`));
+      const pg = page.locator(`[data-plan-page="${dev.planId}"]`);
+      await expect(pg).toContainText('Plan · v2 of 2', { timeout: 20_000 });
+      await expect(pg.locator('[data-step-spec]')).toHaveCount(4);
+      const changes = pg.locator('[data-plan-changes]');
+      await expect(changes).toContainText('What changed since v1');
+      await expect(changes).toContainText('Step 1 · Changed: Reply → Shape');
+      await expect(changes).toContainText('Step 3 · Added: Keep green');
+      await expect(changes.locator('[data-change="added"]')).toHaveCount(2);
+      const older = pg.locator('[data-older-version="1"]');
+      await expect(older).toContainText('Proposed (replaced)');
+      await expect(older).toContainText('First idea: answer, then your OK.');
+      await look(page, 'planpage-1440');
+
+      // v1: replaced, no diff.
+      await older.getByRole('link', { name: 'v1' }).click();
+      const pg1 = page.locator(`[data-plan-page="${old.planId}"]`);
+      await expect(pg1).toContainText('Replaced by v2', { timeout: 20_000 });
+      await expect(pg1.locator('[data-plan-changes]')).toHaveCount(0);
     } finally {
       await s.stop();
     }
@@ -272,6 +382,27 @@ test.describe('phone 390', () => {
       await expect(card).toHaveAttribute('data-plan-main', 'approvePlan');
       await expect(card.locator('[data-approve-plan]')).toBeVisible();
       await look(page, 'today-plan-390');
+    } finally {
+      await s.stop();
+    }
+  });
+
+  test('the plan view at 390: every step open, the plan page', async ({ page }) => {
+    test.setTimeout(120_000);
+    const { s, tid, dev } = await seedPlanView(page);
+    try {
+      await page.goto(`/inbox/${s.wid}/t/${tid}`);
+      await page.getByRole('button', { name: /^Plan/ }).click({ timeout: 20_000 });
+      const plan = panel(page).locator(`[data-plan="${dev.planId}"]`);
+      await expect(plan.locator('[data-step-spec]')).toHaveCount(4);
+      await expect(plan.locator('li[data-step]').nth(2)).toContainText(
+        'Keep green: PR rebased and green',
+      );
+      await look(page, 'planview-390');
+      await plan.getByRole('link', { name: 'Open plan' }).click();
+      const pg = page.locator(`[data-plan-page="${dev.planId}"]`);
+      await expect(pg).toContainText('What changed since v1', { timeout: 20_000 });
+      await look(page, 'planpage-390');
     } finally {
       await s.stop();
     }

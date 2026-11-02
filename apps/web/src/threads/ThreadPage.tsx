@@ -14,6 +14,7 @@ import {
   flagThread,
   ignoreThread,
   moveThread,
+  replacedPlanIds,
   restoreThread,
   type ActionPlan,
 } from '@hive/shared';
@@ -66,7 +67,7 @@ import {
   ShortVersion,
 } from './DecisionLayers';
 import { DecisionTop, ProposalEffects } from './DecisionTop';
-import { planInputOf, planLive, planMain } from './plan';
+import { planInputOf, planLive, planMain, planVersions } from './plan';
 import { PlanPanel } from './PlanPanel';
 import { LabelChip } from './labels';
 import { timeline } from './logic';
@@ -231,8 +232,23 @@ export function ThreadPage() {
   const planRows = (plans.state === 'ready' ? plans.data : []).sort(
     (a, b) => b.data.createdAt.toMillis() - a.data.createdAt.toMillis(),
   );
-  // The plan on show: the live one, else the latest; older plans go to Everything.
-  const shownPlan = planRows.find((p) => planLive(p.data.state)) ?? planRows[0] ?? null;
+  // Versions v1..vN, and the plans a newer one replaced (proposed, never decided: no writes).
+  const versions = new Map(
+    planVersions(planRows.map((p) => ({ id: p.id, createdAtMs: p.data.createdAt.toMillis() }))).map(
+      (v) => [v.id, v.n] as const,
+    ),
+  );
+  const replacedIds = replacedPlanIds(
+    planRows.map((p) => ({
+      id: p.id,
+      state: p.data.state,
+      createdAtMs: p.data.createdAt.toMillis(),
+    })),
+  );
+  // The plan on show: the newest live plan that was not replaced, else the latest; older plans
+  // go to Everything.
+  const shownPlan =
+    planRows.find((p) => planLive(p.data.state) && !replacedIds.has(p.id)) ?? planRows[0] ?? null;
   const pastPlans = planRows.filter((p) => p !== shownPlan);
   const subjectName = subject.state === 'ready' ? (subject.data?.name ?? '') : '';
   const closed = t.state === 'done' || t.state === 'ignored';
@@ -378,6 +394,10 @@ export function ThreadPage() {
       now={now}
       agentName={agentName}
       rail={rail}
+      version={versions.get(p.id)}
+      {...(replacedIds.has(p.id) && planRows[0]
+        ? { replacedBy: versions.get(planRows[0].id) }
+        : {})}
     />
   );
   const rail = wide && shownPlan;

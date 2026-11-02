@@ -18,7 +18,7 @@ import {
   settle,
   UNDO_WAIT,
 } from './helpers';
-import { seedInbox, type Seed } from './inboxSeed';
+import { seedDevPlans, seedInbox, type Seed } from './inboxSeed';
 
 async function look(page: Page, name: string) {
   const shots = process.env.SHOTS_DIR;
@@ -256,6 +256,30 @@ test.describe('desktop 1440', () => {
       await toShipIt(page, s, tid, planId, 'slice6c-keepgreen-running-1440');
       await recheckAtShipIt(page, s, planId, 'slice6c-shipit-rechecking-1440');
       await shipItThenSendBack(page, s, planId, 'slice6-shipit-1440');
+    } finally {
+      await s.stop();
+    }
+  });
+
+  test('the Development plan shows its real titles and every step open', async ({ page }) => {
+    test.setTimeout(120_000);
+    await fastTimers(page);
+    await freezeClock(page);
+    const s = await seedInbox(page);
+    try {
+      const { tid, dev } = await seedDevPlans(s);
+      await page.goto(`/inbox/${s.wid}/t/${tid}`);
+      const rows = page.locator(`[data-plan="${dev.planId}"]`).locator('li[data-step]');
+      await expect(rows).toHaveCount(4, { timeout: 20_000 });
+      await expect(rows.nth(0)).toContainText('Shape: Dark mode for the board');
+      await expect(rows.nth(1)).toContainText('Build: One theme token set');
+      await expect(rows.nth(2)).toContainText('Keep green: PR rebased and green');
+      await expect(rows.nth(3)).toContainText('Release + live check');
+      await expect(rows.locator('[data-step-spec]')).toHaveCount(4);
+      await expect(rows.nth(3).locator('[data-spec-who]')).toHaveText(
+        'Agent · Release + live check',
+      );
+      await look(page, 'devplan-spec-1440');
     } finally {
       await s.stop();
     }

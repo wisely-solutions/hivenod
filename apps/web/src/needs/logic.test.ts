@@ -213,6 +213,49 @@ describe('Today (item kt3E7): proposals, tidy-ups and the stack order', () => {
     expect(by['t:w:fresh']!.tidy).toBe(false);
   });
 
+  it('a replaced plan (proposed, a newer plan on the thread) and its steps are not counted', () => {
+    const plan = (state: string, steps: string[], at: number) =>
+      ({
+        memberUid: 'me',
+        threadId: 'tr',
+        proposedBy: 'agent',
+        steps,
+        cursor: 0,
+        state,
+        note: '',
+        createdAt: ts(at),
+        updatedAt: ts(at),
+        lastEventId: 'e',
+      }) as never;
+    const base = {
+      threads: [row('tr', thread())],
+      openOutcomes: [row('old1', outcome('tr', 'reply', { planId: 'old' } as never))],
+    };
+    // Only the old plan is live: it asks.
+    expect(
+      buildNeeds(
+        [org('w', { ...base, livePlans: [row('old', plan('proposed', ['old1'], 100))] })],
+        'me',
+        NOW,
+      ).todo,
+    ).toHaveLength(1);
+    // A newer live plan replaces it: its open step does not count on its own.
+    const n = buildNeeds(
+      [
+        org('w', {
+          ...base,
+          livePlans: [
+            row('old', plan('proposed', ['old1'], 100)),
+            row('new', plan('active', ['new1'], 200)),
+          ],
+        }),
+      ],
+      'me',
+      NOW,
+    );
+    expect(n.todo.every((x) => x.plan?.id !== 'old' && !x.proposals?.length)).toBe(true);
+  });
+
   it('band-1 threads, band-2 threads, then the rest oldest first', () => {
     const t = (key: string, over: Partial<InboxThread>, since: number) =>
       e({ key, since, thread: { id: key, data: thread(over) } });

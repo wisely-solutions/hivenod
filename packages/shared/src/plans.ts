@@ -276,3 +276,31 @@ export function planThreadState(
 }
 const ON_AGENT: ThreadStateAfter = { state: 'waiting', waiting: { on: 'agent', until: null } };
 const afterDone: ThreadStateAfter = { state: 'done', waiting: null };
+
+/** What replacement needs of a plan: its id, state and when it was made (milliseconds). */
+export interface PlanAge {
+  id: string;
+  state: PlanState;
+  createdAtMs: number;
+}
+
+/**
+ * The plans that were replaced (no writes): a plan still `proposed` while a newer plan exists on
+ * the same thread. Pass the plans of ONE thread; a newer plan in any state replaces it (a tie in
+ * time goes to the greater id). A replaced plan shows "Replaced by vN", has no Approve or Reject,
+ * and neither it nor its steps count in Needs you, Today or the notifier.
+ */
+export function replacedPlanIds(plans: readonly PlanAge[]): Set<string> {
+  const newer = (a: PlanAge, b: PlanAge) =>
+    a.createdAtMs > b.createdAtMs || (a.createdAtMs === b.createdAtMs && a.id > b.id);
+  const out = new Set<string>();
+  for (const p of plans) {
+    if (p.state !== 'proposed') continue;
+    if (plans.some((q) => q.id !== p.id && newer(q, p))) out.add(p.id);
+  }
+  return out;
+}
+
+/** Whether `plan` was replaced by a newer plan among the thread's `plans`. */
+export const isReplaced = (plan: PlanAge, plans: readonly PlanAge[]): boolean =>
+  replacedPlanIds(plans).has(plan.id);

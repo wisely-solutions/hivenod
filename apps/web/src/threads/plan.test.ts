@@ -7,7 +7,12 @@ import {
   planMain,
   planSummary,
   planWaits,
+  openQuestionLines,
+  planDiff,
+  planVersions,
+  producesOf,
   stepTitle,
+  whoOf,
 } from './plan';
 
 const ts = (ms: number) => ({ toMillis: () => ms, seconds: ms / 1000, nanoseconds: 0 });
@@ -120,7 +125,8 @@ describe('plans on the thread page (item qwFAW, slice 4)', () => {
       /^Booking \(retired\) Fri 30 Oct, \d\d:00$/,
     );
     expect(stepTitle(null, {})).toBe('…');
-    expect(stepTitle('reply', { text: 'x'.repeat(80) }).length).toBeLessThan(60);
+    // Never truncated: the title wraps instead.
+    expect(stepTitle('reply', { text: 'x'.repeat(80) })).toBe(`Reply: “${'x'.repeat(80)}”`);
   });
 
   it('reads the project and item of a Build it link', () => {
@@ -130,5 +136,88 @@ describe('plans on the thread page (item qwFAW, slice 4)', () => {
     });
     expect(itemLinkParts('https://teams.example.com/m/1')).toBeNull();
     expect(itemLinkParts(null)).toBeNull();
+  });
+});
+
+describe('the plan view (spec view and plan page)', () => {
+  it('gives the development steps their real titles', () => {
+    expect(stepTitle('shape', { idea: 'Dark mode for the board' })).toBe(
+      'Shape: Dark mode for the board',
+    );
+    expect(stepTitle('build', { brief: 'A theme token set\nand a toggle' })).toBe(
+      'Build: A theme token set and a toggle',
+    );
+    expect(stepTitle('keepgreen', {})).toBe('Keep green: PR rebased and green');
+    expect(stepTitle('release', { notes: 'x' })).toBe('Release + live check');
+    expect(stepTitle('shape', {})).toBe('Shape');
+  });
+
+  it('says who does a step and what it produces', () => {
+    expect(whoOf('approval')).toBe('You decide');
+    expect(whoOf('their_reply')).toBe('Their reply');
+    expect(whoOf('build')).toBe('Agent · Build');
+    expect(whoOf('release')).toBe('Agent · Release + live check');
+    expect(producesOf('shape')).toBe('a proposal with a size for your OK');
+    expect(producesOf('build')).toBe('an open pull request, checks green, not merged');
+    expect(producesOf('keepgreen')).toBe('the PR kept current with main');
+    expect(producesOf('release')).toBe('the change live and checked');
+    expect(producesOf('reply')).toBe('the message sent');
+    expect(producesOf('approval')).toBe('your decision');
+    expect(producesOf('their_reply')).toBe('their answer');
+    expect(producesOf('nudge')).toBe('a reminder sent');
+    expect(producesOf('snooze')).toBe('a wait until the date');
+    expect(producesOf('handover')).toBe('it is handed over');
+    expect(producesOf('book')).toBeNull();
+  });
+
+  it('finds open questions: lines starting with Open: or ending with ?', () => {
+    expect(openQuestionLines('Plain line\nOpen: which theme?\nShould it sync?\nopen: x')).toEqual([
+      { text: 'Plain line', open: false },
+      { text: 'Open: which theme?', open: true },
+      { text: 'Should it sync?', open: true },
+      { text: 'open: x', open: true },
+    ]);
+  });
+
+  it('numbers plan versions by creation time', () => {
+    expect(
+      planVersions([
+        { id: 'b', createdAtMs: 20 },
+        { id: 'a', createdAtMs: 10 },
+        { id: 'c', createdAtMs: 20 },
+      ]),
+    ).toEqual([
+      { id: 'a', n: 1 },
+      { id: 'b', n: 2 },
+      { id: 'c', n: 3 },
+    ]);
+  });
+
+  it('diffs two plans per step position', () => {
+    const prev = [
+      { type: 'reply', fields: { text: 'On it' } },
+      { type: 'approval', fields: { what: 'Prices' } },
+      { type: 'nudge', fields: { text: 'Anything else?' } },
+    ];
+    const cur = [
+      { type: 'reply', fields: { text: 'On it, Sam' } },
+      { type: 'approval', fields: { what: 'Prices' } },
+      { type: 'handover', fields: { to: 'Maria' } },
+      { type: 'release', fields: {} },
+    ];
+    const d = planDiff(prev, cur);
+    expect(d.map((x) => x.kind)).toEqual(['changed', 'same', 'changed', 'added']);
+    expect(d[0]!.label).toBe('Reply');
+    expect(d[0]!.fields).toEqual([
+      { name: 'text', label: 'Reply', before: 'On it', after: 'On it, Sam' },
+    ]);
+    expect(d[2]!.type).toEqual({ before: 'Nudge', after: 'Hand over' });
+    expect(planDiff(cur, prev).map((x) => x.kind)).toEqual([
+      'changed',
+      'same',
+      'changed',
+      'removed',
+    ]);
+    expect(planDiff([], cur)).toHaveLength(4);
   });
 });

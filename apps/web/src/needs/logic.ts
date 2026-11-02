@@ -9,6 +9,7 @@
 import {
   notNowHides,
   outcomeKind,
+  replacedPlanIds,
   threadAsk,
   type ThreadAsk,
   type InboxOutcome,
@@ -67,10 +68,31 @@ export interface Needs {
 /** Thread states that wait for the member. */
 export const THREAD_NEEDS = ['needsYou', 'yourCall'] as const;
 
+/**
+ * The live plans that were replaced: a proposed plan with a newer live plan on its thread (the
+ * live queries hold live plans only, so no extra reads). They and their steps are not counted.
+ */
+export function replacedLivePlans(plans: readonly Row<InboxPlan>[]): Set<string> {
+  const by = new Map<string, Row<InboxPlan>[]>();
+  for (const p of plans) by.set(p.data.threadId, [...(by.get(p.data.threadId) ?? []), p]);
+  const out = new Set<string>();
+  for (const group of by.values())
+    for (const id of replacedPlanIds(
+      group.map((p) => ({
+        id: p.id,
+        state: p.data.state,
+        createdAtMs: p.data.createdAt.toMillis(),
+      })),
+    ))
+      out.add(id);
+  return out;
+}
+
 /** Every organization's waiting threads, merged and ordered. */
 export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.now()): Needs {
   const todo: NeedsEntry[] = [];
   for (const o of orgs) {
+    const replaced = replacedLivePlans(o.livePlans ?? []);
     for (const t of o.threads) {
       if (t.data.memberUid !== uid) continue;
       if (!(THREAD_NEEDS as readonly string[]).includes(t.data.state)) continue;
@@ -78,6 +100,7 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.no
         .filter(
           (p) =>
             p.data.threadId === t.id &&
+            !(p.data.planId && replaced.has(p.data.planId)) &&
             (p.data.state === 'proposed' || p.data.state === 'revising' || theirDraftWaits(p.data)),
         )
         .sort(
@@ -85,7 +108,7 @@ export function buildNeeds(orgs: readonly OrgInput[], uid: string, now = Date.no
             a.data.createdAt.toMillis() - b.data.createdAt.toMillis() || (a.id < b.id ? -1 : 1),
         );
       const plan = (o.livePlans ?? [])
-        .filter((p) => p.data.threadId === t.id)
+        .filter((p) => p.data.threadId === t.id && !replaced.has(p.id))
         .sort((a, b) => b.data.createdAt.toMillis() - a.data.createdAt.toMillis())[0];
       // Your call with nothing left to decide: approved, the agent carries it out. A blocked
       // plan (a step failed) waits for the member: retry, skip or stop.
