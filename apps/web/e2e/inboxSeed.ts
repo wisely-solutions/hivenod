@@ -638,6 +638,39 @@ export async function seedInbox(page: Page, name = 'Cara Lindqvist') {
   };
 }
 
+/** A long Markdown brief (about 3,000 characters, invented) for a shape step's idea. */
+const LONG_IDEA = [
+  'Dark mode for the board that follows the system theme, with a toggle in Settings.',
+  '',
+  '---',
+  '',
+  '## Why',
+  '',
+  ...Array.from(
+    { length: 6 },
+    (_, i) =>
+      `**Reason ${i + 1}:** people work late and the bright board tires their eyes, so a calm theme that follows the device saves a daily annoyance and keeps the screens consistent with the rest of their tools.`,
+  ),
+  '',
+  '## Scope',
+  '',
+  ...Array.from(
+    { length: 8 },
+    (_, i) =>
+      `- Step ${i + 1}: one theme token set per surface, checked in both themes, with \`prefers-color-scheme\` as the default and no data change.`,
+  ),
+  '',
+  '## Plan',
+  '',
+  ...Array.from(
+    { length: 5 },
+    (_, i) =>
+      `${i + 1}. Build part ${i + 1} behind the toggle, then compare screenshots of the main screens in light and dark before moving on to the next part.`,
+  ),
+  '',
+  'See [the design notes](https://example.com/dark-mode) for the palette.',
+].join('\n');
+
 /**
  * The plan view (spec view, plan page): a thread with an older plan still proposed (a reply and
  * your approval) and a newer 4-step Development plan (Shape, Build, Keep green, Release), so the
@@ -666,7 +699,7 @@ export async function seedDevPlans(s: Seed) {
       {
         type: 'shape',
         fields: {
-          idea: 'Dark mode for the board that follows the system theme, with a toggle in Settings.',
+          idea: LONG_IDEA,
         },
       },
       {
