@@ -271,6 +271,11 @@ test.describe('plan view 1440', () => {
       await expect(card1.locator('strong').first()).toBeVisible();
       await expect(card1.locator('li').first()).toBeVisible();
       expect(await card1.innerText()).not.toContain('**');
+      expect(await card1.innerText()).not.toContain('---');
+      await expect(card1.locator('hr').first()).toBeAttached();
+      // The left column sits at the top of the (tall) row, not centred in it.
+      const cardBox = await card1.boundingBox();
+      expect(Math.abs(t1!.y - cardBox!.y)).toBeLessThan(40);
       // The open question is highlighted.
       await expect(plan.locator('[data-open-question]')).toHaveCount(1);
       await expect(plan.locator('[data-open-question]')).toContainText('Open: should the choice');

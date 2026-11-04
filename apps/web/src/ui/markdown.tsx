@@ -9,7 +9,8 @@ export type Block =
   | { t: 'h'; level: 1 | 2 | 3; text: string }
   | { t: 'p'; text: string }
   | { t: 'ul' | 'ol'; items: string[] }
-  | { t: 'code'; text: string };
+  | { t: 'code'; text: string }
+  | { t: 'hr' };
 
 export function parseBlocks(src: string): Block[] {
   const lines = src.replace(/\r\n?/g, '\n').split('\n');
@@ -27,6 +28,11 @@ export function parseBlocks(src: string): Block[] {
       i++;
       while (i < lines.length && !/^```/.test(lines[i]!)) body.push(lines[i++]!);
       out.push({ t: 'code', text: body.join('\n') });
+      continue;
+    }
+    if (/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line)) {
+      flush();
+      out.push({ t: 'hr' });
       continue;
     }
     const h = /^(#{1,3})\s+(.*)$/.exec(line);
@@ -118,6 +124,8 @@ export function Markdown({ source }: { source: string }) {
                 ))}
               </ol>
             );
+          case 'hr':
+            return <hr key={i} className="border-line" />;
           case 'code':
             return (
               <pre key={i} className="overflow-x-auto rounded-btn bg-canvas p-3 font-mono text-13">
