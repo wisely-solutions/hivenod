@@ -8,6 +8,8 @@
 import { expect, type Page } from '@playwright/test';
 import {
   addInboxMessage,
+  decideOnWord,
+  type StepDecision,
   addThreadNote,
   askMember,
   assignSubject,
@@ -215,6 +217,26 @@ export async function agentOf(wid: string, ownerUid: string, name: string) {
     },
     async due(tid: string, due: string | null, reason?: string) {
       await run(dueThread(ctx, { threadId: tid, thread: await thread(tid), due, reason }));
+    },
+    /** May act on my word (step_decide): the member's decision at the step at the plan's turn. */
+    async decide(pid: string, decision: StepDecision, words: string, memberName: string) {
+      const plan = (await getDoc(doc(db, inboxPaths.plan(wid, pid)))).data() as PlanInput['plan'];
+      const outcomes: Record<string, OutcomeStateOf> = {};
+      for (const id of plan.steps)
+        outcomes[id] = (
+          await getDoc(doc(db, inboxPaths.outcome(wid, id)))
+        ).data() as OutcomeStateOf;
+      await run(
+        decideOnWord(ctx, {
+          decision,
+          words,
+          threadId: plan.threadId,
+          thread: await thread(plan.threadId),
+          memberName,
+          outcomeId: plan.steps[plan.cursor]!,
+          plan: { planId: pid, plan, outcomes },
+        }),
+      );
     },
     /** Plans (item qwFAWxZM5xkcE7PPjAzi): one call proposes the steps, as plan_propose does. */
     async plan(tid: string, steps: PlanStepInput[], note = '') {
