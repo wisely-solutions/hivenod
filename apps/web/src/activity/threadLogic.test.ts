@@ -86,6 +86,24 @@ describe('the thread feed', () => {
     );
     expect(linkLabel('https://example.com/x')).toBe('link');
   });
+  it('a decision on the member’s word: his sentence, via the agent’s terminal, with his words', () => {
+    const w = { onBehalfOf: 'alice', memberName: 'Alice', via: 'terminal', words: 'approved' };
+    const s = threadSentence(
+      e('outcome.approved', { ...w, type: 'approval', stepLabel: 'Ship it?' }),
+    );
+    expect(`${s.before}X${s.after}`).toBe('approved Ship it? on X via Hive’s terminal: “approved”');
+    const sb = e('plan.sent_back', {
+      ...w,
+      words: 'bigger',
+      reason: 'bigger',
+      stepLabel: 'Ship it?',
+      toLabel: 'Build',
+    });
+    expect(groupOf(sb)).toBe('decisions');
+    expect(matches(sb, { group: 'decisions', actor: 'people' })).toBe(true);
+    expect(matches(sb, { group: 'plans', actor: 'all' })).toBe(false);
+    expect(threadSentence(sb).before).toBe('asked for changes at Ship it? on ');
+  });
   it('reads what a recommendation asks for', () => {
     expect(recommendationKind('Approve')).toBe('approve');
     expect(recommendationKind('Ship it')).toBe('approve');

@@ -39,6 +39,7 @@ import {
   wakeThread,
   proposePlan,
   sendBackPlan,
+  decideOnWord,
   stepProgress,
   stepAsk,
   stepSent,
@@ -1123,6 +1124,105 @@ function build(): ContractCase[] {
   sb('third blocks', AGENT, {
     ...devPl(['done', 'done', 'done', 'done', 'approved', 'proposed'], 4, 'active', 2),
   });
+  // ---------- May act on my word (packages/shared/src/decideword.ts) ----------
+  const ON = (pl: ReturnType<typeof devPl> | PlanInput, over: Record<string, unknown> = {}) => ({
+    ...pl,
+    plan: {
+      ...pl.plan,
+      templateId: 'dev',
+      cursorAt: ts(NOW_MS - 90_000),
+      createdAt: ts(NOW_MS - 3_600_000),
+      ...over,
+    },
+  });
+  const dw = (name: string, input: Partial<Parameters<typeof decideOnWord>[1]>, actor = AGENT) =>
+    act(
+      `decideOnWord/${name}`,
+      'decideOnWord',
+      actor,
+      {
+        decision: 'approve',
+        words: ' approved ',
+        threadId: 'it1',
+        thread: TH({
+          subjectId: 's1',
+          state: 'yourCall',
+          summary: { version: 3, recAction: 'Approve' },
+        }),
+        memberName: ' João ',
+        outcomeId: 'o2',
+        plan: ON(devPl(['done', 'proposed', 'approved', 'proposed', 'approved', 'proposed'], 1)),
+        ...input,
+      } as Parameters<typeof decideOnWord>[1],
+      decideOnWord,
+    );
+  dw('approve a gate', {});
+  dw('approve a gate, no summary, older plan', {
+    thread: TH({ state: 'yourCall' }),
+    plan: ON(devPl(['done', 'proposed', 'approved', 'proposed', 'approved', 'proposed'], 1), {
+      cursorAt: undefined,
+      templateId: undefined,
+    }),
+  });
+  dw('accept on live', {
+    decision: 'accept',
+    words: 'accepted, it works live',
+    outcomeId: 'o6',
+    plan: ON(devPl(['done', 'done', 'done', 'done', 'done', 'proposed'], 5)),
+  });
+  dw('reject a gate', { decision: 'reject', words: 'no, drop it' });
+  dw('changes default target', {
+    decision: 'changes',
+    words: 'bigger toggle',
+    outcomeId: 'o4',
+    plan: ON(devPl(['done', 'done', 'done', 'proposed', 'approved', 'proposed'], 3)),
+  });
+  dw('changes to shape', {
+    decision: 'changes',
+    words: 'rethink it',
+    outcomeId: 'o4',
+    toStep: 0,
+    plan: ON(devPl(['done', 'done', 'done', 'proposed', 'approved', 'proposed'], 3), {}),
+  });
+  dw('changes not its turn', {
+    decision: 'changes',
+    words: 'x',
+    outcomeId: 'o6',
+  });
+  dw('reject a proposed plan', {
+    decision: 'reject',
+    words: 'a newer plan replaced it',
+    outcomeId: 'o1',
+    plan: ON(
+      PL(
+        [
+          ['shape', 'proposed'],
+          ['approval', 'proposed', { what: 'Go?' }],
+          ['build', 'proposed'],
+        ],
+        0,
+        'proposed',
+      ),
+    ),
+  });
+  dw('close', { decision: 'close', words: 'tidy up', outcomeId: null, plan: undefined });
+  dw('close a closed thread', {
+    decision: 'close',
+    words: 'tidy up',
+    thread: TH({ state: 'done' }),
+  });
+  dw('not the home agent', { thread: TH({ state: 'yourCall', fetchedBy: 'agentB' }) });
+  dw('no words', { words: '   ' });
+  dw('too many words', { words: 'w'.repeat(501) });
+  dw('an agent step', { outcomeId: 'o3' });
+  dw('not a step of the plan', { outcomeId: 'zz' });
+  dw('approve out of turn', { outcomeId: 'o4' });
+  dw('a done plan', {
+    decision: 'accept',
+    outcomeId: 'o6',
+    plan: ON(devPl(['done', 'done', 'done', 'done', 'done', 'proposed'], 5, 'stopped')),
+  });
+  dw('a person', {}, HUMAN);
   // ---------- long steps (slice 6b) ----------
   finP('build started without an item', {
     plan: devPl(['done', 'done', 'approved', 'proposed', 'approved', 'proposed'], 2),

@@ -3,7 +3,8 @@
  * Telegram messages carry the thread quick actions, a button press decides through the same
  * ActionPlan the app uses, and a one-time code links a chat. (Projects are gone, design 7.)
  */
-import { bellId, bellPath, inboxPaths, notifyPath, paths } from '@hive/shared';
+import { bellId, bellPath, decideOnWord, inboxPaths, notifyPath, paths } from '@hive/shared';
+import { applyPlanAdmin } from '../src/admin';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -379,6 +380,61 @@ describe('decision points on threads end to end (slice 3, design 9b)', () => {
         () =>
           calls.filter((c) => c.method === 'sendMessage' && /ta:/.test(JSON.stringify(c.body)))
             .length > 1,
+      );
+    } finally {
+      stop();
+    }
+  });
+
+  it('a gate the home agent decided on the person’s word: a tap says how it was decided', async () => {
+    await put({
+      ...people(),
+      [inboxPaths.thread(W, 'dt1')]: thread(),
+      [inboxPaths.plan(W, 'pl1')]: {
+        memberUid: 'alice',
+        threadId: 'dt1',
+        proposedBy: 'agentA',
+        steps: ['g1'],
+        cursor: 0,
+        state: 'active',
+        note: 'Ship',
+        createdAt: harnessNow(),
+        updatedAt: harnessNow(),
+        lastEventId: 'e1',
+      },
+      [inboxPaths.outcome(W, 'g1')]: outcome({
+        type: 'approval',
+        fields: { what: 'Ship it?' },
+        executor: null,
+        planId: 'pl1',
+      }),
+    });
+    const { calls, bot, stop } = await start();
+    try {
+      await until(() => sent(calls, 'Ship release 175').length > 0);
+      const code = buttonCode(calls, 'ta:')!;
+      // Alice said "approved" in Hive's terminal: Hive records it (rules-free here: Admin SDK).
+      const pl = (await db.doc(inboxPaths.plan(W, 'pl1')).get()).data()!;
+      const g1 = (await db.doc(inboxPaths.outcome(W, 'g1')).get()).data()!;
+      const t = (await db.doc(inboxPaths.thread(W, 'dt1')).get()).data()!;
+      await applyPlanAdmin(
+        db,
+        decideOnWord(
+          { workspaceId: W, actor: { type: 'agent', id: 'agentA', name: 'Hive' } },
+          {
+            decision: 'approve',
+            words: 'approved',
+            threadId: 'dt1',
+            thread: t as never,
+            memberName: 'Alice',
+            outcomeId: 'g1',
+            plan: { planId: 'pl1', plan: pl as never, outcomes: { g1: g1 as never } },
+          },
+        ),
+      );
+      await press(bot, 42, code);
+      expect(answers(calls).pop()).toMatch(
+        /^Already decided at \d\d:\d\d: Approved by Alice via Hive’s terminal: “approved”\.$/,
       );
     } finally {
       stop();

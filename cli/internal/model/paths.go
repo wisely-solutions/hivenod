@@ -30,6 +30,9 @@ func (pathBuilders) InboxOutcome(w, o string) string {
 }
 func (pathBuilders) InboxEvent(w, e string) string { return "workspaces/" + w + "/inboxEvents/" + e }
 func (pathBuilders) InboxPlan(w, p string) string  { return "workspaces/" + w + "/inboxPlans/" + p }
+
+// AgentTrust is the member's list of agents that may act on his word (decidePaths.trust).
+func (pathBuilders) AgentTrust(w, uid string) string { return "workspaces/" + w + "/agentTrust/" + uid }
 func (pathBuilders) InboxRelation(w, r string) string {
 	return "workspaces/" + w + "/inboxRelations/" + r
 }

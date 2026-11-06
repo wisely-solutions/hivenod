@@ -163,10 +163,19 @@ type SendBackPlanResult struct {
 // SendBackPlan is sendBackPlan for an agent (plan_send_back): from the agent step at the cursor
 // it carries out, back to an earlier agent step that is done.
 func SendBackPlan(ctx Ctx, in SendBackPlanInput) (SendBackPlanResult, error) {
+	return sendBackPlan(ctx, in, nil)
+}
+
+// sendBackPlan is sendBackPlan; with w, the member's Ask for changes at the gate at its turn,
+// recorded by his home agent on his word (decideword.go).
+func sendBackPlan(ctx Ctx, in SendBackPlanInput, w *onWordFacts) (SendBackPlanResult, error) {
 	if err := RequireAgent(ctx); err != nil {
 		return SendBackPlanResult{}, err
 	}
 	p := in.Plan
+	if w != nil && p.MemberUID != in.Thread.MemberUID {
+		return SendBackPlanResult{}, fail("Only the person this is for can do this.")
+	}
 	if p.State != "active" && p.State != "proposed" {
 		if p.State == "blocked" {
 			return SendBackPlanResult{}, fail("This plan is blocked: retry or stop it first.")
@@ -184,10 +193,13 @@ func SendBackPlan(ctx Ctx, in SendBackPlanInput) (SendBackPlanResult, error) {
 	if o == nil {
 		return SendBackPlanResult{}, fail("No step is at its turn.")
 	}
-	if OutcomeKind(o.Type) == "human" || o.Executor == nil || *o.Executor != ctx.Actor.ID {
+	if w != nil {
+		if OutcomeKind(o.Type) != "human" || o.State != "proposed" {
+			return SendBackPlanResult{}, fail("Only an approval at its turn sends the plan back.")
+		}
+	} else if OutcomeKind(o.Type) == "human" || o.Executor == nil || *o.Executor != ctx.Actor.ID {
 		return SendBackPlanResult{}, fail("Only the agent carrying out the step at its turn sends the plan back.")
-	}
-	if o.State != "approved" && o.State != "running" {
+	} else if o.State != "approved" && o.State != "running" {
 		return SendBackPlanResult{}, fail("This step is " + o.State + ": nothing to send back.")
 	}
 	types := map[string]string{}
@@ -244,6 +256,16 @@ func SendBackPlan(ctx Ctx, in SendBackPlanInput) (SendBackPlanResult, error) {
 	}
 	target := p.Steps[to]
 	data := map[string]any{"planId": in.PlanID, "outcomeId": target, "from": p.Cursor, "to": to, "reset": reset, "reason": reason, "n": n}
+	if w != nil {
+		for k, v := range decisionFacts(ctx, in.Thread, p, o, nil) {
+			data[k] = v
+		}
+		data["toLabel"] = StepLabelOf(t)
+		data["onBehalfOf"] = w.member
+		data["memberName"] = w.name
+		data["words"] = w.words
+		data["via"] = "terminal"
+	}
 	pl := InboxPlan(ctx, "plan.sent_back", p.MemberUID, sp(p.ThreadID), in.Thread.SubjectID, data, func(eventID string) []plan.Op {
 		var ops []plan.Op
 		for _, id := range reset {

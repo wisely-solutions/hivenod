@@ -289,6 +289,8 @@ type InboxPlan struct {
 	Note       string    `firestore:"note" json:"note"`
 	Confidence *string   `firestore:"confidence" json:"confidence"`
 	CreatedAt  time.Time `firestore:"createdAt" json:"createdAt"`
+	// CursorAt: when the cursor last moved (a decision's wait starts there; absent on older plans).
+	CursorAt *time.Time `firestore:"cursorAt" json:"cursorAt"`
 	// Development plans (item OE8FmrTaIxFVGcaeGG3N, slice 6).
 	TemplateID *string           `firestore:"templateId" json:"templateId"`
 	SendBackTo map[string]string `firestore:"sendBackTo" json:"sendBackTo"`

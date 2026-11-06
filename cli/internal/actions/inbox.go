@@ -359,6 +359,14 @@ type ThreadState struct {
 	// Instructions and Instruct: Ask the agent (item w6O2KOw4ys70TQv9I1xD).
 	Instructions map[string]ThreadInstruction `json:"instructions,omitempty"`
 	Instruct     *ThreadInstruct              `json:"instruct,omitempty"`
+	// Summary: the summary mirror's version and recommended action (decision events carry them).
+	Summary *ThreadSummaryState `json:"summary,omitempty"`
+}
+
+// ThreadSummaryState is what a decision needs of the thread's summary mirror.
+type ThreadSummaryState struct {
+	Version   int64   `json:"version"`
+	RecAction *string `json:"recAction"`
 }
 
 // ThreadInstruction is what the actions need of an instruction.
@@ -442,6 +450,9 @@ func ThreadStateFrom(t model.InboxThread) ThreadState {
 	}
 	if t.Instruct != nil {
 		s.Instruct = &ThreadInstruct{State: t.Instruct.State, ID: t.Instruct.ID, At: t.Instruct.At}
+	}
+	if t.Summary != nil {
+		s.Summary = &ThreadSummaryState{Version: t.Summary.Version, RecAction: t.Summary.RecAction}
 	}
 	if s.Refs == nil {
 		s.Refs = []string{}

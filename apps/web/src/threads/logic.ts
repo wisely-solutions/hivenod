@@ -7,6 +7,7 @@ import {
   THREAD_OPEN,
   outcomeType,
   INSTRUCT_CHIP_LABELS,
+  onWordLine,
   type InstructChip,
   searchSubjects,
   SEARCH_LIMIT,
@@ -365,6 +366,9 @@ export function confidenceText(c: string | null | undefined): 'Sure' | 'Likely' 
 
 /** One line for a timeline event. */
 export function eventText(e: Pick<InboxEvent, 'type' | 'data' | 'actor'>): string {
+  // Decided on the member's word in his agent's terminal (decideword.ts).
+  const onWord = onWordLine(e);
+  if (onWord) return onWord;
   const who = e.actor.type === 'human' ? 'You' : e.actor.name || 'An agent';
   const d = e.data as Record<string, unknown>;
   switch (e.type) {

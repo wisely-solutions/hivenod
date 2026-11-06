@@ -186,6 +186,8 @@ export const INBOX_EVENT_TYPES = [
   'run.expired',
   'agents.off',
   'agents.on',
+  // May act on my word (./decideword.ts): the member's list of agents trusted with his word
+  'agents.trusted',
 ] as const;
 export type InboxEventType = (typeof INBOX_EVENT_TYPES)[number];
 

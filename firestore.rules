@@ -472,8 +472,8 @@ service cloud.firestore {
           && aid != me() && !(aid in get(wsPath(wid)).data.memberRoles)
           && keysOk(d, ['name', 'color', 'projectIds', 'createdBy', 'createdAt',
                'revokedAt', 'lastSeenAt', 'tokenHint', 'previousAgentUid', 'lastEventId'],
-          // guardrails and permissions are optional (absent = defaults); a new agent is never paused.
-               ['guardrails', 'permissions', 'scope'])
+          // guardrails are optional (absent = defaults); a new agent is never paused.
+               ['guardrails', 'scope'])
           // An Inbox-only agent (item fJnu6) is created by an admin only.
           && (!('scope' in d) || isAdmin(wid))
           && validAgentFields(d)
@@ -494,7 +494,7 @@ service cloud.firestore {
           let r = resource.data;
           return (isAdmin(wid)
             && r.revokedAt == null
-            && changed(['name', 'color', 'projectIds', 'revokedAt', 'guardrails', 'permissions',
+            && changed(['name', 'color', 'projectIds', 'revokedAt', 'guardrails',
                         'failStreak', 'pausedAt', 'pausedReason', 'lastEventId'])
             && validAgentFields(d)
             // The name changes only with an agent.renamed event, and that event only with a new name.
@@ -536,12 +536,12 @@ service cloud.firestore {
         allow delete: if isAdmin(wid) && resource.data.revokedAt != null
           && trackedDelete(wid, 'agents', aid, 'agent.removed');
 
-        // `hivenod connect` confirmed by a plain member (item EJ2Cxq4k): default guardrails and
-        // permissions, never all projects. projectIds is legacy since Projects were removed (OE8Fm
+        // `hivenod connect` confirmed by a plain member (item EJ2Cxq4k): default guardrails,
+        // never all projects. projectIds is legacy since Projects were removed (OE8Fm
         // slice 11): at most 5 ids, never checked (MEMBER_CONNECT_MAX_PROJECTS in pairing.ts).
         function memberConnects(d) {
           return roleOf(wid) == 'member'
-            && !('guardrails' in d) && !('permissions' in d)
+            && !('guardrails' in d)
             && d.projectIds is list && d.projectIds.size() <= 5;
         }
         // scope (item fJnu6): absent, or 'inbox' with no projects. It is set at creation and never
@@ -550,20 +550,13 @@ service cloud.firestore {
           return str(d.name, 1, 80) && str(d.color, 0, 32) && str(d.tokenHint, 0, 8)
             && (d.projectIds == '*' || (d.projectIds is list && d.projectIds.size() <= 100))
             && (!('scope' in d) || (d.scope == 'inbox' && d.projectIds == []))
-            && validGuardrails(d.get('guardrails', {'maxFailedRuns': 3}))
-            && d.get('permissions', []) is list && d.get('permissions', []).size() <= 7
-            && d.get('permissions', []).hasOnly(['editFiles', 'runTests', 'gitCommit', 'gitPush',
-                 'installPackages', 'runCommands', 'webAccess']);
+            && validGuardrails(d.get('guardrails', {'maxFailedRuns': 3}));
         }
         function validGuardrails(g) {
-          // maxTokensPerItem is legacy (older agents store it; ignored, never limits a run): still
-          // accepted, never required.
-          return g is map
-            && (exactKeys(g, ['maxFailedRuns']) || exactKeys(g, ['maxFailedRuns', 'maxTokensPerItem']))
-            && g.maxFailedRuns is int && g.maxFailedRuns >= 1 && g.maxFailedRuns <= 20
-            && (!('maxTokensPerItem' in g)
-                || (g.maxTokensPerItem is int && g.maxTokensPerItem >= 1000
-                    && g.maxTokensPerItem <= 100000000));
+          // maxTokensPerItem and permissions are legacy (Projects were removed): older agents keep
+          // them, ignored; nothing writes them any more.
+          return g is map && keysOk(g, ['maxFailedRuns'], ['maxTokensPerItem'])
+            && g.maxFailedRuns is int && g.maxFailedRuns >= 1 && g.maxFailedRuns <= 20;
         }
       }
 
@@ -613,6 +606,13 @@ service cloud.firestore {
       function inboxReader(d) { return inboxOwner(d) || isActiveAgent(wid); }
       function inboxEv(eid) { return getAfter(inboxDoc('inboxEvents', eid)); }
       function inboxEvOf(d) { return inboxEv(d.lastEventId).data; }
+      // Who decides: the member, or his trusted home agent on his word: an event inboxOnWord let
+      // through (only that branch writes onBehalfOf: never a person's event, and only the event's
+      // own member). The event's member and thread are this doc's: every caller checks it with
+      // inboxDocTracked / inboxTrackedThread (r.memberUid, the doc's thread).
+      function inboxDecider(r) {
+        return inboxOwner(r) || inboxEvOf(request.resource.data).data.get('onBehalfOf', '') == r.memberUid;
+      }
       // The inbox event `eid` is written in this batch by me, now, with one of `types`, for `member`.
       function inboxTracked(eid, types, member) {
         let e = inboxEv(eid);
@@ -655,7 +655,6 @@ service cloud.firestore {
 
       // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by
       // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)
-      function outcomeTypes() { return ['reply', 'reply_book', 'book', 'no_reply', 'make_it_work', 'handover', 'snooze', 'nudge', 'ignore', 'shape', 'build', 'keepgreen', 'release', 'their_reply', 'approval', 'schedule', 'schedule_end']; }
       function outcomeSingle() { return ['reply', 'no_reply', 'handover', 'snooze', 'nudge', 'ignore']; }
       function outcomePlanTypes() { return ['reply', 'handover', 'snooze', 'nudge', 'shape', 'build', 'keepgreen', 'release', 'their_reply', 'approval']; }
       function outcomeHuman() { return ['approval']; }
@@ -894,7 +893,7 @@ service cloud.firestore {
           let o = e.data.get('outcomeId', null) == null ? null
             : getAfter(inboxDoc('inboxOutcomes', e.data.outcomeId)).data;
           let atCursor = o != null && inboxAtCursor(r, e.data.outcomeId) && o.planId == pid;
-          return (inboxOwner(r)
+          return (inboxDecider(r)
               && ((e.type == 'outcome.approved' && r.state in ['proposed', 'active'] && atCursor
                   && o.type in outcomeHuman() && o.state == 'done' && next)
                 || (e.type == 'outcome.rejected' && inboxPlanLive(r) && atCursor
@@ -937,7 +936,7 @@ service cloud.firestore {
             && d.sentBack.to == e.outcomeId && d.sentBack.reason == e.reason && str(e.reason, 1, 1000)
             && d.sentBack.by == me() && d.sentBack.at == request.time
             && c.state == (c.type in outcomeHuman() ? 'proposed' : 'approved')
-            && (c.type in outcomeHuman() || r.state == 'blocked' ? inboxOwner(r)
+            && (c.type in outcomeHuman() || r.state == 'blocked' ? inboxDecider(r)
               : isActiveAgent(wid) && c.executor == me());
         }
         // Edit plan: move, remove or add one step, never before `first`; the steps before it
@@ -982,7 +981,7 @@ service cloud.firestore {
           && strOrNull(d.threadId, 128)
           && strOrNull(d.subjectId, 128)
           && ((d.actor.type == 'human' && isMember(wid)
-                && d.memberUid == me()
+                && d.memberUid == me() && !('onBehalfOf' in d.data)
                 && d.type in ['thread.titled', 'thread.answered', 'thread.ignored',
                   'thread.closed', 'thread.restored', 'thread.moved', 'outcome.approved',
                   'outcome.rejected', 'outcome.revise_requested', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area', 'subject.label',
@@ -991,9 +990,11 @@ service cloud.firestore {
                   'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
                   'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back',
                   'schedule.created', 'schedule.updated', 'schedule.paused', 'schedule.resumed',
-                  'schedule.ended', 'schedule.deleted', 'run.decided', 'agents.off', 'agents.on', 'step.external'])
+                  'schedule.ended', 'schedule.deleted', 'run.decided', 'agents.off', 'agents.on', 'step.external',
+                  'agents.trusted'])
+            || (d.actor.type == 'agent' && inboxOnWord(d))
             || (d.actor.type == 'agent' && isActiveAgent(wid)
-                && inboxMember(d.memberUid)
+                && inboxMember(d.memberUid) && !('onBehalfOf' in d.data)
                 && d.type in ['inbox.added', 'thread.filed', 'thread.note',
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.revised',
                   'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
@@ -1002,6 +1003,16 @@ service cloud.firestore {
                   'plan.sent_back', 'step.progress', 'step.external']));
         }
         allow update, delete: if false;
+        // On the member's word (packages/shared/src/decideword.ts): the thread's home agent, while
+        // he trusts it (agentTrust), records his decision at a plan's person step, or closes it.
+        function inboxOnWord(d) {
+          let t = get(inboxDoc('inboxThreads', d.threadId)).data;
+          return isActiveAgent(wid) && inboxMember(d.memberUid)
+            && d.type in ['outcome.approved', 'outcome.rejected', 'plan.rejected', 'plan.sent_back', 'thread.closed']
+            && t.fetchedBy == me() && t.memberUid == d.memberUid && d.data.onBehalfOf == d.memberUid
+            && me() in get(inboxDoc('agentTrust', d.memberUid)).data.agents
+            && d.data.via == 'terminal' && str(d.data.words, 1, 500);
+        }
       }
 
       // Messages: brought in by an agent, with their thread written in the same batch; immutable.
@@ -1074,7 +1085,7 @@ service cloud.firestore {
           && ((touched(['summary']) && isActiveAgent(wid)
               && inboxSummaryMirrored(request.resource.data, resource.data))
             || (isActiveAgent(wid) && inboxThreadAgent(request.resource.data, resource.data))
-            || (inboxOwner(resource.data) && inboxThreadOwner(request.resource.data, resource.data))
+            || (inboxDecider(resource.data) && inboxThreadOwner(request.resource.data, resource.data))
             || ((isActiveAgent(wid) || inboxOwner(resource.data))
               && touched(['title'])
               && str(request.resource.data.title, 1, 200)
@@ -1303,7 +1314,7 @@ service cloud.firestore {
           let e = inboxEv(d.lastEventId);
           return inboxDocTracked(d, ['outcome.approved', 'outcome.rejected', 'thread.ignored', 'thread.closed', 'thread.restored',
                    'plan.approved', 'plan.rejected', 'plan.edited', 'plan.retried', 'plan.skipped', 'plan.stopped',
-                   'plan.sent_back', 'step.external'], me(), tid)
+                   'plan.sent_back', 'step.external'], r.memberUid, tid)
             && (e.data.data.get('planId', null) != null
               // A plan decision: the thread follows the plan (stopped: back to the agent).
               ? getAfter(inboxPlanDoc(e.data.data.planId)).data.threadId == tid
@@ -1486,15 +1497,13 @@ service cloud.firestore {
             || (e.type == 'plan.sent_back' && r.state in ['done', 'running', 'failed'] && pa.cursor < p.cursor
               && (human ? touched(['state', 'decision']) && d.state == 'proposed' && d.decision == null
                 : touched(['state']) && d.state == 'approved'))
-            || (inboxOwner(r) && inboxPlanLive(p)
+            || (inboxDecider(r) && inboxPlanLive(p)
               && ((e.type == 'outcome.approved' && r.state in ['proposed', 'revising']
                   && touched(['state', 'fields', 'decision', 'revise'])
                   && d.get('revise', null) == null && inboxFieldsOk(r.type, d.fields)
                   && inboxStepDecision(d) && d.decision.reason == null
                   && d.decision.keys().hasOnly(['byUid', 'at', 'edited', 'reason', 'version', 'summaryVersion'])
-                  && (d.decision.get('version', null) == null
-                    || (d.decision.version is int && d.decision.version >= 1
-                      && d.decision.version <= r.get('versions', []).size()))
+                  && inboxVersionOk(d, r)
                   && (human
                     // A gate's approval may pin the summary version on screen (slice 6).
                     ? turn && r.state == 'proposed' && d.state == 'done' && pa.cursor == p.cursor + 1
@@ -1528,10 +1537,7 @@ service cloud.firestore {
                   && d.state == 'rejected' && pa.cursor == p.cursor + 1)))
             || (isActiveAgent(wid) && turn && p.state in ['proposed', 'active']
               && (e.type == 'outcome.failed' || r.state == 'running' || inboxOnFor(r))
-              && touched(['state', 'result']) && (exactKeys(d.result, ['text', 'permalink', 'itemId', 'error', 'by', 'at'])
-            && strOrNull(d.result.text, 20000) && strOrNull(d.result.permalink, 2048)
-            && strOrNull(d.result.itemId, 128) && strOrNull(d.result.error, 1000)
-            && d.result.by == me() && d.result.at == request.time)
+              && touched(['state', 'result']) && inboxResultOk(d.result)
               && ((e.type in ['outcome.done', 'outcome.failed', 'outcome.started'] && r.executor == me()
                   && (e.type == 'outcome.started'
                     ? r.state == 'approved' && d.state == 'running'
@@ -1603,9 +1609,7 @@ service cloud.firestore {
         // Approving also works while the agent revises (it ends the request: revise is cleared,
         // so the agent's late revision is refused), and names the version approved, if any.
         function inboxDecide(d, r, type) {
-          return type in ['outcome.approved', 'outcome.rejected']
-            && d.decision.keys().hasAll(['byUid', 'at', 'edited', 'reason'])
-            && d.decision.byUid == me() && d.decision.at == request.time
+          return type in ['outcome.approved', 'outcome.rejected'] && inboxStepDecision(d)
             && ((type == 'outcome.approved'
                 && r.state in ['proposed', 'revising']
                 && d.decision.keys().hasOnly(['byUid', 'at', 'edited', 'reason', 'version'])
@@ -1613,10 +1617,8 @@ service cloud.firestore {
                 && d.get('revise', null) == null
                 && inboxFieldsOk(r.type, d.fields)
                 && d.state == (r.type in outcomeImmediate() ? 'done' : 'approved')
-                && d.decision.edited is bool && d.decision.reason == null
-                && (d.decision.get('version', null) == null
-                  || (d.decision.version is int && d.decision.version >= 1
-                    && d.decision.version <= r.get('versions', []).size())))
+                && d.decision.reason == null
+                && inboxVersionOk(d, r))
               || (type == 'outcome.rejected'
                 && r.state == 'proposed'
                 && exactKeys(d.decision, ['byUid', 'at', 'edited', 'reason'])
@@ -1693,10 +1695,20 @@ service cloud.firestore {
           return r.state == 'approved' && r.executor == me() && (type == 'outcome.failed' || inboxOnFor(r))
             && touched(['state', 'result'])
             && ((type == 'outcome.done' && d.state == 'done') || (type == 'outcome.failed' && d.state == 'failed'))
-            && exactKeys(d.result, ['text', 'permalink', 'itemId', 'error', 'by', 'at'])
-            && strOrNull(d.result.text, 20000) && strOrNull(d.result.permalink, 2048)
-            && strOrNull(d.result.itemId, 128) && strOrNull(d.result.error, 1000)
-            && d.result.by == me() && d.result.at == request.time;
+            && inboxResultOk(d.result);
+        }
+        // What its executor reports: text, link, error (itemId: legacy, null), by it, now.
+        function inboxResultOk(x) {
+          return exactKeys(x, ['text', 'permalink', 'itemId', 'error', 'by', 'at'])
+            && strOrNull(x.text, 20000) && strOrNull(x.permalink, 2048)
+            && strOrNull(x.itemId, 128) && strOrNull(x.error, 1000)
+            && x.by == me() && x.at == request.time;
+        }
+        // An approval names the version on show, if any.
+        function inboxVersionOk(d, r) {
+          return d.decision.get('version', null) == null
+            || (d.decision.version is int && d.decision.version >= 1
+              && d.decision.version <= r.get('versions', []).size());
         }
       }
 
@@ -2001,6 +2013,17 @@ service cloud.firestore {
           && d.since == (off ? request.time : null)
           && d.updatedAt == request.time
           && inboxTracked(d.lastEventId, [off ? 'agents.off' : 'agents.on'], me());
+        }
+        allow delete: if false;
+      }
+      // May act on my word: the member's own list of agents that record his decisions (never an agent).
+      match /agentTrust/{uid} {
+        allow read: if (uid == me() && isMember(wid)) || isActiveAgent(wid);
+        allow create, update: if trustOk(request.resource.data);
+        function trustOk(d) {
+          return uid == me() && isMember(wid) && exactKeys(d, ['agents', 'updatedAt', 'lastEventId'])
+            && d.agents is list && d.agents.size() <= 20 && d.updatedAt == request.time
+            && inboxTracked(d.lastEventId, ['agents.trusted'], me());
         }
         allow delete: if false;
       }

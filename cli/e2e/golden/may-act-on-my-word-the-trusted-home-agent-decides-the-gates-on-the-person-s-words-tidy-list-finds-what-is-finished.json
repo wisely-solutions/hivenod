@@ -1,0 +1,1047 @@
+{
+  "calls": [
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "dw01",
+        "planId": "dwp",
+        "state": "done",
+        "threadId": "dw1",
+        "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "step_decide",
+      "ok": false,
+      "out": "João has not turned on “May act on my word” for you (Agents page in Hivenod), so you cannot decide for them: ask them to decide in Hivenod instead (step_ask or inbox_ask)."
+    },
+    {
+      "tool": "step_decide",
+      "ok": true,
+      "out": {
+        "decision": "approve",
+        "note": "Recorded as João’s decision via your terminal, with their words. Tell them what changed.",
+        "onBehalfOf": "owner",
+        "outcomeId": "dw02",
+        "step": "Approve idea",
+        "threadId": "dw1"
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "dw03",
+        "planId": "dwp",
+        "state": "done",
+        "threadId": "dw1",
+        "threadState": "waiting"
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "dw04",
+        "planId": "dwp",
+        "state": "done",
+        "threadId": "dw1",
+        "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "step_decide",
+      "ok": true,
+      "out": {
+        "decision": "changes",
+        "note": "Recorded as João’s decision via your terminal, with their words. Tell them what changed.",
+        "onBehalfOf": "owner",
+        "outcomeId": "dw05",
+        "step": "Ship it?",
+        "threadId": "dw1"
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "dw03",
+        "planId": "dwp",
+        "state": "done",
+        "threadId": "dw1",
+        "threadState": "waiting"
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "dw04",
+        "planId": "dwp",
+        "state": "done",
+        "threadId": "dw1",
+        "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "step_decide",
+      "ok": true,
+      "out": {
+        "decision": "approve",
+        "note": "Recorded as João’s decision via your terminal, with their words. Tell them what changed.",
+        "onBehalfOf": "owner",
+        "outcomeId": "dw05",
+        "step": "Ship it?",
+        "threadId": "dw1"
+      }
+    },
+    {
+      "tool": "outcome_done",
+      "ok": true,
+      "out": {
+        "note": "Reported as done: the plan moves to its next step (you get its carry_out once it is approved and its turn).",
+        "outcomeId": "dw06",
+        "planId": "dwp",
+        "state": "done",
+        "threadId": "dw1",
+        "threadState": "yourCall"
+      }
+    },
+    {
+      "tool": "plan_propose",
+      "ok": true,
+      "out": {
+        "note": "Plan proposed. The person approves the whole plan or step by step; each step is carried out only once it is approved and the steps before it are done (you get a carry_out per step). An approval step waits for the person.",
+        "planId": "<id>",
+        "state": "proposed",
+        "stepIds": [
+          "<id>"
+        ],
+        "steps": [
+          {
+            "kind": "human",
+            "outcomeId": "<id>",
+            "step": 1,
+            "type": "approval"
+          }
+        ],
+        "threadId": "dw2"
+      }
+    },
+    {
+      "tool": "plan_propose",
+      "ok": true,
+      "out": {
+        "note": "Plan proposed. The person approves the whole plan or step by step; each step is carried out only once it is approved and the steps before it are done (you get a carry_out per step). An approval step waits for the person.",
+        "planId": "<id>",
+        "state": "proposed",
+        "stepIds": [
+          "<id>"
+        ],
+        "steps": [
+          {
+            "kind": "human",
+            "outcomeId": "<id>",
+            "step": 1,
+            "type": "approval"
+          }
+        ],
+        "threadId": "dw2"
+      }
+    },
+    {
+      "tool": "tidy_list",
+      "ok": true,
+      "out": {
+        "candidates": [
+          {
+            "decision": "accept",
+            "kind": "accept",
+            "member": "João",
+            "outcomeId": "dw07",
+            "planId": "dwp",
+            "since": "<iso>",
+            "step": "Accept on live",
+            "threadId": "dw1",
+            "title": "Dark mode",
+            "why": "Released and live-checked, waiting at Accept on live: accept it once the person says it works live."
+          },
+          {
+            "decision": "reject",
+            "kind": "replaced",
+            "member": "João",
+            "outcomeId": "<id>",
+            "planId": "<id>",
+            "threadId": "dw2",
+            "title": "Old idea",
+            "why": "A proposed plan a newer plan replaced: reject it."
+          }
+        ],
+        "note": "Show the person this list. Only on their own words typed in this session: step_decide each one they OK (its decision and outcomeId), re-summarize the stale ones yourself, then report what changed."
+      }
+    },
+    {
+      "tool": "step_decide",
+      "ok": true,
+      "out": {
+        "decision": "accept",
+        "note": "Recorded as João’s decision via your terminal, with their words. Tell them what changed.",
+        "onBehalfOf": "owner",
+        "outcomeId": "dw07",
+        "step": "Accept on live",
+        "threadId": "dw1"
+      }
+    },
+    {
+      "tool": "step_decide",
+      "ok": true,
+      "out": {
+        "decision": "reject",
+        "note": "Recorded as João’s decision via your terminal, with their words. Tell them what changed.",
+        "onBehalfOf": "owner",
+        "outcomeId": "<id>",
+        "step": "Go?",
+        "threadId": "dw2"
+      }
+    },
+    {
+      "tool": "tidy_list",
+      "ok": true,
+      "out": {
+        "candidates": [],
+        "note": "Show the person this list. Only on their own words typed in this session: step_decide each one they OK (its decision and outcomeId), re-summarize the stale ones yourself, then report what changed."
+      }
+    },
+    {
+      "tool": "step_decide",
+      "ok": false,
+      "out": "This thread is closed already."
+    },
+    {
+      "tool": "step_decide",
+      "ok": false,
+      "out": "Quote the person’s words (words): what they typed in this session."
+    },
+    {
+      "tool": "step_decide",
+      "ok": false,
+      "out": "João has not turned on “May act on my word” for you (Agents page in Hivenod), so you cannot decide for them: ask them to decide in Hivenod instead (step_ask or inbox_ask)."
+    }
+  ],
+  "docs": {
+    "workspaces/w1/agents": [
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": "<ts>",
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": "*",
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Agent",
+        "previousAgentUid": null,
+        "projectIds": [
+          "p1"
+        ],
+        "revokedAt": null,
+        "tokenHint": "a7f3"
+      },
+      {
+        "color": "#2F5FD0",
+        "createdAt": "<ts>",
+        "createdBy": "owner",
+        "lastEventId": "seed",
+        "lastSeenAt": null,
+        "name": "Research agent",
+        "previousAgentUid": null,
+        "revokedAt": null,
+        "tokenHint": "wIn0"
+      }
+    ],
+    "workspaces/w1/events": [
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": "p1",
+        "runId": null,
+        "type": "project.created"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {},
+        "itemId": null,
+        "projectId": null,
+        "runId": null,
+        "type": "workspace.created"
+      }
+    ],
+    "workspaces/w1/inboxThreads": [
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "dw1"
+        ],
+        "state": "done",
+        "subjectId": null,
+        "title": "Dark mode",
+        "updatedAt": "<ts>",
+        "waiting": null
+      },
+      {
+        "createdAt": "<ts>",
+        "fetchedBy": "<agent>",
+        "lastEventId": "<id>",
+        "lastMessageAt": "<ts>",
+        "memberUid": "owner",
+        "question": null,
+        "refs": [
+          "dw2"
+        ],
+        "state": "investigating",
+        "subjectId": null,
+        "title": "Old idea",
+        "updatedAt": "<ts>",
+        "waiting": null
+      }
+    ],
+    "workspaces/w1/inboxMessages": [
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "owner",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "<id>",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": null,
+          "name": "Owner"
+        },
+        "source": "hivenod",
+        "text": "Add a dark mode to the board.",
+        "threadId": "dw1",
+        "threadRef": "dw1"
+      },
+      {
+        "attachments": [],
+        "createdAt": "<ts>",
+        "direction": "in",
+        "fetchedBy": "owner",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "messageId": "<id>",
+        "permalink": null,
+        "receivedAt": "<ts>",
+        "replyRef": null,
+        "sender": {
+          "handle": null,
+          "name": "Owner"
+        },
+        "source": "hivenod",
+        "text": "Two plans for this.",
+        "threadId": "dw2",
+        "threadRef": "dw2"
+      }
+    ],
+    "workspaces/w1/inboxOutcomes": [
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {
+          "idea": "Add a dark mode to the board."
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dwp",
+        "proposedBy": "owner",
+        "result": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "error": null,
+          "itemId": null,
+          "permalink": null,
+          "text": "Size S"
+        },
+        "state": "done",
+        "threadId": "dw1",
+        "type": "shape",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {},
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dwp",
+        "proposedBy": "owner",
+        "result": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "error": null,
+          "itemId": null,
+          "permalink": null,
+          "text": "PR #9 updated"
+        },
+        "state": "done",
+        "threadId": "dw1",
+        "type": "build",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {},
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dwp",
+        "proposedBy": "owner",
+        "result": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "error": null,
+          "itemId": null,
+          "permalink": null,
+          "text": "Release 9 live"
+        },
+        "state": "done",
+        "threadId": "dw1",
+        "type": "release",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": "<agent>",
+        "fields": {},
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dwp",
+        "proposedBy": "owner",
+        "result": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "error": null,
+          "itemId": null,
+          "permalink": null,
+          "text": null
+        },
+        "state": "done",
+        "threadId": "dw1",
+        "type": "keepgreen",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": null,
+        "executor": null,
+        "fields": {
+          "what": "Go now?"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "<id>",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "proposed",
+        "threadId": "dw2",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "<agent>",
+          "edited": false,
+          "reason": "yes, tidy those up"
+        },
+        "executor": null,
+        "fields": {
+          "what": "Go?"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "<id>",
+        "proposedBy": "<agent>",
+        "result": null,
+        "state": "rejected",
+        "threadId": "dw2",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "<agent>",
+          "edited": false,
+          "reason": null
+        },
+        "executor": null,
+        "fields": {
+          "what": "Accept on live"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dwp",
+        "proposedBy": "owner",
+        "result": null,
+        "state": "done",
+        "threadId": "dw1",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "<agent>",
+          "edited": false,
+          "reason": null
+        },
+        "executor": null,
+        "fields": {
+          "what": "Approve idea"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dwp",
+        "proposedBy": "owner",
+        "result": null,
+        "state": "done",
+        "threadId": "dw1",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "decision": {
+          "at": "<ts>",
+          "byUid": "<agent>",
+          "edited": false,
+          "reason": null
+        },
+        "executor": null,
+        "fields": {
+          "what": "Ship it?"
+        },
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "planId": "dwp",
+        "proposedBy": "owner",
+        "result": null,
+        "state": "done",
+        "threadId": "dw1",
+        "type": "approval",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/inboxEvents": [
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "edited": false,
+          "memberName": "João",
+          "onBehalfOf": "owner",
+          "outcomeId": "dw02",
+          "planId": "dwp",
+          "recommended": null,
+          "stepLabel": "Approve idea",
+          "summaryVersion": null,
+          "templateId": "dev",
+          "type": "approval",
+          "via": "terminal",
+          "waitedMs": "<ms>",
+          "words": "approved"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "outcome.approved"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "edited": false,
+          "memberName": "João",
+          "onBehalfOf": "owner",
+          "outcomeId": "dw05",
+          "planId": "dwp",
+          "recommended": null,
+          "stepLabel": "Ship it?",
+          "summaryVersion": null,
+          "templateId": "dev",
+          "type": "approval",
+          "via": "terminal",
+          "waitedMs": "<ms>",
+          "words": "ship it"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "outcome.approved"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "edited": false,
+          "memberName": "João",
+          "onBehalfOf": "owner",
+          "outcomeId": "dw07",
+          "planId": "dwp",
+          "recommended": null,
+          "stepLabel": "Accept on live",
+          "summaryVersion": null,
+          "templateId": "dev",
+          "type": "approval",
+          "via": "terminal",
+          "waitedMs": "<ms>",
+          "words": "yes, tidy those up"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "outcome.approved"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "from": 4,
+          "memberName": "João",
+          "n": 1,
+          "onBehalfOf": "owner",
+          "outcomeId": "dw03",
+          "planId": "dwp",
+          "reason": "make the toggle bigger",
+          "recommended": null,
+          "reset": [
+            "dw03",
+            "dw04"
+          ],
+          "stepLabel": "Ship it?",
+          "summaryVersion": null,
+          "templateId": "dev",
+          "to": 2,
+          "toLabel": "Build",
+          "via": "terminal",
+          "waitedMs": "<ms>",
+          "words": "make the toggle bigger"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "plan.sent_back"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "dw01",
+          "permalink": null,
+          "planId": "dwp",
+          "type": "shape"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "dw03",
+          "permalink": null,
+          "planId": "dwp",
+          "type": "build"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "dw03",
+          "permalink": null,
+          "planId": "dwp",
+          "type": "build"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "dw04",
+          "permalink": null,
+          "planId": "dwp",
+          "type": "keepgreen"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "dw04",
+          "permalink": null,
+          "planId": "dwp",
+          "type": "keepgreen"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "itemId": null,
+          "outcomeId": "dw06",
+          "permalink": null,
+          "planId": "dwp",
+          "type": "release"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "outcome.done"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "memberName": "João",
+          "onBehalfOf": "owner",
+          "planId": "<id>",
+          "reason": "yes, tidy those up",
+          "recommended": null,
+          "rejected": [
+            "<id>"
+          ],
+          "stepLabel": "Approve plan",
+          "summaryVersion": null,
+          "templateId": null,
+          "via": "terminal",
+          "waitedMs": "<ms>",
+          "words": "yes, tidy those up"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw2",
+        "type": "plan.rejected"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "planId": "<id>",
+          "steps": [
+            "<id>"
+          ],
+          "types": [
+            "approval"
+          ]
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw2",
+        "type": "plan.proposed"
+      },
+      {
+        "actor": {
+          "id": "<agent>",
+          "name": "Research agent",
+          "type": "agent"
+        },
+        "at": "<ts>",
+        "data": {
+          "planId": "<id>",
+          "steps": [
+            "<id>"
+          ],
+          "types": [
+            "approval"
+          ]
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw2",
+        "type": "plan.proposed"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "agentUid": "<agent>",
+          "messageDocId": "<id>",
+          "planId": "dwp",
+          "steps": [
+            "dw01",
+            "dw02",
+            "dw03",
+            "dw04",
+            "dw05",
+            "dw06",
+            "dw07"
+          ],
+          "templateId": "dev"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw1",
+        "type": "thread.created"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "agentUid": "<agent>",
+          "messageDocId": "<id>"
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": "dw2",
+        "type": "thread.created"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "agentUid": "<agent>",
+          "on": false
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": null,
+        "type": "agents.trusted"
+      },
+      {
+        "actor": {
+          "id": "owner",
+          "name": "Owner",
+          "type": "human"
+        },
+        "at": "<ts>",
+        "data": {
+          "agentUid": "<agent>",
+          "on": true
+        },
+        "memberUid": "owner",
+        "subjectId": null,
+        "threadId": null,
+        "type": "agents.trusted"
+      }
+    ],
+    "workspaces/w1/inboxPlans": [
+      {
+        "createdAt": "<ts>",
+        "cursor": 0,
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "proposedBy": "<agent>",
+        "state": "proposed",
+        "steps": [
+          "<id>"
+        ],
+        "threadId": "dw2",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "cursor": 0,
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "proposedBy": "<agent>",
+        "state": "stopped",
+        "steps": [
+          "<id>"
+        ],
+        "threadId": "dw2",
+        "updatedAt": "<ts>"
+      },
+      {
+        "createdAt": "<ts>",
+        "cursor": 7,
+        "cursorAt": "<ts>",
+        "lastEventId": "<id>",
+        "memberUid": "owner",
+        "note": "",
+        "proposedBy": "owner",
+        "sendBackTo": {
+          "dw02": "dw01",
+          "dw05": "dw03",
+          "dw07": "dw03"
+        },
+        "sentBack": {
+          "at": "<ts>",
+          "by": "<agent>",
+          "n": 1,
+          "reason": "make the toggle bigger",
+          "to": "dw03"
+        },
+        "state": "done",
+        "steps": [
+          "dw01",
+          "dw02",
+          "dw03",
+          "dw04",
+          "dw05",
+          "dw06",
+          "dw07"
+        ],
+        "templateId": "dev",
+        "threadId": "dw1",
+        "updatedAt": "<ts>"
+      }
+    ],
+    "workspaces/w1/agentTrust": [
+      {
+        "agents": [],
+        "lastEventId": "<id>",
+        "updatedAt": "<ts>"
+      }
+    ]
+  }
+}

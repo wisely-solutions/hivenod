@@ -1,4 +1,4 @@
-import type { Agent, InboxEvent } from '@hive/shared';
+import { onWordOf, type Agent, type InboxEvent } from '@hive/shared';
 import { Link } from '@tanstack/react-router';
 import { motion } from 'motion/react';
 import { colorIndex } from '../agents/logic';
@@ -48,7 +48,12 @@ export function ThreadEventRow({
   const schedName = e.type === 'schedule.deleted' ? String(e.data.title ?? '') : scheduleTitle;
   const s = threadSentence(e, folded, e.type.startsWith('run.') && !e.threadId ? null : schedName);
   const group = groupOf(e);
-  const name = e.actor.name || (e.actor.type === 'agent' ? 'Agent' : 'Someone');
+  // Decided on the member's word in his agent's terminal: his decision, by his name.
+  const word = onWordOf(e.data);
+  const person = e.actor.type !== 'agent' || word !== null;
+  const name = word
+    ? word.memberName || 'You'
+    : e.actor.name || (e.actor.type === 'agent' ? 'Agent' : 'Someone');
   const scheduleLink = (
     <Link
       to="/schedules"
@@ -91,7 +96,7 @@ export function ThreadEventRow({
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5">
-          {e.actor.type === 'agent' ? (
+          {!person ? (
             <AgentAvatar
               name={name}
               color={agent ? colorIndex(agent.data.color, agent.id) : colorIndex('', e.actor.id)}

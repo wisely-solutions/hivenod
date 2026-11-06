@@ -1,11 +1,11 @@
-import type { Agent } from '@hive/shared';
+import { agentTrustSchema, decidePaths, setAgentTrust, type Agent } from '@hive/shared';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { Bot, KeyRound, MoreHorizontal, Pencil, Plus, ShieldOff, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useReady } from '../auth/context';
 import { PageHeader } from '../pages/Chrome';
 import { useShellData } from '../shell/data';
-import type { Row } from '../lib/live';
+import { useLiveDoc, type Row } from '../lib/live';
 import { AgentAvatar } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button, IconButton } from '../ui/button';
@@ -13,6 +13,7 @@ import { cn } from '../ui/cn';
 import { EmptyState, Skeleton } from '../ui/feedback';
 import { Icon } from '../ui/icon';
 import { ActionMenu } from '../ui/menu';
+import { Toggle } from '../ui/form';
 import { Dialog, useToast } from '../ui/overlay';
 import { revokeAgentFlow, rotateAgentFlow } from './flow';
 import { agentStatus, colorIndex, statusText } from './logic';
@@ -32,6 +33,28 @@ export function AgentsPage() {
   const { agents, loading, agentsKnown } = useShellData();
   const toast = useToast();
   const { isAdmin, workspaceId } = session;
+  // May act on my word: the member's own list of agents that record his decisions typed in
+  // their terminal (off by default; only he changes it).
+  const trustLive = useLiveDoc(decidePaths.trust(workspaceId, session.me.uid), agentTrustSchema);
+  const trust = trustLive.state === 'ready' ? trustLive.data : null;
+  const [trustBusy, setTrustBusy] = useState<string | null>(null);
+  async function setTrust(agent: Row<Agent>, on: boolean) {
+    const ctx = actionContext(workspaceId);
+    if (!ctx) return;
+    setTrustBusy(agent.id);
+    try {
+      await run(setAgentTrust(ctx, { agentUid: agent.id, on, current: trust }));
+      toast.push({
+        message: on
+          ? `${agent.data.name} may now record your decisions typed in its terminal.`
+          : `${agent.data.name} no longer acts on your word.`,
+      });
+    } catch {
+      toast.push({ message: 'Could not change it. Try again.' });
+    } finally {
+      setTrustBusy(null);
+    }
+  }
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -209,6 +232,19 @@ export function AgentsPage() {
                     ) : null}
                   </div>
                 </div>
+
+                {isRevoked ? null : (
+                  <div className="sm:w-72">
+                    <Toggle
+                      label="May act on my word"
+                      name={`May act on my word: ${a.data.name}`}
+                      description="Your “approved” typed in its terminal counts as your decision."
+                      checked={!!trust?.agents.includes(a.id)}
+                      disabled={trustLive.state === 'loading' || trustBusy === a.id}
+                      onCheckedChange={(v) => void setTrust(a, v)}
+                    />
+                  </div>
+                )}
 
                 <dl className="flex items-center gap-5 text-13 sm:justify-end">
                   <div>

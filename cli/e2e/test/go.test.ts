@@ -38,6 +38,7 @@ import {
   setSubjectLabel,
   type OutcomeStateOf,
   type ThreadStateOf,
+  setAgentTrust,
 } from '@hive/shared';
 import { toFirestoreValue } from '@hive/shared/firestore';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -184,6 +185,7 @@ async function snapshot(uid: string): Promise<Record<string, unknown[]>> {
       'inboxPlans',
       'inboxAttachments',
       'schedules',
+      'agentTrust',
     ])
       await read(`workspaces/${W}/${c}`);
     // Projects, items and runs were removed (slice 11): their old data is not the agent's.
@@ -1670,6 +1672,143 @@ d('Go CLI contract (MCP tools, emulators, rules, golden files)', () => {
       'approval',
       'release',
       'approval',
+    ]);
+    matchesGolden(r);
+  }, 120_000);
+
+  it('may act on my word: the trusted home agent decides the gates on the person’s words; tidy_list finds what is finished', async () => {
+    const r = await scenario(async (call, uid) => {
+      const owner = as('owner');
+      await put({
+        [paths.member(W, 'owner')]: {
+          name: 'João',
+          email: 'o@x.test',
+          photoURL: null,
+          color: 'c1',
+        },
+      });
+      await owner.run(
+        createMemberThread(owner.ctx, {
+          title: 'Dark mode',
+          text: 'Add a dark mode to the board.',
+          agentUid: uid,
+          template: 'dev',
+          threadId: 'dw1',
+          planId: 'dwp',
+          stepIds: ['dw01', 'dw02', 'dw03', 'dw04', 'dw05', 'dw06', 'dw07'],
+        }),
+      );
+      // A second thread with two proposed plans: the older one is replaced.
+      await owner.run(
+        createMemberThread(owner.ctx, {
+          title: 'Old idea',
+          text: 'Two plans for this.',
+          agentUid: uid,
+          threadId: 'dw2',
+        }),
+      );
+      await call('outcome_done', { outcomeId: 'dw01', status: 'done', result: { text: 'Size S' } });
+      // Not trusted yet: refused plainly.
+      await call('step_decide', { threadId: 'dw1', decision: 'approve', words: 'approved' });
+      await owner.run(setAgentTrust(owner.ctx, { agentUid: uid, on: true }));
+      await call('step_decide', { threadId: 'dw1', decision: 'approve', words: 'approved' });
+      await call('outcome_done', {
+        outcomeId: 'dw03',
+        status: 'done',
+        result: { text: 'PR #9 open' },
+      });
+      await call('outcome_done', { outcomeId: 'dw04', status: 'done' });
+      // Ship it? → changes, back to Build with the words; then approved.
+      await call('step_decide', {
+        threadId: 'dw1',
+        decision: 'changes',
+        words: 'make the toggle bigger',
+        toStep: 3,
+      });
+      await call('outcome_done', {
+        outcomeId: 'dw03',
+        status: 'done',
+        result: { text: 'PR #9 updated' },
+      });
+      await call('outcome_done', { outcomeId: 'dw04', status: 'done' });
+      await call('step_decide', {
+        threadId: 'dw1',
+        outcomeId: 'dw05',
+        decision: 'approve',
+        words: 'ship it',
+      });
+      await call('outcome_done', {
+        outcomeId: 'dw06',
+        status: 'done',
+        result: { text: 'Release 9 live' },
+      });
+      await call('plan_propose', {
+        threadId: 'dw2',
+        steps: [{ type: 'approval', fields: { what: 'Go?' } }],
+      });
+      await call('plan_propose', {
+        threadId: 'dw2',
+        steps: [{ type: 'approval', fields: { what: 'Go now?' } }],
+      });
+      const tidy = (await call('tidy_list', {})) as {
+        out: { candidates: { kind: string; outcomeId?: string; threadId: string }[] };
+      };
+      for (const c of tidy.out.candidates)
+        if (c.kind === 'accept' || c.kind === 'replaced')
+          await call('step_decide', {
+            threadId: c.threadId,
+            outcomeId: c.outcomeId,
+            decision: c.kind === 'accept' ? 'accept' : 'reject',
+            words: 'yes, tidy those up',
+          });
+      await call('tidy_list', {});
+      // Done already; another agent's or empty words: refused.
+      await call('step_decide', { threadId: 'dw1', decision: 'close', words: 'close it' });
+      await call('step_decide', { threadId: 'dw2', decision: 'close', words: ' ' });
+      // Revoked: refused again.
+      const cur = (await snap(`workspaces/${W}/agentTrust/owner`)) as { agents: string[] };
+      await owner.run(setAgentTrust(owner.ctx, { agentUid: uid, on: false, current: cur }));
+      await call('step_decide', { threadId: 'dw2', decision: 'close', words: 'close it' });
+    });
+    const oks = r.calls.map((c) => `${(c as { tool: string }).tool}:${(c as { ok: boolean }).ok}`);
+    expect(oks).toEqual([
+      'outcome_done:true',
+      'step_decide:false',
+      'step_decide:true',
+      'outcome_done:true',
+      'outcome_done:true',
+      'step_decide:true',
+      'outcome_done:true',
+      'outcome_done:true',
+      'step_decide:true',
+      'outcome_done:true',
+      'plan_propose:true',
+      'plan_propose:true',
+      'tidy_list:true',
+      'step_decide:true',
+      'step_decide:true',
+      'tidy_list:true',
+      'step_decide:false',
+      'step_decide:false',
+      'step_decide:false',
+    ]);
+    expect(JSON.stringify(r.calls[1])).toContain('May act on my word');
+    const kinds = (r.calls[12] as { out: { candidates: { kind: string }[] } }).out.candidates.map(
+      (c) => c.kind,
+    );
+    expect(kinds.sort()).toEqual(['accept', 'replaced']);
+    expect((r.calls[15] as { out: { candidates: unknown[] } }).out.candidates).toEqual([]);
+    const ev = (r.docs[`workspaces/${W}/inboxEvents`] ?? []) as {
+      type: string;
+      data: Record<string, unknown>;
+    }[];
+    const onWord = ev.filter((e) => e.data.via === 'terminal').map((e) => e.type);
+    expect(onWord.sort()).toEqual([
+      'outcome.approved',
+      'outcome.approved',
+      'outcome.approved',
+      'plan.rejected',
+      'plan.sent_back',
     ]);
     matchesGolden(r);
   }, 120_000);

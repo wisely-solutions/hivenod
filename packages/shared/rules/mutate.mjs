@@ -329,8 +329,8 @@ const MUTATIONS = [
     'inbox: people write agent events',
     [
       [
-        "'schedule.deleted', 'run.decided', 'agents.off', 'agents.on'])",
-        "'schedule.deleted', 'run.decided', 'agents.off', 'agents.on', 'outcome.done'])",
+        "'agents.off', 'agents.on', 'step.external',\n                  'agents.trusted'])",
+        "'agents.off', 'agents.on', 'step.external',\n                  'agents.trusted', 'outcome.done'])",
       ],
     ],
   ],
@@ -470,7 +470,7 @@ const MUTATIONS = [
   ['inbox: approve keeps the revise request', [["&& d.get('revise', null) == null\n", '\n']]],
   [
     'inbox: approve any version',
-    [["&& d.decision.version <= r.get('versions', []).size())))", ')))']],
+    [["\n              && d.decision.version <= r.get('versions', []).size());", ');']],
   ],
   ['inbox: member rewrites fields while asking', [["touched(['state', 'revise'])", 'true']]],
   [
@@ -875,8 +875,8 @@ const MUTATIONS = [
     'send back: an agent at a gate',
     [
       [
-        "&& (c.type in outcomeHuman() || r.state == 'blocked' ? inboxOwner(r)\n",
-        "&& (c.type in outcomeHuman() ? inboxOwner(r) || isActiveAgent(wid) : r.state == 'blocked' ? inboxOwner(r)\n",
+        "&& (c.type in outcomeHuman() || r.state == 'blocked' ? inboxDecider(r)\n",
+        "&& (c.type in outcomeHuman() ? inboxDecider(r) || isActiveAgent(wid) : r.state == 'blocked' ? inboxDecider(r)\n",
       ],
     ],
   ],
@@ -981,7 +981,7 @@ const MUTATIONS = [
   ],
   [
     'send back: a blocked plan by the agent',
-    [["|| r.state == 'blocked' ? inboxOwner(r)", '? inboxOwner(r)']],
+    [["|| r.state == 'blocked' ? inboxDecider(r)", '? inboxDecider(r)']],
   ],
   [
     'send back: a failed step stays failed',
@@ -1220,12 +1220,65 @@ const MUTATIONS = [
         "return (isMember(wid) || isActiveAgent(wid))\n          && exactKeys(d, ['all', 'agents', 'since'",
       ],
       [
-        "'plan.sent_back', 'step.progress']));",
-        "'plan.sent_back', 'step.progress', 'agents.on']));",
+        "'plan.sent_back', 'step.progress', 'step.external']));",
+        "'plan.sent_back', 'step.progress', 'step.external', 'agents.on']));",
       ],
     ],
   ],
   ['off: since in the past', [['\n          && d.since == (off ? request.time : null)', '']]],
+  // May act on my word (packages/shared/src/decideword.ts): the member's trusted home agent
+  // records his decision at a plan's person step; nothing else, nobody else.
+  [
+    'on word: trust not checked',
+    [["\n            && me() in get(inboxDoc('agentTrust', d.memberUid)).data.agents", '']],
+  ],
+  ['on word: any agent’s thread', [['&& t.fetchedBy == me()\n', '\n']]],
+  [
+    'on word: a member who left',
+    [['return isActiveAgent(wid) && inboxMember(d.memberUid)\n', 'return isActiveAgent(wid)\n']],
+  ],
+  ['on word: plain agent events borrow the say', [[" && !('onBehalfOf' in d.data)", '']]],
+  [
+    'on word: a member’s own event borrows another’s say',
+    [["&& d.memberUid == me() && !('onBehalfOf' in d.data)", '&& d.memberUid == me()']],
+  ],
+  ['on word: no words', [['&& str(d.data.words, 1, 500)', '']]],
+  ['on word: any channel', [["&& d.data.via == 'terminal'", '']]],
+  [
+    'on word: single proposals too',
+    [
+      [
+        '&& ((inboxOwner(resource.data)\n                && (inboxDecide(',
+        '&& ((inboxDecider(resource.data)\n                && (inboxDecide(',
+      ],
+    ],
+  ],
+  [
+    'on word: agents write the trust list',
+    [
+      [
+        "return uid == me() && isMember(wid) && exactKeys(d, ['agents', 'updatedAt'",
+        "return (isMember(wid) || isActiveAgent(wid)) && exactKeys(d, ['agents', 'updatedAt'",
+      ],
+      [
+        "'plan.sent_back', 'step.progress', 'step.external']));",
+        "'plan.sent_back', 'step.progress', 'step.external', 'agents.trusted']));",
+      ],
+      [
+        "inboxTracked(d.lastEventId, ['agents.trusted'], me())",
+        "inboxTracked(d.lastEventId, ['agents.trusted'], uid)",
+      ],
+    ],
+  ],
+  [
+    'on word: another member writes the trust list',
+    [
+      [
+        "return uid == me() && isMember(wid) && exactKeys(d, ['agents', 'updatedAt'",
+        "return isMember(wid) && exactKeys(d, ['agents', 'updatedAt'",
+      ],
+    ],
+  ],
 ];
 
 // A search text that no longer matches (the rules were refactored) would check nothing: it is
