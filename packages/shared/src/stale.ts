@@ -8,7 +8,8 @@
  * (an approved plan step), the agent's last "still good" (checkedAt). The flag only offers a
  * Re-check; nothing runs by itself.
  */
-import type { InboxOutcome, InboxThread } from './inbox';
+import { recheckPending, type InboxOutcome, type InboxThread } from './inbox';
+import { summaryFreshness } from './summary';
 
 export const STALE_AFTER_MS = 24 * 3_600_000;
 export type StaleReason = 'slot' | 'message' | 'old';
@@ -56,4 +57,36 @@ export function staleText(reason: StaleReason, o: StaleOutcomeOf, nowMs: number)
   if (reason === 'message') return 'A newer message came in';
   const days = Math.max(1, Math.floor((nowMs - freshAt(o)) / 86_400_000));
   return `${days} ${days === 1 ? 'day' : 'days'} old`;
+}
+
+// ---------- the summary may be out of date (one tap Re-check) ----------
+
+type OutOfDateThread = {
+  state: string;
+  updatedAt?: Ms;
+  summary?: { at?: Ms } | null;
+  recheck?: { state: 'pending' | 'done'; requestedAt?: Ms; at?: Ms } | null;
+};
+
+/**
+ * The summary is older than the thread's last change: the rule behind the "may be out of date"
+ * label. A re-check the agent answered after that change (still good, no new summary) counts as
+ * current: the agent looked and confirmed it.
+ */
+export function summaryOutOfDate(t: Omit<OutOfDateThread, 'state'>): boolean {
+  if (summaryFreshness(t) !== 'stale') return false;
+  const r = t.recheck;
+  return !(r?.state === 'done' && ms(r.at) >= ms(t.updatedAt));
+}
+
+/**
+ * A thread the "Re-check N" bar counts: in Your call or Waiting, its summary out of date, and no
+ * re-check already waiting for its agent.
+ */
+export function outOfDate(t: OutOfDateThread, nowMs: number): boolean {
+  return (
+    (t.state === 'yourCall' || t.state === 'waiting') &&
+    summaryOutOfDate(t) &&
+    !recheckPending({ recheck: t.recheck }, nowMs)
+  );
 }

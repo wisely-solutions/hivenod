@@ -1,6 +1,6 @@
 import type { InboxThread } from '@hive/shared';
 import { describe, expect, it } from 'vitest';
-import { recheckTargets, rowKey, rowStatus, waitingThreads } from './bulkRecheck';
+import { outOfDateThreads, recheckTargets, rowKey, rowStatus, waitingThreads } from './bulkRecheck';
 import type { ThreadRow } from './logic';
 
 const ts = (ms: number) => ({ toMillis: () => ms, seconds: ms / 1000, nanoseconds: 0 });
@@ -144,5 +144,28 @@ describe('rowStatus', () => {
       version: null,
       at: null,
     });
+  });
+});
+
+describe('outOfDateThreads (the Re-check N bar)', () => {
+  const stale = { summary: summary(1, NOW - 120 * MIN) };
+  it('takes the member own Your call and Waiting threads whose summary is older than the change', () => {
+    const rows = [
+      thread('a', { ...stale, state: 'yourCall', waiting: null }),
+      thread('b', stale),
+      thread('c', { summary: summary(1, NOW) }),
+      thread('d', { ...stale, state: 'needsYou', waiting: null }),
+      thread('e', { ...stale, memberUid: 'other' }),
+      thread('f'),
+    ];
+    expect(outOfDateThreads(rows, 'u', NOW).map((t) => t.id)).toEqual(['a', 'b']);
+  });
+  it('skips a thread already waiting on a re-check', () => {
+    const rows = [thread('a', { ...stale, recheck: pending(NOW - 5 * MIN) }), thread('b', stale)];
+    expect(outOfDateThreads(rows, 'u', NOW).map((t) => t.id)).toEqual(['b']);
+  });
+  it('drops the thread once the new summary arrives', () => {
+    const rows = [thread('a', { summary: summary(2, NOW) })];
+    expect(outOfDateThreads(rows, 'u', NOW)).toEqual([]);
   });
 });

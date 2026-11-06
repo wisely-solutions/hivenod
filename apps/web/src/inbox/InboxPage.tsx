@@ -14,6 +14,7 @@ import { BriefCard } from '../today/BriefCard';
 import { DecisionCard, type DecisionCardHandle } from '../today/DecisionCard';
 import { DecisionRow, DoneRow } from '../today/DecisionRow';
 import { TidyUps } from '../today/TidyUps';
+import { StaleRecheckBar } from '../threads/StaleRecheckBar';
 import { TodayRail } from '../today/TodayRail';
 import { OffBanner } from '../off/OffSwitch';
 import { useToday } from '../today/useToday';
@@ -145,6 +146,10 @@ export function InboxPage() {
   const cardRef = useRef<DecisionCardHandle>(null);
   const capture = useOptionalCapture();
   const today = useToday(all, list, tidy, now, done.length);
+  const threadsAllRows = useMemo(
+    () => all.inputs.flatMap((i) => i.threads.map((t) => ({ wid: i.wid, ...t }))),
+    [all.inputs],
+  );
   // Scheduled tasks (slice 6, design 9.3): runs that couldn't happen, Coming up, the banner.
   const wids = useMemo(() => all.orgs.map((o) => o.wid), [all.orgs]);
   const sched = useTodaySchedules(session.me.uid, wids);
@@ -510,6 +515,7 @@ export function InboxPage() {
         <div className="mt-4 empty:hidden">
           <OffBanner />
         </div>
+        {loading ? null : <StaleRecheckBar className="mt-4" threads={threadsAllRows} />}
         {/* The count for screen readers (and the old summary line's place). */}
         <p aria-live="polite" className="sr-only">
           {loading || total === 0 ? '\u00a0' : summaryLine}

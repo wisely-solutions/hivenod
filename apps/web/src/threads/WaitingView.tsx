@@ -7,23 +7,20 @@
  * until the summary moves to a new version, then "updated just now · vN". No polling: the rows
  * follow the Inbox list's thread listener.
  */
-import { requestRecheck, type ActionPlan } from '@hive/shared';
 import { Link } from '@tanstack/react-router';
 import { Check, Clock, Loader2, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNow } from '../activity/data';
-import { useReady } from '../auth/context';
 import { waitLabel } from '../inbox/logic';
-import { stash } from '../lib/pendingDecisions';
 import { Button } from '../ui/button';
 import { cn } from '../ui/cn';
 import { Icon } from '../ui/icon';
-import { useCountdown, useToast } from '../ui/overlay';
 import { UndoButton } from '../ui/UndoButton';
 import { recheckTargets, rowKey, rowStatus, type RowStatus } from './bulkRecheck';
 import { summaryLine } from './decision';
 import type { ThreadRow } from './logic';
-import { errorText, StateChip } from './parts';
+import { StateChip } from './parts';
+import { useBulkRecheck } from './useBulkRecheck';
 
 const BULK_KEY = 'rk:bulk';
 
@@ -38,13 +35,11 @@ export function WaitingView({
   /** The organization's name and colour, when the list spans several. */
   org: (wid: string) => { name: string; color: string } | null;
 }) {
-  const { session, actionContext, run } = useReady();
-  const toast = useToast();
-  const counting = useCountdown(BULK_KEY);
   // A local clock only (no reads): "re-checking…" lapses after the agent answered.
   const now = useNow(30_000);
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
-  const [error, setError] = useState<string | null>(null);
+  const bulk = useBulkRecheck(BULK_KEY, () => setPicked(new Set()));
+  const { counting, error } = bulk;
   const keys = useMemo(() => new Set(threads.map(rowKey)), [threads]);
   // A thread that left the view drops out of the selection.
   const selected = useMemo(() => new Set([...picked].filter((k) => keys.has(k))), [picked, keys]);
@@ -60,57 +55,7 @@ export function WaitingView({
     });
   }
 
-  function recheck(targets: ThreadRow[], tag: 'selected' | 'all') {
-    if (!targets.length || counting) return;
-    setError(null);
-    const plans: Array<{ wid: string; plan: ActionPlan }> = [];
-    for (const t of targets) {
-      const ctx = actionContext(t.wid);
-      if (!ctx) continue;
-      try {
-        plans.push({
-          wid: t.wid,
-          plan: requestRecheck(ctx, { threadId: t.id, thread: { ...t.data }, nowMs: now }),
-        });
-      } catch {
-        /* moved on since (no longer waiting, or already asked): skipped */
-      }
-    }
-    if (!plans.length) return;
-    // Kept across a reload until written, one entry per organization.
-    const forgets = [...new Set(plans.map((p) => p.wid))].map((wid) =>
-      stash(
-        session.me.uid,
-        wid,
-        plans.filter((p) => p.wid === wid).map((p) => p.plan.ops),
-        'Saved: Re-check asked',
-      ),
-    );
-    const forget = () => forgets.forEach((f) => f());
-    const n = plans.length;
-    toast.push({
-      message: `Re-check asked for ${n} thread${n === 1 ? '' : 's'}`,
-      duration: 5000,
-      countdown: {
-        key: BULK_KEY,
-        tag,
-        announce: `Re-check asked for ${n} thread${n === 1 ? '' : 's'}. Undo available for 5 seconds`,
-      },
-      onUndo: forget,
-      onCommit: () => {
-        setPicked(new Set());
-        // One write per thread: a refused one does not hold up the others.
-        void Promise.allSettled(plans.map((p) => run(p.plan))).then((res) => {
-          forget();
-          const failed = res.filter((r) => r.status === 'rejected');
-          if (failed.length)
-            setError(
-              `${failed.length} of ${n} could not be asked: ${errorText((failed[0] as PromiseRejectedResult).reason)}`,
-            );
-        });
-      },
-    });
-  }
+  const recheck = (targets: ThreadRow[], tag: 'selected' | 'all') => bulk.start(targets, tag, now);
 
   if (!threads.length)
     return (
@@ -250,7 +195,7 @@ export function WaitingView({
 }
 
 /** "re-checking…", "updated just now · v4", "checked 5 min ago · still good", "updated 2 d ago". */
-function StatusText({ status, now }: { status: RowStatus; now: number }) {
+export function StatusText({ status, now }: { status: RowStatus; now: number }) {
   const ago = (at: number) => {
     const l = waitLabel(at, now);
     return l === 'just now' ? l : `${l} ago`;

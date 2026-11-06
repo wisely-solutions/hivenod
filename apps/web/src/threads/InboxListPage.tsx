@@ -44,8 +44,10 @@ import { summaryLine } from './decision';
 import { LabelChip } from './labels';
 import { StateChip, UrgentMark } from './parts';
 import { NewThreadDialog } from './NewThread';
-import { waitingThreads } from './bulkRecheck';
-import { WaitingView } from './WaitingView';
+import { useNow } from '../activity/data';
+import { rowStatus, waitingThreads, type RowStatus } from './bulkRecheck';
+import { StaleRecheckBar } from './StaleRecheckBar';
+import { StatusText, WaitingView } from './WaitingView';
 
 const DAYS = [
   { value: '0', label: 'Any time' },
@@ -132,6 +134,7 @@ export function InboxListPage() {
   const messages = useMyMessages(uid, wids, finding);
   const relations = useMyRelations(uid, wids, finding);
   const [now] = useState(() => Date.now());
+  const clock = useNow(30_000);
   const rows = useMemo(() => subjectRows(inbox.subjects, inbox.threads), [inbox]);
   const found = useMemo(
     () =>
@@ -331,6 +334,7 @@ export function InboxListPage() {
       uid={uid}
       ask={askOf(r)}
       now={now}
+      clock={clock}
     />
   );
   const section = (key: string, title: string, list: SubjectRow[]) =>
@@ -389,6 +393,7 @@ export function InboxListPage() {
           { value: 'waiting', label: 'Waiting', count: waitingOn.length },
         ]}
       />
+      {view === 'waiting' ? null : <StaleRecheckBar className="mb-3" threads={inbox.threads} />}
       {view === 'waiting' ? null : (
         <div className="mb-4 flex items-end gap-2">
           <div className="min-w-0 flex-1">
@@ -521,6 +526,17 @@ export function InboxListPage() {
   );
 }
 
+/** "re-checking…" while a thread of the subject waits for its re-check, "updated just now · vN" after. */
+function recheckLine(row: SubjectRow, nowMs: number): RowStatus | null {
+  let updated: RowStatus | null = null;
+  for (const t of row.threads) {
+    const st = rowStatus(t.data, nowMs);
+    if (st.kind === 'rechecking') return st;
+    if (st.kind === 'updated' && nowMs - st.at < 10 * 60_000) updated = st;
+  }
+  return updated;
+}
+
 function FilterChip({
   pressed,
   onClick,
@@ -560,13 +576,18 @@ function SubjectItem({
   uid,
   ask,
   now,
+  clock,
 }: {
   row: SubjectRow;
   org: { name: string; color: string } | null;
   uid: string;
   ask: { text: string; summary: boolean };
   now: number;
+  /** A live clock (ticks every 30 s) for the re-check line. */
+  clock: number;
 }) {
+  // A Re-check in flight, or just answered with a new summary (the row follows the listener).
+  const recheck = recheckLine(row, clock);
   // Waiting on the agent (an approved step it has yet to carry out) is the agent working.
   const working = row.threads.some((t) => agentsTurn(t.data));
   const waitingOn = row.threads.some((t) => t.data.state === 'waiting');
@@ -633,6 +654,11 @@ function SubjectItem({
           >
             {ask.text}
           </p>
+        ) : null}
+        {recheck ? (
+          <div data-recheck-line="" className="mt-0.5">
+            <StatusText status={recheck} now={clock} />
+          </div>
         ) : null}
       </div>
       <div className="relative z-[1] flex shrink-0 items-center gap-1.5 empty:hidden max-sm:order-last max-sm:basis-full max-sm:flex-wrap">
