@@ -4,7 +4,7 @@
  * what each row says about it. Each thread gets the existing Re-check (requestRecheck), one write
  * per thread; nothing polls: the rows follow the Inbox list's own thread listener.
  */
-import { recheckPending, type InboxThread, type RecheckResult } from '@hive/shared';
+import { outOfDate, recheckPending, type InboxThread, type RecheckResult } from '@hive/shared';
 import type { ThreadRow } from './logic';
 
 /** After the agent answers, how long a row waits for the new summary before it says "checked". */
@@ -64,4 +64,17 @@ export function rowStatus(t: Pick<InboxThread, 'recheck' | 'summary'>, nowMs: nu
   return s
     ? { kind: 'idle', version: s.version, at: s.at.toMillis() }
     : { kind: 'idle', version: null, at: null };
+}
+
+/**
+ * The threads the "N summaries may be out of date" bar counts and re-checks: the member's own
+ * threads in Your call or Waiting whose summary is older than their last change, none whose
+ * re-check still waits for its agent (outOfDate, one rule with the "may be out of date" label).
+ */
+export function outOfDateThreads(
+  threads: readonly ThreadRow[],
+  uid: string,
+  nowMs: number,
+): ThreadRow[] {
+  return threads.filter((t) => t.data.memberUid === uid && outOfDate(t.data, nowMs));
 }

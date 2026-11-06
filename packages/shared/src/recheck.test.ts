@@ -16,7 +16,14 @@ import {
   type PlanInput,
   type ThreadStateOf,
 } from './inbox';
-import { freshAt, staleReason, staleText, STALE_AFTER_MS } from './stale';
+import {
+  freshAt,
+  outOfDate,
+  staleReason,
+  staleText,
+  summaryOutOfDate,
+  STALE_AFTER_MS,
+} from './stale';
 
 const agent: ActionContext = {
   workspaceId: 'w1',
@@ -272,5 +279,34 @@ describe('staleReason', () => {
     expect(staleReason({ ...old, updatedAt: at(NOW - 1000) }, thread, NOW)).toBe('message');
     expect(staleReason({ ...old, state: 'done' }, thread, NOW)).toBeNull();
     expect(freshAt({ ...old, state: 'approved', decision: { at: at(NOW - 10) } })).toBe(NOW - 10);
+  });
+});
+
+describe('outOfDate (Re-check N bar)', () => {
+  const base = {
+    state: 'yourCall',
+    updatedAt: at(NOW),
+    summary: { at: at(NOW - 1000) },
+  };
+  it('counts a Your call or Waiting thread whose summary is older than its last change', () => {
+    expect(outOfDate(base, NOW)).toBe(true);
+    expect(outOfDate({ ...base, state: 'waiting' }, NOW)).toBe(true);
+  });
+  it('skips fresh, unsummarized and other states', () => {
+    expect(outOfDate({ ...base, summary: { at: at(NOW) } }, NOW)).toBe(false);
+    expect(outOfDate({ ...base, summary: null }, NOW)).toBe(false);
+    for (const state of ['needsYou', 'investigating', 'done', 'closed'])
+      expect(outOfDate({ ...base, state }, NOW)).toBe(false);
+  });
+  it('skips a thread whose re-check still waits for its agent, until the retry window passes', () => {
+    const recheck = { state: 'pending' as const, requestedAt: at(NOW) };
+    expect(outOfDate({ ...base, recheck }, NOW + 1000)).toBe(false);
+    expect(outOfDate({ ...base, recheck }, NOW + RECHECK_RETRY_MS)).toBe(true);
+  });
+  it('treats an answered re-check after the last change as current; the label follows', () => {
+    const recheck = { state: 'done' as const, requestedAt: at(NOW), at: at(NOW + 5) };
+    expect(outOfDate({ ...base, recheck }, NOW + 10)).toBe(false);
+    expect(summaryOutOfDate({ ...base, recheck })).toBe(false);
+    expect(summaryOutOfDate(base)).toBe(true);
   });
 });

@@ -94,6 +94,8 @@ import { TheirReplyCard } from './TheirReplyCard';
 import { usePlanActions } from '../threads/usePlanActions';
 import { askOf } from '../needs/logic';
 import { NotNowButton, useNotNow } from '../threads/NotNow';
+import { summaryOutOfDate } from '@hive/shared';
+import { rowStatus } from '../threads/bulkRecheck';
 import { summaryLine } from '../threads/decision';
 import { timeAgo } from '../agents/logic';
 import { errorText } from '../threads/parts';
@@ -461,7 +463,9 @@ function SummaryTop({ props }: { props: DecisionCardProps }) {
   const s = t.summary;
   const line = summaryLine(t);
   if (!s || !line) return null;
-  const stale = s.at.toMillis() < t.updatedAt.toMillis();
+  const stale = summaryOutOfDate(t);
+  // The re-check asked for it: until the new summary arrives the row says so (and the label goes).
+  const status = rowStatus(t, props.now);
   const agent = props.agentName(t.fetchedBy);
   return (
     <div data-summary-top="" className="mt-1">
@@ -480,7 +484,11 @@ function SummaryTop({ props }: { props: DecisionCardProps }) {
         ) : null}
         {s.confidence ? `confidence ${s.confidence} · ` : null}
         <span data-updated="">updated {timeAgo(new Date(s.at.toMillis()), props.now)}</span>
-        {stale ? (
+        {status.kind === 'rechecking' ? (
+          <span data-row-status="rechecking" role="status" className="font-medium text-agent">
+            {' · re-checking…'}
+          </span>
+        ) : stale ? (
           <span data-summary-stale="" className="font-medium text-gate-text">
             {' · may be out of date'}
           </span>
