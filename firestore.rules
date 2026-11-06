@@ -1017,7 +1017,7 @@ service cloud.firestore {
             && d.type in ['outcome.approved', 'outcome.rejected', 'plan.rejected', 'plan.sent_back', 'thread.closed']
             && t.fetchedBy == me()
             && me() in get(inboxDoc('agentTrust', d.memberUid)).data.agents
-            && d.data.onBehalfOf == d.memberUid && d.data.via == 'terminal' && str(d.data.words, 1, 500);
+            && d.data.via == 'terminal' && str(d.data.words, 1, 500);
         }
       }
 

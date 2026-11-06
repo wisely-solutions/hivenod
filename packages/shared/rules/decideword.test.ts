@@ -152,8 +152,17 @@ describe('May act on my word: the setting', () => {
         ),
       ),
     );
-    // Bob cannot write Alice's list.
+    // Bob cannot write Alice's list: neither her batch nor his own aimed at her doc.
     await denied(as('bob').run(p));
+    const bob = as('bob');
+    const his = setAgentTrust(bob.ctx, { agentUid: AGENTS.a, on: true });
+    await denied(
+      bob.run(
+        his.ops.map((op) =>
+          op.path === decidePaths.trust(W, 'bob') ? { ...op, path: decidePaths.trust(W, 'alice') } : op,
+        ),
+      ),
+    );
     // Alice's list holds only lists; no other keys.
     await denied(
       alice.run(

@@ -8,6 +8,7 @@ package actions
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/wisely-solutions/hivenod/cli/internal/model"
 	"github.com/wisely-solutions/hivenod/cli/internal/plan"
@@ -31,6 +32,11 @@ type PlanState struct {
 	SentBack   *struct {
 		N int `json:"n"`
 	} `json:"sentBack,omitempty"`
+	// What a person's decision records (decisionFacts): when the cursor reached the step (older
+	// plans: createdAt) and the template.
+	CursorAt   *time.Time `json:"cursorAt,omitempty"`
+	CreatedAt  *time.Time `json:"createdAt,omitempty"`
+	TemplateID *string    `json:"templateId,omitempty"`
 }
 
 // PlanInput is a plan with its steps' outcomes (by id), as the plan actions take it.
@@ -46,7 +52,12 @@ func PlanStateFrom(p model.InboxPlan) PlanState {
 	if steps == nil {
 		steps = []string{}
 	}
-	ps := PlanState{MemberUID: p.MemberUID, ThreadID: p.ThreadID, Steps: steps, Cursor: p.Cursor, State: p.State, SendBackTo: p.SendBackTo}
+	ps := PlanState{MemberUID: p.MemberUID, ThreadID: p.ThreadID, Steps: steps, Cursor: p.Cursor, State: p.State, SendBackTo: p.SendBackTo,
+		CursorAt: p.CursorAt, TemplateID: p.TemplateID}
+	if !p.CreatedAt.IsZero() {
+		c := p.CreatedAt
+		ps.CreatedAt = &c
+	}
 	if p.SentBack != nil {
 		ps.SentBack = &struct {
 			N int `json:"n"`

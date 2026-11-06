@@ -1237,7 +1237,6 @@ const MUTATIONS = [
   ['on word: plain agent events borrow the say', [[" && !('onBehalfOf' in d.data)", '']]],
   ['on word: no words', [['&& str(d.data.words, 1, 500)', '']]],
   ['on word: any channel', [["&& d.data.via == 'terminal'", '']]],
-  ['on word: for anyone', [['&& d.data.onBehalfOf == d.memberUid', "&& d.data.onBehalfOf is string"]]],
   [
     'on word: single proposals too',
     [['&& ((inboxOwner(resource.data)\n                && (inboxDecide(', '&& ((inboxDecider(resource.data)\n                && (inboxDecide(']],

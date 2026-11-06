@@ -185,7 +185,7 @@ function onWord(
     if (sb && sb.by === w.onBehalfOf) d.sentBack = { ...sb, by: me };
     return { ...op, data: d } as WriteOp;
   });
-  return { ...p, ops };
+  return { eventId: p.eventId, ops };
 }
 
 /** The data of an event recorded on the member's word, or null. */

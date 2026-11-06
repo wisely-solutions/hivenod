@@ -66,6 +66,8 @@ func pure[I any](f func(I) (any, error)) runner {
 }
 
 var runners = map[string]runner{
+	// May act on my word (decideword.go)
+	"decideOnWord": act(DecideOnWord),
 	// Inbox (item 4PEHrOW5IfXBQWgOK9wo)
 	"addInboxMessage":   act(AddInboxMessage),
 	"assignSubject":     act(AssignSubject),
