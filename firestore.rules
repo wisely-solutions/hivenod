@@ -613,6 +613,11 @@ service cloud.firestore {
       function inboxReader(d) { return inboxOwner(d) || isActiveAgent(wid); }
       function inboxEv(eid) { return getAfter(inboxDoc('inboxEvents', eid)); }
       function inboxEvOf(d) { return inboxEv(d.lastEventId).data; }
+      // Who decides: the member, or his trusted home agent on his word (an event inboxOnWord let
+      // through: only that branch writes onBehalfOf).
+      function inboxDecider(r) {
+        return inboxOwner(r) || inboxEvOf(request.resource.data).data.get('onBehalfOf', '') == r.memberUid;
+      }
       // The inbox event `eid` is written in this batch by me, now, with one of `types`, for `member`.
       function inboxTracked(eid, types, member) {
         let e = inboxEv(eid);
@@ -894,7 +899,7 @@ service cloud.firestore {
           let o = e.data.get('outcomeId', null) == null ? null
             : getAfter(inboxDoc('inboxOutcomes', e.data.outcomeId)).data;
           let atCursor = o != null && inboxAtCursor(r, e.data.outcomeId) && o.planId == pid;
-          return (inboxOwner(r)
+          return (inboxDecider(r)
               && ((e.type == 'outcome.approved' && r.state in ['proposed', 'active'] && atCursor
                   && o.type in outcomeHuman() && o.state == 'done' && next)
                 || (e.type == 'outcome.rejected' && inboxPlanLive(r) && atCursor
@@ -937,7 +942,7 @@ service cloud.firestore {
             && d.sentBack.to == e.outcomeId && d.sentBack.reason == e.reason && str(e.reason, 1, 1000)
             && d.sentBack.by == me() && d.sentBack.at == request.time
             && c.state == (c.type in outcomeHuman() ? 'proposed' : 'approved')
-            && (c.type in outcomeHuman() || r.state == 'blocked' ? inboxOwner(r)
+            && (c.type in outcomeHuman() || r.state == 'blocked' ? inboxDecider(r)
               : isActiveAgent(wid) && c.executor == me());
         }
         // Edit plan: move, remove or add one step, never before `first`; the steps before it
@@ -991,9 +996,11 @@ service cloud.firestore {
                   'plan.retried', 'plan.skipped', 'plan.stopped', 'thread.recheck_requested',
                   'thread.instructed', 'thread.not_now', 'thread.created', 'plan.sent_back',
                   'schedule.created', 'schedule.updated', 'schedule.paused', 'schedule.resumed',
-                  'schedule.ended', 'schedule.deleted', 'run.decided', 'agents.off', 'agents.on', 'step.external'])
+                  'schedule.ended', 'schedule.deleted', 'run.decided', 'agents.off', 'agents.on', 'step.external',
+                  'agents.trusted'])
+            || (d.actor.type == 'agent' && inboxOnWord(d))
             || (d.actor.type == 'agent' && isActiveAgent(wid)
-                && inboxMember(d.memberUid)
+                && inboxMember(d.memberUid) && !('onBehalfOf' in d.data)
                 && d.type in ['inbox.added', 'thread.filed', 'thread.note',
                   'thread.asked', 'thread.woke', 'thread.titled', 'outcome.proposed', 'outcome.revised',
                   'outcome.done', 'outcome.failed', 'relation.proposed', 'thread.flagged', 'thread.due',
@@ -1002,6 +1009,16 @@ service cloud.firestore {
                   'plan.sent_back', 'step.progress', 'step.external']));
         }
         allow update, delete: if false;
+        // On the member's word (packages/shared/src/decideword.ts): the thread's home agent, while
+        // he trusts it (agentTrust), records his decision at a plan's person step, or closes it.
+        function inboxOnWord(d) {
+          let t = get(inboxDoc('inboxThreads', d.threadId)).data;
+          return isActiveAgent(wid) && inboxMember(d.memberUid)
+            && d.type in ['outcome.approved', 'outcome.rejected', 'plan.rejected', 'plan.sent_back', 'thread.closed']
+            && t.fetchedBy == me()
+            && me() in get(inboxDoc('agentTrust', d.memberUid)).data.agents
+            && d.data.onBehalfOf == d.memberUid && d.data.via == 'terminal' && str(d.data.words, 1, 500);
+        }
       }
 
       // Messages: brought in by an agent, with their thread written in the same batch; immutable.
@@ -1074,7 +1091,7 @@ service cloud.firestore {
           && ((touched(['summary']) && isActiveAgent(wid)
               && inboxSummaryMirrored(request.resource.data, resource.data))
             || (isActiveAgent(wid) && inboxThreadAgent(request.resource.data, resource.data))
-            || (inboxOwner(resource.data) && inboxThreadOwner(request.resource.data, resource.data))
+            || (inboxDecider(resource.data) && inboxThreadOwner(request.resource.data, resource.data))
             || ((isActiveAgent(wid) || inboxOwner(resource.data))
               && touched(['title'])
               && str(request.resource.data.title, 1, 200)
@@ -1303,7 +1320,7 @@ service cloud.firestore {
           let e = inboxEv(d.lastEventId);
           return inboxDocTracked(d, ['outcome.approved', 'outcome.rejected', 'thread.ignored', 'thread.closed', 'thread.restored',
                    'plan.approved', 'plan.rejected', 'plan.edited', 'plan.retried', 'plan.skipped', 'plan.stopped',
-                   'plan.sent_back', 'step.external'], me(), tid)
+                   'plan.sent_back', 'step.external'], r.memberUid, tid)
             && (e.data.data.get('planId', null) != null
               // A plan decision: the thread follows the plan (stopped: back to the agent).
               ? getAfter(inboxPlanDoc(e.data.data.planId)).data.threadId == tid
@@ -1486,7 +1503,7 @@ service cloud.firestore {
             || (e.type == 'plan.sent_back' && r.state in ['done', 'running', 'failed'] && pa.cursor < p.cursor
               && (human ? touched(['state', 'decision']) && d.state == 'proposed' && d.decision == null
                 : touched(['state']) && d.state == 'approved'))
-            || (inboxOwner(r) && inboxPlanLive(p)
+            || (inboxDecider(r) && inboxPlanLive(p)
               && ((e.type == 'outcome.approved' && r.state in ['proposed', 'revising']
                   && touched(['state', 'fields', 'decision', 'revise'])
                   && d.get('revise', null) == null && inboxFieldsOk(r.type, d.fields)
@@ -2002,6 +2019,16 @@ service cloud.firestore {
           && d.updatedAt == request.time
           && inboxTracked(d.lastEventId, [off ? 'agents.off' : 'agents.on'], me());
         }
+        allow delete: if false;
+      }
+      // May act on my word: the member's own list of agents that record his decisions (never an agent).
+      match /agentTrust/{uid} {
+        allow read: if (uid == me() && isMember(wid)) || isActiveAgent(wid);
+        allow create, update: if uid == me() && isMember(wid)
+          && exactKeys(request.resource.data, ['agents', 'updatedAt', 'lastEventId'])
+          && request.resource.data.agents is list && request.resource.data.agents.size() <= 20
+          && request.resource.data.updatedAt == request.time
+          && inboxTracked(request.resource.data.lastEventId, ['agents.trusted'], me());
         allow delete: if false;
       }
     }
