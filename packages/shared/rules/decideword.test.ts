@@ -20,6 +20,8 @@ import {
   proposeOutcome,
   proposePlan,
   addInboxMessage,
+  answerQuestion,
+  askMember,
   type OutcomeStateOf,
   type PlanInput,
   type PlanOf,
@@ -428,5 +430,97 @@ describe('May act on my word: decisions', () => {
         outcomeId: 'dv3',
       }),
     ).toThrow(/person step/);
+  });
+});
+
+describe('May act on my word: the say is bound to the member, the agent and the thread', () => {
+  /** alice's single thread t8 (home agent agentA), with agentA's question waiting for her. */
+  async function question() {
+    const a = as(AGENTS.a);
+    await ok(
+      a.run(
+        addInboxMessage(a.ctx, {
+          messageDocId: 'm8',
+          ref: 'r8',
+          memberUid: 'alice',
+          source: 'mail',
+          sender: { name: 'Zoe' },
+          text: 'Which day?',
+          threadRef: 'z8',
+          messageId: 'z81',
+          receivedAt: new Date(),
+          newThreadId: 't8',
+        }),
+      ),
+    );
+    await ok(
+      a.run(
+        askMember(a.ctx, { threadId: 't8', thread: await thread('t8'), question: 'Which day?' }),
+      ),
+    );
+  }
+  const rewriteEvent = (
+    ops: WriteOp[],
+    f: (d: Record<string, unknown>) => Record<string, unknown>,
+  ) =>
+    ops.map((op) =>
+      op.path.includes('/inboxEvents/') && op.kind !== 'delete'
+        ? { ...op, data: f({ ...op.data! }) }
+        : op,
+    );
+
+  it('attack 1: another member’s own event cannot carry onBehalfOf for alice', async () => {
+    await question();
+    const alice = as('alice');
+    const mine = answerQuestion(alice.ctx, {
+      threadId: 't8',
+      thread: await thread('t8'),
+      answer: 'Friday',
+    });
+    const forged = rewriteEvent(mine.ops, (d) => ({
+      ...d,
+      actor: { type: 'human', id: 'bob', name: 'Bob' },
+      memberUid: 'bob',
+      data: { ...(d.data as object), onBehalfOf: 'alice' },
+    }));
+    await denied(as('bob').run(forged));
+    expect((await snap(T('t8'))).state).toBe('needsYou');
+    // A human event never carries onBehalfOf, not even her own.
+    await denied(
+      alice.run(
+        rewriteEvent(mine.ops, (d) => ({
+          ...d,
+          data: { ...(d.data as object), onBehalfOf: 'alice' },
+        })),
+      ),
+    );
+  });
+
+  it('attack 2: an agent trusted by bob cannot decide on alice’s thread for her', async () => {
+    await atApproveIdea();
+    await trust('bob', AGENTS.a);
+    const a = as(AGENTS.a);
+    const p = await decide(a, 'approve');
+    await denied(a.run(rewriteEvent(p.ops, (d) => ({ ...d, memberUid: 'bob' }))));
+    const c = decideOnWord(a.ctx, {
+      decision: 'close',
+      words: 'close it',
+      threadId: 'nt1',
+      thread: await thread(),
+      memberName: 'Alice',
+    });
+    await denied(a.run(rewriteEvent(c.ops, (d) => ({ ...d, memberUid: 'bob' }))));
+    expect((await snap(O('dv2'))).state).toBe('proposed');
+  });
+
+  it('attack 3: an on-word event for one thread cannot authorize a write on another', async () => {
+    await atApproveIdea();
+    await question();
+    await trust('alice', AGENTS.a);
+    const a = as(AGENTS.a);
+    const p = await decide(a, 'approve');
+    // The gate of nt1, written with an event that names t8 (alice's, agentA's, trusted).
+    await denied(a.run(rewriteEvent(p.ops, (d) => ({ ...d, threadId: 't8' }))));
+    expect((await snap(O('dv2'))).state).toBe('proposed');
   });
 });

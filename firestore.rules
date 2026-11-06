@@ -606,8 +606,10 @@ service cloud.firestore {
       function inboxReader(d) { return inboxOwner(d) || isActiveAgent(wid); }
       function inboxEv(eid) { return getAfter(inboxDoc('inboxEvents', eid)); }
       function inboxEvOf(d) { return inboxEv(d.lastEventId).data; }
-      // Who decides: the member, or his trusted home agent on his word (an event inboxOnWord let
-      // through: only that branch writes onBehalfOf).
+      // Who decides: the member, or his trusted home agent on his word: an event inboxOnWord let
+      // through (only that branch writes onBehalfOf: never a person's event, and only the event's
+      // own member). The event's member and thread are this doc's: every caller checks it with
+      // inboxDocTracked / inboxTrackedThread (r.memberUid, the doc's thread).
       function inboxDecider(r) {
         return inboxOwner(r) || inboxEvOf(request.resource.data).data.get('onBehalfOf', '') == r.memberUid;
       }
@@ -979,7 +981,7 @@ service cloud.firestore {
           && strOrNull(d.threadId, 128)
           && strOrNull(d.subjectId, 128)
           && ((d.actor.type == 'human' && isMember(wid)
-                && d.memberUid == me()
+                && d.memberUid == me() && !('onBehalfOf' in d.data)
                 && d.type in ['thread.titled', 'thread.answered', 'thread.ignored',
                   'thread.closed', 'thread.restored', 'thread.moved', 'outcome.approved',
                   'outcome.rejected', 'outcome.revise_requested', 'subject.created', 'subject.renamed', 'subject.merged', 'subject.split', 'subject.area', 'subject.label',
@@ -1007,7 +1009,7 @@ service cloud.firestore {
           let t = get(inboxDoc('inboxThreads', d.threadId)).data;
           return isActiveAgent(wid) && inboxMember(d.memberUid)
             && d.type in ['outcome.approved', 'outcome.rejected', 'plan.rejected', 'plan.sent_back', 'thread.closed']
-            && t.fetchedBy == me()
+            && t.fetchedBy == me() && t.memberUid == d.memberUid && d.data.onBehalfOf == d.memberUid
             && me() in get(inboxDoc('agentTrust', d.memberUid)).data.agents
             && d.data.via == 'terminal' && str(d.data.words, 1, 500);
         }

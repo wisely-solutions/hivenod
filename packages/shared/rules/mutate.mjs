@@ -1238,6 +1238,14 @@ const MUTATIONS = [
     [['return isActiveAgent(wid) && inboxMember(d.memberUid)\n', 'return isActiveAgent(wid)\n']],
   ],
   ['on word: plain agent events borrow the say', [[" && !('onBehalfOf' in d.data)", '']]],
+  [
+    'on word: a member’s own event borrows another’s say',
+    [["&& d.memberUid == me() && !('onBehalfOf' in d.data)", '&& d.memberUid == me()']],
+  ],
+  [
+    'on word: event for another member',
+    [['&& t.memberUid == d.memberUid && d.data.onBehalfOf == d.memberUid', '']],
+  ],
   ['on word: no words', [['&& str(d.data.words, 1, 500)', '']]],
   ['on word: any channel', [["&& d.data.via == 'terminal'", '']]],
   [
