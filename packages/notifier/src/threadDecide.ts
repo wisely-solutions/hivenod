@@ -45,6 +45,7 @@ import {
   schedulePaths,
   scheduleEnds,
   type Schedule,
+  onWordLine,
 } from '@hive/shared';
 import type { Firestore } from 'firebase-admin/firestore';
 import { applyPlanAdmin } from './admin';
@@ -214,6 +215,40 @@ function decidedAt(s: Loaded, arrival: string): number {
   return ms(t.updatedAt);
 }
 
+/** The event that decided what the button was about (the step's or the plan's last write). */
+function decidedEvent(s: Loaded, arrival: string): string | null {
+  const oid = arrival.startsWith('s:') ? arrival.split(':')[2] : null;
+  const o = oid ? s.outcomes.find((x) => x.id === oid) : null;
+  if (o?.data.decision) return o.data.lastEventId;
+  if (arrival.startsWith('p:')) {
+    const pid = arrival.slice(2);
+    const steps = s.outcomes.filter((x) => x.data.planId === pid && x.data.decision);
+    steps.sort((x, y) => ms(y.data.decision!.at) - ms(x.data.decision!.at));
+    if (steps[0]) return steps[0].data.lastEventId;
+  }
+  return null;
+}
+
+/**
+ * "Already decided at 14:05", and when the home agent recorded it on the person's word, how:
+ * "… Approved by João via Hive’s terminal: “approved”."
+ */
+async function whyNot(db: Firestore, s: Loaded | null, a: ThreadAction): Promise<string | null> {
+  const why = threadWhyNot(s, a);
+  if (!why || !s || !why.startsWith('Already decided')) return why;
+  const eid = decidedEvent(s, a.arrival);
+  if (!eid) return why;
+  const ev = (await db.doc(inboxPaths.event(a.wid, eid)).get()).data();
+  const line = ev
+    ? onWordLine({
+        type: String(ev.type ?? ''),
+        data: (ev.data as Record<string, unknown>) ?? {},
+        actor: { name: String((ev.actor as { name?: string } | undefined)?.name ?? '') },
+      })
+    : null;
+  return line ? `${why.replace(/\.$/, ':')} ${line}.` : why;
+}
+
 /** Why the person may not use this button now, in words for the chat; null when they may. */
 export function threadWhyNot(s: Loaded | null, a: ThreadAction): string | null {
   if (!s) return 'I could not find that thread any more.';
@@ -244,7 +279,7 @@ function planInput(s: Loaded): (PlanInput & { plan: SendBackOf }) | undefined {
 
 /** Loads the thread and says why not, without deciding (the prompt for a reason checks first). */
 export async function threadCheck(db: Firestore, a: ThreadAction): Promise<string | null> {
-  return threadWhyNot(await load(db, a), a);
+  return whyNot(db, await load(db, a), a);
 }
 
 export async function decideThread(
@@ -254,7 +289,7 @@ export async function decideThread(
   nowMs: number,
 ): Promise<ThreadResult> {
   const s = await load(db, a);
-  const blocked = threadWhyNot(s, a);
+  const blocked = await whyNot(db, s, a);
   if (blocked || !s || !s.ask) return { ok: false, text: blocked ?? 'Nothing waits here.' };
   const ask = s.ask;
   const ctx: ActionContext = {

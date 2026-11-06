@@ -264,12 +264,15 @@ export function Toggle({
   onCheckedChange,
   disabled,
   description,
+  name,
 }: {
   label: string;
   checked: boolean;
   onCheckedChange: (v: boolean) => void;
   disabled?: boolean;
   description?: string;
+  /** The switch's accessible name when the label repeats on a page (it must contain the label). */
+  name?: string;
 }) {
   const id = useId();
   return (
@@ -280,6 +283,7 @@ export function Toggle({
       </label>
       <Switch.Root
         id={id}
+        aria-label={name}
         checked={checked}
         onCheckedChange={onCheckedChange}
         disabled={disabled}

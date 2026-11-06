@@ -30,6 +30,8 @@ import {
   type ThreadStateOf,
 } from './inbox';
 import { outcomeKind } from './outcomes';
+import { timestamp } from './schema';
+import { z } from 'zod';
 
 export const STEP_DECISIONS = ['approve', 'accept', 'reject', 'changes', 'close'] as const;
 export type StepDecision = (typeof STEP_DECISIONS)[number];
@@ -44,6 +46,13 @@ export const decidePaths = {
 export interface AgentTrustOf {
   agents: readonly string[];
 }
+
+export const agentTrustSchema = z.object({
+  agents: z.array(z.string()).max(ON_WORD_LIMITS.agents),
+  updatedAt: timestamp,
+  lastEventId: z.string(),
+});
+export type AgentTrust = z.infer<typeof agentTrustSchema>;
 
 /** Whether `agentUid` may act on the member's word. */
 export function trusts(t: AgentTrustOf | null | undefined, agentUid: string): boolean {
@@ -101,7 +110,8 @@ export interface DecideOnWordInput {
 /** The trimmed words, 1-500 characters. */
 export function cleanWords(words: string): string {
   const w = (words ?? '').trim();
-  if (!w) throw new ActionError('Quote the person’s words (words): what they typed in this session.');
+  if (!w)
+    throw new ActionError('Quote the person’s words (words): what they typed in this session.');
   if (w.length > ON_WORD_LIMITS.words)
     throw new ActionError(`The words are at most ${ON_WORD_LIMITS.words} characters.`);
   return w;
@@ -133,8 +143,8 @@ export function decideOnWord(ctx: ActionContext, input: DecideOnWordInput): Acti
       throw new ActionError('Name a person step of the thread’s plan (outcomeId).');
     if (pl.plan.threadId !== input.threadId)
       throw new ActionError('That plan is on another thread.');
-    const proposedPlan = pl.plan.state === 'proposed' && outcomeKind(o.type) === 'agent';
-    if (input.decision === 'reject' && proposedPlan) {
+    // A whole proposed plan (e.g. one a newer plan replaced): Reject plan.
+    if (input.decision === 'reject' && pl.plan.state === 'proposed') {
       p = rejectPlan(as, { ...pl, thread: t, reason: words });
     } else {
       if (outcomeKind(o.type) !== 'human')

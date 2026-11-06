@@ -205,6 +205,11 @@ var ToolRuns = map[string]Run{
 		return c.PlanSendBack(ctx, a.S("threadId"), a.S("reason"), a.F("toStep"))
 	},
 	"thread_wake": func(ctx context.Context, c *Client, a Args) (any, error) { return c.ThreadWake(ctx, a.S("threadId")) },
+	// May act on my word (decideword.go)
+	"step_decide": func(ctx context.Context, c *Client, a Args) (any, error) {
+		return c.StepDecide(ctx, a.S("threadId"), a.SP("outcomeId"), a.S("decision"), a.S("words"), a.F("toStep"))
+	},
+	"tidy_list": func(ctx context.Context, c *Client, a Args) (any, error) { return c.TidyList(ctx) },
 	// Scheduled tasks, slice 5
 	"schedule_propose": func(ctx context.Context, c *Client, a Args) (any, error) {
 		in := ScheduleProposeIn{ThreadID: a.S("threadId"), Title: a.S("title"), What: a.S("what"), Rule: asMap(a["rule"]),

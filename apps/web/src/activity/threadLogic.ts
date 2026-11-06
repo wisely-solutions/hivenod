@@ -5,7 +5,7 @@
  * One query shape for every filter: memberUid ==, type in (a group's types), at desc. The actor
  * filter is applied to the rows (it needs no index).
  */
-import { outcomeType, type InboxEvent, type InboxEventType } from '@hive/shared';
+import { onWordOf, outcomeType, type InboxEvent, type InboxEventType } from '@hive/shared';
 import type { Row } from '../lib/live';
 
 export const THREAD_GROUPS = [
@@ -141,8 +141,11 @@ export function isScheduleEvent(e: Ev): boolean {
 type Ev = Pick<InboxEvent, 'actor' | 'type' | 'data'>;
 
 /** Whether a row belongs in the view: the actor filter, and a send back's side (a person's is a decision). */
+/** A person's decision: his own, or taken on his word in his agent's terminal (decideword.ts). */
+const byPerson = (e: Ev) => e.actor.type === 'human' || onWordOf(e.data) !== null;
+
 export function matches(e: Ev, f: ThreadFeedFilters): boolean {
-  if (f.actor === 'people' && e.actor.type !== 'human') return false;
+  if (f.actor === 'people' && !byPerson(e)) return false;
   if (f.actor === 'agents' && e.actor.type !== 'agent') return false;
   if (!['all', 'people', 'agents'].includes(f.actor) && e.actor.id !== f.actor) return false;
   const sched = isScheduleEvent(e);
@@ -151,8 +154,8 @@ export function matches(e: Ev, f: ThreadFeedFilters): boolean {
   // schedule outcome's rows belong to Schedules.
   if (/^outcome\./.test(e.type) && f.group !== '' && sched) return false;
   if (e.type === 'plan.sent_back') {
-    if (f.group === 'decisions' && e.actor.type !== 'human') return false;
-    if (f.group === 'plans' && e.actor.type === 'human') return false;
+    if (f.group === 'decisions' && !byPerson(e)) return false;
+    if (f.group === 'plans' && byPerson(e)) return false;
   }
   return true;
 }
@@ -160,7 +163,7 @@ export function matches(e: Ev, f: ThreadFeedFilters): boolean {
 /** The group a row is shown in (its dot colour). */
 export function groupOf(e: Ev): ThreadGroupId {
   if (isScheduleEvent(e)) return 'schedules';
-  if (e.type === 'plan.sent_back') return e.actor.type === 'human' ? 'decisions' : 'plans';
+  if (e.type === 'plan.sent_back') return byPerson(e) ? 'decisions' : 'plans';
   return (
     THREAD_GROUPS.find((g) => (g.types as readonly string[]).includes(e.type))?.id ?? 'threads'
   );
@@ -318,6 +321,18 @@ function scheduleSentence(e: Ev, sched: string | null | undefined): Sentence | n
 export function threadSentence(e: Ev, folded = 0, schedule?: string | null): Sentence {
   const sch = scheduleSentence(e, schedule);
   if (sch) return sch;
+  // Decided on the member's word (decideword.ts): the member's sentence, then how.
+  const w = onWordOf(e.data);
+  if (w) {
+    const s = threadSentence(
+      { ...e, data: { ...e.data, onBehalfOf: null }, actor: { ...e.actor, type: 'human' } },
+      folded,
+    );
+    return {
+      ...s,
+      after: `${s.after} via ${e.actor.name || 'the agent'}’s terminal: “${clip(w.words)}”`,
+    };
+  }
   const d = e.data;
   const human = e.actor.type === 'human';
   const reason = clip(str(d.reason) || str(d.instruction));

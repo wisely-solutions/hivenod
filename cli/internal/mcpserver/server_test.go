@@ -53,7 +53,7 @@ func (c *pipeClient) next() map[string]any {
 
 func TestServer(t *testing.T) {
 	sf := LoadSurface()
-	if len(sf.Plain.Tools) != 27 || len(sf.Channel.Tools) != 27 { // thread tools (slice 11) + schedule_propose, schedule_list (schedules slice 5) + step_ask, step_sent (Their reply) + schedule_end
+	if len(sf.Plain.Tools) != 29 || len(sf.Channel.Tools) != 29 { // thread tools (slice 11) + schedule_propose, schedule_list (schedules slice 5) + step_ask, step_sent (Their reply) + schedule_end + step_decide, tidy_list (May act on my word)
 		t.Fatalf("surface: %d plain, %d channel tools", len(sf.Plain.Tools), len(sf.Channel.Tools))
 	}
 	// A test tool with whole-number arguments.

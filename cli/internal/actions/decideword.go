@@ -85,7 +85,7 @@ func DecideOnWord(ctx Ctx, in DecideOnWordInput) (plan.Plan, error) {
 	if pl.Plan.ThreadID != in.ThreadID {
 		return plan.Plan{}, fail("That plan is on another thread.")
 	}
-	if in.Decision == "reject" && pl.Plan.State == "proposed" && OutcomeKind(o.Type) == "agent" {
+	if in.Decision == "reject" && pl.Plan.State == "proposed" {
 		return rejectPlanOnWord(ctx, *pl, t, w)
 	}
 	if OutcomeKind(o.Type) != "human" {

@@ -6,7 +6,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { WriteOp } from '../src/actions';
-import { decidePaths, decideOnWord, setAgentTrust, type DecideOnWordInput } from '../src/decideword';
+import {
+  decidePaths,
+  decideOnWord,
+  setAgentTrust,
+  type DecideOnWordInput,
+} from '../src/decideword';
 import {
   approveOutcome,
   createMemberThread,
@@ -40,7 +45,7 @@ async function load(pid = 'pd1'): Promise<PlanInput & { plan: PlanOf & SendBackO
 const forgeEvent = (ops: WriteOp[], over: Record<string, unknown>) =>
   ops.map((op) =>
     op.path.includes('/inboxEvents/') && op.kind !== 'delete'
-      ? { ...op, data: { ...op.data, data: { ...(op.data.data as object), ...over } } }
+      ? { ...op, data: { ...op.data, data: { ...(op.data!.data as object), ...over } } }
       : op,
   );
 
@@ -128,10 +133,13 @@ describe('May act on my word: the setting', () => {
     // The agent replays the member's own batch, then writes it as itself.
     await denied(as(AGENTS.a).run(p));
     const a = as(AGENTS.a);
-    const forged = setAgentTrust({ ...a.ctx, actor: { ...a.ctx.actor, type: 'human' } }, {
-      agentUid: AGENTS.a,
-      on: true,
-    });
+    const forged = setAgentTrust(
+      { ...a.ctx, actor: { ...a.ctx.actor, type: 'human' } },
+      {
+        agentUid: AGENTS.a,
+        on: true,
+      },
+    );
     await denied(a.run(forged));
     await denied(
       a.run(
@@ -159,7 +167,9 @@ describe('May act on my word: the setting', () => {
     await denied(
       bob.run(
         his.ops.map((op) =>
-          op.path === decidePaths.trust(W, 'bob') ? { ...op, path: decidePaths.trust(W, 'alice') } : op,
+          op.path === decidePaths.trust(W, 'bob')
+            ? { ...op, path: decidePaths.trust(W, 'alice') }
+            : op,
         ),
       ),
     );
@@ -407,7 +417,13 @@ describe('May act on my word: decisions', () => {
         decision: 'approve',
         words: 'approved',
         threadId: 't9',
-        thread: { memberUid: 'alice', subjectId: null, state: 'yourCall', fetchedBy: AGENTS.a, refs: [] },
+        thread: {
+          memberUid: 'alice',
+          subjectId: null,
+          state: 'yourCall',
+          fetchedBy: AGENTS.a,
+          refs: [],
+        },
         memberName: 'Alice',
         outcomeId: 'dv3',
       }),
