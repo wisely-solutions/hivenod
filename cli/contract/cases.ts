@@ -1144,7 +1144,11 @@ function build(): ContractCase[] {
         decision: 'approve',
         words: ' approved ',
         threadId: 'it1',
-        thread: TH({ subjectId: 's1', state: 'yourCall', summary: { version: 3, recAction: 'Approve' } }),
+        thread: TH({
+          subjectId: 's1',
+          state: 'yourCall',
+          summary: { version: 3, recAction: 'Approve' },
+        }),
         memberName: ' João ',
         outcomeId: 'o2',
         plan: ON(devPl(['done', 'proposed', 'approved', 'proposed', 'approved', 'proposed'], 1)),

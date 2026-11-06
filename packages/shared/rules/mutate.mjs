@@ -1233,13 +1233,21 @@ const MUTATIONS = [
     [["\n            && me() in get(inboxDoc('agentTrust', d.memberUid)).data.agents", '']],
   ],
   ['on word: any agent’s thread', [['&& t.fetchedBy == me()\n', '\n']]],
-  ['on word: a member who left', [['return isActiveAgent(wid) && inboxMember(d.memberUid)\n', 'return isActiveAgent(wid)\n']]],
+  [
+    'on word: a member who left',
+    [['return isActiveAgent(wid) && inboxMember(d.memberUid)\n', 'return isActiveAgent(wid)\n']],
+  ],
   ['on word: plain agent events borrow the say', [[" && !('onBehalfOf' in d.data)", '']]],
   ['on word: no words', [['&& str(d.data.words, 1, 500)', '']]],
   ['on word: any channel', [["&& d.data.via == 'terminal'", '']]],
   [
     'on word: single proposals too',
-    [['&& ((inboxOwner(resource.data)\n                && (inboxDecide(', '&& ((inboxDecider(resource.data)\n                && (inboxDecide(']],
+    [
+      [
+        '&& ((inboxOwner(resource.data)\n                && (inboxDecide(',
+        '&& ((inboxDecider(resource.data)\n                && (inboxDecide(',
+      ],
+    ],
   ],
   [
     'on word: agents write the trust list',
@@ -1252,12 +1260,20 @@ const MUTATIONS = [
         "'plan.sent_back', 'step.progress', 'step.external']));",
         "'plan.sent_back', 'step.progress', 'step.external', 'agents.trusted']));",
       ],
-      ["inboxTracked(d.lastEventId, ['agents.trusted'], me())", "inboxTracked(d.lastEventId, ['agents.trusted'], uid)"],
+      [
+        "inboxTracked(d.lastEventId, ['agents.trusted'], me())",
+        "inboxTracked(d.lastEventId, ['agents.trusted'], uid)",
+      ],
     ],
   ],
   [
     'on word: another member writes the trust list',
-    [["return uid == me() && isMember(wid) && exactKeys(d, ['agents', 'updatedAt'", "return isMember(wid) && exactKeys(d, ['agents', 'updatedAt'"]],
+    [
+      [
+        "return uid == me() && isMember(wid) && exactKeys(d, ['agents', 'updatedAt'",
+        "return isMember(wid) && exactKeys(d, ['agents', 'updatedAt'",
+      ],
+    ],
   ],
 ];
 
