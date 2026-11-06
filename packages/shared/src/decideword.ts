@@ -219,7 +219,7 @@ const VERB: Record<string, string> = {
 };
 
 /**
- * The line of a decision taken on the member's word: "Approved by João via Hive’s terminal:
+ * The line of a decision taken on the member's word: "Approved by João via Bee’s terminal:
  * “approved”" (timeline, Activity, notifier). Null for any other event.
  */
 export function onWordLine(e: {
