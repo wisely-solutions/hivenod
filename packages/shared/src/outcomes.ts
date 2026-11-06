@@ -479,7 +479,6 @@ export function outcomeRulesBlock(): string {
   return [
     '      // BEGIN outcome registry (generated from packages/shared/src/outcomes.ts by',
     '      // UPDATE_GO_CONTRACT=1 pnpm test:scripts; do not edit by hand)',
-    `      function outcomeTypes() { return ${list(entries.map(([k]) => k))}; }`,
     `      function outcomeSingle() { return ${list(entries.filter(([, t]) => !t.planOnly && !t.ownTool).map(([k]) => k))}; }`,
     `      function outcomePlanTypes() { return ${list(entries.filter(([, t]) => t.plan).map(([k]) => k))}; }`,
     `      function outcomeHuman() { return ${list(entries.filter(([, t]) => t.kind === 'human').map(([k]) => k))}; }`,

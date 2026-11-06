@@ -470,7 +470,7 @@ const MUTATIONS = [
   ['inbox: approve keeps the revise request', [["&& d.get('revise', null) == null\n", '\n']]],
   [
     'inbox: approve any version',
-    [["&& d.decision.version <= r.get('versions', []).size())))", ')))']],
+    [["\n              && d.decision.version <= r.get('versions', []).size());", ');']],
   ],
   ['inbox: member rewrites fields while asking', [["touched(['state', 'revise'])", 'true']]],
   [
@@ -1245,19 +1245,19 @@ const MUTATIONS = [
     'on word: agents write the trust list',
     [
       [
-        'allow create, update: if uid == me() && isMember(wid)\n          && exactKeys(request.resource.data, [\'agents\'',
-        'allow create, update: if (isMember(wid) || isActiveAgent(wid))\n          && exactKeys(request.resource.data, [\'agents\'',
+        "return uid == me() && isMember(wid) && exactKeys(d, ['agents', 'updatedAt'",
+        "return (isMember(wid) || isActiveAgent(wid)) && exactKeys(d, ['agents', 'updatedAt'",
       ],
       [
         "'plan.sent_back', 'step.progress', 'step.external']));",
         "'plan.sent_back', 'step.progress', 'step.external', 'agents.trusted']));",
       ],
-      ["inboxTracked(request.resource.data.lastEventId, ['agents.trusted'], me())", "inboxTracked(request.resource.data.lastEventId, ['agents.trusted'], uid)"],
+      ["inboxTracked(d.lastEventId, ['agents.trusted'], me())", "inboxTracked(d.lastEventId, ['agents.trusted'], uid)"],
     ],
   ],
   [
     'on word: another member writes the trust list',
-    [["allow create, update: if uid == me() && isMember(wid)", 'allow create, update: if isMember(wid)']],
+    [["return uid == me() && isMember(wid) && exactKeys(d, ['agents', 'updatedAt'", "return isMember(wid) && exactKeys(d, ['agents', 'updatedAt'"]],
   ],
 ];
 
