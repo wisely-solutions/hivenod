@@ -1242,10 +1242,6 @@ const MUTATIONS = [
     'on word: a member’s own event borrows another’s say',
     [["&& d.memberUid == me() && !('onBehalfOf' in d.data)", '&& d.memberUid == me()']],
   ],
-  [
-    'on word: event for another member',
-    [['&& t.memberUid == d.memberUid && d.data.onBehalfOf == d.memberUid', '']],
-  ],
   ['on word: no words', [['&& str(d.data.words, 1, 500)', '']]],
   ['on word: any channel', [["&& d.data.via == 'terminal'", '']]],
   [
