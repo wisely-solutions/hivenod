@@ -78,8 +78,30 @@ export function firstFree(pl: PlanInput): number {
   return pl.plan.cursor + (started ? 1 : 0);
 }
 
-/** A title part: whitespace collapsed, never truncated (the title wraps instead). */
-const clip = (s: string) => s.trim().replace(/\s+/g, ' ');
+const HEADLINE_MAX = 100;
+/**
+ * A short title from a long text: the first non-empty line (skipping `---` rules), its first
+ * sentence, Markdown marks stripped, at most 100 characters, cut on a word boundary with "…".
+ */
+export function headline(text: string): string {
+  const line =
+    text
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l !== '' && !/^[-*_=\s]{3,}$/.test(l)) ?? '';
+  const plain = line
+    .replace(/^#{1,6}\s+/, '')
+    .replace(/^(?:[-*+]|\d+[.)])\s+/, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__|\*|`)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const sentence = /^(.+?[.!?])(?:\s|$)/.exec(plain)?.[1] ?? plain;
+  if (sentence.length <= HEADLINE_MAX) return sentence;
+  const cut = sentence.slice(0, HEADLINE_MAX - 1);
+  const at = cut.lastIndexOf(' ');
+  return `${(at > 20 ? cut.slice(0, at) : cut).replace(/[\s,;:.-]+$/, '')}…`;
+}
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 export function when(iso: unknown): string {
   const t = Date.parse(str(iso));
@@ -92,32 +114,32 @@ export function when(iso: unknown): string {
 export function stepTitle(type: string | null, fields: Readonly<Record<string, unknown>>): string {
   switch (type) {
     case 'reply':
-      return str(fields.text) ? `Reply: “${clip(str(fields.text))}”` : 'Reply';
+      return str(fields.text) ? `Reply: “${headline(str(fields.text))}”` : 'Reply';
     // Retired with Calendar (slice 5): old records only.
     case 'reply_book':
     case 'book':
       return `Booking (retired) ${when(fields.start)}`.trim();
     case 'approval':
-      return `You approve: ${clip(str(fields.what))}`;
+      return `You approve: ${headline(str(fields.what))}`;
     // Development plans: the real titles, as the plan's steps are called.
     case 'shape':
-      return str(fields.idea) ? `Shape: ${clip(str(fields.idea))}` : 'Shape';
+      return str(fields.idea) ? `Shape: ${headline(str(fields.idea))}` : 'Shape';
     case 'build':
-      return str(fields.brief) ? `Build: ${clip(str(fields.brief))}` : 'Build';
+      return str(fields.brief) ? `Build: ${headline(str(fields.brief))}` : 'Build';
     case 'keepgreen':
       return 'Keep green: PR rebased and green';
     case 'release':
       return 'Release + live check';
     case 'make_it_work':
-      return str(fields.title) ? `Build it: ${clip(str(fields.title))}` : 'Build it';
+      return str(fields.title) ? `Build it: ${headline(str(fields.title))}` : 'Build it';
     case 'handover':
-      return `Hand over to ${clip(str(fields.to))}`;
+      return `Hand over to ${headline(str(fields.to))}`;
     case 'their_reply':
-      return `${clip(str(fields.who))}${str(fields.org) ? ` (${clip(str(fields.org))})` : ''}: ${clip(str(fields.need))}`;
+      return `${headline(str(fields.who))}${str(fields.org) ? ` (${headline(str(fields.org))})` : ''}: ${headline(str(fields.need))}`;
     case 'snooze':
       return `Wait until ${when(fields.until)}`.trim();
     case 'nudge':
-      return str(fields.text) ? `Nudge: “${clip(str(fields.text))}”` : 'Nudge';
+      return str(fields.text) ? `Nudge: “${headline(str(fields.text))}”` : 'Nudge';
     case null:
       return '…';
     default:

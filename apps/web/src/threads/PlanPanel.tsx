@@ -596,7 +596,7 @@ export function PlanPanel(props: PlanPanelProps) {
               onDragOver={movable(s.index) && drag !== null ? (e) => e.preventDefault() : undefined}
               onDrop={movable(s.index) ? onDrop(s.index) : undefined}
             >
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 @[56rem]:self-start">
                 {live && !sheet ? (
                   <span
                     aria-hidden

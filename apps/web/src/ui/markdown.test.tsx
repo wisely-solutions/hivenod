@@ -3,6 +3,19 @@ import { describe, expect, it } from 'vitest';
 import { Markdown, parseBlocks, safeUrl } from './markdown';
 
 describe('markdown', () => {
+  it('renders a rule line (---, ***, - - -) as a horizontal rule, not text or a list', () => {
+    expect(parseBlocks('a\n\n---\n\n***\n- - -\n- item')).toEqual([
+      { t: 'p', text: 'a' },
+      { t: 'hr' },
+      { t: 'hr' },
+      { t: 'hr' },
+      { t: 'ul', items: ['item'] },
+    ]);
+    const { container } = render(<Markdown source={'above\n\n---\n\nbelow'} />);
+    expect(container.querySelectorAll('hr')).toHaveLength(1);
+    expect(container.textContent).not.toContain('---');
+  });
+
   it('parses headings, lists, code and paragraphs', () => {
     expect(parseBlocks('# Hi\n\nsome\ntext\n\n- a\n- b\n\n1. x\n\n```\ncode\n```')).toEqual([
       { t: 'h', level: 1, text: 'Hi' },

@@ -11,6 +11,7 @@ import {
   planDiff,
   planVersions,
   producesOf,
+  headline,
   stepTitle,
   whoOf,
 } from './plan';
@@ -139,13 +140,33 @@ describe('plans on the thread page (item qwFAW, slice 4)', () => {
   });
 });
 
+describe('headline', () => {
+  const long = `**Dark mode for the board that follows the system theme, with a toggle in Settings and a remembered choice per device.** More text.\n\n---\n- item`;
+  it('keeps short text unchanged', () => {
+    expect(headline('Dark mode')).toBe('Dark mode');
+  });
+  it('takes the first sentence of the first line, Markdown stripped, within 100 characters', () => {
+    const h = headline(long);
+    expect(h.length).toBeLessThanOrEqual(100);
+    expect(h.endsWith('…')).toBe(true);
+    expect(h).not.toMatch(/\*/);
+    expect(h.startsWith('Dark mode for the board')).toBe(true);
+    expect(headline('First one. Second one.')).toBe('First one.');
+  });
+  it('strips headings, bullets, links and skips rules', () => {
+    expect(headline('---\n\n## [The plan](https://example.com) for `x`')).toBe('The plan for x');
+    expect(headline('1. __Do__ this')).toBe('Do this');
+    expect(headline('- a *b*')).toBe('a b');
+  });
+});
+
 describe('the plan view (spec view and plan page)', () => {
   it('gives the development steps their real titles', () => {
     expect(stepTitle('shape', { idea: 'Dark mode for the board' })).toBe(
       'Shape: Dark mode for the board',
     );
     expect(stepTitle('build', { brief: 'A theme token set\nand a toggle' })).toBe(
-      'Build: A theme token set and a toggle',
+      'Build: A theme token set',
     );
     expect(stepTitle('keepgreen', {})).toBe('Keep green: PR rebased and green');
     expect(stepTitle('release', { notes: 'x' })).toBe('Release + live check');

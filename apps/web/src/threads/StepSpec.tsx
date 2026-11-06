@@ -6,8 +6,20 @@
  */
 import { outcomeType, type PlanStepView } from '@hive/shared';
 import { Pill } from '../ui/badge';
+import { Markdown } from '../ui/markdown';
 import { cn } from '../ui/cn';
 import { openQuestionLines, PILL, producesOf, STEP_UI_TEXT, when, whoOf } from './plan';
+
+/** A field's text as blocks: each open-question line alone, the lines between them as Markdown. */
+function textBlocks(value: string): { text: string; open: boolean }[] {
+  const out: { text: string; open: boolean }[] = [];
+  for (const l of openQuestionLines(value)) {
+    const last = out[out.length - 1];
+    if (!l.open && last && !last.open) last.text += `\n${l.text}`;
+    else out.push({ text: l.text, open: l.open });
+  }
+  return out;
+}
 
 export function StepSpec({
   type,
@@ -45,19 +57,17 @@ export function StepSpec({
               <div className="text-14 text-ink">{when(v)}</div>
             ) : (
               <div className="text-14 text-ink [overflow-wrap:anywhere]">
-                {openQuestionLines(String(v)).map((l, i) =>
-                  l.open ? (
+                {textBlocks(String(v)).map((blk, i) =>
+                  blk.open ? (
                     <p
                       key={i}
                       data-open-question=""
                       className="my-0.5 rounded-btn border border-gate/60 bg-gate-bg px-2 py-1 text-gate-text"
                     >
-                      {l.text}
+                      {blk.text}
                     </p>
                   ) : (
-                    <p key={i} className="min-h-[1lh] whitespace-pre-wrap">
-                      {l.text}
-                    </p>
+                    <Markdown key={i} source={blk.text} />
                   ),
                 )}
               </div>
